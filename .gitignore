@@ -1,0 +1,66 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+expo-env.d.ts
+
+# Native
+ios/
+android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# ── Aangescherpt vóór de baselinecommit (2026-09-11) ────────────────────────
+# Alle env-varianten, behalve het voorbeeldbestand met placeholderwaarden.
+.env.*
+!.env.example
+
+# Native build- en afhankelijkheidsmappen (ios/ en android/ staan hierboven al
+# volledig uit; deze regels vangen ze ook als die ooit worden getrackt).
+ios/Pods/
+ios/build/
+android/build/
+android/app/build/
+.gradle/
+DerivedData/
+build/
+
+# Sleutels, certificaten en provisioning
+*.pem
+*.cer
+*.certSigningRequest
+*.provisionprofile
+credentials.json
+google-services.json
+GoogleService-Info.plist
+.secrets
+secrets.json
+
+# Logs en caches
+*.log
+.cache/
+.tmp/

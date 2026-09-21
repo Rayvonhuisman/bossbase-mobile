@@ -1,0 +1,169 @@
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ViewStyle,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from 'expo-router';
+import { useTheme } from '@/providers';
+import { AnimatedScreen } from './AnimatedScreen';
+import { ScreenErrorBoundary } from './ScreenErrorBoundary';
+import { StatusBarScrim } from './StatusBarScrim';
+
+type Props = {
+  children: ReactNode;
+  /**
+   * Paginakop (meestal een <AppTopBar/>). Zoals in het ontwerp is dit het
+   * eerste onderdeel ván de scrollende inhoud: de kop schuift mee omhoog en
+   * verdwijnt onder de statusbalk, en komt terug als je weer naar boven
+   * scrolt. De kop draagt zelf de veilige zone bovenaan.
+   */
+  header?: ReactNode;
+  /** If true (default), content is wrapped in a vertical ScrollView. */
+  scroll?: boolean;
+  /**
+   * Pull-to-refresh. Geef `onRefresh` mee en het scherm krijgt een
+   * `RefreshControl` in de themakleur; `refreshing` hoort UITSLUITEND waar te
+   * zijn als de gebruiker er zelf aan trekt (zie `useLaden`). Een automatische
+   * verversing bij focus mag deze vlag niet zetten — dan duwt iOS de inhoud
+   * omlaag en lijkt het scherm scheef te hangen.
+   */
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  /** Bottom padding to clear the floating tab bar. Default 132. */
+  bottomInset?: number;
+  /**
+   * Set on screens that render an AppFab, so scroll content clears BOTH the
+   * floating tab bar and the FAB (safe-area aware). The FAB sits at
+   * ~insets.bottom+88 with height 54, so content must clear ~insets.bottom+150.
+   */
+  floatingAction?: boolean;
+  /** Override the page background. Defaults to the active theme background. */
+  background?: string;
+  contentContainerStyle?: ViewStyle;
+  /** Subtle entrance animation (fade + slide-up). Default true. */
+  animate?: boolean;
+};
+
+/**
+ * Canonical screen wrapper used by every redesigned page.
+ *
+ * - Sets the page background to the active theme bg (light/dark). Theming this
+ *   one component flips the canvas (and overscroll) on every AppScreen page.
+ * - Pads the top by the safe-area inset + 4px so headers sit just below status bar.
+ * - The `header` scrolls WITH the content (one scroll container, as in the
+ *   design); a soft status-bar scrim keeps the clock readable above it.
+ * - Gives content a subtle entrance animation (see AnimatedScreen), so every
+ *   AppScreen-based page feels native without per-screen wiring.
+ * - Hides scrollbars.
+ */
+export function AppScreen({
+  children,
+  header,
+  scroll = true,
+  onRefresh,
+  refreshing = false,
+  bottomInset = 132,
+  floatingAction = false,
+  background,
+  contentContainerStyle,
+  animate = true,
+}: Props) {
+  const insets = useSafeAreaInsets();
+  const { colors: t, colorMode } = useTheme();
+  const bg = background ?? t.bg;
+  const barStyle = colorMode === 'dark' ? 'light' : 'dark';
+  // When a FAB is present, clear both the floating tab bar and the FAB.
+  const scrollPaddingBottom = floatingAction ? insets.bottom + 150 : bottomInset;
+  // The header owns the safe-area inset (it pads itself below the status bar).
+  // Without one, the content clears the status bar itself.
+  const contentPaddingTop = header ? 0 : insets.top + 4;
+
+  // Een tabwissel mag geen scherm achterlaten dat nog omlaag hangt van een
+  // pull-to-refresh of een overscroll. Komt het scherm terug in beeld terwijl
+  // de inhoud boven de nul staat en er niet ververst wordt, zet hem dan terug.
+  const scrollRef = useRef<ScrollView>(null);
+  const offsetY = useRef(0);
+  const refreshingRef = useRef(refreshing);
+  useEffect(() => {
+    refreshingRef.current = refreshing;
+  }, [refreshing]);
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offsetY.current = e.nativeEvent.contentOffset.y;
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (offsetY.current < 0 && !refreshingRef.current) {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      }
+    }, []),
+  );
+
+  if (!scroll) {
+    return (
+      <View style={[styles.root, { backgroundColor: bg }]}>
+        <StatusBar style={barStyle} />
+        {header}
+        <AnimatedScreen
+          disabled={!animate}
+          // Zonder ScrollView is er niets om mee te scrollen: de kop staat
+          // gewoon bovenaan, met de gebruikelijke ruimte eronder.
+          style={[{ paddingTop: header ? 12 : contentPaddingTop, flex: 1 }, contentContainerStyle]}
+        >
+          <ScreenErrorBoundary>{children}</ScreenErrorBoundary>
+        </AnimatedScreen>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.root, { backgroundColor: bg }]}>
+      <StatusBar style={barStyle} />
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          { paddingTop: contentPaddingTop, paddingBottom: scrollPaddingBottom },
+          contentContainerStyle,
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        // Wij bepalen de insets zelf: de kop draagt de veilige zone bovenaan en
+        // de onderruimte staat hierboven. Laat iOS er niets bij optellen, anders
+        // begint de inhoud een stuk lager dan bedoeld.
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={t.green}
+              colors={[t.green]}
+              // De ScrollView begint bovenaan het scherm; zet de spinner onder
+              // de statusbalk in plaats van erachter.
+              progressViewOffset={insets.top}
+            />
+          ) : undefined
+        }
+      >
+        {header}
+        <AnimatedScreen disabled={!animate}>
+          <ScreenErrorBoundary>{children}</ScreenErrorBoundary>
+        </AnimatedScreen>
+      </ScrollView>
+      <StatusBarScrim background={bg} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
