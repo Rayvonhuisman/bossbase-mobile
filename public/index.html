@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      viewport-fit=cover: zonder deze waarde geeft iOS `env(safe-area-inset-*)`
+      altijd 0 en kent react-native-safe-area-context de notch en de homebalk
+      niet. De app houdt zelf rekening met de veilige zones, net als op native.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+    />
+    <title>%WEB_TITLE%</title>
+    <meta
+      name="description"
+      content="Werkbonnen, planning, klanten en uren voor vakmensen — de BossBase-app."
+    />
+
+    <!-- Installeerbare app (PWA). Zie public/manifest.webmanifest en public/sw.js. -->
+    <!--
+      use-credentials: een Vercel-preview achter Deployment Protection geeft het
+      manifest anders een 401 (de browser haalt manifesten standaard zonder
+      cookies op), en dan is de preview niet installeerbaar.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <!--
+      Kleur van de browserbalk / statusbalk. Gelijk aan de achtergrond van de app
+      in lichte modus; MobielKader zet hem bij wisselen van thema bij.
+    -->
+    <meta name="theme-color" content="#F3F4F6" />
+
+    <!-- iOS: beginschermicoon en weergave zonder Safari-balken. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BossBase" />
+    <!--
+      "default": een gewone statusbalk boven de app. "black-translucent" zou de
+      app eronder laten doorlopen, maar dan staat witte statustekst op de lichte
+      achtergrond van de app — onleesbaar.
+    -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+        /* Achtergrond van de app (lichte modus), zodat er bij het laden geen
+           witte flits is. */
+        background-color: #f3f4f6;
+        /* Geen "pull to refresh" of terugveren van de hele pagina: alleen de
+           lijsten scrollen, net als in de app. */
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+    <style id="bossbase-web">
+      /* Zichtbare focus voor wie met het toetsenbord werkt; een tik of klik
+         laat geen rand achter. */
+      [role='button']:focus-visible,
+      [role='link']:focus-visible,
+      [role='tab']:focus-visible,
+      a:focus-visible {
+        outline: 2px solid #22c55e;
+        outline-offset: 2px;
+      }
+      /* iOS Safari zoomt in op elk invoerveld met een lettergrootte onder de
+         16px, en zoomt daarna niet terug. Op touchtoestellen daarom minimaal
+         16px; op desktop blijft de maat uit het ontwerp staan. */
+      @media (pointer: coarse) {
+        input,
+        textarea,
+        select {
+          font-size: max(16px, 1em) !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      Je hebt JavaScript nodig om BossBase te gebruiken.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

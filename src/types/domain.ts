@@ -230,14 +230,16 @@ export type WerkbonUur = {
 
 export type TimeEntryType = 'arbeid' | 'reistijd' | 'overhead' | 'overig';
 
-/** One row of `urenregistratie` — working-day hours (wages/leave). */
+/**
+ * One row of `urenregistratie` — working-day hours (wages/leave).
+ *
+ * No work order, customer, deal or project: the dashboard dropped those
+ * columns (migration 20260831140000). Job hours live in `werkbon_uren`.
+ */
 export type TimeEntry = {
   id: string;
   company_id: string;
   profile_id: string;
-  customer_id: string | null;
-  werkbon_id: string | null;
-  deal_id: string | null;
   datum: string; // YYYY-MM-DD
   start_tijd: string | null;
   eind_tijd: string | null;
@@ -256,5 +258,7 @@ export type TimeEntry = {
  */
 export type UrenRegel = TimeEntry & {
   bron: 'werkdag' | 'werkbon';
+  /** De werkbon van een werkbonuur; altijd `null` bij een werkdaguur. */
+  werkbon_id: string | null;
   werkbonLabel: string | null;
 };

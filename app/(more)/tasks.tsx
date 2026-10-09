@@ -31,6 +31,7 @@ import { formatDateNL } from '@/lib/format';
 import { vandaagIso } from '@/lib/nlTijd';
 import { ds, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Taken — hetzelfde `activities`-record als op het Activiteiten-scherm, met
@@ -111,7 +112,7 @@ export default function TasksScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Taken" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Taken" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -127,7 +128,7 @@ export default function TasksScreen() {
             variant="detail"
             title="Taken"
             subtitle={`${items.length} open ${items.length === 1 ? 'taak' : 'taken'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton

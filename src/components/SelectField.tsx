@@ -3,6 +3,7 @@ import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'r
 import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
+import { MobielKader } from './MobielKader';
 
 export type SelectOption = {
   id: string;
@@ -92,6 +93,8 @@ export function SelectField({
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}
       >
+        {/* Op web staat de kiezer op telefoonbreedte, net als de app eronder. */}
+        <MobielKader>
         <View style={{ flex: 1, backgroundColor: t.bg }}>
           <View style={styles.kopBalk}>
             <Text style={styles.kopTitel}>{label}</Text>
@@ -153,6 +156,7 @@ export function SelectField({
             )}
           />
         </View>
+        </MobielKader>
       </Modal>
     </View>
   );

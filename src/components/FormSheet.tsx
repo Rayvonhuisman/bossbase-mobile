@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Button } from './Button';
+import { MobielKader } from './MobielKader';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 
@@ -76,6 +77,8 @@ export function FormSheet({
       presentationStyle="pageSheet"
       onRequestClose={sluit}
     >
+      {/* Op web staat het vel op telefoonbreedte, net als de app eronder. */}
+      <MobielKader>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: t.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -133,6 +136,7 @@ export function FormSheet({
           ) : null}
         </View>
       </KeyboardAvoidingView>
+      </MobielKader>
     </Modal>
   );
 }

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -14,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -44,6 +44,7 @@ import {
   ErrorState,
   FormField,
   LoadingScreen,
+  MobielKader,
   StatusBadge,
   StatusBarScrim,
   statusLabel,
@@ -75,7 +76,7 @@ import {
   type FotoCategorie,
   listVoertuigen,
 } from '@/services/workOrderService';
-import { base64NaarBytes } from '@/lib/base64';
+import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import {
   createWerkbonUur,
   listWerkbonUren,
@@ -89,6 +90,7 @@ import {
   formatHours,
   formatTimeNL,
 } from '@/lib/format';
+import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, dsShadowGreen, spacing, type ThemeColors } from '@/theme';
 import type {
   WerkbonUur,
@@ -240,7 +242,7 @@ export default function WorkOrderDetailScreen() {
 
   const handleStatusChange = (next: WorkOrderStatus) => {
     if (!workOrder) return;
-    Alert.alert('Status wijzigen', `Werkbon markeren als "${statusLabel(next)}"?`, [
+    Dialog.alert('Status wijzigen', `Werkbon markeren als "${statusLabel(next)}"?`, [
       { text: 'Annuleren', style: 'cancel' },
       {
         text: 'Bevestigen',
@@ -249,7 +251,7 @@ export default function WorkOrderDetailScreen() {
           const { data, error: updateError } = await updateWorkOrderStatus(workOrder, next);
           setStatusUpdating(false);
           if (updateError || !data) {
-            Alert.alert('Status niet opgeslagen', updateError ?? 'Probeer het opnieuw.');
+            Dialog.alert('Status niet opgeslagen', updateError ?? 'Probeer het opnieuw.');
             return;
           }
           // Take the row the database returned, not our guess of it.
@@ -277,14 +279,14 @@ export default function WorkOrderDetailScreen() {
   const openStatusActions = () => {
     if (!workOrder) return;
     if (isSigned) {
-      Alert.alert(
+      Dialog.alert(
         'Werkbon is ondertekend',
         'Deze werkbon is afgetekend door de klant en staat op slot. Maak een nieuwe werkbon voor een correctie.',
       );
       return;
     }
     if (!canManage) {
-      Alert.alert(
+      Dialog.alert(
         'Geen rechten',
         'Alleen de verantwoordelijke voor deze werkbon, een admin of een planner kan de status wijzigen.',
       );
@@ -292,14 +294,14 @@ export default function WorkOrderDetailScreen() {
     }
     const next = getAllowedNextStatuses(workOrder.status, role);
     if (next.length === 0) {
-      Alert.alert('Geen status-wijzigingen mogelijk', 'Deze werkbon kan niet verder.');
+      Dialog.alert('Geen status-wijzigingen mogelijk', 'Deze werkbon kan niet verder.');
       return;
     }
     const buttons = next.map((s) => ({
       text: statusLabel(s),
       onPress: () => handleStatusChange(s),
     }));
-    Alert.alert('Status wijzigen', undefined, [
+    Dialog.alert('Status wijzigen', undefined, [
       ...buttons,
       { text: 'Annuleren', style: 'cancel' as const },
     ]);
@@ -307,7 +309,7 @@ export default function WorkOrderDetailScreen() {
 
   const handleToggleTask = async (task: WorkOrderTask) => {
     if (isSigned || !canManage) {
-      Alert.alert(
+      Dialog.alert(
         isSigned ? 'Werkbon is ondertekend' : 'Geen rechten',
         isSigned
           ? 'Deze werkbon staat op slot en kan niet meer worden gewijzigd.'
@@ -319,7 +321,7 @@ export default function WorkOrderDetailScreen() {
     const { data, error: taskError } = await setTaskDone(task.id, !task.afgerond);
     setBusyTaskId(null);
     if (taskError || !data) {
-      Alert.alert('Niet opgeslagen', taskError ?? 'Probeer het opnieuw.');
+      Dialog.alert('Niet opgeslagen', taskError ?? 'Probeer het opnieuw.');
       return;
     }
     setTasks((prev) => prev.map((t) => (t.id === data.id ? data : t)));
@@ -327,14 +329,14 @@ export default function WorkOrderDetailScreen() {
 
   /** Bevestigen en verwijderen, met de foutmelding van de server als die komt. */
   const bevestigVerwijderen = (titel: string, tekst: string, doe: () => Promise<string | null>) => {
-    Alert.alert(titel, tekst, [
+    Dialog.alert(titel, tekst, [
       { text: 'Annuleren', style: 'cancel' },
       {
         text: 'Verwijderen',
         style: 'destructive',
         onPress: async () => {
           const fout = await doe();
-          if (fout) Alert.alert('Niet verwijderd', fout);
+          if (fout) Dialog.alert('Niet verwijderd', fout);
         },
       },
     ]);
@@ -385,7 +387,7 @@ export default function WorkOrderDetailScreen() {
     if (nieuwAantal < 1) return;
     const { data, error: e } = await updateMaterialAmount(m.id, nieuwAantal);
     if (e || !data) {
-      Alert.alert('Niet opgeslagen', e ?? 'Probeer het opnieuw.');
+      Dialog.alert('Niet opgeslagen', e ?? 'Probeer het opnieuw.');
       return;
     }
     setMaterials((prev) => prev.map((x) => (x.id === data.id ? data : x)));
@@ -404,7 +406,7 @@ export default function WorkOrderDetailScreen() {
    */
   const kiesFoto = () => {
     if (!workOrder) return;
-    Alert.alert('Foto toevoegen', 'Waar komt de foto vandaan?', [
+    Dialog.alert('Foto toevoegen', 'Waar komt de foto vandaan?', [
       { text: 'Camera', onPress: () => kiesCategorie('camera') },
       { text: 'Fotobibliotheek', onPress: () => kiesCategorie('bibliotheek') },
       { text: 'Annuleren', style: 'cancel' },
@@ -412,7 +414,7 @@ export default function WorkOrderDetailScreen() {
   };
 
   const kiesCategorie = (bron: 'camera' | 'bibliotheek') => {
-    Alert.alert('Welke fase?', 'Zo staat de foto straks op de juiste plek op de werkbon.', [
+    Dialog.alert('Welke fase?', 'Zo staat de foto straks op de juiste plek op de werkbon.', [
       { text: 'Voor', onPress: () => pakEnUpload(bron, 'voor') },
       { text: 'Tijdens', onPress: () => pakEnUpload(bron, 'tijdens') },
       { text: 'Na', onPress: () => pakEnUpload(bron, 'na') },
@@ -423,27 +425,33 @@ export default function WorkOrderDetailScreen() {
   const pakEnUpload = async (bron: 'camera' | 'bibliotheek', categorie: FotoCategorie) => {
     if (!workOrder) return;
     try {
-      const rechtenVraag =
-        bron === 'camera'
-          ? await ImagePicker.requestCameraPermissionsAsync()
-          : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!rechtenVraag.granted) {
-        Alert.alert(
-          'Geen toestemming',
+      // Op web is er geen toestemming te vragen (de browser opent gewoon een
+      // bestandskiezer), en elke `await` vóór die kiezer kan in Safari de
+      // gebruikersactie laten verlopen — dan opent hij niet. Dus daar overslaan.
+      if (Platform.OS !== 'web') {
+        const rechtenVraag =
           bron === 'camera'
-            ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-            : 'Geef BossBase toegang tot je foto\'s om er een te kiezen.',
-        );
-        return;
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!rechtenVraag.granted) {
+          Dialog.alert(
+            'Geen toestemming',
+            bron === 'camera'
+              ? 'Geef BossBase toegang tot de camera om een foto te maken.'
+              : 'Geef BossBase toegang tot je foto\'s om er een te kiezen.',
+          );
+          return;
+        }
       }
 
       // Een telefoonfoto is al gauw een paar megabyte. De werkbon toont hem nooit
       // groter dan het scherm, dus verkleinen scheelt opslag én wachttijd —
-      // dezelfde afweging als het dashboard maakt bij het uploaden.
+      // dezelfde afweging als het dashboard maakt bij het uploaden. (Op web
+      // negeert de kiezer `quality`; daar verkleint `bereidFotoVoor`.)
       const opties: ImagePicker.ImagePickerOptions = {
         mediaTypes: ['images'],
         quality: 0.7,
-        base64: true,
+        base64: FOTO_ALS_BASE64,
       };
       const resultaat =
         bron === 'camera'
@@ -452,32 +460,39 @@ export default function WorkOrderDetailScreen() {
 
       if (resultaat.canceled) return;
       const asset = resultaat.assets?.[0];
-      if (!asset?.base64) {
-        Alert.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere foto.');
+      if (!asset) {
+        Dialog.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere foto.');
         return;
       }
 
       setFotoBezig(true);
-      const bytes = base64NaarBytes(asset.base64);
-      const extensie = (asset.uri.split('.').pop() ?? 'jpg').toLowerCase().split('?')[0] || 'jpg';
+      // Type en extensie komen uit de inhoud van het bestand, niet uit de URI
+      // (op web een `blob:`-adres zonder extensie) of uit de opgegeven naam.
+      // Alleen JPEG, PNG en WebP komen erdoor.
+      const foto = await bereidFotoVoor(asset);
+      if (!foto.ok) {
+        setFotoBezig(false);
+        Dialog.alert(foto.titel, foto.tekst);
+        return;
+      }
       const { data, error: fotoError } = await uploadWorkOrderPhoto({
         werkbon_id: workOrder.id,
         company_id: workOrder.company_id,
         categorie,
-        bytes: bytes.buffer as ArrayBuffer,
-        contentType: asset.mimeType ?? 'image/jpeg',
-        extensie: extensie === 'heic' ? 'jpg' : extensie,
+        bytes: foto.bytes,
+        contentType: foto.contentType,
+        extensie: foto.extensie,
       });
       setFotoBezig(false);
       if (fotoError || !data) {
-        Alert.alert('Foto niet opgeslagen', fotoError ?? 'Probeer het opnieuw.');
+        Dialog.alert('Foto niet opgeslagen', fotoError ?? 'Probeer het opnieuw.');
         return;
       }
       setPhotos((prev) => [...prev, data]);
     } catch (e) {
       setFotoBezig(false);
       if (__DEV__) console.log('[werkbon] foto toevoegen mislukt', e);
-      Alert.alert('Foto niet opgeslagen', 'Er ging iets mis bij het toevoegen van de foto.');
+      Dialog.alert('Foto niet opgeslagen', 'Er ging iets mis bij het toevoegen van de foto.');
     }
   };
 
@@ -503,7 +518,7 @@ export default function WorkOrderDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Werkbon" onBack={() => router.back()} />
+          <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
           <LoadingScreen label="Werkbon laden..." />
         </View>
       </>
@@ -515,7 +530,7 @@ export default function WorkOrderDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Werkbon" onBack={() => router.back()} />
+          <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
           <ErrorState
             title="Werkbon niet gevonden"
             message={error ?? 'Deze werkbon bestaat niet of je hebt geen toegang.'}
@@ -563,7 +578,7 @@ export default function WorkOrderDetailScreen() {
         {/* De kop scrolt mee met de pagina, zoals in het ontwerp. */}
         <AppTopBar
           variant="detail"
-          onBack={() => router.back()}
+          onBack={() => terugOfNaar(router, '/work-orders')}
           eyebrow={`${workOrder.nummer ?? 'Werkbon'}${
             workOrder.gepland_op ? ` · ${formatDagLabel(workOrder.gepland_op)}` : ''
           }`}
@@ -1233,7 +1248,7 @@ function CustomerActions({
       await Linking.openURL(url);
     } catch (e) {
       console.warn('[CustomerActions] openURL failed', e);
-      Alert.alert('Kon niet openen', 'Deze actie wordt niet door je toestel ondersteund.');
+      Dialog.alert('Kon niet openen', 'Deze actie wordt niet door je toestel ondersteund.');
     }
   };
 
@@ -1341,6 +1356,7 @@ function AddNoteModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <MobielKader>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1384,6 +1400,7 @@ function AddNoteModal({
           <Button label="Opslaan" onPress={submit} loading={submitting} />
         </ScrollView>
       </KeyboardAvoidingView>
+      </MobielKader>
     </Modal>
   );
 }
@@ -1432,6 +1449,7 @@ function AddTaskModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <MobielKader>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1463,6 +1481,7 @@ function AddTaskModal({
           <Button label="Opslaan" onPress={submit} loading={submitting} />
         </ScrollView>
       </KeyboardAvoidingView>
+      </MobielKader>
     </Modal>
   );
 }
@@ -1523,6 +1542,7 @@ function AddMaterialModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <MobielKader>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1562,6 +1582,7 @@ function AddMaterialModal({
           <Button label="Opslaan" onPress={submit} loading={submitting} />
         </ScrollView>
       </KeyboardAvoidingView>
+      </MobielKader>
     </Modal>
   );
 }
@@ -1627,6 +1648,7 @@ function AddTimeEntryModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <MobielKader>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1665,6 +1687,7 @@ function AddTimeEntryModal({
           <Button label="Opslaan" onPress={submit} loading={submitting} />
         </ScrollView>
       </KeyboardAvoidingView>
+      </MobielKader>
     </Modal>
   );
 }

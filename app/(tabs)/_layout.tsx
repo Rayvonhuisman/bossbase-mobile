@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Redirect, Tabs } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from "expo-router/js-tabs";
 import { CalendarDays, ClipboardList, Clock, Home, Menu, Users } from 'lucide-react-native';
@@ -149,7 +150,7 @@ export default function TabsLayout() {
           <Button label="Opnieuw proberen" onPress={refreshProfile} />
           <Pressable
             onPress={() =>
-              Alert.alert('Uitloggen?', undefined, [
+              Dialog.alert('Uitloggen?', undefined, [
                 { text: 'Annuleren', style: 'cancel' },
                 { text: 'Uitloggen', style: 'destructive', onPress: signOut },
               ])

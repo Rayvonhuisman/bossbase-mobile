@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { terugOfNaar } from '@/lib/navigatie';
 import { onb } from './_tokens';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ export function TopBar({
   return (
     <View style={styles.topBar}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => terugOfNaar(router, '/')}
         hitSlop={8}
         style={[styles.backBtn, { opacity: showBack ? 1 : 0 }]}
         disabled={!showBack}

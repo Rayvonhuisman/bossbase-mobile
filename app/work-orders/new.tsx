@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { Stack, useRouter } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/services/workOrderService';
 import { listCustomers } from '@/services/customerService';
 import { isGeldigeISODatum, vandaagISO } from '@/lib/datum';
+import { terugOfNaar } from '@/lib/navigatie';
 import { ds, spacing, type ThemeColors } from '@/theme';
 import type { Customer } from '@/types/domain';
 
@@ -161,11 +162,11 @@ function NewWorkOrderInhoud() {
     }
     // Meteen naar de nieuwe bon: het nummer komt uit de database, dus dit is de
     // eerste plek waar de gebruiker ziet wat hij heeft gemaakt.
-    Alert.alert('Werkbon aangemaakt', `${data.nummer ?? 'De werkbon'} is opgeslagen.`);
+    Dialog.alert('Werkbon aangemaakt', `${data.nummer ?? 'De werkbon'} is opgeslagen.`);
     router.replace(`/work-orders/${data.id}`);
   };
 
-  const topBar = <AppTopBar variant="detail" title="Nieuwe werkbon" onBack={() => router.back()} />;
+  const topBar = <AppTopBar variant="detail" title="Nieuwe werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />;
 
   if (!loaded || laden) {
     return (

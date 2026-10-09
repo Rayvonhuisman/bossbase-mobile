@@ -31,6 +31,7 @@ import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { formatDateNL } from '@/lib/format';
 import { ds } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Notities — dezelfde `notes`-tabel als het dashboard.
@@ -160,7 +161,7 @@ export default function NotesScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Notities" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Notities" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -176,7 +177,7 @@ export default function NotesScreen() {
             variant="detail"
             title="Notities"
             subtitle={`${items.length} ${items.length === 1 ? 'notitie' : 'notities'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe notitie" onPress={openNieuw} />

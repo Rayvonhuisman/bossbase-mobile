@@ -26,9 +26,11 @@ import { canBookHours, listWorkOrders } from '@/services/workOrderService';
 import { createWerkbonUur } from '@/services/werkbonUrenService';
 import { createWerkdagUur } from '@/services/timeEntryService';
 import { isGeldigeISODatum, minutenVanTijd, vandaagISO } from '@/lib/datum';
+import { berekenUren } from '@/lib/urenBerekening';
 import { formatDagLabel } from '@/lib/format';
 import { spacing, type ThemeColors } from '@/theme';
 import type { WriteResult } from '@/lib/writeResult';
+import { terugOfNaar } from '@/lib/navigatie';
 import type { WorkOrderWithCustomer } from '@/types/domain';
 
 /**
@@ -40,8 +42,8 @@ import type { WorkOrderWithCustomer } from '@/types/domain';
  *   dashboard leest en die nacalculatie, facturatie en de werkbon-PDF voedt.
  *   Hier is een werkbon verplicht; zonder klus horen de uren er niet in.
  * - **Overig** → `urenregistratie`. De gewone urenstaat: reistijd, overleg,
- *   magazijn, verlof. Er gaat géén `werkbon_id` mee (de kolom blijft leeg) en
- *   er komt geen werkbonnummer in de notitie: een verzonnen koppeling levert
+ *   magazijn, verlof. Die tabel kent geen werkbon (meer), en er komt ook geen
+ *   werkbonnummer in de notitie: een verzonnen koppeling levert
  *   een tweede administratie op die het kantoor nooit ziet kloppen.
  *
  * Beide paden lopen via `schrijf()`, dus een door RLS geweigerde rij komt hier
@@ -129,18 +131,18 @@ export default function NewTimeEntryScreen() {
 
   // ─── Uren: afgeleid zodra er een begin- én eindtijd staat ────────────────
   const pauzeMinuten = Math.max(0, Math.round(Number(pauze.replace(',', '.')) || 0));
+  // Dezelfde rekenregel als het dashboard: eind − begin − pauze, afgerond op
+  // twee decimalen (lib/urenBerekening). Wat hier staat, is wat er opgeslagen
+  // wordt — niet een afgerond getal op het scherm en een ander in de database.
+  const berekendeUren = berekenUren(van, tot, pauzeMinuten);
   const tijdvakFout =
     van && tot && minutenVanTijd(tot) <= minutenVanTijd(van)
       ? 'De eindtijd ligt vóór de begintijd.'
-      : null;
-  const berekendeUren =
-    van && tot && !tijdvakFout
-      ? Math.max(0, (minutenVanTijd(tot) - minutenVanTijd(van) - pauzeMinuten) / 60)
-      : null;
+      : van && tot && berekendeUren === null
+        ? 'De pauze is langer dan de tijd tussen begin en eind.'
+        : null;
   const urenUitTijd = berekendeUren !== null;
-  const urenWaarde = urenUitTijd
-    ? (Math.round(berekendeUren * 100) / 100).toString().replace('.', ',')
-    : uren;
+  const urenWaarde = urenUitTijd ? berekendeUren.toString().replace('.', ',') : uren;
 
   const onSubmit = async () => {
     setError(null);
@@ -211,11 +213,11 @@ export default function NewTimeEntryScreen() {
         ? `Uren geboekt op ${selectedWo?.nummer ?? 'de werkbon'}.`
         : 'Uren opgeslagen.',
     );
-    router.back();
+    terugOfNaar(router, '/hours');
   };
 
   // Every state keeps the top bar, so the back affordance is never lost.
-  const topBar = <AppTopBar variant="detail" title="Uren toevoegen" onBack={() => router.back()} />;
+  const topBar = <AppTopBar variant="detail" title="Uren toevoegen" onBack={() => terugOfNaar(router, '/hours')} />;
 
   if (loadingWo || !rechtenGeladen) {
     return (

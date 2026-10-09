@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Dialog } from './dialog';
 
 /**
  * Standardised "Not yet available" alert.
@@ -13,5 +13,5 @@ export function notAvailableAlert(
   feature: string,
   detail = 'Deze functie is nog niet beschikbaar in de mobiele app.',
 ): void {
-  Alert.alert(feature, detail);
+  Dialog.alert(feature, detail);
 }

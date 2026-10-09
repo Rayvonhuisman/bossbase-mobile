@@ -22,6 +22,7 @@ import { listCompanyPhotos, type CompanyPhoto } from '@/services/workOrderServic
 import { formatDateNL } from '@/lib/format';
 import { ds, radius, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Foto's & bestanden — alle werkbonfoto's van het bedrijf, nieuwste eerst.
@@ -74,7 +75,7 @@ export default function FilesScreen() {
         <AppScreen
           scroll={false}
           header={
-            <AppTopBar variant="detail" title="Foto's & bestanden" onBack={() => router.back()} />
+            <AppTopBar variant="detail" title="Foto's & bestanden" onBack={() => terugOfNaar(router, '/menu')} />
           }
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
@@ -108,7 +109,7 @@ export default function FilesScreen() {
             variant="detail"
             title="Foto's & bestanden"
             subtitle={`${items.length} ${items.length === 1 ? "foto" : "foto's"} bij ${groepen.size} ${groepen.size === 1 ? 'werkbon' : 'werkbonnen'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
           />
         }
         refreshing={refreshing}

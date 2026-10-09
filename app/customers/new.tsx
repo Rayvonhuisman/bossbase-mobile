@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { Dialog } from '@/lib/dialog';
+import { terugOfNaar } from '@/lib/navigatie';
 import { Stack, useRouter } from 'expo-router';
 import { AppTopBar, FormField, PermissionGate, FormFooter } from '@/components';
 import { useAuth, useTheme } from '@/providers';
@@ -72,8 +73,8 @@ function NewCustomerInhoud() {
       setError(saveError);
       return;
     }
-    Alert.alert('Klant opgeslagen', `${name.trim()} is toegevoegd.`);
-    router.back();
+    Dialog.alert('Klant opgeslagen', `${name.trim()} is toegevoegd.`);
+    terugOfNaar(router, '/customers');
   };
 
   return (
@@ -81,7 +82,7 @@ function NewCustomerInhoud() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppTopBar variant="detail" title="Nieuwe klant" onBack={() => router.back()} />
+        <AppTopBar variant="detail" title="Nieuwe klant" onBack={() => terugOfNaar(router, '/customers')} />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

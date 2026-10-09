@@ -35,6 +35,7 @@ import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Pipeline — deals per fase, uit dezelfde `deals`-tabel als het dashboard.
@@ -211,7 +212,7 @@ function PipelineScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Pipeline" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Pipeline" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -230,7 +231,7 @@ function PipelineScreenInhoud() {
             title="Pipeline"
             subtitle={`${deals.length} ${deals.length === 1 ? 'deal' : 'deals'}`}
             meta={totaal > 0 ? formatEUR(totaal) : undefined}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe deal" onPress={openNieuw} />

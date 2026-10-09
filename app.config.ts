@@ -74,6 +74,18 @@ const config: ExpoConfig = {
     ],
   },
 
+  /**
+   * Webversie (PWA-traject): dezelfde Expo Router-app, gebundeld door Metro
+   * als single-page app. Eén `index.html`, routering in de browser — er is
+   * niets om vooraf te renderen achter een login, en zo raakt geen enkel
+   * scherm `localStorage` of de sessie aan tijdens een build.
+   */
+  web: {
+    bundler: 'metro',
+    output: 'single',
+    favicon: './assets/icon.png',
+  },
+
   plugins: [
     'expo-router',
     'expo-asset',

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { isReadonly } from '@/lib/sessionContext';
-import { isGeldigeDatum } from '@/lib/nlTijd';
+import { isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
+import { berekenUren, rondUrenAf } from '@/lib/urenBerekening';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { WerkbonUur } from '@/types/domain';
 
@@ -141,7 +142,9 @@ export async function createWerkbonUur(
   if (!isGeldigeDatum(input.datum)) {
     return writeFout('validatie', 'Vul een geldige datum in.');
   }
-  if (!Number.isFinite(input.uren) || input.uren <= 0) {
+  // Twee decimalen, zoals het dashboard (zie lib/urenBerekening).
+  const uren = rondUrenAf(input.uren);
+  if (!Number.isFinite(uren) || uren <= 0) {
     return writeFout('validatie', 'Vul een geldig aantal uren in.');
   }
   if (input.pauze_minuten !== undefined && (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)) {
@@ -157,7 +160,7 @@ export async function createWerkbonUur(
           werkbon_id: input.werkbon_id,
           profile_id: input.profile_id,
           datum: input.datum,
-          uren: input.uren,
+          uren,
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
@@ -182,27 +185,53 @@ export async function createWerkbonUur(
  * Die vraag kan de app niet zelf beantwoorden, dus we tonen de knop en laten de
  * server beslissen; komt er geen rij terug, dan is dat een weigering en geen
  * geslaagde opslag.
+ *
+ * Zoals in het dashboard: komen begin- én eindtijd mee, dan worden de uren
+ * daaruit herberekend (eind − begin − pauze) en wint die uitkomst van een
+ * meegegeven `uren`. Zo kan een regel nooit "08:00–16:00, 30 min pauze, 8 uur"
+ * worden.
  */
 export async function updateWerkbonUur(
   id: string,
-  input: { datum?: string; uren?: number; pauze_minuten?: number; notitie?: string | null },
+  input: {
+    datum?: string;
+    start_tijd?: string | null;
+    eind_tijd?: string | null;
+    uren?: number;
+    pauze_minuten?: number;
+    notitie?: string | null;
+  },
 ): Promise<WriteResult<WerkbonUur>> {
   const updates: Record<string, unknown> = {};
   if (input.datum !== undefined) {
     if (!isGeldigeDatum(input.datum)) return writeFout('validatie', 'Vul een geldige datum in (JJJJ-MM-DD).');
     updates.datum = input.datum;
   }
-  if (input.uren !== undefined) {
-    if (!Number.isFinite(input.uren) || input.uren <= 0) {
-      return writeFout('validatie', 'Vul een geldig aantal uren in.');
+  for (const veld of ['start_tijd', 'eind_tijd'] as const) {
+    const v = input[veld];
+    if (v !== undefined) {
+      if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
+      updates[veld] = v || null;
     }
-    updates.uren = input.uren;
   }
   if (input.pauze_minuten !== undefined) {
     if (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0) {
       return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
     }
     updates.pauze_minuten = input.pauze_minuten;
+  }
+  const herberekend = input.start_tijd && input.eind_tijd
+    ? berekenUren(input.start_tijd, input.eind_tijd, input.pauze_minuten ?? 0)
+    : null;
+  if (input.start_tijd && input.eind_tijd && herberekend === null) {
+    return writeFout('validatie', 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.');
+  }
+  const uren = herberekend ?? (input.uren !== undefined ? rondUrenAf(input.uren) : undefined);
+  if (uren !== undefined) {
+    if (!Number.isFinite(uren) || uren <= 0) {
+      return writeFout('validatie', 'Vul een geldig aantal uren in.');
+    }
+    updates.uren = uren;
   }
   if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
 

@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import { Dialog } from './dialog';
 
 /**
  * Centralized helpers for OS deep-link actions used across screens.
@@ -12,7 +13,7 @@ async function safeOpen(url: string, fallbackMsg = 'Deze actie wordt niet onders
     await Linking.openURL(url);
   } catch (e) {
     console.warn('[linking] openURL failed', { url, err: e });
-    Alert.alert('Kon niet openen', fallbackMsg);
+    Dialog.alert('Kon niet openen', fallbackMsg);
   }
 }
 
@@ -32,6 +33,22 @@ export function sendMail(email: string | null | undefined): boolean {
   if (!trimmed) return false;
   safeOpen(`mailto:${trimmed}`, 'Mail werkt niet op dit toestel.');
   return true;
+}
+
+/**
+ * Wachtwoordherstel loopt via de website: daar vraag je met "Wachtwoord
+ * vergeten?" een resetlink aan, die per mail komt en op
+ * `www.bossbase.nl/reset-password?token=…` landt. De app doet zelf niets met
+ * wachtwoorden die je kwijt bent.
+ *
+ * Bewust naar `/login` en niet naar `/reset-password`: zonder token toont die
+ * pagina alleen "Deze link is ongeldig". Het aanvraagformulier zit achter
+ * "Wachtwoord vergeten?" op de inlogpagina, en die werkt ook op een telefoon.
+ */
+export const WACHTWOORD_HERSTEL_URL = 'https://www.bossbase.nl/login';
+
+export function openWachtwoordHerstel(): void {
+  safeOpen(WACHTWOORD_HERSTEL_URL, 'Ga in je browser naar www.bossbase.nl/login.');
 }
 
 /** Open maps app at the given address string. Falls back to Google Maps web. */

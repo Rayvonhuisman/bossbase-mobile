@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
 import { Lock, Plus, Receipt, Trash2 } from 'lucide-react-native';
 import {
@@ -60,6 +61,7 @@ import { vandaagIso } from '@/lib/nlTijd';
 import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
@@ -279,7 +281,7 @@ function InvoicesScreenInhoud() {
    */
   const betaaldZetten = (f: FactuurRow) => {
     if (!magBetaald) return;
-    Alert.alert(
+    Dialog.alert(
       'Factuur op betaald zetten?',
       `${f.nummer} · ${formatEUR(Number(f.totaal_incl ?? 0))}`,
       [
@@ -291,7 +293,7 @@ function InvoicesScreenInhoud() {
               onSuccess: async (res) => {
                 const uitkomst = res as { gewijzigd: boolean };
                 if (!uitkomst.gewijzigd) {
-                  Alert.alert('Geen wijziging', 'Deze factuur stond al op betaald.');
+                  Dialog.alert('Geen wijziging', 'Deze factuur stond al op betaald.');
                 }
                 await herlaad();
               },
@@ -314,7 +316,7 @@ function InvoicesScreenInhoud() {
             setConcept(null);
             // De factuur is weg; lukte de prullenbak niet, dan komt hij bij de
             // volgende synchronisatie terug en moet de gebruiker dat weten.
-            if (typeof extra?.waarschuwing === 'string') Alert.alert('Let op', extra.waarschuwing);
+            if (typeof extra?.waarschuwing === 'string') Dialog.alert('Let op', extra.waarschuwing);
             await herlaad();
           },
         });
@@ -377,7 +379,7 @@ function InvoicesScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Facturen" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Facturen" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -400,7 +402,7 @@ function InvoicesScreenInhoud() {
             title="Facturen"
             subtitle={`${items.length} ${items.length === 1 ? 'factuur' : 'facturen'}`}
             meta={openstaand > 0 ? `${formatEUR(openstaand)} open` : undefined}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={openNieuw} />

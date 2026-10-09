@@ -42,6 +42,7 @@ import { useSave } from '@/lib/useSave';
 import { formatDateNL } from '@/lib/format';
 import { ds, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Activiteiten — bellen, mailen, bezoeken, taken en opvolgacties.
@@ -145,7 +146,7 @@ export default function ActivitiesScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Activiteiten" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Activiteiten" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -194,7 +195,7 @@ export default function ActivitiesScreen() {
             variant="detail"
             title="Activiteiten"
             subtitle={`${open.length} open · ${gedaan.length} afgerond`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton

@@ -37,6 +37,7 @@ import { useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Bedrijfsinstellingen — `bedrijfsinstellingen` (tarieven, btw, agenda) en
@@ -205,7 +206,7 @@ function SettingsScreenInhoud() {
         <AppScreen
           scroll={false}
           header={
-            <AppTopBar variant="detail" title="Bedrijfsinstellingen" onBack={() => router.back()} />
+            <AppTopBar variant="detail" title="Bedrijfsinstellingen" onBack={() => terugOfNaar(router, '/menu')} />
           }
         >
           <ErrorState
@@ -226,7 +227,7 @@ function SettingsScreenInhoud() {
             variant="detail"
             title="Bedrijfsinstellingen"
             subtitle={bedrijf?.name ?? company?.name ?? 'Bedrijf'}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magWijzigen ? (
                 <HeaderIconButton

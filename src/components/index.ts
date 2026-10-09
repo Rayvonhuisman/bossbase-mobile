@@ -22,6 +22,8 @@ export { NoticeBanner } from './NoticeBanner';
 export { RegelEditor } from './RegelEditor';
 export type { NoticeToon } from './NoticeBanner';
 export { DateField, TimeField } from './DateField';
+export { DialogHost } from './DialogHost';
+export { MobielKader } from './MobielKader';
 export { FormField } from './FormField';
 export { FormSheet } from './FormSheet';
 export { SelectField } from './SelectField';
