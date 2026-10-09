@@ -6,6 +6,9 @@
   "outputDirectory": "dist",
   "cleanUrls": false,
   "trailingSlash": false,
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     {
       "source": "/((?!_expo/|assets/|icons/).*)",
