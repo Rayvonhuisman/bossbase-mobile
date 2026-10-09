@@ -92,3 +92,6 @@ design-reference/
 # bundel.
 MOBILE_*.md
 MOBILE_*.sql
+
+# Vercel CLI-koppeling en webexport horen niet in een native build.
+.vercel/
