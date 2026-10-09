@@ -1,0 +1,19 @@
+# Wat `vercel deploy` vanaf een lokale machine mag uploaden.
+#
+# De Vercel CLI kijkt bij een upload NIET naar .gitignore. Zonder dit bestand
+# zouden .env, ontwerpmateriaal met bedrijfsgegevens (design-reference/) en
+# interne documenten (MOBILE_*.md/.sql) als bron in het Vercel-project
+# belanden. Daarom een toelatingslijst: alles uit, behalve wat de webbuild
+# (`npm run build:web`) nodig heeft.
+/*
+!/app
+!/src
+!/assets
+!/public
+!/scripts
+!/package.json
+!/package-lock.json
+!/app.config.ts
+!/babel.config.js
+!/tsconfig.json
+!/vercel.json
