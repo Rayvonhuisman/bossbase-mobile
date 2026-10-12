@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "build:web": "expo export --platform web && node scripts/pwa-na-export.mjs dist"
+    "build:web": "expo export --platform web && node scripts/pwa-na-export.mjs dist",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "check:bundel": "node scripts/controleer-bundel.mjs dist"
   },
   "dependencies": {
     "@expo-google-fonts/sora": "^0.4.2",

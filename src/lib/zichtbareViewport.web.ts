@@ -46,16 +46,28 @@ let huidig: ZichtbareViewport = VOL;
 const luisteraars = new Set<() => void>();
 let geinstalleerd = false;
 
-function meet(): ZichtbareViewport {
-  const vv = window.visualViewport;
+/**
+ * Pure berekening (los te testen): wat is er zichtbaar, gegeven de visual
+ * viewport en de hoogte van de pagina zelf?
+ */
+export function berekenViewport(
+  vv: Pick<VisualViewport, 'height' | 'offsetTop' | 'scale'> | null | undefined,
+  layout: number,
+): ZichtbareViewport {
   if (!vv || Math.abs(vv.scale - 1) > 0.01) return VOL;
-  const layout = document.documentElement.clientHeight || window.innerHeight;
   const hoogte = Math.round(vv.height);
   const boven = Math.max(0, Math.round(vv.offsetTop));
   const toetsenbordOpen = layout - hoogte > TOETSENBORD_DREMPEL;
   // Zonder toetsenbord en zonder verschuiving: gewoon de volle ruimte.
   if (!toetsenbordOpen && boven === 0) return VOL;
   return { hoogte, boven, toetsenbordOpen };
+}
+
+function meet(): ZichtbareViewport {
+  return berekenViewport(
+    window.visualViewport,
+    document.documentElement.clientHeight || window.innerHeight,
+  );
 }
 
 function isTekstveld(el: Element | null): el is HTMLElement {
