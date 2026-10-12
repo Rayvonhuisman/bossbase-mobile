@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
-import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 
 /**
  * Klantnotities — rijen in `klant_tijdlijn` met `type = 'notitie_toegevoegd'`.
@@ -25,8 +25,12 @@ import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/wr
  *      schrijft platte tekst met ge-escapete tekens, en leest HTML terug als
  *      platte tekst — zo blijft een notitie van beide kanten leesbaar.
  *
- * RLS (`032_klant_tijdlijn`): FOR ALL voor leden van hetzelfde bedrijf. Er is
- * geen aparte rechtgate; tenant-isolatie loopt via `company_id`.
+ * RLS op `klant_tijdlijn`: lezen en toevoegen binnen het eigen bedrijf
+ * (`company_id = current_company_id()`), en geen UPDATE- of DELETE-policy. De
+ * tijdlijn is een logboek: een notitie blijft staan zoals hij is toegevoegd.
+ * Daarom biedt deze service ook geen wijzigen of verwijderen aan; zo'n
+ * schrijfactie zou altijd nul rijen raken. Verdwijnt de klant, dan verdwijnen
+ * zijn notities mee (`ON DELETE CASCADE`).
  */
 
 const NOTITIE_TYPE = 'notitie_toegevoegd';
@@ -171,54 +175,3 @@ export async function createNote(input: NoteInput): Promise<WriteResult<NoteRow>
   return res.ok ? { ok: true, data: toNote(res.data) } : res;
 }
 
-export async function updateNote(
-  id: string,
-  input: Partial<NoteInput>,
-): Promise<WriteResult<NoteRow>> {
-  const updates: Record<string, unknown> = {};
-  if (input.body !== undefined) {
-    if (!input.body.trim()) return writeFout('validatie', 'Een notitie mag niet leeg zijn.');
-    updates.omschrijving = naarHtml(input.body);
-  }
-  if (input.customer_id !== undefined) updates.customer_id = input.customer_id;
-  if (Object.keys(updates).length === 0) {
-    return writeFout('validatie', 'Er is niets gewijzigd.');
-  }
-
-  const res = await schrijf<NoteDbRow>(
-    () =>
-      supabase
-        .from('klant_tijdlijn')
-        .update(updates)
-        .eq('id', id)
-        .eq('type', NOTITIE_TYPE)
-        .select(NOTE_COLUMNS),
-    { context: 'noteService.updateNote', bedrijfReadonly: isReadonly() },
-  );
-  return res.ok ? { ok: true, data: toNote(res.data) } : res;
-}
-
-/**
- * Verwijdert een notitie. `.eq('type', …)` erbij zodat een verkeerde id nooit
- * een gewone tijdlijnregel (offerte aangemaakt, factuur betaald) kan wissen, en
- * `.select('id')` zodat een geweigerde of al verdwenen rij als mislukking
- * terugkomt in plaats van als stille "gelukt".
- */
-export async function deleteNote(id: string): Promise<WriteStatus> {
-  const res = await schrijf<{ id: string }>(
-    () =>
-      supabase
-        .from('klant_tijdlijn')
-        .delete()
-        .eq('id', id)
-        .eq('type', NOTITIE_TYPE)
-        .select('id'),
-    {
-      context: 'noteService.deleteNote',
-      bedrijfReadonly: isReadonly(),
-      leegSoort: 'niet-gevonden',
-      leegMelding: 'Deze notitie is al verwijderd of je hebt er geen rechten voor.',
-    },
-  );
-  return res.ok ? { ok: true, data: null } : res;
-}

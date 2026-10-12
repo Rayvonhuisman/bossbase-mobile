@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
 import { Lock, Plus, Wallet } from 'lucide-react-native';
 import {
@@ -39,6 +40,7 @@ import { vandaagIso } from '@/lib/nlTijd';
 import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
@@ -225,7 +227,7 @@ function ExpensesScreenInhoud() {
         save(() => deleteJobCost(id), {
           onSuccess: async (_data, extra) => {
             setConcept(null);
-            if (typeof extra?.waarschuwing === 'string') Alert.alert('Let op', extra.waarschuwing);
+            if (typeof extra?.waarschuwing === 'string') Dialog.alert('Let op', extra.waarschuwing);
             await herlaad();
           },
         });
@@ -243,7 +245,7 @@ function ExpensesScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Kosten" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Kosten" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -262,7 +264,7 @@ function ExpensesScreenInhoud() {
             title="Kosten"
             subtitle={`${items.length} ${items.length === 1 ? 'kostenpost' : 'kostenposten'}`}
             meta={totaal > 0 ? formatEUR(totaal) : undefined}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe kostenpost" onPress={openNieuw} />

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, StickyNote } from 'lucide-react-native';
 import {
@@ -18,29 +18,23 @@ import {
   type SelectOption,
 } from '@/components';
 import { usePermissions, useTheme } from '@/providers';
-import {
-  createNote,
-  deleteNote,
-  listNotes,
-  updateNote,
-  type NoteRow,
-} from '@/services/noteService';
+import { createNote, listNotes, type NoteRow } from '@/services/noteService';
 import { listCustomers } from '@/services/customerService';
 import type { Customer } from '@/types/domain';
-import { bevestigVerwijderen, useSave } from '@/lib/useSave';
+import { useSave } from '@/lib/useSave';
 import { formatDateNL } from '@/lib/format';
 import { ds } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
- * Notities — dezelfde `notes`-tabel als het dashboard.
+ * Notities — klantnotities op de klanttijdlijn (`klant_tijdlijn`), dezelfde
+ * als in het dashboard.
  *
- * Rechten: de RLS-policies op `notes` vragen alleen dat de rij bij je eigen
- * bedrijf hoort; er is geen apart notitierecht. Aanmaken valt wél onder de
- * read-onlygate (`readonly_notes`), bewerken en verwijderen niet — dat is geen
- * versoepeling van onze kant maar precies wat de policies doen, en het spoort
- * met de belofte in het dashboard dat een verlopen account zijn administratie
- * kan blijven bijhouden.
+ * Toevoegen kan; wijzigen en verwijderen niet. De tijdlijn is een logboek en
+ * de RLS-policies kennen alleen lezen en toevoegen (zie `noteService`). Een
+ * knop "Bewerken" of "Verwijderen" zou dus altijd op een foutmelding uitlopen;
+ * daarom tonen we die niet, ook niet aan een beheerder.
  */
 
 function titleFor(n: NoteRow): string {
@@ -61,8 +55,6 @@ function subtitleFor(n: NoteRow): string {
 }
 
 type Concept = {
-  /** null = nieuwe notitie. */
-  id: string | null;
   body: string;
   customerId: string | null;
 };
@@ -79,8 +71,6 @@ export default function NotesScreen() {
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
   const magMaken = mag('notities', 'maken');
-  const magWijzigen = mag('notities', 'wijzigen');
-  const magVerwijderen = mag('notities', 'verwijderen');
 
   const load = useCallback(async () => {
     setError(null);
@@ -109,25 +99,13 @@ export default function NotesScreen() {
 
   const openNieuw = () => {
     setSaveError(null);
-    setConcept({ id: null, body: '', customerId: null });
-  };
-
-  const openBewerk = (n: NoteRow) => {
-    if (!magWijzigen) return;
-    setSaveError(null);
-    setConcept({ id: n.id, body: n.body, customerId: n.customer_id });
+    setConcept({ body: '', customerId: null });
   };
 
   const opslaan = async () => {
     if (!concept) return;
     const res = await save(
-      () =>
-        concept.id
-          ? updateNote(concept.id, {
-              body: concept.body,
-              ...(concept.customerId ? { customer_id: concept.customerId } : {}),
-            })
-          : createNote({ body: concept.body, customer_id: concept.customerId ?? '' }),
+      () => createNote({ body: concept.body, customer_id: concept.customerId ?? '' }),
       {
         onSuccess: async () => {
           setConcept(null);
@@ -136,19 +114,6 @@ export default function NotesScreen() {
       },
     );
     return res;
-  };
-
-  const verwijderen = () => {
-    if (!concept?.id) return;
-    const id = concept.id;
-    bevestigVerwijderen('Notitie', () => {
-      save(() => deleteNote(id), {
-        onSuccess: async () => {
-          setConcept(null);
-          await herlaad();
-        },
-      });
-    });
   };
 
   // Niets tonen zolang de rechten onderweg zijn: een plusknop die verschijnt en
@@ -160,7 +125,7 @@ export default function NotesScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Notities" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Notities" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -176,7 +141,7 @@ export default function NotesScreen() {
             variant="detail"
             title="Notities"
             subtitle={`${items.length} ${items.length === 1 ? 'notitie' : 'notities'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe notitie" onPress={openNieuw} />
@@ -209,28 +174,26 @@ export default function NotesScreen() {
                   icon={StickyNote}
                   title={titleFor(n)}
                   subtitle={subtitleFor(n)}
-                  onPress={magWijzigen ? () => openBewerk(n) : undefined}
                 />
               ))}
             </AppListGroup>
+            <Text style={[styles.voetnoot, { color: t.muted }]}>
+              Een notitie blijft op de klanttijdlijn staan zoals hij is toegevoegd. Wijzigen of
+              verwijderen kan niet.
+            </Text>
           </>
         )}
       </AppScreen>
 
       <FormSheet
         visible={concept !== null}
-        title={concept?.id ? 'Notitie bewerken' : 'Nieuwe notitie'}
-        subtitle={concept?.id ? undefined : 'Wordt direct zichtbaar op het dashboard'}
+        title="Nieuwe notitie"
+        subtitle="Wordt direct zichtbaar op het dashboard"
         error={saveError}
         saving={saving}
         submitDisabled={!concept?.body.trim()}
         onSubmit={opslaan}
         onClose={() => setConcept(null)}
-        destructive={
-          concept?.id && magVerwijderen
-            ? { label: 'Notitie verwijderen', onPress: verwijderen }
-            : undefined
-        }
       >
         <FormField
           label="Notitie"
@@ -255,3 +218,7 @@ export default function NotesScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  voetnoot: { fontSize: 12.5, lineHeight: 18, marginTop: 12, paddingHorizontal: 4 },
+});

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
 
 /**
@@ -137,6 +138,18 @@ export function useLaden(
       return;
     }
     voerUit('focus');
+  }, [isFocused, bijFocus, klaarOmTeLaden, voerUit]);
+
+  // Web: een geïnstalleerde app (of een tabblad) staat soms dagen open. Komt
+  // hij weer in beeld, dan stil bijwerken — net als terugkeren op een scherm.
+  // Alleen het scherm dat in beeld is. Op iOS en Android blijft het gedrag
+  // zoals het was.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !bijFocus || !klaarOmTeLaden || !isFocused) return;
+    const sub = AppState.addEventListener('change', (stand) => {
+      if (stand === 'active' && eersteGedaan.current) voerUit('focus');
+    });
+    return () => sub.remove();
   }, [isFocused, bijFocus, klaarOmTeLaden, voerUit]);
 
   const onRefresh = useCallback(() => {

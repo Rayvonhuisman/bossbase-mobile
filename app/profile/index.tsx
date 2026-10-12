@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Constants from 'expo-constants';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import {
@@ -23,6 +24,7 @@ import { useSave } from '@/lib/useSave';
 import type { Role } from '@/types/domain';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
+import { terugOfNaar } from '@/lib/navigatie';
 
 const ROLE_LABELS: Record<Role, string> = {
   admin: 'Beheerder',
@@ -53,7 +55,7 @@ export default function ProfileScreen() {
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
   const onLogout = () => {
-    Alert.alert('Uitloggen?', 'Je wordt teruggebracht naar het inlogscherm.', [
+    Dialog.alert('Uitloggen?', 'Je wordt teruggebracht naar het inlogscherm.', [
       { text: 'Annuleren', style: 'cancel' },
       { text: 'Uitloggen', style: 'destructive', onPress: () => signOut() },
     ]);
@@ -67,7 +69,7 @@ export default function ProfileScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: th.bg }}>
         <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
-        <AppTopBar variant="detail" onBack={() => router.back()} title="Profiel" />
+        <AppTopBar variant="detail" onBack={() => terugOfNaar(router, '/today')} title="Profiel" />
         <LoadingScreen label="Profiel laden..." />
       </View>
     );
@@ -84,7 +86,7 @@ export default function ProfileScreen() {
         {/* De kop scrolt mee met de pagina, zoals in het ontwerp. */}
         <AppTopBar
           variant="detail"
-          onBack={() => router.back()}
+          onBack={() => terugOfNaar(router, '/today')}
           title="Profiel"
           subtitle={`${roleLabel} · ${companyName}`}
           rightAction={
@@ -283,7 +285,7 @@ export default function ProfileScreen() {
           save(() => wijzigWachtwoord(wachtwoord.nieuw), {
             onSuccess: () => {
               setWachtwoord(null);
-              Alert.alert('Gelukt', 'Je wachtwoord is gewijzigd.');
+              Dialog.alert('Gelukt', 'Je wachtwoord is gewijzigd.');
             },
           });
         }}

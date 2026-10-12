@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
 import { CalendarSync, CreditCard, Landmark, Lock } from 'lucide-react-native';
 import {
@@ -26,6 +27,7 @@ import { useSave } from '@/lib/useSave';
 import { formatDateNL } from '@/lib/format';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Integraties — de echte verbindingsstatus, uit de veilige RPC's.
@@ -78,7 +80,7 @@ function IntegrationsScreenInhoud() {
   const googleKoppelen = () => {
     save(() => startGoogleKoppeling(), {
       onSuccess: () => {
-        Alert.alert(
+        Dialog.alert(
           'Google Agenda',
           'Rond de koppeling af in je browser. Kom daarna terug; de status wordt automatisch ' +
             'bijgewerkt.',
@@ -88,7 +90,7 @@ function IntegrationsScreenInhoud() {
   };
 
   const googleOntkoppelen = () => {
-    Alert.alert(
+    Dialog.alert(
       'Google Agenda ontkoppelen?',
       'Afspraken worden daarna niet meer gesynchroniseerd. Je agenda bij Google blijft bestaan.',
       [
@@ -103,7 +105,7 @@ function IntegrationsScreenInhoud() {
   };
 
   const stripeOntkoppelen = () => {
-    Alert.alert(
+    Dialog.alert(
       'Stripe ontkoppelen?',
       'Betaallinks op facturen werken daarna niet meer. Je account bij Stripe blijft bestaan.',
       [
@@ -124,7 +126,7 @@ function IntegrationsScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Integraties" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Integraties" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState
             title="Niet geladen"
@@ -154,7 +156,7 @@ function IntegrationsScreenInhoud() {
             variant="detail"
             title="Integraties"
             subtitle={`${gekoppeldeBoekhouding + (stand.google?.connected ? 1 : 0) + (stand.stripe?.connected ? 1 : 0)} actief`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
           />
         }
         refreshing={refreshing}
@@ -254,7 +256,7 @@ function IntegrationsScreenInhoud() {
             title="Waar staan mijn sleutels?"
             subtitle="Tokens verlaten de server niet"
             onPress={() =>
-              Alert.alert(
+              Dialog.alert(
                 'Veilig gekoppeld',
                 'De API-sleutels van je koppelingen staan op de server en zijn voor de app niet ' +
                   'leesbaar — ook niet via een directe aanroep. De app ziet alleen of een ' +

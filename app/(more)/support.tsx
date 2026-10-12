@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Info, Mail, MessageSquarePlus, Phone } from 'lucide-react-native';
 import { AppListGroup, AppListItem, AppScreen, AppSection, AppTopBar } from '@/components';
 import { sendMail, callPhone } from '@/lib/linking';
+import { terugOfNaar } from '@/lib/navigatie';
 import { useTheme } from '@/providers';
 
 const SUPPORT_EMAIL = 'info@bossbase.nl';
@@ -22,7 +23,7 @@ export default function SupportScreen() {
             variant="detail"
             title="Help & support"
             subtitle="We helpen je graag verder"
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
           />
         }
       >

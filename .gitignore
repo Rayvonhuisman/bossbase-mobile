@@ -64,3 +64,6 @@ secrets.json
 *.log
 .cache/
 .tmp/
+
+# Vercel CLI: lokale projectkoppeling (project- en team-ID), hoort niet in Git.
+.vercel/

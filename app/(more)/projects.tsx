@@ -38,6 +38,7 @@ import { formatDateNL, formatEUR } from '@/lib/format';
 import { getUserId } from '@/lib/sessionContext';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Projecten — dezelfde `projects`-tabel en dezelfde statussen als het dashboard.
@@ -221,7 +222,7 @@ export default function ProjectsScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Projecten" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Projecten" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -237,7 +238,7 @@ export default function ProjectsScreen() {
             variant="detail"
             title="Projecten"
             subtitle={`${items.length} ${items.length === 1 ? 'project' : 'projecten'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuw project" onPress={openNieuw} />

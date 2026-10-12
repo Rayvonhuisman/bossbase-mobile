@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Dialog } from './dialog';
 import { useToast } from '@/providers';
 import type { WriteResult } from './writeResult';
 
@@ -84,7 +84,7 @@ export function bevestigVerwijderen(
   onBevestig: () => void,
   uitleg = 'Dit kan niet ongedaan worden gemaakt.',
 ): void {
-  Alert.alert(`${wat} verwijderen?`, uitleg, [
+  Dialog.alert(`${wat} verwijderen?`, uitleg, [
     { text: 'Annuleren', style: 'cancel' },
     { text: 'Verwijderen', style: 'destructive', onPress: onBevestig },
   ]);

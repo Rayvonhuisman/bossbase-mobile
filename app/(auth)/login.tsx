@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AnimatedScreen, Button } from '@/components';
+import { AnimatedScreen, Button, InstalleerBossBase } from '@/components';
+import { openWachtwoordHerstel } from '@/lib/linking';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 
@@ -91,6 +93,16 @@ export default function LoginScreen() {
                 returnKeyType="go"
                 onSubmitEditing={onSubmit}
               />
+              {/* Herstel loopt via de website (zie openWachtwoordHerstel). */}
+              <Pressable
+                onPress={openWachtwoordHerstel}
+                accessibilityRole="link"
+                accessibilityHint="Opent bossbase.nl in je browser"
+                hitSlop={8}
+                style={styles.vergeten}
+              >
+                <Text style={styles.vergetenTekst}>Wachtwoord vergeten?</Text>
+              </Pressable>
             </View>
 
             {errorMessage ? (
@@ -101,6 +113,9 @@ export default function LoginScreen() {
 
             <Button label="Inloggen" onPress={onSubmit} loading={loading} />
           </View>
+
+          {/* Alleen in de webapp, en niet als hij al geïnstalleerd is. */}
+          <InstalleerBossBase />
         </AnimatedScreen>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -145,6 +160,16 @@ const makeStyles = (t: ThemeColors) =>
       fontSize: 16,
       color: t.ink,
       backgroundColor: t.card,
+    },
+    vergeten: {
+      alignSelf: 'flex-end',
+      marginTop: spacing.sm,
+      paddingVertical: 2,
+    },
+    vergetenTekst: {
+      fontSize: 13.5,
+      fontWeight: '600',
+      color: t.green700,
     },
     errorBox: {
       // Uit de thematokens, zodat de melding ook in donkere modus leesbaar is.

@@ -24,6 +24,7 @@ import {
   FormSheet,
   LoadingScreen,
   NoticeBanner,
+  TimeField,
   type ChipDef,
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
@@ -37,9 +38,12 @@ import {
 import { todayISO, formatDagLabel, formatHours } from '@/lib/format';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { TimeEntryType, UrenRegel } from '@/types/domain';
+import type { DagUren } from '@/lib/urenTotalen';
 import { deleteWerkbonUur, updateWerkbonUur } from '@/services/werkbonUrenService';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { useLaden } from '@/lib/useLaden';
+import { telDagenOp, urenPerDag, urenVanDag } from '@/lib/urenTotalen';
+import { berekenUren } from '@/lib/urenBerekening';
 
 const NL_DAYS_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
@@ -124,9 +128,10 @@ export default function HoursScreen() {
   const [bewerken, setBewerken] = useState<UurConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
+  const userId = user?.id;
   const load = useCallback(
     async () => {
-      if (!user?.id) return;
+      if (!userId) return;
       setError(null);
 
       const from = toISODate(weekStart);
@@ -134,7 +139,7 @@ export default function HoursScreen() {
       const { data, error: fetchError } =
         filter === 'team' && isTeamScope
           ? await listCompanyUren(from, to)
-          : await listUrenForProfile(user.id, from, to);
+          : await listUrenForProfile(userId, from, to);
 
       // Werkbonuren en werkdaguren komen uit twee tabellen. Faalt er één, dan
       // is het totaal onvolledig — dat melden we, want een te laag getal dat
@@ -142,7 +147,7 @@ export default function HoursScreen() {
       setError(fetchError);
       setEntries(data);
     },
-    [user?.id, weekStart, weekEnd, filter, isTeamScope],
+    [userId, weekStart, weekEnd, filter, isTeamScope],
   );
 
   /**
@@ -159,29 +164,48 @@ export default function HoursScreen() {
     () => entries.filter((e) => e.datum === todayISOStr),
     [entries, todayISOStr],
   );
-  const loggedToday = useMemo(
-    () => todayEntries.reduce((sum, e) => sum + Number(e.uren || 0), 0),
-    [todayEntries],
+  // Werkdag- en werkbonuren apart, zoals het dashboard (zie lib/urenTotalen):
+  // de norm van 8 uur per dag en 40 per week gaat over werkdaguren; werkbonuren
+  // en het verschil staan ernaast. De lijst hieronder toont wél elke regel.
+  const vandaagUren = useMemo(
+    () => urenVanDag(todayEntries, todayISOStr),
+    [todayEntries, todayISOStr],
   );
   const expectedToday = 8;
-  const missingToday = Math.max(0, expectedToday - loggedToday);
-  const pct = Math.min(100, (loggedToday / expectedToday) * 100);
+  const missingToday = Math.max(0, expectedToday - vandaagUren.werkdag);
+  const pct = Math.min(100, (vandaagUren.werkdag / expectedToday) * 100);
 
-  const weekTotals = useMemo(() => {
-    const buckets = Array.from({ length: 7 }, () => 0);
-    entries.forEach((e) => {
-      const d = new Date(e.datum);
-      if (Number.isNaN(d.getTime())) return;
-      const diff = Math.floor(
-        (d.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000),
-      );
-      if (diff >= 0 && diff < 7) buckets[diff] = (buckets[diff] ?? 0) + Number(e.uren || 0);
+  const weekDagen = useMemo(() => {
+    const dagen = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return toISODate(d);
     });
-    return buckets;
+    return urenPerDag(entries, dagen);
   }, [entries, weekStart]);
+  const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
 
-  /** Weektotaal — de noemer die het ontwerp in de bovenbalk en de weekkaart toont. */
-  const weekTotal = useMemo(() => weekTotals.reduce((a, b) => a + b, 0), [weekTotals]);
+  // Bewerken: staan begin én eind er, dan zijn de uren eind − begin − pauze
+  // (dezelfde regel als het dashboard en het nieuwe-urenformulier). Anders
+  // blijft het ingevulde aantal staan.
+  const bewerkUren = useMemo(() => {
+    if (!bewerken) return { waarde: '', berekend: false, fout: null as string | null };
+    if (bewerken.van && bewerken.tot) {
+      const uren = berekenUren(bewerken.van, bewerken.tot, bewerken.pauze.replace(',', '.'));
+      if (uren === null) {
+        return {
+          waarde: bewerken.uren,
+          berekend: false,
+          fout: 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.',
+        };
+      }
+      return { waarde: String(uren).replace('.', ','), berekend: true, fout: null };
+    }
+    return { waarde: bewerken.uren, berekend: false, fout: null };
+  }, [bewerken]);
+
+  /** Weektotaal werkdaguren — de noemer die het ontwerp in de bovenbalk en de weekkaart toont. */
+  const weekTotal = week.werkdag;
 
   const filteredList = useMemo(() => {
     if (filter === 'vandaag') return todayEntries;
@@ -251,10 +275,10 @@ export default function HoursScreen() {
             <View style={styles.summaryTop}>
               <ProgressRing pct={pct} styles={styles} t={t} />
               <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
-                <Text style={styles.summaryKicker}>Vandaag geregistreerd</Text>
+                <Text style={styles.summaryKicker}>Werkdag vandaag</Text>
                 <View style={styles.summaryNumberRow}>
                   <Text style={styles.summaryNumber}>
-                    {loggedToday.toString().replace('.', ',')}
+                    {vandaagUren.werkdag.toString().replace('.', ',')}
                   </Text>
                   <Text style={styles.summaryNumberSub}>/ {expectedToday} uur</Text>
                 </View>
@@ -267,38 +291,60 @@ export default function HoursScreen() {
                 </Text>
               </View>
             </View>
+            {/* Werkdag, klus en het verschil naast elkaar — nooit opgeteld. */}
+            <View style={styles.summaryStats}>
+              <UrenStat label="Werkdag" uren={vandaagUren.werkdag} styles={styles} />
+              <UrenStat label="Op werkbonnen" uren={vandaagUren.werkbon} styles={styles} />
+              <UrenStat
+                label="Niet aan een klus"
+                uren={Math.max(0, vandaagUren.verschil)}
+                styles={styles}
+                leeg={vandaagUren.werkdag === 0}
+              />
+            </View>
           </AppCard>
         </View>
+        <UrenSignaal
+          dag={vandaagUren}
+          wie={filter === 'team' && isTeamScope ? 'team' : 'ik'}
+          styles={styles}
+        />
 
         {/* Weekoverzicht — kop in de kaart, zoals in het ontwerp */}
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <AppCard padding={16}>
             <View style={styles.weekKop}>
               <Text style={styles.weekKopTitel}>Weekoverzicht</Text>
-              <Text style={styles.weekKopMeta}>{formatHM(weekTotal)} van 40 u</Text>
+              <Text style={styles.weekKopMeta}>{formatHM(weekTotal)} van 40 u werkdag</Text>
             </View>
             <View style={styles.weekRow}>
               {NL_DAYS_SHORT.slice(1).concat('Zo').map((label, idx) => {
-                const hours = weekTotals[idx] ?? 0;
+                const dag = weekDagen[idx];
+                const hours = dag?.werkdag ?? 0;
+                // Een dag die niet klopt (klus zonder werkdag, of meer klus
+                // dan werkdag) krijgt de waarschuwingskleur.
+                const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                 const on = idx === todayWeekIdx;
-                const height = Math.max(hours ? 6 : 4, Math.min(52, (hours / 8) * 52));
+                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / 8) * 52));
                 return (
                   <View key={label + idx} style={styles.weekItem}>
-                    <Text style={[styles.weekHours, on && { color: t.ink }]}>
-                      {hours ? formatHM(hours) : ''}
+                    <Text style={[styles.weekHours, on && { color: t.ink }, signaal && styles.weekHoursLet]}>
+                      {hours ? formatHM(hours) : signaal ? '!' : ''}
                     </Text>
                     <View style={styles.weekBarFrame}>
                       <View
                         style={[
                           styles.weekBar,
                           { height },
-                          on
-                            ? styles.weekBarOn
-                            : hours >= 8
-                              ? styles.weekBarVol
-                              : hours > 0
-                                ? styles.weekBarDeels
-                                : styles.weekBarIdle,
+                          signaal
+                            ? styles.weekBarLet
+                            : on
+                              ? styles.weekBarOn
+                              : hours >= 8
+                                ? styles.weekBarVol
+                                : hours > 0
+                                  ? styles.weekBarDeels
+                                  : styles.weekBarIdle,
                         ]}
                       />
                     </View>
@@ -309,6 +355,30 @@ export default function HoursScreen() {
                 );
               })}
             </View>
+            <View style={styles.summaryStats}>
+              <UrenStat label="Werkdag" uren={week.werkdag} styles={styles} />
+              <UrenStat label="Op werkbonnen" uren={week.werkbon} styles={styles} />
+              <UrenStat
+                label="Niet aan een klus"
+                uren={Math.max(0, week.verschil)}
+                styles={styles}
+                leeg={week.werkdag === 0}
+              />
+            </View>
+            {week.dagenZonderWerkdag > 0 || week.dagenKlusGroter > 0 ? (
+              <Text style={styles.weekLetTekst}>
+                {[
+                  week.dagenZonderWerkdag > 0
+                    ? `${week.dagenZonderWerkdag} ${week.dagenZonderWerkdag === 1 ? 'dag' : 'dagen'} met werkbonuren maar zonder werkdag`
+                    : null,
+                  week.dagenKlusGroter > 0
+                    ? `${week.dagenKlusGroter} ${week.dagenKlusGroter === 1 ? 'dag' : 'dagen'} met meer werkbon- dan werkdaguren`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            ) : null}
           </AppCard>
         </View>
 
@@ -361,7 +431,9 @@ export default function HoursScreen() {
                           id: echteUurId(e.id),
                           bron: e.bron,
                           datum: e.datum,
-                          uren: String(e.uren ?? ''),
+                          van: e.start_tijd ? e.start_tijd.slice(0, 5) : null,
+                          tot: e.eind_tijd ? e.eind_tijd.slice(0, 5) : null,
+                          uren: String(e.uren ?? '').replace('.', ','),
                           pauze: String(e.pauze_minuten ?? 0),
                           notitie: e.notitie ?? '',
                         });
@@ -389,26 +461,26 @@ export default function HoursScreen() {
         subtitle={bewerken?.bron === 'werkbon' ? 'Uren op een werkbon' : 'Werkdaguren'}
         error={saveError}
         saving={saving}
-        submitDisabled={!bewerken?.uren.trim()}
+        submitDisabled={!bewerkUren.waarde.trim() || !!bewerkUren.fout}
         onSubmit={() => {
-          if (!bewerken) return;
-          const uren = Number(bewerken.uren.replace(',', '.'));
-          const pauze = Number(bewerken.pauze.replace(',', '.') || 0);
+          if (!bewerken || bewerkUren.fout) return;
+          const pauze = Math.max(0, Math.round(Number(bewerken.pauze.replace(',', '.')) || 0));
+          // Met begin- en eindtijd rekent de service de uren zelf opnieuw uit
+          // (eind − begin − pauze, zoals het dashboard); zonder tijden telt
+          // het ingevulde aantal.
+          const velden = {
+            datum: bewerken.datum,
+            start_tijd: bewerken.van,
+            eind_tijd: bewerken.tot,
+            uren: Number(bewerkUren.waarde.replace(',', '.')),
+            pauze_minuten: pauze,
+            notitie: bewerken.notitie,
+          };
           save(
             () =>
               bewerken.bron === 'werkbon'
-                ? updateWerkbonUur(bewerken.id, {
-                    datum: bewerken.datum,
-                    uren,
-                    pauze_minuten: pauze,
-                    notitie: bewerken.notitie,
-                  })
-                : updateTimeEntry(bewerken.id, {
-                    datum: bewerken.datum,
-                    uren,
-                    pauze_minuten: pauze,
-                    notitie: bewerken.notitie,
-                  }),
+                ? updateWerkbonUur(bewerken.id, velden)
+                : updateTimeEntry(bewerken.id, velden),
             {
               onSuccess: async () => {
                 setBewerken(null);
@@ -441,12 +513,33 @@ export default function HoursScreen() {
         />
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
+            <TimeField
+              label="Van"
+              value={bewerken?.van ?? null}
+              onChange={(v) => setBewerken((c) => (c ? { ...c, van: v } : c))}
+              placeholder="Kies"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <TimeField
+              label="Tot"
+              value={bewerken?.tot ?? null}
+              onChange={(v) => setBewerken((c) => (c ? { ...c, tot: v } : c))}
+              placeholder="Kies"
+            />
+          </View>
+        </View>
+        {bewerkUren.fout ? <NoticeBanner toon="waarschuwing" message={bewerkUren.fout} /> : null}
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flex: 1 }}>
             <FormField
               label="Uren"
-              value={bewerken?.uren ?? ''}
+              value={bewerkUren.waarde}
               onChangeText={(v) => setBewerken((c) => (c ? { ...c, uren: v } : c))}
               placeholder="1,5"
               keyboardType="decimal-pad"
+              editable={!bewerkUren.berekend}
+              hint={bewerkUren.berekend ? 'Berekend uit de tijden' : undefined}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -475,6 +568,71 @@ export default function HoursScreen() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/** Eén getal uit de statistiekrij onder de samenvatting (stijl uit het ontwerp). */
+function UrenStat({
+  label,
+  uren,
+  styles,
+  leeg,
+}: {
+  label: string;
+  uren: number;
+  styles: ReturnType<typeof makeStyles>;
+  /** Geen getal tonen (bijvoorbeeld "niet aan een klus" zonder werkdag). */
+  leeg?: boolean;
+}) {
+  return (
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <Text style={styles.summaryStatN}>{leeg ? '–' : formatHM(uren)}</Text>
+      <Text style={styles.summaryStatL} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * De twee situaties die niet kloppen, als waarschuwing onder de samenvatting:
+ * werkbonuren zonder werkdag, en meer werkbon- dan werkdaguren. Geen
+ * wegrekenen, gewoon zeggen wat er ontbreekt.
+ */
+function UrenSignaal({
+  dag,
+  wie,
+  styles,
+}: {
+  dag: DagUren;
+  wie: 'ik' | 'team';
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  let tekst: string | null = null;
+  if (wie === 'team') {
+    const delen = [
+      dag.zonderWerkdag > 0
+        ? `${dag.zonderWerkdag} ${dag.zonderWerkdag === 1 ? 'medewerker heeft' : 'medewerkers hebben'} vandaag werkbonuren maar geen werkdag geschreven.`
+        : null,
+      dag.klusGroter > 0
+        ? `Bij ${dag.klusGroter} ${dag.klusGroter === 1 ? 'medewerker zijn' : 'medewerkers zijn'} de werkbonuren hoger dan de werkdaguren.`
+        : null,
+    ].filter(Boolean);
+    tekst = delen.length ? delen.join(' ') : null;
+  } else if (dag.zonderWerkdag > 0) {
+    tekst = `Je hebt vandaag ${formatHM(dag.werkbon)} op werkbonnen geboekt, maar nog geen werkdaguren geschreven. Vul je werkdag aan via "Uren toevoegen" → Overig.`;
+  } else if (dag.klusGroter > 0) {
+    tekst = `Je werkbonuren (${formatHM(dag.werkbon)}) zijn hoger dan je werkdaguren (${formatHM(dag.werkdag)}). Controleer je werkdag of de uren op de werkbonnen.`;
+  }
+  if (!tekst) return null;
+  return (
+    <View style={styles.signaalWrap}>
+      <NoticeBanner
+        toon="waarschuwing"
+        title={dag.zonderWerkdag > 0 && wie === 'ik' ? 'Werkdaguren ontbreken' : 'Uren kloppen niet'}
+        message={tekst}
+      />
+    </View>
+  );
+}
 
 function ProgressRing({
   pct,
@@ -527,6 +685,9 @@ type UurConcept = {
   id: string;
   bron: 'werkdag' | 'werkbon';
   datum: string;
+  /** `HH:MM` of leeg. */
+  van: string | null;
+  tot: string | null;
   uren: string;
   pauze: string;
   notitie: string;
@@ -840,6 +1001,23 @@ const makeStyles = (t: ThemeColors) =>
   },
   weekBarIdle: {
     backgroundColor: t.bgAlt,
+  },
+  // Een dag die niet klopt: zelfde amber als de waarschuwingen elders.
+  weekBarLet: {
+    backgroundColor: t.statusWarnStripe,
+  },
+  weekHoursLet: {
+    color: t.statusWarnFg,
+  },
+  weekLetTekst: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: t.statusWarnFg,
+  },
+  signaalWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   weekLabel: {
     fontSize: 11,

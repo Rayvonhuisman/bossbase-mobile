@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +45,7 @@ import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { Customer, WorkOrderWithCustomer } from '@/types/domain';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,12 +140,12 @@ export default function CustomerDetailScreen() {
 
   const onCall = () => {
     if (!callPhone(customer?.phone)) {
-      Alert.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
+      Dialog.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
     }
   };
   const onMail = () => {
     if (!sendMail(customer?.email)) {
-      Alert.alert('Geen e-mailadres', 'Voor deze klant is geen e-mail bekend.');
+      Dialog.alert('Geen e-mailadres', 'Voor deze klant is geen e-mail bekend.');
     }
   };
   const onNavigate = () => {
@@ -152,7 +153,7 @@ export default function CustomerDetailScreen() {
       .filter(Boolean)
       .join(', ');
     if (!openMaps(addr)) {
-      Alert.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
+      Dialog.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
     }
   };
 
@@ -161,7 +162,7 @@ export default function CustomerDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Klant" onBack={() => router.back()} />
+          <AppTopBar variant="detail" title="Klant" onBack={() => terugOfNaar(router, '/customers')} />
           <LoadingScreen label="Klant laden..." />
         </View>
       </>
@@ -172,7 +173,7 @@ export default function CustomerDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Klant" onBack={() => router.back()} />
+          <AppTopBar variant="detail" title="Klant" onBack={() => terugOfNaar(router, '/customers')} />
           <ErrorState
             title="Klant niet gevonden"
             message={error ?? 'Deze klant bestaat niet of je hebt geen toegang.'}
@@ -213,7 +214,7 @@ export default function CustomerDetailScreen() {
           {/* De kop scrolt mee met de pagina, zoals in het ontwerp. */}
           <AppTopBar
             variant="detail"
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/customers')}
             eyebrow="Klant"
             title={name}
             subtitle={[customer.city, tag].filter(Boolean).join(' · ') || undefined}
@@ -442,7 +443,7 @@ export default function CustomerDetailScreen() {
                         save(() => deleteCustomer(id), {
                           onSuccess: () => {
                             setConcept(null);
-                            router.back();
+                            terugOfNaar(router, '/customers');
                           },
                         });
                       },

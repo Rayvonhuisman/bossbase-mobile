@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/providers';
+import { useTrekOmTeVerversen } from '@/lib/trekOmTeVerversen';
 import { AnimatedScreen } from './AnimatedScreen';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary';
 import { StatusBarScrim } from './StatusBarScrim';
@@ -105,6 +107,12 @@ export function AppScreen({
     }, []),
   );
 
+  // Web: `RefreshControl` bestaat daar niet; trekken bovenaan ververst toch.
+  // Native: geeft niets terug, daar doet `RefreshControl` het.
+  const bovenaan = useCallback(() => offsetY.current <= 0, []);
+  const trek = useTrekOmTeVerversen(onRefresh, bovenaan);
+  const toonTrek = trek.eigenIndicator && (trek.voortgang > 0 || refreshing);
+
   if (!scroll) {
     return (
       <View style={[styles.root, { backgroundColor: bg }]}>
@@ -140,6 +148,7 @@ export function AppScreen({
         automaticallyAdjustContentInsets={false}
         onScroll={onScroll}
         scrollEventThrottle={32}
+        {...trek.handlers}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -160,10 +169,37 @@ export function AppScreen({
         </AnimatedScreen>
       </ScrollView>
       <StatusBarScrim background={bg} />
+      {toonTrek ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.trek,
+            {
+              top: insets.top + 8,
+              opacity: refreshing ? 1 : trek.voortgang,
+              transform: [{ translateY: refreshing ? 24 : trek.voortgang * 24 }],
+              backgroundColor: t.card,
+              borderColor: t.line,
+            },
+          ]}
+        >
+          <ActivityIndicator size="small" color={t.green} animating={refreshing || trek.voortgang >= 1} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  trek: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

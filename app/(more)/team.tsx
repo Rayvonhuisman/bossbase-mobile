@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
 import { MailWarning, ShieldCheck, UserPlus, UsersRound } from 'lucide-react-native';
 import {
@@ -37,6 +38,7 @@ import { getUserId } from '@/lib/sessionContext';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Team — echte teamleden komen uit `profiles`, openstaande uitnodigingen uit
@@ -193,7 +195,7 @@ function TeamScreenInhoud() {
           // Eerlijk zijn over de mail: de uitnodiging staat er, maar als de
           // mail niet weg is moet iemand de link zelf doorgeven.
           if (uitkomst?.mailVerstuurd === false) {
-            Alert.alert(
+            Dialog.alert(
               'Uitnodiging aangemaakt, mail niet verstuurd',
               'De uitnodiging is geldig, maar de e-mail kon niet worden verzonden. ' +
                 'Probeer het opnieuw vanaf het dashboard of stuur de link handmatig.',
@@ -221,11 +223,11 @@ function TeamScreenInhoud() {
   const wisselActief = (m: TeamMemberRow) => {
     const blokkade = beschermd(m);
     if (blokkade) {
-      Alert.alert('Niet mogelijk', `${blokkade} Deze actie is daarom uitgeschakeld.`);
+      Dialog.alert('Niet mogelijk', `${blokkade} Deze actie is daarom uitgeschakeld.`);
       return;
     }
     const naarInactief = m.status === 'actief';
-    Alert.alert(
+    Dialog.alert(
       naarInactief ? 'Teamlid deactiveren?' : 'Teamlid activeren?',
       naarInactief
         ? `${m.full_name || m.email} kan daarna niet meer inloggen. Zijn werk blijft bewaard.`
@@ -249,7 +251,7 @@ function TeamScreenInhoud() {
   const teamlidVerwijderen = (m: TeamMemberRow) => {
     const blokkade = beschermd(m);
     if (blokkade) {
-      Alert.alert('Niet mogelijk', `${blokkade} Verwijderen is daarom uitgeschakeld.`);
+      Dialog.alert('Niet mogelijk', `${blokkade} Verwijderen is daarom uitgeschakeld.`);
       return;
     }
     bevestigVerwijderen(
@@ -265,7 +267,7 @@ function TeamScreenInhoud() {
 
   const openRechten = async (m: TeamMemberRow) => {
     if (!m.profile_id) {
-      Alert.alert('Nog niet mogelijk', 'Dit teamlid heeft de uitnodiging nog niet geaccepteerd.');
+      Dialog.alert('Nog niet mogelijk', 'Dit teamlid heeft de uitnodiging nog niet geaccepteerd.');
       return;
     }
     setRechtenVoor(m);
@@ -299,7 +301,7 @@ function TeamScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Team" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Team" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -319,7 +321,7 @@ function TeamScreenInhoud() {
             title="Team"
             subtitle={`${leden.length} ${leden.length === 1 ? 'teamlid' : 'teamleden'}`}
             meta={uitnodigingen.length > 0 ? `${uitnodigingen.length} open` : undefined}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magUitnodigen ? (
                 <HeaderIconButton
@@ -393,7 +395,7 @@ function TeamScreenInhoud() {
                             onPress={() =>
                               magRechten
                                 ? openRechten(m)
-                                : Alert.alert(
+                                : Dialog.alert(
                                     'Niet beschikbaar',
                                     waaromNiet('team', 'rechtenWijzigen') ??
                                       'Rechten beheren zit niet in je abonnement.',
@@ -559,7 +561,7 @@ function TeamScreenInhoud() {
                     // Brede inzage: het dashboard vraagt hier expliciet om
                     // bevestiging, omdat dit het werk van álle collega's opent.
                     if (aan && sub.waarschuw) {
-                      Alert.alert(
+                      Dialog.alert(
                         'Brede inzage',
                         'Met dit recht ziet dit teamlid de projecten en werkbonnen van het hele ' +
                           'team, niet alleen die van zichzelf. Weet je het zeker?',

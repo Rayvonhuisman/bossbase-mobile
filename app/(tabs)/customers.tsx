@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Dialog } from '@/lib/dialog';
 import {
   ChevronRight,
   Navigation as NavigationIcon,
@@ -137,7 +137,9 @@ export default function CustomersScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('alle');
 
-  const todayMs = useMemo(() => Date.now(), []);
+  // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep
+  // tijdens het renderen).
+  const [todayMs] = useState(() => Date.now());
 
   const load = useCallback(
     async () => {
@@ -213,13 +215,13 @@ export default function CustomersScreen() {
 
   const onCall = (c: Customer) => {
     if (!callPhone(c.phone)) {
-      Alert.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
+      Dialog.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
     }
   };
   const onNavigate = (c: Customer) => {
     const addr = [c.address, c.postcode, c.city].filter(Boolean).join(', ');
     if (!openMaps(addr)) {
-      Alert.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
+      Dialog.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
     }
   };
   const onOpenCustomer = (c: Customer) => {

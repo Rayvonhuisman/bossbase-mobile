@@ -9,9 +9,9 @@ import {
   Phone,
   Users,
 } from 'lucide-react-native';
-import { AppCard, AppScreen, AppTopBar, StatusBadge, statusKey } from '@/components';
+import { AppCard, AppScreen, AppTopBar, NoticeBanner, StatusBadge, statusKey } from '@/components';
 import { useAuth, useTheme } from '@/providers';
-import { listTimeEntriesForProfile } from '@/services/timeEntryService';
+import { listUrenForProfile } from '@/services/timeEntryService';
 import {
   getNextPlanningItem,
   listPlanningItemsForRange,
@@ -19,6 +19,7 @@ import {
 } from '@/services/activityService';
 import { getDayRange } from '@/lib/dateRange';
 import { useLaden } from '@/lib/useLaden';
+import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
 import { formatPlanningTime } from '@/lib/format';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
@@ -120,13 +121,14 @@ export default function TodayScreen() {
   }, [weekStart]);
   const todayWeekIdx = useMemo(() => (new Date().getDay() + 6) % 7, []);
 
-  const [weekTotals, setWeekTotals] = useState<number[]>(() => Array.from({ length: 7 }, () => 0));
+  const [weekDagen, setWeekDagen] = useState<DagUren[]>([]);
   const [nextItem, setNextItem] = useState<PlanningItem | null>(null);
   const [todayItems, setTodayItems] = useState<PlanningItem[]>([]);
 
+  const userId = user?.id;
   const load = useCallback(
     async () => {
-      if (!user?.id) return;
+      if (!userId) return;
 
       const dayRange = getDayRange(new Date());
       const [planRes, weekRes, nextRes] = await Promise.all([
@@ -136,29 +138,31 @@ export default function TodayScreen() {
           startDate: dayRange.startDate,
           endDate: dayRange.endDate,
           assignedToUserId,
-          currentUserId: user.id,
+          currentUserId: userId,
           currentUserName,
         }),
-        listTimeEntriesForProfile(user.id, toISODate(weekStart), toISODate(weekEnd)),
-        getNextPlanningItem({ assignedToUserId, currentUserId: user.id, currentUserName }),
+        // Werkdag- én werkbonuren, net als de Uren-tab: wie alleen op klussen
+        // boekt, zag hier anders altijd 0.
+        listUrenForProfile(userId, toISODate(weekStart), toISODate(weekEnd)),
+        getNextPlanningItem({ assignedToUserId, currentUserId: userId, currentUserName }),
       ]);
 
       setTodayItems(planRes.items);
       setNextItem(nextRes.item);
 
       if (!weekRes.error && weekRes.data) {
-        const buckets = Array.from({ length: 7 }, () => 0);
-        weekRes.data.forEach((e) => {
-          const d = new Date(e.datum);
-          if (Number.isNaN(d.getTime())) return;
-          const diff = Math.floor((d.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000));
-          if (diff >= 0 && diff < 7) buckets[diff] = (buckets[diff] ?? 0) + Number(e.uren || 0);
+        // Zelfde telling als de Uren-tab: werkdag- en werkbonuren apart, nooit
+        // opgeteld (zie lib/urenTotalen).
+        const dagen = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(weekStart);
+          d.setDate(d.getDate() + i);
+          return toISODate(d);
         });
-        setWeekTotals(buckets);
+        setWeekDagen(urenPerDag(weekRes.data, dagen));
       }
 
     },
-    [user?.id, assignedToUserId, currentUserName, weekStart, weekEnd],
+    [userId, assignedToUserId, currentUserName, weekStart, weekEnd],
   );
 
 
@@ -169,8 +173,12 @@ export default function TodayScreen() {
    */
   const { loading, refreshing, onRefresh } = useLaden(load);
 
-  const weekTotal = useMemo(() => weekTotals.reduce((s, h) => s + h, 0), [weekTotals]);
-  const loggedToday = weekTotals[todayWeekIdx] ?? 0;
+  // De norm (8 uur per dag) gaat over werkdaguren; werkbonuren staan ernaast.
+  const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
+  const vandaagUren = weekDagen[todayWeekIdx];
+  const loggedToday = vandaagUren?.werkdag ?? 0;
+  const werkdagOntbreekt = (vandaagUren?.zonderWerkdag ?? 0) > 0;
+  const klusGroter = (vandaagUren?.klusGroter ?? 0) > 0;
 
   // ─── Afgeleiden voor de herokaart ───────────────────────────────────────
   const werkbonnen = useMemo(
@@ -204,7 +212,11 @@ export default function TodayScreen() {
     : werkbonnen.length > 0
       ? 'Alles afgerond voor vandaag'
       : 'Niets gepland voor vandaag';
-  const heroRechts = urenOver > 0 ? `nog ${formatUrenLang(urenOver)}` : 'dag compleet';
+  const heroRechts = werkdagOntbreekt
+    ? 'werkdag ontbreekt'
+    : urenOver > 0
+      ? `nog ${formatUrenLang(urenOver)}`
+      : 'dag compleet';
 
   // Kort gehouden: de bovenbalk geeft één regel, en "geschreven" erachter
   // viel er in de simulator al af op een iPhone 17.
@@ -254,7 +266,7 @@ export default function TodayScreen() {
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.heroLabel}>Uren</Text>
+                <Text style={styles.heroLabel}>Werkdag</Text>
                 <View style={styles.heroValueRow}>
                   <Text style={[styles.heroValue, { color: c.green }]}>
                     {formatUren(loggedToday)}
@@ -290,6 +302,22 @@ export default function TodayScreen() {
             </View>
           </View>
         </View>
+
+        {/* Uren die niet kloppen: zeggen, niet wegrekenen (lib/urenTotalen). */}
+        {!loading && (werkdagOntbreekt || klusGroter) && vandaagUren ? (
+          <View style={styles.signaalWrap}>
+            <NoticeBanner
+              toon="waarschuwing"
+              title={werkdagOntbreekt ? 'Werkdaguren ontbreken' : 'Uren kloppen niet'}
+              message={
+                werkdagOntbreekt
+                  ? `Je hebt vandaag ${formatUrenLang(vandaagUren.werkbon)} op werkbonnen geboekt, maar nog geen werkdaguren geschreven.`
+                  : `Je werkbonuren (${formatUrenLang(vandaagUren.werkbon)}) zijn hoger dan je werkdaguren (${formatUrenLang(vandaagUren.werkdag)}).`
+              }
+              onPress={() => router.push('/(tabs)/hours')}
+            />
+          </View>
+        ) : null}
 
         {/* ── Snelle acties ───────────────────────────────────────────── */}
         <View style={styles.quickRow}>
@@ -406,31 +434,35 @@ export default function TodayScreen() {
           </View>
           <AppCard padding={16}>
             <View style={styles.weekHeader}>
-              <Text style={styles.weekTotalLabel}>Totaal deze week</Text>
-              <Text style={styles.weekTotalValue}>{formatUrenLang(weekTotal)}</Text>
+              <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
+              <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
             </View>
             <View style={styles.weekRow}>
               {NL_DAYS_SHORT.map((label, idx) => {
-                const hours = weekTotals[idx] ?? 0;
+                const dag = weekDagen[idx];
+                const hours = dag?.werkdag ?? 0;
+                const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                 const on = idx === todayWeekIdx;
-                const height = Math.max(hours ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
+                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
                 return (
                   <View key={label + idx} style={styles.weekItem}>
-                    <Text style={[styles.weekHours, on && { color: c.ink }]}>
-                      {hours ? formatUren(hours) : ''}
+                    <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
+                      {hours ? formatUren(hours) : signaal ? '!' : ''}
                     </Text>
                     <View style={styles.weekBarFrame}>
                       <View
                         style={[
                           styles.weekBar,
                           { height },
-                          on
-                            ? styles.weekBarOn
-                            : hours >= NORM_UREN
-                              ? styles.weekBarVol
-                              : hours > 0
-                                ? styles.weekBarDeels
-                                : styles.weekBarIdle,
+                          signaal
+                            ? styles.weekBarLet
+                            : on
+                              ? styles.weekBarOn
+                              : hours >= NORM_UREN
+                                ? styles.weekBarVol
+                                : hours > 0
+                                  ? styles.weekBarDeels
+                                  : styles.weekBarIdle,
                         ]}
                       />
                     </View>
@@ -441,6 +473,10 @@ export default function TodayScreen() {
                 );
               })}
             </View>
+            <Text style={styles.weekKlus}>
+              Op werkbonnen {formatUrenLang(week.werkbon)}
+              {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
+            </Text>
           </AppCard>
         </View>
       </AppScreen>
@@ -765,4 +801,9 @@ const makeStyles = (c: ThemeColors) =>
     weekLabelOn: { color: c.green700, fontWeight: '700' },
     weekBarIdle: { backgroundColor: c.bgAlt },
     weekLabel: { fontSize: 11, fontWeight: '600', color: c.muted },
+    // Een dag die niet klopt: zelfde amber als de waarschuwingen elders.
+    weekBarLet: { backgroundColor: c.statusWarnStripe },
+    weekHoursLet: { color: c.statusWarnFg },
+    weekKlus: { marginTop: 12, fontSize: 12, fontWeight: '600', color: c.muted },
+    signaalWrap: { paddingHorizontal: 16, paddingTop: 12 },
   });

@@ -55,6 +55,7 @@ import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { terugOfNaar } from '@/lib/navigatie';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
@@ -336,7 +337,7 @@ function OffersScreenInhoud() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Offertes" onBack={() => router.back()} />}
+          header={<AppTopBar variant="detail" title="Offertes" onBack={() => terugOfNaar(router, '/menu')} />}
         >
           <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
         </AppScreen>
@@ -354,7 +355,7 @@ function OffersScreenInhoud() {
             variant="detail"
             title="Offertes"
             subtitle={`${items.length} ${items.length === 1 ? 'offerte' : 'offertes'}`}
-            onBack={() => router.back()}
+            onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
                 <HeaderIconButton icon={Plus} label="Nieuwe offerte" onPress={openNieuw} />

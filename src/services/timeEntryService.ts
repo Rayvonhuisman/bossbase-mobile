@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { isReadonly } from '@/lib/sessionContext';
 import { isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
+import { berekenUren, rondUrenAf } from '@/lib/urenBerekening';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import {
   listCompanyWerkbonUren,
@@ -8,11 +9,17 @@ import {
 } from './werkbonUrenService';
 import type { TimeEntry, UrenRegel, WerkbonUur } from '@/types/domain';
 
-// Werkdaguren: loon en verlof. De koppelkolommen (customer_id/werkbon_id/
-// deal_id) bestaan sinds migratie 20260907210753 en worden hier alleen gelezen —
-// uren op een klus horen in werkbon_uren (zie werkbonUrenService).
+// Werkdaguren: loon en verlof. Uren op een klus staan in werkbon_uren (zie
+// werkbonUrenService).
+//
+// `urenregistratie` heeft géén werkbon, klant, deal of project meer: het
+// dashboard heeft die kolommen bewust verwijderd (migratie
+// 20260831140000_werkbon_uren: "Werkdaguren zijn voortaan puur de werkdag").
+// Ze hier toch opvragen laat de héle query falen (Postgres 42703) — dat was
+// waarom de Uren-tab en het weektotaal op Vandaag niet laadden. Deze lijst volgt
+// daarom precies de kolommen die in productie bestaan.
 const TIME_ENTRY_COLUMNS = `
-  id, company_id, profile_id, customer_id, werkbon_id, deal_id,
+  id, company_id, profile_id,
   datum, start_tijd, eind_tijd, pauze_minuten, uren, type, notitie,
   created_at, updated_at
 `;
@@ -71,10 +78,13 @@ export async function listCompanyTimeEntries(
 // ---------------------------------------------------------------------------
 //
 // De database houdt werkbonuren (werkbon_uren) en werkdaguren (urenregistratie)
-// bewust gescheiden. Voor het Uren-overzicht in de app is dat één vraag —
-// "hoeveel heb ik geschreven?" — dus tonen we beide bronnen samen. Alleen
-// urenregistratie tonen zou uren die net op een werkbon zijn geboekt laten
-// verdwijnen; alleen werkbon_uren zou verlof en overhead weglaten.
+// bewust gescheiden. De LIJST toont beide bronnen samen: alleen urenregistratie
+// zou uren die net op een werkbon zijn geboekt laten verdwijnen; alleen
+// werkbon_uren zou verlof en overhead weglaten.
+//
+// TOTALEN tellen de twee bronnen níét bij elkaar op: een werkdag omvat de
+// klusuren van die dag (het dashboard toont "werkdag − klus" als verschil).
+// Zie `lib/urenTotalen.ts`.
 
 /** Zet een werkbon_uren-rij om naar de regel die het Uren-scherm rendert. */
 function werkbonUurNaarRegel(
@@ -86,9 +96,7 @@ function werkbonUurNaarRegel(
     id: `wb:${row.id}`,
     company_id: row.company_id,
     profile_id: row.profile_id,
-    customer_id: null,
     werkbon_id: row.werkbon_id,
-    deal_id: null,
     datum: row.datum,
     start_tijd: row.start_tijd,
     eind_tijd: row.eind_tijd,
@@ -106,7 +114,16 @@ function werkbonUurNaarRegel(
 }
 
 function timeEntryNaarRegel(row: TimeEntry): UrenRegel {
-  return { ...row, id: `ur:${row.id}`, uren: Number(row.uren) || 0, bron: 'werkdag', werkbonLabel: null };
+  // Een werkdaguur hoort per definitie niet bij een werkbon; `werkbon_id: null`
+  // is hier dus de werkelijkheid, geen ontbrekend gegeven.
+  return {
+    ...row,
+    id: `ur:${row.id}`,
+    uren: Number(row.uren) || 0,
+    werkbon_id: null,
+    bron: 'werkdag',
+    werkbonLabel: null,
+  };
 }
 
 /**
@@ -188,10 +205,9 @@ export type CreateWerkdagUurInput = {
  * werkdaguren, dus een regel die hier binnenkomt staat daar gewoon in de
  * urenstaat. Wat er bewust NIET gebeurt:
  *
- * - **Geen `werkbon_id`.** De kolom is nullable (migratie 20260907210753) en
- *   blijft leeg. Een klus-uur hoort in `werkbon_uren`; een verzonnen koppeling
- *   of een werkbonnummer in de notitie levert een tweede administratie op die
- *   nooit klopt.
+ * - **Geen werkbon.** `urenregistratie` heeft geen `werkbon_id` meer (migratie
+ *   20260831140000). Een klus-uur hoort in `werkbon_uren`; een werkbonnummer
+ *   in de notitie levert een tweede administratie op die nooit klopt.
  * - **Geen `type`.** Die kolom is in het dashboard vervallen (migratie
  *   20260831130000: "wordt niet meer geschreven", historische waarde
  *   'arbeid'). De kolom heeft een default, dus we laten hem met rust in plaats
@@ -207,7 +223,9 @@ export async function createWerkdagUur(
   if (!isGeldigeDatum(input.datum)) {
     return writeFout('validatie', 'Vul een geldige datum in.');
   }
-  if (!Number.isFinite(input.uren) || input.uren <= 0) {
+  // Twee decimalen, zoals het dashboard (zie lib/urenBerekening).
+  const uren = rondUrenAf(input.uren);
+  if (!Number.isFinite(uren) || uren <= 0) {
     return writeFout('validatie', 'Vul een geldig aantal uren in.');
   }
   for (const v of [input.start_tijd, input.eind_tijd]) {
@@ -228,7 +246,7 @@ export async function createWerkdagUur(
           company_id: input.company_id,
           profile_id: input.profile_id,
           datum: input.datum,
-          uren: input.uren,
+          uren,
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
@@ -250,6 +268,10 @@ export async function createWerkdagUur(
  * De policy laat dit toe aan admin en planner, én aan de medewerker voor zijn
  * eigen rijen. De 'eigen rij'-helft toetst de server; de app toont de knop en
  * meldt eerlijk als er niets is geraakt.
+ *
+ * Zoals in het dashboard: komen begin- én eindtijd mee, dan worden de uren
+ * daaruit herberekend (eind − begin − pauze) en wint die uitkomst van een
+ * meegegeven `uren`.
  */
 export async function updateTimeEntry(
   id: string,
@@ -282,11 +304,18 @@ export async function updateTimeEntry(
     }
     updates.pauze_minuten = input.pauze_minuten;
   }
-  if (input.uren !== undefined) {
-    if (!Number.isFinite(input.uren) || input.uren <= 0) {
+  const herberekend = input.start_tijd && input.eind_tijd
+    ? berekenUren(input.start_tijd, input.eind_tijd, input.pauze_minuten ?? 0)
+    : null;
+  if (input.start_tijd && input.eind_tijd && herberekend === null) {
+    return writeFout('validatie', 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.');
+  }
+  const uren = herberekend ?? (input.uren !== undefined ? rondUrenAf(input.uren) : undefined);
+  if (uren !== undefined) {
+    if (!Number.isFinite(uren) || uren <= 0) {
       return writeFout('validatie', 'Vul een geldig aantal uren in.');
     }
-    updates.uren = input.uren;
+    updates.uren = uren;
   }
   if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
 

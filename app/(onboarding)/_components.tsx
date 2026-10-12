@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { ReactNode } from 'react';
 import {
   Pressable,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { terugOfNaar } from '@/lib/navigatie';
 import { onb } from './_tokens';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,7 +56,7 @@ export function TopBar({
   return (
     <View style={styles.topBar}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => terugOfNaar(router, '/')}
         hitSlop={8}
         style={[styles.backBtn, { opacity: showBack ? 1 : 0 }]}
         disabled={!showBack}
@@ -203,9 +205,6 @@ export function Field({ label, hint, isPassword, error, ...props }: FieldProps) 
   );
 }
 
-// We need React for the Field hooks — use a runtime import to avoid
-// circular-import warnings in some bundlers.
-import * as React from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
