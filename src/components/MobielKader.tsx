@@ -5,6 +5,6 @@ import type { ReactNode } from 'react';
  * dus hier gebeurt niets. De webvariant (`MobielKader.web.tsx`) houdt de app op
  * een groot scherm op telefoonbreedte.
  */
-export function MobielKader({ children }: { children: ReactNode }) {
+export function MobielKader({ children }: { children: ReactNode; soort?: 'app' | 'formulier' }) {
   return <>{children}</>;
 }

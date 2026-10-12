@@ -7,6 +7,7 @@ import type { BottomTabBarProps } from "expo-router/js-tabs";
 import { CalendarDays, ClipboardList, Clock, Home, Menu, Users } from 'lucide-react-native';
 import { Button, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { TABBALK_MAX } from '@/lib/schermklasseRegels';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
 
@@ -228,9 +229,14 @@ const ftStyles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
+    // Op een breed scherm (iPad, desktop) gecentreerd en begrensd in plaats
+    // van een balk over de volle breedte. Op een telefoon geen verschil.
+    alignItems: 'center',
     // `bottom` is set inline = safe-area inset + 12 so it floats above the home indicator.
   },
   bar: {
+    width: '100%',
+    maxWidth: TABBALK_MAX,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
