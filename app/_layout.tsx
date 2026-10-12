@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DialogHost, MobielKader } from '@/components';
+import { DialogHost, MobielKader, NieuweVersieMelding } from '@/components';
 import { registreerServiceWorker } from '@/lib/pwa';
 import {
   AuthProvider,
@@ -55,11 +55,15 @@ export default function RootLayout() {
                   <Stack.Screen name="hours" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="(more)" options={{ animation: 'slide_from_right' }} />
+                  {/* Openbare uitleg om de webapp te installeren. */}
+                  <Stack.Screen name="installeren" options={{ animation: 'fade' }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
                 {/* Op web tekent dit de dialogen van `Dialog.alert`; op iOS en
                     Android doet het besturingssysteem dat zelf. */}
                 <DialogHost />
+                {/* Op web: melding met herlaadknop zodra er een nieuwe versie is. */}
+                <NieuweVersieMelding />
                 </ToastProvider>
               </OnboardingProvider>
             </PermissionsProvider>

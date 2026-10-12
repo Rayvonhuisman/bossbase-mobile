@@ -24,6 +24,8 @@ export type { NoticeToon } from './NoticeBanner';
 export { DateField, TimeField } from './DateField';
 export { DialogHost } from './DialogHost';
 export { MobielKader } from './MobielKader';
+export { NieuweVersieMelding } from './NieuweVersieMelding';
+export { InstalleerBossBase } from './InstalleerBossBase';
 export { FormField } from './FormField';
 export { FormSheet } from './FormSheet';
 export { SelectField } from './SelectField';

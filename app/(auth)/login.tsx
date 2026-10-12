@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AnimatedScreen, Button } from '@/components';
+import { AnimatedScreen, Button, InstalleerBossBase } from '@/components';
 import { openWachtwoordHerstel } from '@/lib/linking';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
@@ -113,6 +113,9 @@ export default function LoginScreen() {
 
             <Button label="Inloggen" onPress={onSubmit} loading={loading} />
           </View>
+
+          {/* Alleen in de webapp, en niet als hij al geïnstalleerd is. */}
+          <InstalleerBossBase />
         </AnimatedScreen>
       </KeyboardAvoidingView>
     </SafeAreaView>
