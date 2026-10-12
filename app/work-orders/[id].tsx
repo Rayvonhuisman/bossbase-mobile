@@ -77,6 +77,7 @@ import {
   listVoertuigen,
 } from '@/services/workOrderService';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
+import { useFocusTerug } from '@/lib/focusTerug';
 import {
   createWerkbonUur,
   listWerkbonUren,
@@ -101,6 +102,7 @@ import type {
   WorkOrderTask,
   WorkOrderWithRelations,
 } from '@/types/domain';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 // Dark "ink" surface kept constant across themes (status button).
 /** Vaste inkt op de donkere herokaart — blijft in beide thema's donker. */
@@ -1323,6 +1325,7 @@ function AddNoteModal({
   onClose: () => void;
   onSubmit: (body: string, voorKlant: boolean) => Promise<{ error: string | null }>;
 }) {
+  useFocusTerug(visible);
   const [body, setBody] = useState('');
   const [voorKlant, setVoorKlant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1356,7 +1359,7 @@ function AddNoteModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
-      <MobielKader>
+      <MobielKader soort="formulier">
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1420,6 +1423,7 @@ function AddTaskModal({
   onClose: () => void;
   onSubmit: (omschrijving: string) => Promise<{ error: string | null }>;
 }) {
+  useFocusTerug(visible);
   const [omschrijving, setOmschrijving] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -1449,7 +1453,7 @@ function AddTaskModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
-      <MobielKader>
+      <MobielKader soort="formulier">
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1504,6 +1508,7 @@ function AddMaterialModal({
   onClose: () => void;
   onSubmit: (naam: string, eenheid: string, aantal: number) => Promise<{ error: string | null }>;
 }) {
+  useFocusTerug(visible);
   const [naam, setNaam] = useState('');
   const [eenheid, setEenheid] = useState('');
   const [aantalStr, setAantalStr] = useState('1');
@@ -1542,7 +1547,7 @@ function AddMaterialModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
-      <MobielKader>
+      <MobielKader soort="formulier">
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1604,6 +1609,7 @@ function AddTimeEntryModal({
     notitie: string | null;
   }) => Promise<{ error: string | null }>;
 }) {
+  useFocusTerug(visible);
   const [datum, setDatum] = useState(vandaagISO());
   const [urenStr, setUrenStr] = useState('');
   const [notitie, setNotitie] = useState('');
@@ -1648,7 +1654,7 @@ function AddTimeEntryModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
-      <MobielKader>
+      <MobielKader soort="formulier">
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: th.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1898,6 +1904,8 @@ const makeStyles = (t: ThemeColors) =>
       borderTopColor: t.line,
     },
     actieKnop: {
+      // Op een iPad of desktop niet over de volle kolombreedte.
+      ...leesbreedte,
       height: 52,
       borderRadius: 16,
       backgroundColor: ds.green,

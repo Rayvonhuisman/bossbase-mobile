@@ -4,6 +4,7 @@ import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { MobielKader } from './MobielKader';
+import { useFocusTerug } from '@/lib/focusTerug';
 
 export type SelectOption = {
   id: string;
@@ -48,6 +49,7 @@ export function SelectField({
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [open, setOpen] = useState(false);
+  useFocusTerug(open);
   const [zoek, setZoek] = useState('');
 
   const gekozen = options.find((o) => o.id === value) ?? null;
@@ -94,7 +96,7 @@ export function SelectField({
         onRequestClose={() => setOpen(false)}
       >
         {/* Op web staat de kiezer op telefoonbreedte, net als de app eronder. */}
-        <MobielKader>
+        <MobielKader soort="formulier">
         <View style={{ flex: 1, backgroundColor: t.bg }}>
           <View style={styles.kopBalk}>
             <Text style={styles.kopTitel}>{label}</Text>
