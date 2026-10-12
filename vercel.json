@@ -10,6 +10,7 @@
     "deploymentEnabled": {
       "*": false,
       "**": false,
+      "main": true,
       "feature/pwa-web": true
     }
   },
