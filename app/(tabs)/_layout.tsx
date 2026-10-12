@@ -7,6 +7,7 @@ import type { BottomTabBarProps } from "expo-router/js-tabs";
 import { CalendarDays, ClipboardList, Clock, Home, Menu, Users } from 'lucide-react-native';
 import { Button, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
 
 /**
@@ -59,6 +60,10 @@ const PROFILE_ERROR_MESSAGES: Record<string, { title: string; body: string }> = 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors: t } = useTheme();
+  // Met een open toetsenbord (web) zou de balk erboven gaan zweven en ruimte
+  // van het zoekveld afsnoepen. Native: altijd false, de balk blijft zoals hij was.
+  const toetsenbordOpen = useToetsenbordOpen();
+  if (toetsenbordOpen) return null;
 
   return (
     <View style={[ftStyles.wrap, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">

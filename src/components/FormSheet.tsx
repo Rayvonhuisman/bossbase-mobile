@@ -15,6 +15,7 @@ import { Button } from './Button';
 import { MobielKader } from './MobielKader';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
+import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 
 type Props = {
   visible: boolean;
@@ -62,6 +63,9 @@ export function FormSheet({
   const { colors: t } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(t), [t]);
+  // Web: ligt het toetsenbord over de homebalk, dan is die ruimte niet nodig.
+  // Native: altijd false.
+  const toetsenbordOpen = useToetsenbordOpen();
 
   // Tijdens het opslaan mag het formulier niet dicht: anders verdwijnt de
   // uitkomst voordat iemand hem gezien heeft.
@@ -103,14 +107,23 @@ export function FormSheet({
         <ScrollView
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          // Native: toetsenbord weg bij slepen. Op web niet: react-native-web
+          // sluit het toetsenbord dan bij élk scroll-event, ook als de browser
+          // het actieve veld zelf in beeld scrolt — en dan raakt het veld zijn
+          // focus kwijt zodra het toetsenbord opent.
+          keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
         >
           {children}
         </ScrollView>
 
         {/* Ondermarge uit de safe-area: minimaal 20, meer op een toestel met
             homebalk. Zo blijft de knop op elke iPhone bereikbaar. */}
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: toetsenbordOpen ? 12 : Math.max(insets.bottom, 20) },
+          ]}
+        >
           {error ? (
             <View style={styles.foutBanner}>
               <Text style={styles.foutTekst}>{error}</Text>

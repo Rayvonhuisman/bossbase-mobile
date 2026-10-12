@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '@/providers';
+import { useZichtbareViewport } from '@/lib/zichtbareViewport';
 
 /**
  * Houdt de app in de browser op telefoonbreedte.
@@ -17,6 +18,11 @@ import { useTheme } from '@/providers';
  *
  * `overflow: hidden` houdt alles wat breder uitvalt binnen de kolom, zodat de
  * pagina nooit horizontaal gaat scrollen.
+ *
+ * Met een open toetsenbord neemt het kader de hoogte en positie van het
+ * zichtbare deel van het scherm over (zie `lib/zichtbareViewport`): de app en
+ * een open formulier passen dan precies boven het toetsenbord, in plaats van
+ * dat iOS het hele beeld omhoog schuift en de bovenkant uit beeld valt.
  */
 const MAX_BREEDTE = 480;
 
@@ -26,6 +32,7 @@ export function MobielKader({ children }: { children: ReactNode }) {
   // De zijranden alleen als er naast de kolom ruimte is; op een telefoon zou
   // het een haarlijn langs de schermrand zijn.
   const metRand = width > MAX_BREEDTE;
+  const viewport = useZichtbareViewport();
 
   // De browserbalk (en in een geïnstalleerde app de statusbalk) volgt het thema
   // van de app, niet dat van het systeem.
@@ -37,6 +44,15 @@ export function MobielKader({ children }: { children: ReactNode }) {
       style={[
         styles.buiten,
         { backgroundColor: colorMode === 'dark' ? '#060A08' : '#E5E7EB' },
+        viewport.hoogte !== null && {
+          // Niet `flex: 0`: react-native-web maakt daar `flex-basis: 0%` van,
+          // en dat wint het van `height` (de kolom wordt dan 0 hoog).
+          flexGrow: 0,
+          flexShrink: 0,
+          flexBasis: 'auto',
+          height: viewport.hoogte,
+          transform: [{ translateY: viewport.boven }],
+        },
       ]}
     >
       <View
