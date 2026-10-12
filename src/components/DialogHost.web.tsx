@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { dsShadowPop, radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
@@ -141,6 +141,21 @@ function DialoogInhoud({
   // van react-native-web houdt de focus ook binnen de modal, maar met een lege
   // tussenstop; dit is directer en voorspelbaar.
   const kaart = useRef<View>(null);
+
+  // Altijd bovenop. react-native-web zet de container van elke `Modal` in
+  // <body> zodra het component mount, met dezelfde z-index. Deze host mount
+  // als eerste (in de root-layout), dus een formulier dat later mount lag
+  // erboven: een bevestiging als "Uren verwijderen?" vanuit een formulier was
+  // onzichtbaar. Bij elke dialoog schuiven we zijn container naar het eind
+  // van <body>, zodat hij boven alles ligt wat er op dat moment open is.
+  useLayoutEffect(() => {
+    let el = kaart.current as unknown as HTMLElement | null;
+    while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
+    if (el && el.parentElement === document.body && el !== document.body.lastElementChild) {
+      document.body.appendChild(el);
+    }
+  }, []);
+
   useEffect(() => {
     const opTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
