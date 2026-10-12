@@ -87,6 +87,8 @@ export default function NewTimeEntryScreen() {
   }, [role, user?.id]);
 
   useEffect(() => {
+    // Gegevens laden bij openen; loadWo zet zelf de laadstatus.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadWo();
   }, [loadWo]);
 

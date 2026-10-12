@@ -137,7 +137,9 @@ export default function CustomersScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('alle');
 
-  const todayMs = useMemo(() => Date.now(), []);
+  // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep
+  // tijdens het renderen).
+  const [todayMs] = useState(() => Date.now());
 
   const load = useCallback(
     async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, type StyleProp, type ViewStyle } from 'react-native';
 import { useIsFocused } from "expo-router/react-navigation";
 
@@ -25,7 +25,9 @@ type Props = {
  */
 export function AnimatedScreen({ children, style, disabled }: Props) {
   const isFocused = useIsFocused();
-  const progress = useRef(new Animated.Value(disabled ? 1 : 0)).current;
+  // useState (niet useRef(...).current): één Animated.Value per scherm, zonder
+  // tijdens het renderen een ref uit te lezen.
+  const [progress] = useState(() => new Animated.Value(disabled ? 1 : 0));
 
   useEffect(() => {
     if (disabled) {

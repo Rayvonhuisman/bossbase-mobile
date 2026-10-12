@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { ReactNode } from 'react';
 import {
   Pressable,
@@ -204,9 +205,6 @@ export function Field({ label, hint, isPassword, error, ...props }: FieldProps) 
   );
 }
 
-// We need React for the Field hooks — use a runtime import to avoid
-// circular-import warnings in some bundlers.
-import * as React from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles

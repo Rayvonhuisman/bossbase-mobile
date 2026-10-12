@@ -125,9 +125,10 @@ export default function TodayScreen() {
   const [nextItem, setNextItem] = useState<PlanningItem | null>(null);
   const [todayItems, setTodayItems] = useState<PlanningItem[]>([]);
 
+  const userId = user?.id;
   const load = useCallback(
     async () => {
-      if (!user?.id) return;
+      if (!userId) return;
 
       const dayRange = getDayRange(new Date());
       const [planRes, weekRes, nextRes] = await Promise.all([
@@ -137,13 +138,13 @@ export default function TodayScreen() {
           startDate: dayRange.startDate,
           endDate: dayRange.endDate,
           assignedToUserId,
-          currentUserId: user.id,
+          currentUserId: userId,
           currentUserName,
         }),
         // Werkdag- én werkbonuren, net als de Uren-tab: wie alleen op klussen
         // boekt, zag hier anders altijd 0.
-        listUrenForProfile(user.id, toISODate(weekStart), toISODate(weekEnd)),
-        getNextPlanningItem({ assignedToUserId, currentUserId: user.id, currentUserName }),
+        listUrenForProfile(userId, toISODate(weekStart), toISODate(weekEnd)),
+        getNextPlanningItem({ assignedToUserId, currentUserId: userId, currentUserName }),
       ]);
 
       setTodayItems(planRes.items);
@@ -161,7 +162,7 @@ export default function TodayScreen() {
       }
 
     },
-    [user?.id, assignedToUserId, currentUserName, weekStart, weekEnd],
+    [userId, assignedToUserId, currentUserName, weekStart, weekEnd],
   );
 
 

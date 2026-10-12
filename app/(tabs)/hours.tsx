@@ -128,9 +128,10 @@ export default function HoursScreen() {
   const [bewerken, setBewerken] = useState<UurConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
+  const userId = user?.id;
   const load = useCallback(
     async () => {
-      if (!user?.id) return;
+      if (!userId) return;
       setError(null);
 
       const from = toISODate(weekStart);
@@ -138,7 +139,7 @@ export default function HoursScreen() {
       const { data, error: fetchError } =
         filter === 'team' && isTeamScope
           ? await listCompanyUren(from, to)
-          : await listUrenForProfile(user.id, from, to);
+          : await listUrenForProfile(userId, from, to);
 
       // Werkbonuren en werkdaguren komen uit twee tabellen. Faalt er één, dan
       // is het totaal onvolledig — dat melden we, want een te laag getal dat
@@ -146,7 +147,7 @@ export default function HoursScreen() {
       setError(fetchError);
       setEntries(data);
     },
-    [user?.id, weekStart, weekEnd, filter, isTeamScope],
+    [userId, weekStart, weekEnd, filter, isTeamScope],
   );
 
   /**
