@@ -12,7 +12,8 @@ async function safeOpen(url: string, fallbackMsg = 'Deze actie wordt niet onders
   try {
     await Linking.openURL(url);
   } catch (e) {
-    console.warn('[linking] openURL failed', { url, err: e });
+    // De URL bevat een telefoonnummer of e-mailadres: alleen tijdens ontwikkeling loggen.
+    if (__DEV__) console.warn('[linking] openURL failed', { url, err: e });
     Dialog.alert('Kon niet openen', fallbackMsg);
   }
 }

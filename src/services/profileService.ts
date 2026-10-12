@@ -2,6 +2,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly } from '@/lib/sessionContext';
 import { translateAuthError } from '@/lib/authErrors';
+import { isNetwerkfout } from '@/lib/netwerkfout';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { Company, Profile } from '@/types/domain';
 
@@ -183,12 +184,8 @@ function classifySupabaseError(
   }
 
   // RN/fetch network failures surface here with messages like "Network request
-  // failed" or "Failed to fetch".
-  if (
-    combined.includes('failed to fetch') ||
-    combined.includes('network request failed') ||
-    combined.includes('network')
-  ) {
+  // failed", "Failed to fetch" or (Safari) "Load failed".
+  if (isNetwerkfout(combined) || combined.includes('network')) {
     return {
       kind: 'network_error',
       message: error.message,

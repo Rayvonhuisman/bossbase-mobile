@@ -1,4 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
+import { isNetwerkfout } from './netwerkfout';
 
 /**
  * Eén schrijfpad voor de hele app.
@@ -95,12 +96,7 @@ export function classificeerFout(
   if (alles.includes('readonly')) return writeFout('readonly', undefined, technisch);
 
   // PostgREST vertaalt een lege timeout/offline anders per platform.
-  if (
-    alles.includes('failed to fetch') ||
-    alles.includes('network request failed') ||
-    alles.includes('networkerror') ||
-    code === 'ECONNABORTED'
-  ) {
+  if (isNetwerkfout(alles) || code === 'ECONNABORTED') {
     return writeFout('netwerk', undefined, technisch);
   }
 

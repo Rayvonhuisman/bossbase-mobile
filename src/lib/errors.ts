@@ -1,4 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
+import { isNetwerkfout } from './netwerkfout';
 
 /**
  * Map a Supabase / PostgREST error to a friendly Dutch user-facing string.
@@ -14,12 +15,16 @@ export function describeError(
   const message = error.message ?? '';
   const lower = message.toLowerCase();
 
-  console.warn(`[${context}]`, {
-    code,
-    message,
-    details: 'details' in error ? error.details : undefined,
-    hint: 'hint' in error ? error.hint : undefined,
-  });
+  // Alleen tijdens ontwikkeling: details en hint kunnen ingevoerde waarden
+  // bevatten (bijvoorbeeld bij een dubbele sleutel).
+  if (__DEV__) {
+    console.warn(`[${context}]`, {
+      code,
+      message,
+      details: 'details' in error ? error.details : undefined,
+      hint: 'hint' in error ? error.hint : undefined,
+    });
+  }
 
   if (code === '42501' || code === 'PGRST301' || lower.includes('permission')) {
     return 'Je hebt geen toestemming voor deze actie.';
@@ -27,7 +32,7 @@ export function describeError(
   if (code === '42703' || code === '42P01' || code === 'PGRST204') {
     return 'De app moet worden bijgewerkt. Neem contact op met je beheerder.';
   }
-  if (lower.includes('network') || lower.includes('failed to fetch')) {
+  if (lower.includes('network') || isNetwerkfout(message)) {
     return 'Geen verbinding met de server. Controleer je internet.';
   }
   if (lower.includes('jwt') || lower.includes('expired')) {
