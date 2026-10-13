@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
+import { getCompanyId, getSessionStand, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { classificeerFout, schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 
 /**
@@ -395,8 +395,16 @@ export async function uploadBedrijfslogo(input: {
       "Dit bestandstype wordt niet ondersteund. Het logo komt ook in e-mails en PDF's terecht — gebruik JPG of PNG.",
     );
   }
-  if (input.bytes.byteLength > 10 * 1024 * 1024) {
-    return writeFout('validatie', 'Het logo is groter dan 10 MB.');
+  // Bucket `bedrijf-logos` heeft file_size_limit 5 MB; groter weigert de server.
+  if (input.bytes.byteLength > 5 * 1024 * 1024) {
+    return writeFout('validatie', 'Het logo is groter dan 5 MB.');
+  }
+  // De storage-policy op `bedrijf-logos` toetst alleen de bedrijfsmap, niet de
+  // rol. Zonder deze check zou een niet-beheerder `logo.*` kunnen overschrijven
+  // (zelfde URL, dus direct zichtbaar in mails/PDF's) terwijl de update van
+  // `companies.logo_url` daarna door RLS wordt geweigerd.
+  if (getSessionStand().role !== 'admin') {
+    return writeFout('geen-rechten', 'Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.');
   }
   const ext = input.extensie === 'png' ? 'png' : 'jpg';
   const pad = `${companyId}/logo.${ext}`;

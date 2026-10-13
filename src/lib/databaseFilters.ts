@@ -471,9 +471,24 @@ export function exportRegels(
   });
 }
 
+/**
+ * Formule-injectie voorkomen (CSV/Excel): een tekstwaarde die met `=`, `+`,
+ * `-`, `@`, tab of CR begint, krijgt een `'` ervoor, zodat Excel/Sheets hem
+ * als tekst toont in plaats van als formule uit te voeren. Getallen en
+ * telefoon-/bedragachtige waarden (alleen cijfers, spaties, `().,` met
+ * hooguit een voorteken) blijven ongemoeid: daar zit geen formule in.
+ */
+export function csvVeilig(v: unknown): string {
+  if (typeof v === 'number') return String(v);
+  const s = String(v ?? '');
+  if (!/^[=+\-@\t\r]/.test(s)) return s;
+  if (/^[+-]?[\d\s().,]+$/.test(s)) return s;
+  return `'${s}`;
+}
+
 /** CSV zoals het dashboard: komma-gescheiden, alles gequote, met UTF-8 BOM. */
 export function naarCsv(regels: readonly Record<string, string | number>[]): string {
-  const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const q = (v: unknown) => `"${csvVeilig(v).replace(/"/g, '""')}"`;
   const kop = EXPORT_KOLOMMEN.map(q).join(',');
   const rijen = regels.map((r) => EXPORT_KOLOMMEN.map((k) => q(r[k])).join(','));
   return '﻿' + [kop, ...rijen].join('\n');

@@ -21,7 +21,7 @@ Belangrijke voorafopmerking: twee bestanden uit de opdracht zijn **niet** wat de
 - Pagina-sleutels (`PAGINAS`): `pipeline, customers, leveranciers, materialen, activities, calendar, planning, projecten, werkbonnen, uren, costs, revenue, facturen, offertes, database, team, instellingen, abonnement` (+ `dashboard` als standaard) — `src/lib/route.js`.
 - Render per pagina: `src/App.jsx:1605-1655`.
 - Publieke (niet-dashboard) routes in de SPA: `/login`, `/register`, `/reset-password?token=`, `/uitnodiging/<token>`, `/offerte/<token>` (ondertekenen), `/werkbon/<token>` (ondertekenen), `/betaal/<token>`, `/betaald`, `/betaling-geannuleerd`, `/cookieverklaring`, `/superadmin` — `src/App.jsx:1661-1750`, lijst in `src/lib/appRoutes.js`.
-- `/superadmin`: alleen als `profile.isSuperAdmin === true` én e-mail in `['info@bossbase.nl','nielsgrevink@gmail.com']` — `src/App.jsx:1744-1745`.
+- `/superadmin`: alleen als `profile.isSuperAdmin === true` én e-mail in `['info@bossbase.nl','<privé-adres op de allowlist>']` — `src/App.jsx:1744-1745`.
 
 ### 1.2 Zijbalk-menu (NAV) — exacte volgorde
 

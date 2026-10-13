@@ -312,7 +312,7 @@ Bron: `/Users/macbook/BossBase-billing` (branch `main`), alleen `src/` + ter con
 | `/api/*` | `null` | – | Vercel-serverfuncties (o.a. SnelStart-webhook) |
 
 ### 6.2 SuperAdminPage (`src/pages/SuperAdminPage.jsx`, route `src/App.jsx:1736-1750`)
-- Intern platformbeheer van BossBase zelf, niet voor klanten: alleen `profile.isSuperAdmin === true` én e-mail in hardcoded allowlist `['info@bossbase.nl','nielsgrevink@gmail.com']`; rendert niets tot rechten geladen zijn.
+- Intern platformbeheer van BossBase zelf, niet voor klanten: alleen `profile.isSuperAdmin === true` én e-mail in hardcoded allowlist `['info@bossbase.nl','<privé-adres op de allowlist>']`; rendert niets tot rechten geladen zijn.
 - Data via Edge Function **`super-admin-data`** (alle bedrijven, abonnementen, aanvragen via bossbase.nl). Acties: bedrijfsstatus (`companies.status`) en abonnement (`subscriptions` plan/status/notities) aanpassen, status van leads/aanvragen via bossbase.nl (`nieuw, in_behandeling, gekwalificeerd, afgewezen, spam`; `super-admin-data` met `actie:'aanvraag_status'`), gratis-website-aanvragen (`WebsiteAanvragen`).
 - Waarom niet in de klantapp: leest en wijzigt gegevens van álle tenants (service-role via Edge Function), beheert abonnementen/betaalstatus van klanten en BossBase-salesleads. Dat is operator-tooling, geen tenantfunctionaliteit; in een klantapp is het puur aanvalsoppervlak.
 

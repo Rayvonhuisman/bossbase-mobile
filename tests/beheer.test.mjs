@@ -219,3 +219,21 @@ test('database: bedragen en export zoals het dashboard', () => {
   assert.equal(csv.split('\n').length, 2);
   assert.equal(db.EXPORT_KOLOMMEN.length, 24);
 });
+
+test('database: CSV-export voorkomt formule-injectie (=, +, -, @, tab, CR)', () => {
+  assert.equal(db.csvVeilig('=HYPERLINK("http://x","klik")'), `'=HYPERLINK("http://x","klik")`);
+  assert.equal(db.csvVeilig('+cmd|calc'), "'+cmd|calc");
+  assert.equal(db.csvVeilig('-2+3+cmd|calc'), "'-2+3+cmd|calc");
+  assert.equal(db.csvVeilig('@SUM(A1)'), "'@SUM(A1)");
+  assert.equal(db.csvVeilig('\t=1'), "'\t=1");
+  assert.equal(db.csvVeilig('\r=1'), "'\r=1");
+  // Gewone waarden en telefoonnummers/bedragen blijven ongemoeid.
+  assert.equal(db.csvVeilig('Jansen BV'), 'Jansen BV');
+  assert.equal(db.csvVeilig('+31 6 12345678'), '+31 6 12345678');
+  assert.equal(db.csvVeilig('-12,50'), '-12,50');
+  assert.equal(db.csvVeilig(42), '42');
+  assert.equal(db.csvVeilig(null), '');
+  const csv = db.naarCsv([{ Naam: '=1+1', Email: 'a@b.nl' }]);
+  assert.ok(csv.includes(`"'=1+1"`));
+  assert.ok(csv.includes('"a@b.nl"'));
+});
