@@ -408,7 +408,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           succesMelding: 'Project verwijderd',
         });
       },
-      'Werkbonnen en facturen die eraan hangen blijven bestaan, maar verliezen hun projectkoppeling.',
+      'Projectnotities, foto’s en projectkosten worden mee verwijderd. Werkbonnen, facturen en ' +
+        'losse kostenposten blijven bestaan, maar verliezen hun projectkoppeling.',
     );
   };
 
@@ -926,8 +927,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               </Text>
               <Text style={styles.tekst}>{alsTekst(n.note)}</Text>
             </View>
-            {/* De policy laat de auteur en admin/planner verwijderen. */}
-            {n.created_by === eigenId || mag('team', 'wijzigen') ? (
+            {/* project_notes_delete: de auteur, of bb_is_admin_or_permission('projecten_bewerken'). */}
+            {n.created_by === eigenId || can('projecten_bewerken') ? (
               <Pressable
                 onPress={() => notitieWeg(n)}
                 hitSlop={10}

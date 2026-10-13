@@ -1,7 +1,13 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { isReadonly } from '@/lib/sessionContext';
-import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { getUserId, isReadonly } from '@/lib/sessionContext';
+import {
+  classificeerFout,
+  schrijf,
+  writeFout,
+  type WriteResult,
+  type WriteStatus,
+} from '@/lib/writeResult';
 import type { Customer } from '@/types/domain';
 import { haalInStukken } from '@/lib/inStukken';
 import { alsHtml } from '@/lib/notitieTekst';
@@ -131,15 +137,38 @@ export async function createCustomer(
     .single();
 
   if (error) {
-    console.warn('[customerService.createCustomer]', error.code, error.message);
-    // Honest, Dutch user-facing message — never a fake success.
+    // Eerlijke melding. Een RLS-weigering (42501) kan drie oorzaken hebben:
+    // read-only abonnement (`readonly_customers`), de klantenlimiet van het
+    // pakket (`plan_limiet_klanten`) of het ontbrekende recht (customers_insert
+    // vraagt klanten_bewerken, verkoop, offertes, werkbonnen_bewerken of
+    // planning). De database zegt niet welke; noem dus beide mogelijkheden.
+    const fout = classificeerFout(error, 'customerService.createCustomer', isReadonly());
     const msg =
-      error.code === '42501' || error.code === 'PGRST301'
-        ? 'Je hebt geen rechten om een klant aan te maken.'
-        : 'Klant kon niet worden opgeslagen. Probeer het opnieuw.';
+      fout.soort === 'geen-rechten'
+        ? 'Klant niet opgeslagen: je hebt geen recht om klanten aan te maken, of de ' +
+          'klantenlimiet van je abonnement is bereikt (Instellingen → Abonnement).'
+        : fout.soort === 'onbekend'
+          ? 'Klant kon niet worden opgeslagen. Probeer het opnieuw.'
+          : fout.melding;
     return { data: null, error: msg };
   }
-  return { data: (data as unknown as Customer) ?? null, error: null };
+  const klant = (data as unknown as Customer) ?? null;
+  // Zelfde tijdlijnregel als `createCustomer` in het dashboard. Mislukt die,
+  // dan blijft de klant gewoon bestaan.
+  if (klant?.id) {
+    const eigen = getUserId();
+    void Promise.resolve(
+      supabase.from('klant_tijdlijn').insert({
+        company_id: payload.company_id,
+        customer_id: klant.id,
+        type: 'klant_aangemaakt',
+        omschrijving: 'Klant toegevoegd aan het systeem',
+        aangemaakt_op: new Date().toISOString(),
+        ...(eigen ? { created_by: eigen } : {}),
+      }),
+    ).catch(() => {});
+  }
+  return { data: klant, error: null };
 }
 
 export async function getCustomer(
@@ -163,11 +192,11 @@ export async function getCustomer(
 // ---------------------------------------------------------------------------
 //
 // Let op de asymmetrie in de RLS op `customers` (geverifieerd op de live
-// database): INSERT vraagt alleen het eigen bedrijf (plus de read-onlygate en de
-// klantenlimiet), UPDATE vraagt `klanten_bewerken` en DELETE vraagt
-// `klanten_verwijderen`. Aanmaken mag dus meer mensen dan bewerken — precies
-// andersom dan je zou verwachten, en de reden dat die twee hier aparte gates
-// hebben in plaats van één "mag klanten beheren".
+// database, 13-10-2026): INSERT vraagt het eigen bedrijf plus één van
+// klanten_bewerken/verkoop/offertes/werkbonnen_bewerken/planning (en de
+// read-onlygate en de klantenlimiet), UPDATE vraagt `klanten_bewerken` en
+// DELETE `klanten_verwijderen` (of admin). Aanmaken mag dus meer mensen dan
+// bewerken, en daarom hebben die twee hier aparte gates.
 
 export type UpdateCustomerInput = Partial<Omit<CreateCustomerInput, 'company_id'>>;
 
@@ -238,10 +267,15 @@ export async function deleteCustomer(id: string): Promise<WriteStatus & { waarsc
       leegMelding: 'De klant is niet verwijderd. Je hebt het recht Klanten verwijderen nodig.',
     },
   );
+  // FK's op de live database: aanvragen (deals), activiteiten, klanttijdlijn en
+  // verzonden e-mails gaan mee (CASCADE); werkbonnen, offertes, facturen,
+  // projecten en kosten blijven en verliezen alleen hun klant (SET NULL). Wat
+  // blokkeert is `calendar_events` (customer_id en deal_id zonder ON DELETE):
+  // een agenda-afspraak bij de klant of bij een van zijn aanvragen.
   if (!res.ok && res.soort === 'conflict') {
     return writeFout(
       'conflict',
-      'Deze klant heeft nog werkbonnen, offertes of facturen. Verwijder of ontkoppel die eerst.',
+      'Deze klant heeft nog agenda-afspraken (direct of via een aanvraag). Verwijder die eerst in de agenda.',
     );
   }
   if (!res.ok) return res;

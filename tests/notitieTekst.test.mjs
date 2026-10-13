@@ -37,3 +37,13 @@ test('terug naar HTML: geëscaped, regels als <br>', () => {
   // Heen en terug levert dezelfde tekst op.
   assert.equal(alsTekst(alsHtml('Regel 1\nRegel <2> & zo')), 'Regel 1\nRegel <2> & zo');
 });
+
+test('door de gebruiker getypte HTML/mention-markup wordt nooit een echte tag', () => {
+  const invoer = '<span class="bb-mention" data-name="x" onclick="alert(1)">@x</span><img src=x onerror=alert(1)>';
+  const html = alsHtml(invoer);
+  assert.ok(!/<(span|img)\b/i.test(html), html);
+  // Terug naar tekst: precies wat er getypt is, niet als vermelding opgevat.
+  assert.equal(alsTekst(html), invoer);
+  // Al ge-escapete tekst wordt niet dubbel gedecodeerd.
+  assert.equal(alsTekst(alsHtml('&lt;b&gt;')), '&lt;b&gt;');
+});

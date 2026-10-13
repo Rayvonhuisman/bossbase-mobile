@@ -12,9 +12,9 @@ import { kostenPerLeverancier, verwijderBlokkade, type LeverancierKosten } from 
  * enkel veld verplicht); KvK, btw en IBAN worden vóór elke schrijfactie
  * gecontroleerd, met dezelfde meldingen als het dashboard.
  *
- * RLS (`20260824140000_leveranciers.sql`): lezen en toevoegen binnen het eigen
- * bedrijf (toevoegen ook met de read-onlygate), wijzigen vraagt
- * `klanten_bewerken` en verwijderen `klanten_verwijderen`.
+ * RLS (live database, 13-10-2026): lezen binnen het eigen bedrijf; toevoegen
+ * vraagt `klanten_bewerken` of `kosten` (plus de read-onlygate), wijzigen
+ * `klanten_bewerken` en verwijderen `klanten_verwijderen` (of admin).
  * `job_costs.leverancier_id` staat op ON DELETE RESTRICT: een leverancier met
  * kosten kan niet weg.
  */

@@ -16,9 +16,10 @@ import { leesbreedte } from '@/lib/schermklasseRegels';
 import { spacing } from '@/theme';
 
 /**
- * Nieuwe leverancier — `NewLeverancierModal` van het dashboard. Daar heeft de
- * knop geen rechtengate; de database eist het eigen bedrijf en een lopend
- * abonnement (read-only blokkeert), en die uitkomst komt hier eerlijk terug.
+ * Nieuwe leverancier — `NewLeverancierModal` van het dashboard. De database
+ * eist het eigen bedrijf, het recht `klanten_bewerken` of `kosten` en een
+ * lopend abonnement (read-only blokkeert); de lijst toont de knop alleen dan,
+ * en een weigering via een directe link komt hier eerlijk terug.
  * Na het opslaan opent de kaart van de nieuwe leverancier.
  */
 export default function NieuweLeverancierScherm() {

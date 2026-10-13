@@ -154,10 +154,16 @@ export default function CustomersScreen() {
     !!klantenLimiet && klantenLimiet.max != null && klantenLimiet.gebruikt >= klantenLimiet.max;
   const canCreate = rechtenGeladen && can('klanten_bewerken') && !readonly && !limietVol;
   /**
-   * Een leverancier toevoegen heeft in het dashboard geen rechtengate; de
-   * database eist alleen het eigen bedrijf en een lopend abonnement.
+   * Een leverancier toevoegen: `leveranciers_insert` eist het eigen bedrijf
+   * plus het recht `klanten_bewerken` of `kosten`, en `readonly_leveranciers`
+   * een lopend abonnement (live database, 13-10-2026). Zonder dat recht zou de
+   * knop alleen tot een weigering leiden.
    */
-  const magLeverancierMaken = rechtenGeladen && !readonly;
+  const magLeverancierMaken =
+    rechtenGeladen && !readonly && (can('klanten_bewerken') || can('kosten'));
+  /** Kostentotalen per leverancier alleen met het kostenrecht: zonder dat geeft
+   * RLS op job_costs hooguit de werkbonkosten terug, en dan klopt het totaal niet. */
+  const toonKosten = rechtenGeladen && can('kosten');
   const toonBedragen = rechtenGeladen && can('facturen');
 
   const [items, setItems] = useState<Customer[]>([]);
@@ -179,7 +185,9 @@ export default function CustomersScreen() {
       const [klantRes, levRes, kostRes, totaalRes] = await Promise.all([
         listCustomers(),
         listLeveranciersVolledig(),
-        listLeverancierKostenTotalen(),
+        toonKosten
+          ? listLeverancierKostenTotalen()
+          : Promise.resolve({} as Record<string, LeverancierKosten>),
         toonBedragen ? listFactuurTotaalRijen() : Promise.resolve({ data: [], error: null }),
       ]);
       if (klantRes.error) {
@@ -194,7 +202,7 @@ export default function CustomersScreen() {
       setKosten(kostRes);
       if (!totaalRes.error) setTotalen(totalenPerKlant(totaalRes.data));
     },
-    [toonBedragen],
+    [toonBedragen, toonKosten],
   );
 
   /**

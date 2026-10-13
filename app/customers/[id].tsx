@@ -718,7 +718,10 @@ export default function CustomerDetailScreen() {
                   kvk_number: concept.kvk,
                   btw_number: concept.btw,
                   iban: concept.iban,
-                  notes: concept.notes,
+                  // Ongewijzigd? Niet meesturen: anders gaan opmaak en
+                  // @-vermeldingen uit de dashboard-editor verloren.
+                  notes:
+                    concept.notes === alsTekst(customer.notes) ? undefined : concept.notes,
                 }),
               {
                 onSuccess: async () => {
@@ -748,7 +751,8 @@ export default function CustomerDetailScreen() {
                           },
                         });
                       },
-                      'Werkbonnen, offertes en facturen van deze klant blijven bestaan en blokkeren het verwijderen.',
+                      'Aanvragen, activiteiten, notities en de tijdlijn van deze klant worden mee ' +
+                        'verwijderd. Werkbonnen, offertes, facturen en projecten blijven bestaan zonder klant.',
                     ),
                 }
               : undefined
