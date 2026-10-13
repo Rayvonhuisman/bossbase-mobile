@@ -21,6 +21,7 @@ export const PERMISSIONS = [
   'klanten_verwijderen',
   'verkoop',
   // Uitvoering
+  'projecten',
   'projecten_bewerken',
   'werkbonnen_bewerken',
   'planning',
@@ -82,6 +83,41 @@ export function canWithRole(
 }
 
 /**
+ * Inzagerechten die in een gedeelde werkruimte (pakket Groei, feature
+ * `gedeelde_werkruimte`) automatisch gelden — letterlijk `INZAGE_RECHTEN` uit
+ * `usePermissions.js` van het dashboard. Bewerkrechten (klanten_bewerken,
+ * projecten_bewerken, werkbonnen_bewerken, planning, inkoopprijzen,
+ * instellingen, …) horen daar bewust niet bij.
+ */
+export const INZAGE_RECHTEN: readonly string[] = [
+  'verkoop',
+  'offertes',
+  'facturen',
+  'kosten',
+  'bedrijfsfinancien',
+  'projectbedragen',
+  'alles_inzien',
+  'agenda_inzien',
+  'projecten',
+  'database',
+  'team',
+];
+
+/**
+ * "Zien" zoals het dashboard (`can()` in `usePermissions.js`): in een gedeelde
+ * werkruimte is elk inzagerecht toegestaan, anders de gewone rechtencheck.
+ */
+export function canZien(
+  permission: Permission | string,
+  role: string | null | undefined,
+  granted: readonly string[],
+  features: readonly string[] | null | undefined,
+): boolean {
+  if (features?.includes('gedeelde_werkruimte') && INZAGE_RECHTEN.includes(permission)) return true;
+  return canWithRole(permission, role, granted);
+}
+
+/**
  * Wat een menu-item nodig heeft. Gespiegeld aan `NAV` in het dashboard:
  * items zonder recht zijn voor iedereen zichtbaar en worden door RLS begrensd
  * (eigen werk versus dat van het hele team).
@@ -106,15 +142,17 @@ export type NavGate = {
  */
 export const ROUTE_GATES: Record<string, NavGate> = {
   '/pipeline': { permission: 'verkoop' },
+  // Zoals het menu van het dashboard (NAV: projecten → recht `projecten`).
+  '/projects': { permission: 'projecten' },
   '/offers': { permission: 'offertes' },
   '/invoices': { permission: 'facturen' },
   '/expenses': { permission: 'kosten', feature: 'kosten_nacalculatie' },
   '/team': { permission: 'team' },
   '/settings': { permission: 'instellingen' },
   '/integrations': { permission: 'instellingen' },
-  // Projecten, activiteiten, taken, notities, foto's, werkbonnen, uren, agenda
-  // en klanten kennen in het dashboard géén rechtgate: RLS bepaalt of je alleen
-  // je eigen werk ziet of dat van het hele team.
+  // Activiteiten, werkbonnen, uren, agenda en relaties kennen in het
+  // dashboard géén rechtgate: RLS bepaalt of je alleen je eigen werk ziet of
+  // dat van het hele team.
 };
 
 /** De gate voor een route, of `null` als de route voor iedereen open staat. */

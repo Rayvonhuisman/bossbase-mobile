@@ -52,6 +52,11 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
     label: 'Uitvoering',
     subs: [
       {
+        key: 'projecten',
+        label: 'Projecten',
+        kort: 'De Projecten-pagina openen',
+      },
+      {
         key: 'projecten_bewerken',
         label: 'Projecten bewerken',
         kort: 'Alle projecten aanmaken en bewerken',

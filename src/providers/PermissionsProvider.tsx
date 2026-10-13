@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import {
   actieGate,
   canWithRole,
+  canZien,
   gateFor,
   readonlyTekst,
   type ActionGate,
@@ -176,7 +177,11 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const planStatus = bruikbaar?.planStatus ?? null;
     const error = bruikbaar?.error ?? null;
 
-    const can = (permission: Permission | string) => canWithRole(permission, role, granted);
+    // Zien, zoals het dashboard: in een gedeelde werkruimte (Groei) gelden de
+    // inzagerechten voor iedereen. Schrijfacties lopen via `mag()`/services en
+    // blijven strikt (canWithRole) en server-side afgedwongen.
+    const can = (permission: Permission | string) =>
+      canZien(permission, role, granted, planStatus?.features ?? null);
 
     const hasFeature = (feature: Feature) => {
       // Geen serverantwoord = niet blokkeren op abonnement. Dezelfde keuze als
@@ -206,7 +211,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           ? 'Alleen een beheerder kan dit.'
           : 'Je rol geeft hier geen toegang toe.';
       }
-      if (gate.permission && !can(gate.permission)) {
+      // Acties zijn schrijven: strikt, zoals `magBewerken` in het dashboard
+      // (de gedeelde werkruimte geeft alleen inzage).
+      if (gate.permission && !canWithRole(gate.permission, role, granted)) {
         return 'Je hebt hier geen rechten voor.';
       }
       if (gate.feature && !hasFeature(gate.feature)) {
