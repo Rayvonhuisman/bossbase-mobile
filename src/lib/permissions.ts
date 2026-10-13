@@ -136,8 +136,8 @@ export type NavGate = {
  *   pipeline → verkoop · offertes → offertes · facturen → facturen
  *   kosten   → kosten + feature kosten_nacalculatie
  *   planning → planning + feature planning   (mobiel is /planning de Agenda,
- *              die in het dashboard ongated is; de planningsmodule zelf zit
- *              niet in de app)
+ *              die in het dashboard ongated is; de planningsmodule zelf is
+ *              /planningbord)
  *   team     → team · instellingen → instellingen · database → database
  */
 export const ROUTE_GATES: Record<string, NavGate> = {

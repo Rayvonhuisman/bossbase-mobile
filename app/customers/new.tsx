@@ -45,6 +45,9 @@ function NewCustomerInhoud() {
   const [postcode, setPostcode] = useState('');
   const [city, setCity] = useState('');
   const [kvk, setKvk] = useState('');
+  const [btw, setBtw] = useState('');
+  const [iban, setIban] = useState('');
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,11 @@ function NewCustomerInhoud() {
     setError(null);
     if (!name.trim()) {
       setError('Naam is verplicht.');
+      return;
+    }
+    // Zelfde e-mailcontrole als `NewCustomerModal` in het dashboard.
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setError('Ongeldig e-mailadres.');
       return;
     }
     if (!companyId) {
@@ -68,6 +76,9 @@ function NewCustomerInhoud() {
       postcode,
       city,
       kvk_number: kvk,
+      btw_number: btw,
+      iban,
+      notes,
     });
     setSaving(false);
     if (saveError) {
@@ -143,6 +154,29 @@ function NewCustomerInhoud() {
               onChangeText={setKvk}
               placeholder="Optioneel"
               keyboardType="number-pad"
+            />
+            <FormField
+              label="Btw-nummer"
+              value={btw}
+              onChangeText={setBtw}
+              placeholder="Optioneel, bijv. NL123456789B01"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <FormField
+              label="IBAN"
+              value={iban}
+              onChangeText={setIban}
+              placeholder="Optioneel"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <FormField
+              label="Notities"
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Optioneel"
+              multiline
             />
 
           </ScrollView>
