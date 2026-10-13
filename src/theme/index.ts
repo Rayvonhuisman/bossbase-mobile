@@ -113,17 +113,21 @@ export const ds = {
   green700: '#15803D',
   green50: '#DCFCE7',
   green100: '#BBF7D0',
-  /** Forest ink — de donkergroene tekst op een groen vlak. Constant in beide
-   *  thema's: groen blijft groen, dus de tekst erop blijft donker. */
-  greenInk: '#0A2E1F',
   /**
-   * Het vlak van de zwevende tabbalk (`--ink` in het ontwerp). In light mode
-   * gelijk aan de forest ink; in dark mode juist iets LICHTER dan de
-   * achtergrond, met een zichtbare rand (`--inkB`). Zonder dat onderscheid
-   * verdwijnt de balk in donkere modus in de achtergrond — precies wat het
-   * ontwerp met die twee aparte variabelen voorkomt.
+   * BossBase-zwart, exact zoals het dashboard (`--bb-black` / `--sb`, de
+   * zijbalk en `theme-color`). Eerder stond hier een donkergroen (#0A2E1F);
+   * dat kwam niet uit de huisstijl.
    */
-  barBg: '#0A2E1F',
+  zwart: '#0D0D0D',
+  /** Tekst en iconen óp een groen vlak — het dashboard gebruikt daar zwart.
+   *  Constant in beide thema's: groen blijft groen, dus de tekst erop ook. */
+  greenInk: '#0D0D0D',
+  /**
+   * Het vlak van de zwevende tabbalk en de donkere herokaarten. In light mode
+   * het BossBase-zwart; in dark mode juist iets LICHTER dan de achtergrond, met
+   * een zichtbare rand, anders verdwijnt de balk in de achtergrond.
+   */
+  barBg: '#0D0D0D',
   barBorder: 'transparent',
 
   // ── Vlakken ─────────────────────────────────────────────────────────────
@@ -184,7 +188,7 @@ export const ds = {
  * kaarten meteen onrustig.
  */
 export const dsShadow = {
-  shadowColor: '#0A2E1F',
+  shadowColor: '#0D0D0D',
   shadowOpacity: 0.05,
   shadowRadius: 10,
   shadowOffset: { width: 0, height: 2 },
@@ -193,7 +197,7 @@ export const dsShadow = {
 
 /** Zwevende elementen: tabbalk, modals, hero-kaart. */
 export const dsShadowPop = {
-  shadowColor: '#0A2E1F',
+  shadowColor: '#0D0D0D',
   shadowOpacity: 0.18,
   shadowRadius: 30,
   shadowOffset: { width: 0, height: 10 },
@@ -228,24 +232,24 @@ export const lightTheme: ThemeColors = ds;
 
 export const darkTheme: ThemeColors = {
   ...ds,
-  // Vlakken
-  bg: '#0B1210',
-  bgAlt: '#1E2B25',
-  card: '#151F1A',
+  // Vlakken — op het BossBase-zwart, neutraal grijs (geen groene zweem).
+  bg: '#0D0D0D',
+  bgAlt: '#202020',
+  card: '#171717',
   line: 'rgba(255,255,255,0.09)',
   lineStrong: 'rgba(255,255,255,0.18)',
   // Tekst
-  ink: '#F1F5F2',
-  ink2: '#CBD5D0',
-  muted: '#A3B0A8',
-  muted2: '#8D9A93',
+  ink: '#F5F5F5',
+  ink2: '#D4D4D4',
+  muted: '#A3A3A3',
+  muted2: '#8F8F8F',
   // Groen: de actiekleur blijft gelijk, tekst en vlak worden lichter zodat ze
   // op een donkere achtergrond nog leesbaar zijn.
   green700: '#4ADE80',
   green50: 'rgba(34,197,94,0.16)',
   green100: 'rgba(34,197,94,0.24)',
-  greenInk: '#0A2E1F',
-  barBg: '#1B2822',
+  greenInk: '#0D0D0D',
+  barBg: '#1F1F1F',
   barBorder: 'rgba(255,255,255,0.1)',
   // Statusbadges
   statusDraftBg: 'rgba(255,255,255,0.08)',

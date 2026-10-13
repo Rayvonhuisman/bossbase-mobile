@@ -59,7 +59,7 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.card,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: t.lineStrong,
-      shadowColor: '#0A2E1F',
+      shadowColor: '#0D0D0D',
       shadowOpacity: 0.14,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 6 },

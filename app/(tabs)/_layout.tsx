@@ -245,7 +245,7 @@ const ftStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 7,
     // Zwevende schaduw uit het ontwerp: 0 10px 30px rgba(10,46,31,.18).
-    shadowColor: '#0A2E1F',
+    shadowColor: '#0D0D0D',
     shadowOpacity: 0.18,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 10 },

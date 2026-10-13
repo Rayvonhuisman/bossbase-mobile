@@ -424,7 +424,7 @@ const makeStyles = (t: ThemeColors) =>
     },
     keuzeKnopOn: {
       backgroundColor: t.card,
-      shadowColor: '#0A2E1F',
+      shadowColor: '#0D0D0D',
       shadowOpacity: 0.1,
       shadowRadius: 4,
       shadowOffset: { width: 0, height: 1 },

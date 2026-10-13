@@ -55,7 +55,7 @@ export function MobielKader({
     <View
       style={[
         styles.buiten,
-        { backgroundColor: colorMode === 'dark' ? '#060A08' : '#E5E7EB' },
+        { backgroundColor: colorMode === 'dark' ? '#000000' : '#E5E7EB' },
         viewport.hoogte !== null && {
           // Niet `flex: 0`: react-native-web maakt daar `flex-basis: 0%` van,
           // en dat wint het van `height` (de kolom wordt dan 0 hoog).

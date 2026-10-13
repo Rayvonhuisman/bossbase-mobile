@@ -198,7 +198,7 @@ const makeStyles = (t: ThemeColors) =>
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       backgroundColor: t.card,
-      shadowColor: '#0A2E1F',
+      shadowColor: '#0D0D0D',
       shadowOpacity: 0.12,
       shadowRadius: 40,
       shadowOffset: { width: 0, height: -10 },
