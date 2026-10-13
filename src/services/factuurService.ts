@@ -9,6 +9,7 @@ import {
   type WriteStatus,
 } from '@/lib/writeResult';
 import { negeerBijImport } from './importPrullenbak';
+import { haalInStukken } from '@/lib/inStukken';
 
 /**
  * Facturen (`facturen`) en factuurregels (`factuur_regels`).
@@ -165,7 +166,9 @@ export async function getFactuurPdfUrl(factuurId: string): Promise<string | null
 export async function volgendFactuurNummer(): Promise<
   { ok: true; nummer: string } | { ok: false; melding: string }
 > {
-  const { data, error } = await supabase.from('facturen').select('nummer');
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase.from('facturen').select('id, nummer').order('id', { ascending: true }).range(van, tot),
+  );
   if (error) {
     console.warn('[factuurService.volgendFactuurNummer]', error.message);
     return { ok: false, melding: 'Het factuurnummer kon niet worden bepaald. Probeer het opnieuw.' };

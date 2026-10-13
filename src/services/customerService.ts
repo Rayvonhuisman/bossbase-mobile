@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { isReadonly } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { Customer } from '@/types/domain';
+import { haalInStukken } from '@/lib/inStukken';
 
 /**
  * Columns we actually need. We intentionally do NOT select `updated_at`:
@@ -37,10 +38,16 @@ export async function listCustomers(): Promise<{
 }> {
   // Try each sort fallback until one succeeds. Other errors bubble up.
   for (const orderCol of SORT_FALLBACKS) {
-    const { data, error } = await supabase
-      .from('customers')
-      .select(SAFE_COLUMNS)
-      .order(orderCol, { ascending: false });
+    // In stukken van 1000 (zie lib/inStukken); `id` als tweede sortering
+    // zodat geen rij tussen twee stukken verschuift.
+    const { data, error } = await haalInStukken((van, tot) =>
+      supabase
+        .from('customers')
+        .select(SAFE_COLUMNS)
+        .order(orderCol, { ascending: false })
+        .order('id', { ascending: true })
+        .range(van, tot),
+    );
 
     if (!error) {
       return { data: (data as unknown as Customer[]) ?? [], error: null };
@@ -61,7 +68,9 @@ export async function listCustomers(): Promise<{
   }
 
   // Final fallback: no sort at all.
-  const { data, error } = await supabase.from('customers').select(SAFE_COLUMNS);
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase.from('customers').select(SAFE_COLUMNS).order('id', { ascending: true }).range(van, tot),
+  );
   if (error) {
     console.warn('[customerService.listCustomers] unsorted fallback', error.message);
     return { data: [], error: 'Klanten konden niet worden geladen.' };

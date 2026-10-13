@@ -9,6 +9,7 @@ import type {
   WorkOrderTask,
   WorkOrderWithRelations,
 } from '@/types/domain';
+import { haalInStukken } from '@/lib/inStukken';
 
 /**
  * Columns selected from `werkbonnen`, verified against the live schema.
@@ -98,6 +99,8 @@ export type ListWorkOrdersOptions = {
    * returns an empty list for exactly the people who need the app most.
    */
   assignedToUserId?: string | null;
+  /** Alleen de werkbonnen van één klant; de server filtert, niet de app. */
+  customerId?: string;
 };
 
 /** PostgREST `or` filter that matches either assignment model. */
@@ -108,17 +111,21 @@ function assignedFilter(userId: string): string {
 export async function listWorkOrders(
   opts: ListWorkOrdersOptions = {},
 ): Promise<{ data: WorkOrderWithRelations[]; error: string | null }> {
-  let query = supabase
-    .from('werkbonnen')
-    .select(WORK_ORDER_COLUMNS)
-    .order('gepland_op', { ascending: true, nullsFirst: false })
-    .order('updated_at', { ascending: false });
-
-  if (opts.assignedToUserId) {
-    query = query.or(assignedFilter(opts.assignedToUserId));
-  }
-
-  const { data, error } = await metTijdslimiet((signal) => query.abortSignal(signal));
+  // In stukken van 1000 (zie lib/inStukken), elk met de tijdslimiet. `id` als
+  // laatste sortering, zodat geen rij tussen twee stukken verschuift.
+  const { data, error } = await haalInStukken((van, tot) => {
+    let query = supabase
+      .from('werkbonnen')
+      .select(WORK_ORDER_COLUMNS)
+      .order('gepland_op', { ascending: true, nullsFirst: false })
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true });
+    if (opts.assignedToUserId) {
+      query = query.or(assignedFilter(opts.assignedToUserId));
+    }
+    if (opts.customerId) query = query.eq('customer_id', opts.customerId);
+    return metTijdslimiet((signal) => query.range(van, tot).abortSignal(signal));
+  });
   if (error) {
     return { data: [], error: describeError('listWorkOrders', error) };
   }

@@ -104,7 +104,7 @@ export default function CustomerDetailScreen() {
 
       const [custResp, woResp, noteResp] = await Promise.all([
         getCustomer(id),
-        listWorkOrders({}),
+        listWorkOrders({ customerId: id }),
         listNotes({ customerId: id }),
       ]);
       // De notities zijn bijzaak op dit scherm: mislukken ze, dan blijft de
@@ -125,7 +125,7 @@ export default function CustomerDetailScreen() {
         }
         // Filter werkbonnen op deze klant
         if (!woResp.error && woResp.data) {
-          setWorkOrders(woResp.data.filter((w) => w.customer_id === id));
+          setWorkOrders(woResp.data);
         }
       }
 

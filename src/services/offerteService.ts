@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { haalInStukken } from '@/lib/inStukken';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -141,7 +142,9 @@ export async function getOfferteItems(
 export async function volgendOfferteNummer(): Promise<
   { ok: true; nummer: string } | { ok: false; melding: string }
 > {
-  const { data, error } = await supabase.from('offertes').select('nummer');
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase.from('offertes').select('id, nummer').order('id', { ascending: true }).range(van, tot),
+  );
   if (error) {
     console.warn('[offerteService.volgendOfferteNummer]', error.message);
     return { ok: false, melding: 'Het offertenummer kon niet worden bepaald. Probeer het opnieuw.' };
