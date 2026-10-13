@@ -10,6 +10,8 @@ import {
 } from '@/lib/writeResult';
 import { negeerBijImport } from './importPrullenbak';
 import { haalInStukken } from '@/lib/inStukken';
+import { bouwCreditFactuur, magCrediteren, volgendNummer } from '@/lib/documentLogica';
+import { DOCUMENT_KLANT_KOLOMMEN, type DocumentKlant } from './offerteService';
 
 /**
  * Facturen (`facturen`) en factuurregels (`factuur_regels`).
@@ -41,7 +43,7 @@ export const FACTUUR_STATUS_OPTIES = Object.entries(FACTUUR_STATUS).map(([id, la
 /** `geboekt` komt uit de boekhoudkoppeling en staat niet in de keuzelijst. */
 export function factuurStatusLabel(status: string | null | undefined): string {
   if (!status) return 'Concept';
-  if (status === 'geboekt') return 'Geboekt';
+  if (status === 'geboekt') return 'Uit SnelStart';
   return FACTUUR_STATUS[status] ?? status;
 }
 
@@ -110,21 +112,82 @@ export function isGeimporteerd(f: Pick<FactuurRow, 'externe_referentie'>): boole
   return Boolean(f.externe_referentie);
 }
 
+/**
+ * Alle facturen, nieuwste eerst (zelfde sortering als het dashboard). Zonder
+ * `limit` in stukken van 1000, zodat zoeken, filteren en de KPI's over de hele
+ * lijst gaan.
+ */
 export async function listFacturen(
-  limit = 100,
+  limit?: number,
 ): Promise<{ data: FactuurRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('facturen')
-    .select(FACTUUR_COLUMNS)
-    .order('factuurdatum', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const basis = () =>
+    supabase
+      .from('facturen')
+      .select(FACTUUR_COLUMNS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true });
+
+  const { data, error } =
+    limit !== undefined
+      ? await basis().limit(limit)
+      : await haalInStukken((van, tot) => basis().range(van, tot));
 
   if (error) {
     console.warn('[factuurService.listFacturen]', error.message);
     return { data: [], error: 'Facturen konden niet worden geladen.' };
   }
   return { data: (data as unknown as FactuurRow[]) ?? [], error: null };
+}
+
+/** Eén factuur met herinneringen, bevroren bedrijfsgegevens en klantgegevens. */
+export type FactuurDetail = Omit<FactuurRow, 'customer'> & {
+  herinnering_1_verstuurd_at?: string | null;
+  herinnering_2_verstuurd_at?: string | null;
+  snapshot_bedrijfsnaam?: string | null;
+  snapshot_logo_url?: string | null;
+  snapshot_branding_color?: string | null;
+  snapshot_adres?: string | null;
+  snapshot_postcode?: string | null;
+  snapshot_plaats?: string | null;
+  snapshot_email?: string | null;
+  snapshot_kvk?: string | null;
+  snapshot_btw?: string | null;
+  customer: DocumentKlant | null;
+};
+
+export async function getFactuurDetail(
+  id: string,
+): Promise<{ data: FactuurDetail | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('facturen')
+    .select(`*, customer:customers ( ${DOCUMENT_KLANT_KOLOMMEN} )`)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    console.warn('[factuurService.getFactuurDetail]', error.message);
+    return { data: null, error: 'De factuur kon niet worden geladen.' };
+  }
+  return { data: (data as unknown as FactuurDetail | null) ?? null, error: null };
+}
+
+/**
+ * Welke facturen hebben een bewaarde PDF in `factuur-pdfs`? Eén listing van
+ * de map van het bedrijf in plaats van een controle per rij — zoals
+ * `getFacturenMetDocument` in het dashboard. Mislukt het, dan een lege set:
+ * de app toont dan de afdrukweergave in plaats van een bestand.
+ */
+export async function listFacturenMetDocument(): Promise<Set<string>> {
+  const companyId = getCompanyId();
+  if (!companyId) return new Set();
+  const { data, error } = await supabase.storage
+    .from('factuur-pdfs')
+    .list(companyId, { limit: 1000 });
+  if (error) return new Set();
+  return new Set(
+    (data ?? [])
+      .filter((o) => o.name?.endsWith('.pdf'))
+      .map((o) => o.name.replace(/\.pdf$/, '')),
+  );
 }
 
 export async function getFactuurRegels(
@@ -173,12 +236,28 @@ export async function volgendFactuurNummer(): Promise<
     console.warn('[factuurService.volgendFactuurNummer]', error.message);
     return { ok: false, melding: 'Het factuurnummer kon niet worden bepaald. Probeer het opnieuw.' };
   }
-  let hoogste = 0;
-  for (const r of (data as { nummer: string | null }[]) ?? []) {
-    const m = /^BB-F(\d+)/.exec(r.nummer ?? '');
-    if (m) hoogste = Math.max(hoogste, Number(m[1]));
+  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
+  return { ok: true, nummer: volgendNummer(nummers, 'factuur') };
+}
+
+/** Volgend creditnummer: `BB-CF001`, `BB-CF002`, … (hoogste + 1). */
+export async function volgendCreditNummer(): Promise<
+  { ok: true; nummer: string } | { ok: false; melding: string }
+> {
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('facturen')
+      .select('id, nummer')
+      .eq('is_credit', true)
+      .order('id', { ascending: true })
+      .range(van, tot),
+  );
+  if (error) {
+    console.warn('[factuurService.volgendCreditNummer]', error.message);
+    return { ok: false, melding: 'Het creditnummer kon niet worden bepaald. Probeer het opnieuw.' };
   }
-  return { ok: true, nummer: `BB-F${String(hoogste + 1).padStart(3, '0')}` };
+  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
+  return { ok: true, nummer: volgendNummer(nummers, 'credit') };
 }
 
 async function nummerAlInGebruik(nummer: string, behalveId: string): Promise<boolean> {
@@ -633,4 +712,135 @@ export async function createFactuurMetRegels(
   }
 
   return { ok: true, data: { factuur: kop.data, regels: terug.data } };
+}
+
+
+// ── Creditfactuur ──────────────────────────────────────────────────────────
+
+const SNAPSHOT_VELDEN = [
+  'snapshot_logo_url',
+  'snapshot_branding_color',
+  'snapshot_bedrijfsnaam',
+  'snapshot_adres',
+  'snapshot_postcode',
+  'snapshot_plaats',
+  'snapshot_email',
+  'snapshot_kvk',
+  'snapshot_btw',
+] as const;
+
+/**
+ * Een factuur volledig crediteren, zoals "Crediteer factuur" in het dashboard
+ * (`createCreditFactuur`): nummer `BB-CF…`, status meteen `verzonden`,
+ * notitie "Creditering van factuur …", alle regels met negatieve prijs, de
+ * bevroren bedrijfsgegevens van het origineel, en het origineel krijgt
+ * `gecrediteerd = true`.
+ *
+ * Gedeeltelijk crediteren (regels kiezen, aantallen aanpassen) kan alleen in
+ * het dashboard.
+ *
+ * Teruglezen zoals bij het aanmaken: het origineel wordt pas als gecrediteerd
+ * gemarkeerd als alle creditregels echt zijn opgeslagen.
+ */
+export async function createCreditFactuur(
+  origineelId: string,
+): Promise<WriteResult<FactuurRow>> {
+  const { data: org, error: orgFout } = await supabase
+    .from('facturen')
+    .select('*')
+    .eq('id', origineelId)
+    .maybeSingle();
+  if (orgFout) return classificeerFout(orgFout, 'factuurService.createCreditFactuur.lees');
+  const origineel = org as (Record<string, unknown> & FactuurRow) | null;
+  if (!origineel) return writeFout('niet-gevonden');
+  if (!magCrediteren(origineel)) {
+    return writeFout(
+      'op-slot',
+      'Deze factuur kan niet gecrediteerd worden. Alleen een verzonden of betaalde factuur ' +
+        'die nog niet gecrediteerd is, kan een creditfactuur krijgen.',
+    );
+  }
+
+  const regelRes = await getFactuurRegels(origineelId);
+  if (regelRes.error) return writeFout('onbekend', regelRes.error);
+  if (regelRes.data.length === 0) {
+    return writeFout('validatie', 'Deze factuur heeft geen regels om te crediteren.');
+  }
+
+  const nummerRes = await volgendCreditNummer();
+  if (!nummerRes.ok) return writeFout('onbekend', nummerRes.melding);
+
+  const credit = bouwCreditFactuur(regelRes.data);
+  const basis: Record<string, unknown> = {
+    customer_id: origineel.customer_id,
+    project_id: origineel.project_id,
+    nummer: nummerRes.nummer,
+    factuurdatum: vandaagIso(),
+    status: 'verzonden',
+    notities: `Creditering van factuur ${origineel.nummer}`,
+    is_credit: true,
+    credit_van_factuur_id: origineelId,
+    totaal_excl: credit.totaal_excl,
+    totaal_incl: credit.totaal_incl,
+  };
+  for (const veld of SNAPSHOT_VELDEN) basis[veld] = origineel[veld] ?? null;
+
+  const payload = withCompanyId(basis);
+  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+
+  const kop = await schrijf<FactuurRow>(
+    () => supabase.from('facturen').insert(payload).select(FACTUUR_COLUMNS),
+    {
+      context: 'factuurService.createCreditFactuur',
+      bedrijfReadonly: isReadonly(),
+      leegMelding: 'De creditfactuur is niet opgeslagen. Je hebt het recht Facturen nodig.',
+    },
+  );
+  if (!kop.ok) return kop;
+
+  const mislukt: string[] = [];
+  for (const r of credit.regels) {
+    const regelPayload = withCompanyId({ factuur_id: kop.data.id, ...r });
+    if (!regelPayload) {
+      mislukt.push('bedrijfsgegevens ontbreken');
+      continue;
+    }
+    const res = await schrijf<FactuurRegel>(
+      () => supabase.from('factuur_regels').insert(regelPayload).select(REGEL_COLUMNS),
+      {
+        context: 'factuurService.createCreditFactuur.regel',
+        bedrijfReadonly: isReadonly(),
+        leegMelding: 'Factuurregels opslaan kan alleen als beheerder of planner.',
+      },
+    );
+    if (!res.ok) mislukt.push(res.melding);
+  }
+
+  const terug = await getFactuurRegels(kop.data.id);
+  if (mislukt.length > 0 || terug.error || terug.data.length !== credit.regels.length) {
+    return writeFout(
+      'onbekend',
+      `Creditfactuur ${kop.data.nummer} is aangemaakt, maar niet alle regels zijn opgeslagen. ` +
+        'De oorspronkelijke factuur is daarom niet als gecrediteerd gemarkeerd. ' +
+        (mislukt[0] ?? ''),
+    );
+  }
+
+  const markeer = await schrijf<{ id: string }>(
+    () =>
+      supabase
+        .from('facturen')
+        .update({ gecrediteerd: true, updated_at: new Date().toISOString() })
+        .eq('id', origineelId)
+        .select('id'),
+    { context: 'factuurService.createCreditFactuur.markeer', bedrijfReadonly: isReadonly() },
+  );
+  if (!markeer.ok) {
+    return writeFout(
+      'onbekend',
+      `Creditfactuur ${kop.data.nummer} is aangemaakt, maar factuur ${origineel.nummer} kon niet ` +
+        'als gecrediteerd worden gemarkeerd.',
+    );
+  }
+  return kop;
 }

@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Lock, Plus, Receipt, Trash2 } from 'lucide-react-native';
 import {
+  AppFilterChips,
   AppListGroup,
   AppListItem,
+  AppSearchBar,
   AppScreen,
   AppSection,
   AppTopBar,
@@ -29,8 +31,12 @@ import {
   deleteFactuur,
   deleteFactuurRegel,
   FACTUUR_STATUS_OPTIES,
-  factuurStatusLabel,
+  createCreditFactuur,
+  getFactuurDetail,
+  getFactuurPdfUrl,
   getFactuurRegels,
+  listFacturenMetDocument,
+  type FactuurDetail,
   herberekenFactuurTotalen,
   inhoudLigtVast,
   isGeimporteerd,
@@ -45,7 +51,7 @@ import {
 } from '@/services/factuurService';
 import { listCustomers } from '@/services/customerService';
 import { listProjects } from '@/services/projectService';
-import { getCompanySettings } from '@/services/settingsService';
+import { getCompany, getCompanySettings, type CompanyRow } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import {
   berekenTotalen,
@@ -62,9 +68,43 @@ import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
+import { useSchermklasse } from '@/lib/schermklasse';
+import { drukHtmlAf, kanAfdrukken } from '@/lib/afdrukken';
+import { bouwDocumentHtml } from '@/lib/documentHtml';
+import {
+  bedrijfVoorDocument,
+  documentTotalen,
+  FACTUUR_FILTERS,
+  factuurKpis,
+  factuurStatusInfo,
+  factuurWeergaveStatus,
+  filterFacturen,
+  isFactuurVerlopen,
+  magCrediteren,
+  telFactuurFilters,
+  type FactuurFilter,
+} from '@/lib/documentLogica';
+import { Paneel } from '@/components/Paneel';
+import {
+  DetailRij,
+  DocumentStatusBadge,
+  RegelLijst,
+  TegelRaster,
+  TotalenBlok,
+} from '@/components/DocumentOnderdelen';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
+ *
+ * Gelijk aan de facturenpagina van het dashboard: KPI's (Totaal, Openstaand,
+ * Betaald deze maand, Verlopen), filtertabs (Alle/Concept/Verzonden/Betaald/
+ * Verlopen/Gecrediteerd), zoeken op nummer en klant, "Te laat" als de
+ * vervaldatum verstreken is, CF-badge voor creditfacturen en "Gecrediteerd".
+ * De detailweergave opent de bewaarde PDF uit `factuur-pdfs` (tijdelijke
+ * link); zonder bewaard bestand is er een afdrukbare weergave. Volledig
+ * crediteren (`BB-CF…`) kan hier; versturen, herinneringen en gedeeltelijk
+ * crediteren gaan via het dashboard.
  *
  * Betaald zetten loopt via de RPC `mark_factuur_betaald`, precies de route die
  * de Stripe-webhook ook gebruikt. Die is idempotent en geeft terug óf er iets
@@ -102,21 +142,53 @@ type RegelConcept = { omschrijving: string; aantal: string; prijs: string; btw: 
 
 const LEGE_REGEL: RegelConcept = { omschrijving: '', aantal: '1', prijs: '', btw: '21' };
 
-function subtitleFor(f: FactuurRow): string {
-  const delen: string[] = [factuurStatusLabel(f.status)];
+function subtitleFor(f: FactuurRow, vandaag: string): string {
+  const delen: string[] = [];
+  if (f.is_credit) delen.push('Creditfactuur');
   if (f.customer?.name) delen.push(f.customer.name);
   if (f.betaald_op) delen.push(`Betaald ${formatDateNL(f.betaald_op)}`);
-  else if (f.vervaldatum) delen.push(`Vervalt ${formatDateNL(f.vervaldatum)}`);
-  return delen.join(' · ');
+  else if (f.vervaldatum) {
+    delen.push(
+      `${isFactuurVerlopen(f, vandaag) ? 'Verviel' : 'Vervalt'} ${formatDateNL(f.vervaldatum)}`,
+    );
+  }
+  if (f.gecrediteerd) delen.push('Gecrediteerd');
+  return delen.join(' · ') || 'Factuur';
+}
+
+function regelMeta(r: FactuurRegel): string {
+  const btw =
+    r.btw_regime === 'verlegd'
+      ? 'btw verlegd'
+      : r.btw_regime === 'vrijgesteld'
+        ? 'geen btw'
+        : `${Number(r.btw_pct ?? 21)}% btw`;
+  return `${String(r.aantal).replace('.', ',')} × ${formatEUR(r.eenheidsprijs)} · ${btw}`;
 }
 
 function InvoicesScreenInhoud() {
   const router = useRouter();
+  const { id: openId } = useLocalSearchParams<{ id?: string }>();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
+  const { klasse } = useSchermklasse();
+  const breed = klasse === 'tablet';
+  const vandaag = vandaagIso();
 
   const [items, setItems] = useState<FactuurRow[]>([]);
+  const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
+  const [metDocument, setMetDocument] = useState<Set<string>>(new Set());
+  const [zoek, setZoek] = useState('');
+  const [filter, setFilter] = useState<FactuurFilter>('alle');
+
+  // Detailweergave
+  const [detail, setDetail] = useState<FactuurRow | null>(null);
+  const [detailData, setDetailData] = useState<FactuurDetail | null>(null);
+  const [detailRegels, setDetailRegels] = useState<FactuurRegel[]>([]);
+  const [detailLaden, setDetailLaden] = useState(false);
+  const [detailFout, setDetailFout] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
   const [projecten, setProjecten] = useState<SelectOption[]>([]);
   const [instellingen, setInstellingen] = useState({
@@ -148,13 +220,17 @@ function InvoicesScreenInhoud() {
   const load = useCallback(async () => {
     setError(null);
 
-    const [factRes, klantRes, projRes, instRes, eenheidRes] = await Promise.all([
+    const [factRes, klantRes, projRes, instRes, eenheidRes, bedrijfRes, docRes] = await Promise.all([
       listFacturen(),
       listCustomers(),
       listProjects(),
       getCompanySettings(),
       listEigenEenheden(),
+      getCompany(),
+      listFacturenMetDocument(),
     ]);
+    if (!bedrijfRes.error) setBedrijf(bedrijfRes.data);
+    setMetDocument(docRes);
 
     if (factRes.error) setError(factRes.error);
     else setItems(factRes.data);
@@ -186,6 +262,126 @@ function InvoicesScreenInhoud() {
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
 
+
+  /**
+   * Detailweergave (`ViewFactuurModal`). Regels, klant- en bedrijfsgegevens en
+   * — als er een bewaard bestand is — de tijdelijke PDF-link worden bij het
+   * openen opgehaald, zodat de knoppen daarna synchroon een venster openen
+   * (Safari blokkeert vensters die pas na een netwerkverzoek komen).
+   */
+  const openDetail = async (f: FactuurRow) => {
+    setDetail(f);
+    setDetailData(null);
+    setDetailRegels([]);
+    setDetailFout(null);
+    setPdfUrl(null);
+    setDetailLaden(true);
+    const [d, r, url] = await Promise.all([
+      getFactuurDetail(f.id),
+      getFactuurRegels(f.id),
+      metDocument.has(f.id) ? getFactuurPdfUrl(f.id) : Promise.resolve(null),
+    ]);
+    setDetailData(d.data);
+    setDetailRegels(r.data);
+    setDetailFout(d.error ?? r.error);
+    setPdfUrl(url);
+    setDetailLaden(false);
+  };
+
+  // Openen vanuit een melding of link: /invoices?id=<id>
+  useEffect(() => {
+    if (!openId || loading) return;
+    const f = items.find((x) => x.id === openId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (f) void openDetail(f);
+    router.setParams({ id: undefined });
+    // `openDetail` is een gewone functie (nieuw bij elke render); alleen een
+    // nieuwe id of een geladen lijst moet dit opnieuw laten lopen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, items, router]);
+
+  const openPdf = () => {
+    if (pdfUrl) {
+      void Linking.openURL(pdfUrl);
+      return;
+    }
+    Dialog.alert('Niet gelukt', 'De bewaarde PDF kon niet worden geopend. Probeer het opnieuw.');
+  };
+
+  const afdrukken = () => {
+    if (!detail) return;
+    if (!kanAfdrukken()) {
+      Dialog.alert(
+        'Afdrukken via de webversie',
+        'In de app staat de volledige factuur hierboven. Afdrukken of als PDF bewaren kan in de ' +
+          'webversie (app.bossbase.nl) of in het dashboard.',
+      );
+      return;
+    }
+    const d = detailData;
+    const regels = detailRegels.map((r) => ({
+      omschrijving: r.omschrijving,
+      aantal: r.aantal,
+      prijs: r.eenheidsprijs,
+      btwPct: r.btw_pct,
+      btwRegime: r.btw_regime,
+      bedrag: r.regelprijs,
+    }));
+    const html = bouwDocumentHtml({
+      soort: 'factuur',
+      nummer: detail.nummer,
+      datum: detail.factuurdatum,
+      vervaldatum: detail.vervaldatum,
+      kenmerk: detail.betalingskenmerk,
+      creditNote: detail.is_credit ? alsTekst(detail.notities) : null,
+      bedrijf: bedrijfVoorDocument(d ?? {}, bedrijf),
+      klant: d?.customer
+        ? {
+            naam: d.customer.name,
+            adres: d.customer.address,
+            postcode: d.customer.postcode,
+            plaats: d.customer.city,
+            email: d.customer.email,
+            telefoon: d.customer.phone,
+            kvk: d.customer.kvk_number,
+            btw: d.customer.btw_number,
+          }
+        : null,
+      regels,
+      totalen: documentTotalen(
+        regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct, btwRegime: r.btwRegime })),
+      ),
+      notitie: detail.is_credit ? null : alsTekst(detail.notities),
+    });
+    if (!drukHtmlAf(html)) {
+      Dialog.alert('Niet gelukt', 'De afdrukweergave kon niet worden geopend.');
+    }
+  };
+
+  const crediteren = (f: FactuurRow) => {
+    Dialog.alert(
+      'Factuur crediteren?',
+      `Er komt een creditfactuur (BB-CF…) voor het volledige bedrag van ${f.nummer}. ` +
+        'Gedeeltelijk crediteren kan in het dashboard.',
+      [
+        { text: 'Annuleren', style: 'cancel' },
+        {
+          text: 'Crediteren',
+          style: 'destructive',
+          onPress: () => {
+            save(() => createCreditFactuur(f.id), {
+              onSuccess: async (res) => {
+                setDetail(null);
+                const credit = res as FactuurRow;
+                Dialog.alert('Creditfactuur aangemaakt', `${credit.nummer} staat in de lijst.`);
+                await herlaad();
+              },
+            });
+          },
+        },
+      ],
+    );
+  };
 
   const openNieuw = () => {
     setSaveError(null);
@@ -387,9 +583,29 @@ function InvoicesScreenInhoud() {
     );
   }
 
-  const openstaand = items
-    .filter((f) => f.status !== 'betaald' && !f.is_credit)
-    .reduce((s, f) => s + Number(f.totaal_incl ?? 0), 0);
+  const kpis = factuurKpis(items, vandaag);
+  const tellingen = telFactuurFilters(items, vandaag);
+  const zichtbaar = filterFacturen(items, { filter, zoek, vandaag });
+  const magCreditMaken = mag('facturen', 'maken') && mag('factuurRegels', 'maken');
+
+  const detailTotalen = detail
+    ? detailRegels.length > 0
+      ? documentTotalen(
+          detailRegels.map((r) => ({
+            bedrag: r.regelprijs,
+            btwPct: r.btw_pct,
+            btwRegime: r.btw_regime,
+          })),
+        )
+      : {
+          excl: Number(detail.totaal_excl ?? 0),
+          btwPerTarief: [],
+          incl: Number(detail.totaal_incl ?? 0),
+        }
+    : null;
+  const detailStatus = factuurStatusInfo(detail ? factuurWeergaveStatus(detail, vandaag) : null);
+  const detailVerlopen = detail ? isFactuurVerlopen(detail, vandaag) : false;
+  const detailGeimporteerd = detail ? isGeimporteerd(detail) || detail.status === 'geboekt' : false;
 
   const regelsOpSlot = regelsVoor ? inhoudLigtVast(regelsVoor) : false;
 
@@ -401,7 +617,7 @@ function InvoicesScreenInhoud() {
             variant="detail"
             title="Facturen"
             subtitle={`${items.length} ${items.length === 1 ? 'factuur' : 'facturen'}`}
-            meta={openstaand > 0 ? `${formatEUR(openstaand)} open` : undefined}
+            meta={kpis.openstaand !== 0 ? `${formatEUR(kpis.openstaand)} open` : undefined}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
@@ -419,6 +635,27 @@ function InvoicesScreenInhoud() {
           </View>
         ) : null}
 
+        <TegelRaster
+          breed={breed}
+          tegels={[
+            { id: 'totaal', label: 'Totaal facturen', waarde: String(kpis.totaal) },
+            { id: 'open', label: 'Openstaand', waarde: formatEUR(kpis.openstaand) },
+            { id: 'betaald', label: 'Betaald deze maand', waarde: formatEUR(kpis.betaaldDezeMaand) },
+            { id: 'verlopen', label: 'Verlopen', waarde: String(kpis.verlopen) },
+          ]}
+        />
+
+        <View style={styles.zoekRij}>
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek factuur..." />
+        </View>
+        <View style={{ paddingTop: 12 }}>
+          <AppFilterChips
+            chips={FACTUUR_FILTERS.map((f) => ({ id: f.id, label: f.label, count: tellingen[f.id] }))}
+            active={filter}
+            onChange={setFilter}
+          />
+        </View>
+
         {items.length === 0 ? (
           <EmptyState
             icon={<Receipt size={40} color={ds.green} strokeWidth={1.6} />}
@@ -429,45 +666,202 @@ function InvoicesScreenInhoud() {
                 : (waaromNiet('facturen', 'maken') ?? 'Er zijn nog geen facturen.')
             }
           />
+        ) : zichtbaar.length === 0 ? (
+          <EmptyState
+            icon={<Receipt size={40} color={ds.green} strokeWidth={1.6} />}
+            title="Geen facturen gevonden"
+            message="Geen facturen die passen bij je zoekopdracht of filter."
+          />
         ) : (
           <>
-            <AppSection title="Alle facturen" count={items.length} variant="eyebrow" />
+            <AppSection
+              title={filter === 'alle' ? 'Alle facturen' : (FACTUUR_FILTERS.find((f) => f.id === filter)?.label ?? '')}
+              count={zichtbaar.length}
+              variant="eyebrow"
+            />
             <AppListGroup>
-              {items.map((f, i) => (
-                <AppListItem
-                  key={f.id}
-                  first={i === 0}
-                  icon={isGeimporteerd(f) ? Lock : Receipt}
-                  title={f.nummer}
-                  subtitle={subtitleFor(f)}
-                  onPress={magWijzigen ? () => openBewerk(f) : undefined}
-                  trailing={
-                    <View style={styles.trailing}>
-                      <Text style={styles.bedrag}>{formatEUR(Number(f.totaal_incl ?? 0))}</Text>
-                      <Pressable
-                        onPress={() => openRegels(f)}
-                        hitSlop={10}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Regels van ${f.nummer}`}
-                        style={styles.regelKnop}
-                      >
-                        <Receipt size={15} color={t.muted} />
-                      </Pressable>
-                    </View>
-                  }
-                />
-              ))}
+              {zichtbaar.map((f, i) => {
+                const st = factuurStatusInfo(factuurWeergaveStatus(f, vandaag));
+                return (
+                  <AppListItem
+                    key={f.id}
+                    first={i === 0}
+                    icon={isGeimporteerd(f) ? Lock : Receipt}
+                    title={f.is_credit ? `${f.nummer} · CF` : f.nummer}
+                    subtitle={subtitleFor(f, vandaag)}
+                    onPress={() => void openDetail(f)}
+                    trailing={
+                      <View style={styles.trailing}>
+                        <Text style={styles.bedrag}>{formatEUR(Number(f.totaal_incl ?? 0))}</Text>
+                        <DocumentStatusBadge toon={st.toon} label={st.label} />
+                      </View>
+                    }
+                  />
+                );
+              })}
             </AppListGroup>
-
-            {magBetaald ? (
-              <Text style={styles.voetnoot}>
-                Open een factuur om hem op betaald te zetten. Dat blijft ook werken als je
-                account op alleen-lezen staat.
-              </Text>
-            ) : null}
           </>
         )}
       </AppScreen>
+
+      {/* Factuur bekijken */}
+      <Paneel
+        open={detail !== null}
+        titel={detail?.nummer ?? 'Factuur'}
+        subtitel={detail?.customer?.name ?? undefined}
+        onSluit={() => setDetail(null)}
+        voet={
+          detail ? (
+            <View style={styles.knoppen}>
+              {metDocument.has(detail.id) ? (
+                <Button
+                  label={detailGeimporteerd ? 'Origineel document' : 'Bewaarde PDF openen'}
+                  onPress={openPdf}
+                  disabled={detailLaden}
+                  style={styles.knop}
+                />
+              ) : !detailGeimporteerd ? (
+                <Button
+                  label="Bekijken / afdrukken"
+                  onPress={afdrukken}
+                  disabled={detailLaden}
+                  style={styles.knop}
+                />
+              ) : null}
+              {magBetaald && !detailGeimporteerd && detail.status !== 'betaald' ? (
+                <Button
+                  label="Markeer als betaald"
+                  variant="secondary"
+                  disabled={saving}
+                  onPress={() => {
+                    const f = detail;
+                    setDetail(null);
+                    betaaldZetten(f);
+                  }}
+                  style={styles.knop}
+                />
+              ) : null}
+              {magWijzigen ? (
+                <Button
+                  label="Bewerken"
+                  variant="secondary"
+                  onPress={() => {
+                    const f = detail;
+                    setDetail(null);
+                    openBewerk(f);
+                  }}
+                  style={styles.knop}
+                />
+              ) : null}
+              {!detailGeimporteerd ? (
+                <Button
+                  label="Regels"
+                  variant="ghost"
+                  onPress={() => {
+                    const f = detail;
+                    setDetail(null);
+                    void openRegels(f);
+                  }}
+                  style={styles.knop}
+                />
+              ) : null}
+              {magCreditMaken && magCrediteren(detail) ? (
+                <Button
+                  label="Crediteer factuur"
+                  variant="ghost"
+                  disabled={saving}
+                  onPress={() => crediteren(detail)}
+                  style={styles.knop}
+                />
+              ) : null}
+            </View>
+          ) : null
+        }
+      >
+        {detail ? (
+          <View style={{ gap: spacing.md }}>
+            {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
+            {saveError ? <NoticeBanner toon="fout" message={saveError} /> : null}
+            <View>
+              <DetailRij label="Klant" waarde={detail.customer?.name ?? 'Geen klant'} />
+              <DetailRij
+                label="Status"
+                waarde={
+                  <View style={styles.badgeRij}>
+                    {detail.is_credit ? <DocumentStatusBadge toon="red" label="CF" /> : null}
+                    {detail.gecrediteerd ? (
+                      <DocumentStatusBadge toon="gray" label="Gecrediteerd" />
+                    ) : null}
+                    <DocumentStatusBadge toon={detailStatus.toon} label={detailStatus.label} />
+                  </View>
+                }
+              />
+              <DetailRij label="Factuurdatum" waarde={formatDateNL(detail.factuurdatum)} />
+              <DetailRij
+                label="Betaaltermijn"
+                waarde={
+                  detail.vervaldatum
+                    ? `${formatDateNL(detail.vervaldatum)}${detailVerlopen ? ' · Te laat' : ''}`
+                    : '—'
+                }
+                toon={detailVerlopen ? 'rood' : undefined}
+              />
+              {detail.betalingskenmerk ? (
+                <DetailRij label="Betalingskenmerk" waarde={detail.betalingskenmerk} />
+              ) : null}
+              {detail.betaald_op ? (
+                <DetailRij label="Betaald op" waarde={formatDateNL(detail.betaald_op)} />
+              ) : null}
+              {detailData?.herinnering_1_verstuurd_at ? (
+                <DetailRij
+                  label="Herinnering 1 verstuurd"
+                  waarde={formatDateNL(detailData.herinnering_1_verstuurd_at)}
+                />
+              ) : null}
+              {detailData?.herinnering_2_verstuurd_at ? (
+                <DetailRij
+                  label="Herinnering 2 verstuurd"
+                  waarde={formatDateNL(detailData.herinnering_2_verstuurd_at)}
+                />
+              ) : null}
+            </View>
+
+            {detailGeimporteerd ? (
+              <NoticeBanner
+                toon="info"
+                message={
+                  metDocument.has(detail.id)
+                    ? 'Deze factuur komt uit je boekhouding; het originele document staat hierboven.'
+                    : 'Deze factuur komt uit je boekhouding. Er is geen document meegekomen.'
+                }
+              />
+            ) : null}
+
+            <RegelLijst
+              laden={detailLaden}
+              leegTekst="Deze factuur heeft geen regels."
+              regels={detailRegels.map((r) => ({
+                id: r.id,
+                omschrijving: r.omschrijving,
+                meta: regelMeta(r),
+                bedrag: r.regelprijs,
+              }))}
+            />
+            {detailTotalen ? <TotalenBlok {...detailTotalen} /> : null}
+
+            {detail.notities ? (
+              <View style={{ gap: spacing.xs }}>
+                <Text style={styles.label}>Notities</Text>
+                <Text style={styles.uitleg}>{alsTekst(detail.notities)}</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.uitleg}>
+              Versturen per mail en herinneringen sturen doe je in het dashboard.
+            </Text>
+          </View>
+        ) : null}
+      </Paneel>
 
       {/* Factuur aanmaken / bewerken */}
       <FormSheet
@@ -727,7 +1121,11 @@ function InvoicesScreenInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
-    trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    trailing: { alignItems: 'flex-end', gap: 4 },
+    zoekRij: { paddingHorizontal: 16, paddingTop: 14 },
+    knoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    knop: { flexGrow: 1, minWidth: 140, minHeight: 44 },
+    badgeRij: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink2 },
     regelKnop: {
       width: 30,

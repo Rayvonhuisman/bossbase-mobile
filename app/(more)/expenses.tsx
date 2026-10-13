@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
-import { Lock, Plus, Wallet } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Lock, Plus, Wallet } from 'lucide-react-native';
 import {
+  AppFilterChips,
   AppListGroup,
   AppListItem,
   AppScreen,
@@ -20,18 +21,22 @@ import {
   SelectField,
   type SelectOption,
   DateField,
+  NoticeBanner,
 } from '@/components';
 import { usePermissions, useTheme } from '@/providers';
 import {
   createJobCost,
   createLeverancier,
   deleteJobCost,
+  getBijlageUrl,
   isVergrendeld,
-  KOSTEN_CATEGORIEEN,
   listJobCosts,
+  listKostenCategorieen,
   listLeveranciers,
+  listWerkbonInkopen,
   updateJobCost,
   type JobCostRow,
+  type KostenCategorie,
 } from '@/services/jobCostService';
 import { listCustomers } from '@/services/customerService';
 import { listProjects } from '@/services/projectService';
@@ -41,9 +46,34 @@ import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { useSchermklasse } from '@/lib/schermklasse';
+import {
+  bouwKostenPagina,
+  calcBtw,
+  categorieMeta,
+  kostenBron,
+  legeKostenTekst,
+  PERIODE_TYPES,
+  periodeRange,
+  rijUitJobCost,
+  rijUitWerkbonInkoop,
+  type KostenRij,
+  type KostenWeergave,
+  type PeriodeType,
+  type WerkbonInkoopBron,
+} from '@/lib/kostenLogica';
+import { DocumentStatusBadge, TegelRaster } from '@/components/DocumentOnderdelen';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
+ *
+ * Opbouw gelijk aan de Kosten-pagina van het dashboard: twee weergaven die
+ * nooit bij elkaar worden opgeteld ("Geboekte kosten" en "Kosten op
+ * werkbonnen" = werkbonmateriaal + inkopen op werkbonnen), de tegels (totaal,
+ * Materiaal, Arbeid als > 0, Reis, Overig — tellen op tot het totaal), het
+ * signaal "N kostenposten hebben nog geen leverancier", de periodekeuze
+ * (week/maand/kwartaal/jaar met bladeren, server-side op datum) en de filters
+ * klant en categorie. De berekeningen staan in `lib/kostenLogica.ts`.
  *
  * Twee dingen die de database afdwingt en die je hier terugziet:
  *
@@ -80,27 +110,46 @@ type Concept = {
   btwInclusief: boolean;
 };
 
-function subtitleFor(k: JobCostRow): string {
-  const delen: string[] = [];
-  if (k.category) delen.push(k.category);
-  if (k.leverancier) delen.push(k.leverancier);
-  if (k.customer?.name) delen.push(k.customer.name);
-  if (k.cost_date) delen.push(formatDateNL(k.cost_date));
-  return delen.join(' · ') || 'Kostenpost';
-}
+// Onthouden zolang de app open is, zoals het dashboard het in localStorage zet.
+let bewaardeWeergave: KostenWeergave = 'kosten';
+let bewaardPeriodeType: PeriodeType = 'maand';
 
 function ExpensesScreenInhoud() {
   const router = useRouter();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
+  const { klasse } = useSchermklasse();
+  const breed = klasse === 'tablet';
 
-  const [items, setItems] = useState<JobCostRow[]>([]);
+  const [kosten, setKosten] = useState<JobCostRow[]>([]);
+  const [inkopen, setInkopen] = useState<WerkbonInkoopBron[]>([]);
+  const [periodeLaden, setPeriodeLaden] = useState(false);
+  const [periodeFout, setPeriodeFout] = useState<string | null>(null);
   const [leveranciers, setLeveranciers] = useState<SelectOption[]>([]);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
-  const [projecten, setProjecten] = useState<SelectOption[]>([]);  const [error, setError] = useState<string | null>(null);
+  const [projecten, setProjecten] = useState<SelectOption[]>([]);
+  const [categorieen, setCategorieen] = useState<KostenCategorie[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [concept, setConcept] = useState<Concept | null>(null);
   const [nieuweLeverancier, setNieuweLeverancier] = useState('');
+  const [bijlageUrl, setBijlageUrl] = useState<string | null>(null);
+
+  const [weergave, setWeergaveState] = useState<KostenWeergave>(bewaardeWeergave);
+  const [periodeType, setPeriodeTypeState] = useState<PeriodeType>(bewaardPeriodeType);
+  const [periodeOffset, setPeriodeOffset] = useState(0);
+  const [filterKlant, setFilterKlant] = useState<string | null>(null);
+  const [filterCat, setFilterCat] = useState<string | null>(null);
+
+  const kiesWeergave = (w: KostenWeergave) => {
+    bewaardeWeergave = w;
+    setWeergaveState(w);
+  };
+  const kiesPeriodeType = (p: PeriodeType) => {
+    bewaardPeriodeType = p;
+    setPeriodeTypeState(p);
+    setPeriodeOffset(0);
+  };
 
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
   const { save: saveLev, saving: levBezig, error: levFout } = useSave<{ id: string; naam: string }>();
@@ -109,18 +158,45 @@ function ExpensesScreenInhoud() {
   const magWijzigen = mag('kosten', 'wijzigen');
   const magVerwijderen = mag('kosten', 'verwijderen');
 
+  const periode = useMemo(
+    () => periodeRange(periodeType, periodeOffset),
+    [periodeType, periodeOffset],
+  );
+  const { start: periodeStart, eind: periodeEind, label: periodeLabel } = periode;
+
+  /**
+   * De kosten van één periode, server-side op datum (zoals het dashboard). Een
+   * volgnummer houdt een trage oude periode tegen die na een snelle klik op
+   * "volgende" binnenkomt.
+   */
+  const verzoek = useRef(0);
+  const laadPeriode = useCallback(async () => {
+    const nr = ++verzoek.current;
+    setPeriodeLaden(true);
+    const bereik = { vanDatum: periodeStart, totDatum: periodeEind };
+    const [kostRes, inkoopRes] = await Promise.all([
+      listJobCosts(bereik),
+      listWerkbonInkopen(bereik),
+    ]);
+    if (nr !== verzoek.current) return;
+    setPeriodeLaden(false);
+    const fout = kostRes.error ?? inkoopRes.error;
+    setPeriodeFout(fout);
+    if (!fout) {
+      setKosten(kostRes.data);
+      setInkopen(inkoopRes.data);
+    }
+  }, [periodeStart, periodeEind]);
+
   const load = useCallback(async () => {
     setError(null);
-
-    const [kostRes, levRes, klantRes, projRes] = await Promise.all([
-      listJobCosts(),
+    const [, levRes, klantRes, projRes, catRes] = await Promise.all([
+      laadPeriode(),
       listLeveranciers(),
       listCustomers(),
       listProjects(),
+      listKostenCategorieen(),
     ]);
-
-    if (kostRes.error) setError(kostRes.error);
-    else setItems(kostRes.data);
     if (!levRes.error) setLeveranciers(levRes.data.map((l) => ({ id: l.id, label: l.naam })));
     if (!klantRes.error) {
       setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
@@ -128,8 +204,8 @@ function ExpensesScreenInhoud() {
     if (!projRes.error) {
       setProjecten(projRes.data.map((p) => ({ id: p.id, label: p.name ?? 'Project' })));
     }
-  }, []);
-
+    setCategorieen(catRes);
+  }, [laadPeriode]);
 
   /**
    * Eerste load, stille verversing bij focus en pull-to-refresh zijn hier
@@ -138,16 +214,71 @@ function ExpensesScreenInhoud() {
    */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
+  // Andere periode gekozen: alleen de kosten opnieuw ophalen. De eerste keer
+  // doet `useLaden` dat al.
+  const periodeGezien = useRef(false);
+  useEffect(() => {
+    if (!periodeGezien.current) {
+      periodeGezien.current = true;
+      return;
+    }
+    void laadPeriode();
+  }, [laadPeriode]);
 
+  const klantNamen = useMemo(() => new Map(klanten.map((k) => [k.id, k.label])), [klanten]);
+  const leverancierNamen = useMemo(
+    () => new Map(leveranciers.map((l) => [l.id, l.label])),
+    [leveranciers],
+  );
+  const kostenRijen = useMemo(() => kosten.map(rijUitJobCost), [kosten]);
+  const inkoopRijen = useMemo(() => inkopen.map(rijUitWerkbonInkoop), [inkopen]);
+  const pagina = useMemo(
+    () =>
+      bouwKostenPagina({
+        kosten: kostenRijen,
+        inkopen: inkoopRijen,
+        weergave,
+        filterKlant,
+        filterCat,
+      }),
+    [kostenRijen, inkoopRijen, weergave, filterKlant, filterCat],
+  );
+
+  const klantVan = (r: KostenRij): string => {
+    if (r.klantId) return klantNamen.get(r.klantId) ?? r.klantNaam ?? 'Klant';
+    return r.klantType === 'algemeen' ? 'Algemeen' : 'Geen klant';
+  };
+  const leverancierVan = (r: KostenRij): string => {
+    if (r.leverancierId) return leverancierNamen.get(r.leverancierId) ?? r.leverancierNaam ?? 'Leverancier';
+    if (r.werkbonMateriaalId || r.werkbonInkoop) return 'via werkbon';
+    return 'Leverancier ontbreekt';
+  };
+  const subtitleVoor = (r: KostenRij): string => {
+    const bron = kostenBron(r.externeRef);
+    return [
+      klantVan(r),
+      leverancierVan(r),
+      r.datum ? formatDateNL(r.datum) : '',
+      bron === 'snelstart' ? 'SnelStart' : bron === 'moneybird' ? 'Moneybird' : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  };
+
+  const categorieOpties: SelectOption[] = pagina.categorieen.map((c) => ({
+    id: c,
+    label: categorieMeta(c).label,
+  }));
 
   const openNieuw = () => {
     setSaveError(null);
+    setBijlageUrl(null);
     setConcept({
       id: null,
       opSlot: false,
       description: '',
       bedrag: '',
-      category: 'Materiaal',
+      category: categorieen[0]?.naam ?? 'Materiaal',
       datum: vandaagIso(),
       leverancierId: null,
       customerId: null,
@@ -160,6 +291,10 @@ function ExpensesScreenInhoud() {
   const openBewerk = (k: JobCostRow) => {
     if (!magWijzigen) return;
     setSaveError(null);
+    // De tijdelijke link meteen ophalen, zodat "Bijlage bekijken" synchroon
+    // vanuit de klik een venster kan openen (pop-upblokkering in Safari).
+    setBijlageUrl(null);
+    if (k.bijlage_url) void getBijlageUrl(k.bijlage_url).then(setBijlageUrl);
     setConcept({
       // Een geïmporteerde kost of een spiegelregel van werkbonmateriaal is
       // inhoudelijk niet te wijzigen — de bron ligt elders — maar verwijderen
@@ -174,7 +309,9 @@ function ExpensesScreenInhoud() {
       customerId: k.customer_id,
       projectId: k.project_id,
       btwPct: k.btw_percentage != null ? String(k.btw_percentage) : '21',
-      btwInclusief: k.btw_inclusief === true,
+      // `amount` is altijd exclusief btw opgeslagen (dashboardregel), dus een
+      // bestaande post opent in de stand "excl.".
+      btwInclusief: false,
     });
   };
 
@@ -253,7 +390,22 @@ function ExpensesScreenInhoud() {
     );
   }
 
-  const totaal = items.reduce((s, k) => s + Number(k.amount ?? 0), 0);
+  const kostPerId = new Map(kosten.map((k) => [k.id, k]));
+  const toontMateriaal = weergave === 'materiaal';
+  const btwOverzicht = concept
+    ? calcBtw(
+        Number(concept.bedrag.replace(',', '.') || 0),
+        Number(concept.btwPct.replace(',', '.') || 0),
+        concept.btwInclusief ? 'incl' : 'excl',
+      )
+    : null;
+  const conceptCategorie = categorieen.find((c) => c.naam === concept?.category);
+  const categorieKeuzes = [
+    ...categorieen.map((c) => c.naam),
+    ...(concept?.category && !categorieen.some((c) => c.naam === concept.category)
+      ? [concept.category]
+      : []),
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -262,12 +414,12 @@ function ExpensesScreenInhoud() {
           <AppTopBar
             variant="detail"
             title="Kosten"
-            subtitle={`${items.length} ${items.length === 1 ? 'kostenpost' : 'kostenposten'}`}
-            meta={totaal > 0 ? formatEUR(totaal) : undefined}
+            subtitle={periodeLabel}
+            meta={formatEUR(pagina.totaal)}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe kostenpost" onPress={openNieuw} />
+                <HeaderIconButton icon={Plus} label="Kosten toevoegen" onPress={openNieuw} />
               ) : undefined
             }
           />
@@ -275,40 +427,174 @@ function ExpensesScreenInhoud() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
-        {items.length === 0 ? (
+        {/* Welke weergave: boekingen of wat op werkbonnen staat. */}
+        <View style={{ paddingTop: 12 }}>
+          <AppFilterChips<KostenWeergave>
+            chips={[
+              { id: 'kosten', label: 'Geboekte kosten' },
+              { id: 'materiaal', label: 'Kosten op werkbonnen' },
+            ]}
+            active={weergave}
+            onChange={kiesWeergave}
+          />
+        </View>
+
+        {/* Periode */}
+        <View style={{ paddingTop: 10 }}>
+          <AppFilterChips<PeriodeType>
+            chips={PERIODE_TYPES.map((p) => ({ id: p.id, label: p.label }))}
+            active={periodeType}
+            onChange={kiesPeriodeType}
+          />
+        </View>
+        <View style={styles.periodeRij}>
+          <Pressable
+            onPress={() => setPeriodeOffset((o) => o - 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Vorige periode"
+            style={styles.periodeKnop}
+          >
+            <ChevronLeft size={20} color={t.ink} />
+          </Pressable>
+          <Text style={styles.periodeLabel} numberOfLines={1}>
+            {periodeLabel}
+          </Text>
+          <Pressable
+            onPress={() => setPeriodeOffset((o) => o + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Volgende periode"
+            style={styles.periodeKnop}
+          >
+            <ChevronRight size={20} color={t.ink} />
+          </Pressable>
+          {periodeOffset !== 0 ? (
+            <Pressable
+              onPress={() => setPeriodeOffset(0)}
+              accessibilityRole="button"
+              accessibilityLabel="Terug naar nu"
+              style={[styles.periodeKnop, styles.nuKnop]}
+            >
+              <Text style={styles.nuTekst}>Nu</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Klant en categorie */}
+        <View style={[styles.filterRij, breed && { flexDirection: 'row' }]}>
+          <View style={breed ? { flex: 1 } : undefined}>
+            <SelectField
+              label="Klant"
+              value={filterKlant}
+              options={klanten}
+              onChange={setFilterKlant}
+              allowEmpty
+              emptyLabel="Alle klanten"
+              placeholder="Alle klanten"
+              searchable
+            />
+          </View>
+          <View style={breed ? { flex: 1 } : undefined}>
+            <SelectField
+              label="Categorie"
+              value={filterCat}
+              options={categorieOpties}
+              onChange={setFilterCat}
+              allowEmpty
+              emptyLabel="Alle categorieën"
+              placeholder="Alle categorieën"
+            />
+          </View>
+        </View>
+
+        <TegelRaster
+          breed={breed}
+          tegels={pagina.tegels.map((tg) => ({
+            id: tg.id,
+            label: tg.label,
+            waarde: formatEUR(tg.bedrag),
+            uitleg: tg.uitleg,
+          }))}
+        />
+
+        <View style={styles.meldingen}>
+          {periodeFout ? (
+            <NoticeBanner toon="fout" message={periodeFout} onPress={() => void laadPeriode()} />
+          ) : null}
+          {toontMateriaal ? (
+            <NoticeBanner
+              toon="info"
+              title="Dit zijn geen boekingen"
+              message={
+                'Materiaal en inkopen die op werkbonnen staan. Ze tellen niet mee in je kosten en ' +
+                'je btw — in je boekhouding is de factuur van je leverancier de kostenpost. Ze ' +
+                'tellen wél mee in de brutowinst van een project.'
+              }
+            />
+          ) : pagina.zonderLeverancier > 0 ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              title={`${pagina.zonderLeverancier} ${
+                pagina.zonderLeverancier === 1 ? 'kostenpost heeft' : 'kostenposten hebben'
+              } nog geen leverancier`}
+              message="Zonder leverancier kunnen ze niet naar de boekhouding. Open zo’n regel en kies alsnog een leverancier."
+            />
+          ) : null}
+        </View>
+
+        {pagina.regels.length === 0 ? (
           <EmptyState
             icon={<Wallet size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen kosten"
+            title={periodeLaden ? 'Kosten laden...' : toontMateriaal ? 'Geen kosten op werkbonnen' : 'Geen kosten'}
             message={
-              magMaken
-                ? 'Leg met de plusknop je eerste kostenpost vast.'
-                : (waaromNiet('kosten', 'maken') ?? 'Er zijn nog geen kosten geregistreerd.')
+              periodeLaden
+                ? 'Even geduld.'
+                : legeKostenTekst(weergave, periodeLabel, Boolean(filterKlant || filterCat)) +
+                  (magMaken || toontMateriaal
+                    ? ''
+                    : ` ${waaromNiet('kosten', 'maken') ?? ''}`)
             }
           />
         ) : (
           <>
-            <AppSection title="Alle kosten" count={items.length} variant="eyebrow" />
+            <AppSection
+              title={toontMateriaal ? 'Kosten op werkbonnen' : 'Kostenregels'}
+              count={pagina.regels.length}
+              variant="eyebrow"
+            />
             <AppListGroup>
-              {items.map((k, i) => {
-                const opSlot = isVergrendeld(k);
+              {pagina.regels.map((r, i) => {
+                const bron = kostPerId.get(r.id);
+                const opSlot = bron ? isVergrendeld(bron) : true;
+                const cat = categorieMeta(r.cat);
                 return (
                   <AppListItem
-                    key={k.id}
+                    key={`${r.werkbonInkoop ? 'i' : 'k'}-${r.id}`}
                     first={i === 0}
                     icon={opSlot ? Lock : Wallet}
-                    title={k.description ?? 'Kostenpost'}
-                    subtitle={subtitleFor(k)}
-                    onPress={magWijzigen ? () => openBewerk(k) : undefined}
+                    title={r.omschrijving || cat.label}
+                    subtitle={subtitleVoor(r)}
+                    onPress={
+                      !r.werkbonInkoop && bron && magWijzigen ? () => openBewerk(bron) : undefined
+                    }
                     trailing={
-                      <Text style={styles.bedrag}>{formatEUR(Number(k.amount ?? 0))}</Text>
+                      <View style={styles.trailing}>
+                        <Text style={styles.bedrag}>{formatEUR(r.bedrag)}</Text>
+                        {r.btwPct != null ? (
+                          <Text style={styles.incl}>
+                            {formatEUR(calcBtw(r.bedrag, r.btwPct, 'excl').incl)} incl. · {r.btwPct}%
+                          </Text>
+                        ) : null}
+                        <DocumentStatusBadge toon={cat.toon} label={cat.label} />
+                      </View>
                     }
                   />
                 );
               })}
             </AppListGroup>
             <Text style={styles.voetnoot}>
-              Kosten met een slotje komen uit je boekhouding of van werkbonmateriaal. Die pas je
-              aan bij de bron; verwijderen kan hier wel.
+              Bedragen zijn exclusief btw. Kosten met een slotje komen uit je boekhouding of van
+              werkbonmateriaal; die pas je aan bij de bron. Inkopen op een werkbon wijzig je op de
+              werkbon.
             </Text>
           </>
         )}
@@ -347,25 +633,45 @@ function ExpensesScreenInhoud() {
           autoFocus={!concept?.id}
         />
 
-        <View style={styles.rij}>
-          <View style={{ flex: 1.3 }}>
-            <FormField
-              label="Bedrag"
-              value={concept?.bedrag ?? ''}
-              onChangeText={(v) => setConcept((c) => (c ? { ...c, bedrag: v } : c))}
-              placeholder="0,00"
-              keyboardType="decimal-pad"
-            />
+        <FormField
+          label={concept?.btwInclusief ? 'Bedrag incl. btw' : 'Bedrag excl. btw'}
+          value={concept?.bedrag ?? ''}
+          onChangeText={(v) => setConcept((c) => (c ? { ...c, bedrag: v } : c))}
+          placeholder="0,00"
+          keyboardType="decimal-pad"
+          editable={!concept?.opSlot}
+        />
+
+        <View style={{ gap: spacing.xs }}>
+          <Text style={styles.label}>Btw</Text>
+          <View style={styles.chipRij}>
+            {[
+              { id: '21', label: '21%' },
+              { id: '9', label: '9%' },
+              { id: '0', label: 'Geen btw (0%)' },
+            ].map((o) => {
+              const actief = Number(concept?.btwPct.replace(',', '.')) === Number(o.id);
+              return (
+                <Pressable
+                  key={o.id}
+                  onPress={() => setConcept((c) => (c ? { ...c, btwPct: o.id } : c))}
+                  disabled={concept?.opSlot}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: actief }}
+                  style={[styles.chip, actief && styles.chipActief]}
+                >
+                  <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
-          <View style={{ flex: 1 }}>
-            <FormField
-              label="Btw %"
-              value={concept?.btwPct ?? ''}
-              onChangeText={(v) => setConcept((c) => (c ? { ...c, btwPct: v } : c))}
-              placeholder="21"
-              keyboardType="decimal-pad"
-            />
-          </View>
+          {btwOverzicht ? (
+            <Text style={styles.schakelUitleg}>
+              Excl. {formatEUR(btwOverzicht.excl)} · btw {formatEUR(btwOverzicht.btw)} · incl.{' '}
+              {formatEUR(btwOverzicht.incl)}. Opgeslagen wordt het bedrag excl. btw, net als in
+              het dashboard.
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.schakelRij}>
@@ -385,7 +691,7 @@ function ExpensesScreenInhoud() {
         <View style={{ gap: spacing.xs }}>
           <Text style={styles.label}>Categorie</Text>
           <View style={styles.chipRij}>
-            {KOSTEN_CATEGORIEEN.map((cat) => {
+            {categorieKeuzes.map((cat) => {
               const actief = concept?.category === cat;
               return (
                 <Pressable
@@ -401,6 +707,21 @@ function ExpensesScreenInhoud() {
             })}
           </View>
         </View>
+
+        {conceptCategorie?.bonVerplicht && !concept?.id ? (
+          <NoticeBanner
+            toon="info"
+            message="Voor deze categorie vraagt het dashboard een bon. Een bon toevoegen kan (nog) alleen in het dashboard."
+          />
+        ) : null}
+
+        {concept?.id && bijlageUrl ? (
+          <Button
+            label="Bijlage bekijken"
+            variant="secondary"
+            onPress={() => void Linking.openURL(bijlageUrl)}
+          />
+        ) : null}
 
         <SelectField
           label="Leverancier"
@@ -469,6 +790,30 @@ function ExpensesScreenInhoud() {
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink2 },
+    trailing: { alignItems: 'flex-end', gap: 3 },
+    incl: { fontSize: 11.5, color: t.muted },
+    periodeRij: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+    },
+    periodeKnop: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    nuKnop: { paddingHorizontal: 14 },
+    nuTekst: { fontSize: 13, fontWeight: '700', color: t.ink },
+    periodeLabel: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700', color: t.ink },
+    filterRij: { gap: spacing.md, paddingHorizontal: 16, paddingTop: 12 },
+    meldingen: { gap: spacing.sm, paddingHorizontal: 16, paddingTop: 12 },
     label: { ...typography.label, color: t.ink2 },
     rij: { flexDirection: 'row', gap: spacing.md },
     chipRij: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

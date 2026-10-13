@@ -75,11 +75,11 @@ export function routeVoorLink(link: string | null): string | null {
     case 'activities':
       return '/activities';
     case 'projecten':
-      return '/projects';
+      return id ? `/projects?id=${id}` : '/projects';
     case 'offertes':
-      return '/offers';
+      return id ? `/offers?id=${id}` : '/offers';
     case 'facturen':
-      return '/invoices';
+      return id ? `/invoices?id=${id}` : '/invoices';
     case 'planning':
     case 'calendar':
       return '/planning';
