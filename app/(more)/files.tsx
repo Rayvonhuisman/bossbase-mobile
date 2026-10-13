@@ -4,9 +4,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSchermklasse } from '@/lib/schermklasse';
 import { useRouter } from 'expo-router';
 import { Camera } from 'lucide-react-native';
 import {
@@ -43,7 +43,9 @@ export default function FilesScreen() {
   const router = useRouter();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { width } = useWindowDimensions();
+  // De breedte van de app-kolom, niet van het venster: op een iPad of desktop
+  // staat de app in een begrensde kolom.
+  const { kolomBreedte: width } = useSchermklasse();
 
   const [items, setItems] = useState<CompanyPhoto[]>([]);  const [error, setError] = useState<string | null>(null);
 

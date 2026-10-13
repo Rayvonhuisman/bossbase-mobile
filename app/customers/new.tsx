@@ -13,6 +13,7 @@ import { AppTopBar, FormField, PermissionGate, FormFooter } from '@/components';
 import { useAuth, useTheme } from '@/providers';
 import { createCustomer } from '@/services/customerService';
 import { spacing, type ThemeColors } from '@/theme';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 /**
  * Quick-capture form for a new customer. Saves to the same Supabase `customers`
@@ -160,6 +161,7 @@ function NewCustomerInhoud() {
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     content: {
+      ...leesbreedte,
       padding: spacing.lg,
       paddingBottom: 48,
       gap: spacing.lg,

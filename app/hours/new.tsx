@@ -32,6 +32,7 @@ import { spacing, type ThemeColors } from '@/theme';
 import type { WriteResult } from '@/lib/writeResult';
 import { terugOfNaar } from '@/lib/navigatie';
 import type { WorkOrderWithCustomer } from '@/types/domain';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 /**
  * Uren vastleggen — op een werkbon, of algemeen.
@@ -401,6 +402,7 @@ export default function NewTimeEntryScreen() {
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     content: {
+      ...leesbreedte,
       padding: spacing.lg,
       paddingBottom: 48,
       gap: spacing.lg,

@@ -70,6 +70,11 @@ function meet(): ZichtbareViewport {
   );
 }
 
+function nietIngezoomd(): boolean {
+  const vv = window.visualViewport;
+  return !vv || Math.abs(vv.scale - 1) <= 0.01;
+}
+
 function isTekstveld(el: Element | null): el is HTMLElement {
   if (!el) return false;
   if (el instanceof HTMLTextAreaElement) return true;
@@ -145,7 +150,10 @@ function installeer() {
   vv?.addEventListener('scroll', bijwerken);
   window.addEventListener('resize', bijwerken);
   // De app scrolt nooit het document; schuift iOS het toch, zet het terug.
+  // Niet bij inzoomen: wie met twee vingers inzoomt (vergrootglas,
+  // toegankelijkheid) moet het beeld vrij kunnen verschuiven.
   window.addEventListener('scroll', () => {
+    if (!nietIngezoomd()) return;
     if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
   });
   // Een element met `overflow: hidden` (zoals het kader van de app) is niet

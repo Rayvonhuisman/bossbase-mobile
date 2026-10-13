@@ -31,6 +31,7 @@ import { isGeldigeISODatum, vandaagISO } from '@/lib/datum';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, spacing, type ThemeColors } from '@/theme';
 import type { Customer } from '@/types/domain';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 
 type Collega = { id: string; full_name: string | null; role: string | null };
@@ -369,6 +370,7 @@ function Keuze({
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     content: {
+      ...leesbreedte,
       padding: spacing.lg,
       paddingBottom: 64,
       gap: spacing.lg,
