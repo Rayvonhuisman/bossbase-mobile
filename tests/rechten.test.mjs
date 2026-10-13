@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 
 const { canWithRole, canZien, INZAGE_RECHTEN } = await import('../src/lib/permissions.ts');
 
-test('admin mag alles; planner krijgt alleen planning automatisch', () => {
+test('admin mag alles; de rol planner bestaat niet meer en geeft niets (20261002135952)', () => {
   assert.equal(canWithRole('facturen', 'admin', []), true);
-  assert.equal(canWithRole('planning', 'planner', []), true);
+  assert.equal(canWithRole('planning', 'planner', []), false);
   assert.equal(canWithRole('facturen', 'planner', []), false);
+  assert.equal(canWithRole('planning', 'medewerker', ['planning']), true);
   assert.equal(canWithRole('facturen', 'medewerker', ['facturen']), true);
   assert.equal(canWithRole('facturen', null, ['facturen']), false);
 });

@@ -157,6 +157,8 @@ export type FactuurDetail = Omit<FactuurRow, 'customer'> & {
   snapshot_email?: string | null;
   snapshot_kvk?: string | null;
   snapshot_btw?: string | null;
+  snapshot_iban?: string | null;
+  snapshot_iban_tnv?: string | null;
   customer: DocumentKlant | null;
 };
 

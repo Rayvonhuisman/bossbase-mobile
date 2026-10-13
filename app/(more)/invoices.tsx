@@ -334,6 +334,7 @@ function InvoicesScreenInhoud() {
       vervaldatum: detail.vervaldatum,
       kenmerk: detail.betalingskenmerk,
       creditNote: detail.is_credit ? alsTekst(detail.notities) : null,
+      isCredit: Boolean(detail.is_credit),
       bedrijf: bedrijfVoorDocument(d ?? {}, bedrijf),
       klant: d?.customer
         ? {

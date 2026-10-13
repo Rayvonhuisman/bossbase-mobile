@@ -113,7 +113,7 @@ export default function MenuScreen() {
   const naam = profile?.full_name ?? user?.email ?? 'Mijn account';
   const initialenNaam = initialen(profile?.full_name ?? user?.email ?? '?', '?');
   const avatar = avatarKleuren(naam, colorMode === 'dark');
-  const rolLabel = role === 'admin' ? 'Beheerder' : role === 'planner' ? 'Planner' : 'Medewerker';
+  const rolLabel = role === 'admin' ? 'Beheerder' : 'Medewerker';
   const styles = makeStyles(t);
 
   // Niets van het menu tonen zolang de rechten onderweg zijn. Een item dat

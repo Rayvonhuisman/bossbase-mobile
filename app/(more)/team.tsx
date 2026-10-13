@@ -289,7 +289,7 @@ function TeamScreenInhoud() {
       Dialog.alert(
         'Rollen & rechten',
         waaromNiet('team', 'rechtenWijzigen') ??
-          'Rollen & rechten zit niet in je abonnement. Dat zit in het Team-pakket.',
+          'Rollen & rechten zit niet in je abonnement. Dat zit in Groei en Team.',
       );
       return;
     }

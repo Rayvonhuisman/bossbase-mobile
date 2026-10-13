@@ -4,6 +4,7 @@ import { haalInStukken } from '@/lib/inStukken';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { PROJECT_STATUS, projectStatusLabel, type FactuurBedrag } from '@/lib/projectLogica';
+import { idBatches, PROJECT_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
 
 export { PROJECT_STATUS, projectStatusLabel };
 
@@ -25,11 +26,17 @@ export { PROJECT_STATUS, projectStatusLabel };
  *
  * RLS: SELECT is breed (gedeelde werkruimte, `alles_inzien`, of zelf gekoppeld);
  * INSERT/UPDATE vragen `projecten_bewerken`; DELETE vraagt rol admin.
+ *
+ * Bedragen (dashboard 3-10-2026, migraties 20261003093758/093845):
+ * `project_value` en `geschatte_waarde` zijn voor `authenticated` niet meer
+ * leesbaar — een select die ze noemt faalt voor iedereen. Ze komen via de RPC
+ * `bb_projectbedragen(p_ids)`, die alleen antwoordt met het recht
+ * `projectbedragen` (admin of recht; niet via de gedeelde werkruimte). Schrijven mag nog.
  */
 
 const PROJECT_COLUMNS = `
   id, company_id, customer_id, deal_id, offerte_id, name, description, status,
-  project_value, waarde_bron, geschatte_waarde, quoted_hours, start_date, deadline,
+  waarde_bron, quoted_hours, start_date, deadline,
   owner_id, assigned_to, created_by, created_at,
   customer:customers ( id, name ),
   deal:deals ( title ),
@@ -60,6 +67,34 @@ export type ProjectRow = {
   offerte: { nummer: string | null } | null;
 };
 
+/**
+ * Vult `project_value`/`geschatte_waarde` aan via `bb_projectbedragen`, zoals
+ * `metBedragen` in het dashboard. Zonder recht blijven ze `null`.
+ */
+export async function metProjectBedragen<T extends { id: string }>(
+  rijen: readonly T[],
+): Promise<{ data: (T & { project_value: number | null; geschatte_waarde: number | null })[]; error: string | null }> {
+  const bedragen: { id: string }[] = [];
+  for (const ids of idBatches(rijen.map((r) => r.id))) {
+    const { data, error } = await supabase.rpc('bb_projectbedragen', { p_ids: ids });
+    if (error) {
+      console.warn('[projectService.metProjectBedragen]', error.message);
+      return { data: vulBedragen(rijen, [], PROJECT_BEDRAG_VELDEN), error: 'Projectbedragen konden niet worden geladen.' };
+    }
+    bedragen.push(...((data as { id: string }[] | null) ?? []));
+  }
+  return { data: vulBedragen(rijen, bedragen, PROJECT_BEDRAG_VELDEN), error: null };
+}
+
+type RuweProject = Omit<ProjectRow, 'project_value' | 'geschatte_waarde'>;
+
+/** Na een geslaagde schrijfactie de bedragen erbij; de schrijfactie zelf telt. */
+async function schrijfMetBedragen<R extends WriteResult<ProjectRow>>(res: R): Promise<R> {
+  if (!res.ok) return res;
+  const { data } = await metProjectBedragen([res.data as unknown as RuweProject]);
+  return { ...res, data: data[0] ?? res.data };
+}
+
 export async function listProjects(): Promise<{ data: ProjectRow[]; error: string | null }> {
   const { data, error } = await haalInStukken((van, tot) =>
     supabase
@@ -74,7 +109,7 @@ export async function listProjects(): Promise<{ data: ProjectRow[]; error: strin
     console.warn('[projectService.listProjects]', error.message);
     return { data: [], error: 'Projecten konden niet worden geladen.' };
   }
-  return { data: (data as unknown as ProjectRow[]) ?? [], error: null };
+  return metProjectBedragen((data as unknown as RuweProject[]) ?? []);
 }
 
 export async function getProject(
@@ -89,7 +124,9 @@ export async function getProject(
     console.warn('[projectService.getProject]', error.message);
     return { data: null, error: 'Project kon niet worden geladen.' };
   }
-  return { data: (data as unknown as ProjectRow | null) ?? null, error: null };
+  if (!data) return { data: null, error: null };
+  const res = await metProjectBedragen([data as unknown as RuweProject]);
+  return { data: res.data[0] ?? null, error: res.error };
 }
 
 /** Het (oudste) project bij een deal — wat het dashboard opent vanaf de pipeline. */
@@ -106,8 +143,10 @@ export async function getProjectByDeal(
     console.warn('[projectService.getProjectByDeal]', error.message);
     return { data: null, error: 'Project kon niet worden geladen.' };
   }
-  const rijen = (data as unknown as ProjectRow[]) ?? [];
-  return { data: rijen[0] ?? null, error: null };
+  const eerste = ((data as unknown as RuweProject[]) ?? [])[0];
+  if (!eerste) return { data: null, error: null };
+  const res = await metProjectBedragen([eerste]);
+  return { data: res.data[0] ?? null, error: res.error };
 }
 
 export type ProjectInput = {
@@ -196,7 +235,7 @@ export async function createProject(
         () => supabase.from('projects').update(patch).eq('id', bestaand.id).select(PROJECT_COLUMNS),
         { context: 'projectService.createProject(bestaand)', bedrijfReadonly: isReadonly() },
       );
-      return res.ok ? { ...res, bestond: true } : res;
+      return res.ok ? { ...(await schrijfMetBedragen(res)), bestond: true } : res;
     }
   }
 
@@ -209,15 +248,17 @@ export async function createProject(
     return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
   }
 
-  return schrijf<ProjectRow>(
-    () => supabase.from('projects').insert(payload).select(PROJECT_COLUMNS),
-    {
-      context: 'projectService.createProject',
-      bedrijfReadonly: isReadonly(),
-      leegMelding:
-        'Het project is niet opgeslagen. Je hebt het recht Projecten bewerken nodig om ' +
-        'projecten aan te maken.',
-    },
+  return schrijfMetBedragen(
+    await schrijf<ProjectRow>(
+      () => supabase.from('projects').insert(payload).select(PROJECT_COLUMNS),
+      {
+        context: 'projectService.createProject',
+        bedrijfReadonly: isReadonly(),
+        leegMelding:
+          'Het project is niet opgeslagen. Je hebt het recht Projecten bewerken nodig om ' +
+          'projecten aan te maken.',
+      },
+    ),
   );
 }
 
@@ -231,15 +272,17 @@ export async function updateProject(
   const updates = mapProject(input);
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
 
-  return schrijf<ProjectRow>(
-    () => supabase.from('projects').update(updates).eq('id', id).select(PROJECT_COLUMNS),
-    {
-      context: 'projectService.updateProject',
-      bedrijfReadonly: isReadonly(),
-      leegMelding:
-        'Er is niets gewijzigd. Je hebt het recht Projecten bewerken nodig, of het project ' +
-        'bestaat niet meer.',
-    },
+  return schrijfMetBedragen(
+    await schrijf<ProjectRow>(
+      () => supabase.from('projects').update(updates).eq('id', id).select(PROJECT_COLUMNS),
+      {
+        context: 'projectService.updateProject',
+        bedrijfReadonly: isReadonly(),
+        leegMelding:
+          'Er is niets gewijzigd. Je hebt het recht Projecten bewerken nodig, of het project ' +
+          'bestaat niet meer.',
+      },
+    ),
   );
 }
 
@@ -452,7 +495,8 @@ export async function getAanvraagBron(
 // ── Projectnotities ────────────────────────────────────────────────────────
 //
 // Losse tabel `project_notes`, net als in het dashboard. INSERT vraagt alleen
-// het bedrijf; wijzigen en verwijderen mag de auteur zelf of een admin/planner.
+// het bedrijf; wijzigen en verwijderen mag de auteur zelf, een admin of wie
+// `projecten_bewerken` heeft (migratie 20261002135952, geen plannerrol meer).
 
 const NOTE_COLUMNS =
   'id, company_id, project_id, created_by, note, created_at, auteur:profiles ( full_name )';

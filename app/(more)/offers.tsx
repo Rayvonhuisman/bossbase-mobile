@@ -99,9 +99,8 @@ import {
  * Versturen per mail gebeurt (nog) in het dashboard.
  *
  * Twee gates die uit elkaar lopen en die je hier apart terugziet:
- * de offerte zelf hangt op het recht `offertes`, de REGELS hangen op de ROL
- * (admin of planner). Een medewerker met offerterecht kan dus wel een offerte
- * openen en de status bijwerken, en geen regels toevoegen. Verder ligt de
+ * offerte en regels hangen sinds migratie 20261002135952 allebei op het recht
+ * `offertes` (voorheen de regels op de rol admin/planner). Verder ligt de
  * inhoud van een verstuurde of ondertekende offerte vast — status wijzigen mag
  * dan nog wel.
  */
@@ -876,7 +875,7 @@ function OffersScreenInhoud() {
             toon="waarschuwing"
             message={
               waaromNiet('offerteRegels', 'maken') ??
-              'Je mag wel een offerte aanmaken, maar geen regels toevoegen. Vraag een beheerder of planner om de regels te zetten.'
+              'Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.'
             }
           />
         ) : null}
@@ -919,7 +918,7 @@ function OffersScreenInhoud() {
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               {waaromNiet('offerteRegels', 'maken') ??
-                'Offerteregels wijzigen kan alleen als beheerder of planner.'}
+                'Offerteregels wijzigen vraagt het recht Offertes.'}
             </Text>
           </View>
         ) : (

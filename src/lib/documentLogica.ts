@@ -396,6 +396,9 @@ export type BedrijfOpDocument = {
   btw: string | null;
   kleur: string | null;
   logoUrl: string | null;
+  /** Rekeningnummer voor de betaaltekst op een factuur (migratie 20261002132507). */
+  iban: string | null;
+  ibanTnv: string | null;
 };
 
 type SnapshotVelden = {
@@ -408,6 +411,8 @@ type SnapshotVelden = {
   snapshot_email?: string | null;
   snapshot_kvk?: string | null;
   snapshot_btw?: string | null;
+  snapshot_iban?: string | null;
+  snapshot_iban_tnv?: string | null;
 };
 
 type LiveBedrijf = {
@@ -420,6 +425,8 @@ type LiveBedrijf = {
   btw_number?: string | null;
   branding_color?: string | null;
   logo_url?: string | null;
+  iban?: string | null;
+  iban_tnv?: string | null;
 } | null;
 
 /**
@@ -443,5 +450,9 @@ export function bedrijfVoorDocument(doc: SnapshotVelden, live: LiveBedrijf): Bed
     btw: kies(doc.snapshot_btw, live?.btw_number),
     kleur: kies(doc.snapshot_branding_color, live?.branding_color),
     logoUrl: kies(doc.snapshot_logo_url, live?.logo_url),
+    // Facturen van vóór de IBAN-kolom hebben geen snapshot: dan het huidige
+    // (`companyForDocument` in het dashboard, origin/main).
+    iban: doc.snapshot_iban ?? live?.iban ?? null,
+    ibanTnv: doc.snapshot_iban_tnv ?? live?.iban_tnv ?? null,
   };
 }

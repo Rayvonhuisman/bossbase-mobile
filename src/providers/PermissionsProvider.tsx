@@ -77,7 +77,7 @@ type PermissionsContextValue = {
    * daarna verdwijnt heeft zijn bestaan al verraden.
    *
    *   mag('facturen', 'maken')          → nieuwe factuur
-   *   mag('facturen', 'betaaldZetten')  → blijft open op een read-only account
+   *   mag('facturen', 'betaaldZetten')  → dicht op een read-only account (trigger)
    */
   mag: (module: string, actie: string) => boolean;
   /** Waarom mag het niet? Voor een eerlijke uitleg in plaats van een dode knop. */

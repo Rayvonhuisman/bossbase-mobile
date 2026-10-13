@@ -257,7 +257,10 @@ export async function updateDealStage(
   if (res.ok) {
     void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Deal fase gewijzigd: ${res.data.title ?? ''}`, {
       dealId: res.data.id,
-      stageId,
+      // De database zet een heropende deal terug in de fase van vóór het
+      // verlies (trigger bb_deal_fase_voor_verlies, migratie 20261002182736);
+      // de meegestuurde fase is alleen het vangnet.
+      stageId: res.data.stage_id ?? stageId,
     });
   }
   return res;
@@ -327,7 +330,10 @@ export async function heropenVerlorenDeal(id: string, stageId: string): Promise<
   if (res.ok) {
     void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Deal heropend: ${res.data.title ?? ''}`, {
       dealId: res.data.id,
-      stageId,
+      // De database zet een heropende deal terug in de fase van vóór het
+      // verlies (trigger bb_deal_fase_voor_verlies, migratie 20261002182736);
+      // de meegestuurde fase is alleen het vangnet.
+      stageId: res.data.stage_id ?? stageId,
     });
   }
   return res;

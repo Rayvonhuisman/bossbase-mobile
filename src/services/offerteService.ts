@@ -495,22 +495,13 @@ export async function updateOfferte(
     if (input.status === 'geaccepteerd') updates.geaccepteerd_op = new Date().toISOString();
   }
 
-  const financieel = (
-    ['arbeidsuren', 'uurtarief', 'materiaalkosten', 'reiskosten', 'btw_pct'] as const
-  ).some((k) => input[k] !== undefined);
-
-  if (financieel) {
-    const { data: cur } = await supabase.from('offertes').select('*').eq('id', id).maybeSingle();
-    const huidig = (cur ?? {}) as Record<string, number>;
-    const samen = {
-      arbeidsuren: input.arbeidsuren ?? Number(huidig.arbeidsuren ?? 0),
-      uurtarief: input.uurtarief ?? Number(huidig.uurtarief ?? 55),
-      materiaalkosten: input.materiaalkosten ?? Number(huidig.materiaalkosten ?? 0),
-      reiskosten: input.reiskosten ?? Number(huidig.reiskosten ?? 0),
-      marge_pct: Number(huidig.marge_pct ?? 0),
-      btw_pct: input.btw_pct ?? Number(huidig.btw_pct ?? 21),
-    };
-    Object.assign(updates, samen, berekenOfferteTotalen(samen));
+  // Totalen rekent de database: trg_offertes_totalen_forceren zet bij elke
+  // update totaal_excl/incl uit de regels (bb_offertetotalen); een offerte
+  // zonder regels laat hij met rust. Hier niets meer herberekenen, zoals
+  // `updateOfferte` in het dashboard (origin/main) — de oude marge-formule
+  // gaf bij een mislukte leesactie verzonnen standaardwaarden.
+  for (const k of ['arbeidsuren', 'uurtarief', 'materiaalkosten', 'reiskosten', 'btw_pct'] as const) {
+    if (input[k] !== undefined) updates[k] = Number(input[k]);
   }
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
@@ -712,7 +703,7 @@ export type NieuweRegelInvoer = {
  *   uitkomst; zonder deze controle zou "offerte aangemaakt" kunnen verschijnen
  *   bij een offerte zonder enkele regel.
  * - **Geen halve waarheid.** Mislukt een regel, dan blijft de offerte staan
- *   (weggooien kan een medewerker niet altijd — DELETE vraagt admin/planner) en
+ *   (niet automatisch weggooien: de oorzaak kan ook het verwijderen raken) en
  *   krijgt de gebruiker te zien wélke regel niet is opgeslagen, met het nummer
  *   van de aangemaakte offerte erbij. Beter een eerlijke halve uitkomst dan een
  *   groen vinkje op een document dat niet klopt.

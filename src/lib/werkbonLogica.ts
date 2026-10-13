@@ -450,7 +450,13 @@ export function telStatussen(lijst: WerkbonZoekbaar[]): Record<StatusFilter, num
 
 // ── Materiaal ───────────────────────────────────────────────────────────────
 
-export const EENHEDEN = ['stuk', 'm', 'm²', 'liter', 'uur'] as const;
+// Gangbare eenheden in de bouw — `EENHEDEN` uit materiaalService.js van het
+// dashboard (origin/main, 8c7302b). Een afwijkende eenheid (bijv. uit een
+// import: "m1") blijft bewaard; de formulieren tonen hem als extra keuze.
+export const EENHEDEN = [
+  'stuk', 'm', 'm²', 'm³', 'kg', 'liter', 'uur', 'zak', 'plaat', 'rol', 'doos', 'koker', 'blik',
+  'emmer', 'set', 'pak', 'bigbag',
+] as const;
 export const BTW_TARIEVEN = [21, 9, 0] as const;
 
 export const rond2 = (n: number) => Math.round(n * 100) / 100;

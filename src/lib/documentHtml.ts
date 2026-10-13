@@ -35,7 +35,14 @@ export type DocumentHtmlInvoer = {
   ondertekendDoor?: string | null;
   /** Creditfactuur: de notitie onder het nummer ("Creditering van factuur …"). */
   creditNote?: string | null;
-  bedrijf: DocumentPartij & { kleur?: string | null; logoUrl?: string | null };
+  bedrijf: DocumentPartij & {
+    kleur?: string | null;
+    logoUrl?: string | null;
+    iban?: string | null;
+    ibanTnv?: string | null;
+  };
+  /** Creditfactuur: geen betaalverzoek eronder. */
+  isCredit?: boolean;
   klant: DocumentPartij | null;
   regels: {
     omschrijving: string;
@@ -94,6 +101,54 @@ function partijRegels(p: DocumentPartij | null): string {
   ].join('');
 }
 
+/** NL91ABNA0417164300 → NL91 ABNA 0417 1643 00 (`formatIban` in het dashboard). */
+export function formatIban(iban: string | null | undefined): string {
+  return String(iban ?? '')
+    .replace(/\s+/g, '')
+    .toUpperCase()
+    .replace(/(.{4})/g, '$1 ')
+    .trim();
+}
+
+/**
+ * De regels onder de totalen van een factuur, letterlijk zoals de
+ * dashboard-PDF (generatePdf.js, origin/main, audit H11 + art. 35a Wet OB):
+ * btw verlegd met het btw-nummer van de opdrachtgever, een vrijgesteld deel,
+ * en het betaalverzoek met IBAN (niet op een creditfactuur).
+ */
+export function factuurVoettekst(i: {
+  regimes: readonly (string | null | undefined)[];
+  klantBtw?: string | null;
+  isCredit?: boolean;
+  iban?: string | null;
+  ibanTnv?: string | null;
+  bedrijfsnaam?: string | null;
+  vervaldatum?: string | null;
+  kenmerk?: string | null;
+  nummer?: string | null;
+}): string[] {
+  const uit: string[] = [];
+  if (i.regimes.includes('verlegd')) {
+    uit.push(
+      `Btw verlegd: de btw wordt afgedragen door de opdrachtgever${
+        i.klantBtw ? ` (btw-nummer ${i.klantBtw})` : ''
+      }.`,
+    );
+  }
+  if (i.regimes.includes('vrijgesteld')) uit.push('Een deel van deze factuur is vrijgesteld van btw.');
+  if (!i.isCredit && i.iban) {
+    const tnv = i.ibanTnv || i.bedrijfsnaam || '';
+    const verval = i.vervaldatum ? ` vóór ${datumNL(i.vervaldatum)}` : '';
+    const kenmerk = i.kenmerk || i.nummer;
+    uit.push(
+      `Graag het totaalbedrag${verval} overmaken op ${formatIban(i.iban)}${tnv ? ` t.n.v. ${tnv}` : ''}${
+        kenmerk ? `, onder vermelding van ${kenmerk}` : ''
+      }.`,
+    );
+  }
+  return uit;
+}
+
 function btwKolom(pct: number | null, regime: string | null | undefined, standaard: number): string {
   if (regime === 'verlegd') return 'verlegd';
   if (regime === 'vrijgesteld') return '0%';
@@ -141,6 +196,21 @@ export function bouwDocumentHtml(i: DocumentHtmlInvoer): string {
     .map((t) => `<tr><td>BTW ${t.pct}%</td><td class="r">${eur(t.bedrag)}</td></tr>`)
     .join('');
 
+  const voettekst =
+    i.soort === 'factuur'
+      ? factuurVoettekst({
+          regimes: i.regels.map((r) => r.btwRegime),
+          klantBtw: i.klant?.btw,
+          isCredit: i.isCredit ?? Boolean(i.creditNote),
+          iban: i.bedrijf.iban,
+          ibanTnv: i.bedrijf.ibanTnv,
+          bedrijfsnaam: i.bedrijf.naam,
+          vervaldatum: i.vervaldatum,
+          kenmerk: i.kenmerk,
+          nummer: i.nummer,
+        })
+      : [];
+
   const handtekening =
     i.soort === 'offerte' && i.ondertekendOp
       ? `<div class="getekend">Digitaal ondertekend${
@@ -184,6 +254,7 @@ export function bouwDocumentHtml(i: DocumentHtmlInvoer): string {
   table.totalen td { padding: 3px 4px; }
   table.totalen tr.eind td { font-weight: 800; font-size: 15px; border-top: 2px solid var(--ink); padding-top: 7px; }
   .notitie { margin-top: 24px; white-space: pre-wrap; }
+  .betaling { margin-top: 18px; font-size: 12px; }
   .getekend { margin-top: 18px; padding: 10px 12px; border: 1px solid #bbf7d0; background: #f0fdf4;
     color: #15803d; border-radius: 8px; font-weight: 600; }
   .voet { margin-top: 36px; color: var(--zacht); font-size: 11px; text-align: center; }
@@ -222,6 +293,7 @@ ${regels}
     ${btwRijen}
     <tr class="eind"><td>Totaal incl. BTW</td><td class="r">${eur(totalen.incl)}</td></tr>
   </table>
+  ${voettekst.length ? `<div class="betaling">${voettekst.map((t) => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
   ${notitie ? `<div class="notitie">${escapeHtml(notitie)}</div>` : ''}
   ${handtekening}
   <div class="voet">Gegenereerd door BossBase</div>

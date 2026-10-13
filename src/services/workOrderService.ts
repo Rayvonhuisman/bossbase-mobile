@@ -12,6 +12,8 @@ import type {
 import { haalInStukken } from '@/lib/inStukken';
 import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
 import { hhmm, type DagPayload, type WerkbonDag } from '@/lib/werkbonLogica';
+import { idBatches, MATERIAAL_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
+import { magWerkbonRegelsBeheren } from '@/lib/werkbonRechten';
 
 /**
  * Een werkbonrij zoals WORK_ORDER_COLUMNS hem levert: de basisvorm uit
@@ -294,7 +296,8 @@ export async function setTaskDone(
   if (!row) {
     return {
       data: null,
-      error: 'Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een admin of een planner kan dat.',
+      error:
+        'Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan dat.',
     };
   }
   return { data: row, error: null };
@@ -492,10 +495,10 @@ export function canEditWorkOrder(
 /**
  * Mag deze gebruiker uren boeken op deze werkbon?
  *
- * Spiegelt `bb_mag_werkbon_uren_beheren()`: uitvoerder, verantwoordelijke, of
- * rol admin/planner. Let op het verschil met bewerken — hier telt de RÓL, niet
- * het recht `werkbonnen_bewerken`. Boeken mag dus een bredere groep (iedere
- * uitvoerder) én een smallere (geen los recht dat het opent).
+ * Spiegelt `bb_mag_werkbon_uren_beheren()` (migratie 20261002135952):
+ * uitvoerder, verantwoordelijke, admin of het recht `planning` — zoals
+ * `magWerkbonUrenBeheren(werkbon, profile, magBewerken('planning'))` in het
+ * dashboard. `werkbonnen_bewerken` opent het niet.
  */
 export function canBookHours(
   workOrder: Pick<
@@ -506,30 +509,31 @@ export function canBookHours(
 ): boolean {
   if (workOrder.ondertekend_op) return false;
   if (r.readonly) return false;
-  if (r.role === 'admin' || r.role === 'planner') return true;
+  if (r.role === 'admin' || r.can('planning')) return true;
   if (!r.userId) return false;
   return (
     (workOrder.assigned_to_ids ?? []).includes(r.userId) ||
-    (workOrder.verantwoordelijke_ids ?? []).includes(r.userId) ||
-    workOrder.assigned_to === r.userId
+    // Zelfde als bb_mag_werkbon_uren_beheren: alleen de lijsten tellen.
+    (workOrder.verantwoordelijke_ids ?? []).includes(r.userId)
   );
 }
 
 /**
- * "Beheert werkbonnen" — `canManage` van het dashboard:
- * rol admin of planner, of het recht `werkbonnen_bewerken`.
+ * "Beheert werkbonnen" — `canManage` van het dashboard (origin/main):
+ * rol admin, of het recht `werkbonnen_bewerken`. De rol 'planner' bestaat niet
+ * meer (`profiles_role_check`: admin | medewerker).
  * Dit opent: nieuwe werkbon, het volledige bewerkformulier en de status.
  */
 export function canManageWerkbonnen(r: WerkbonRechten): boolean {
-  return r.role === 'admin' || r.role === 'planner' || r.can('werkbonnen_bewerken');
+  return r.role === 'admin' || r.can('werkbonnen_bewerken');
 }
 
 /**
  * Mag deze gebruiker een werkbon aanmaken?
  *
- * Policy `werkbonnen_insert` (migratie 20260918110000) eist
+ * Policy `werkbonnen_insert` (live geverifieerd 13-10-2026) eist
  * `bb_has_permission('planning') OR bb_has_permission('werkbonnen_bewerken')`
- * — admin en planner vallen daar via de helper onder. De knop volgt het
+ * — admin valt daar via de helper onder. De knop volgt het
  * dashboard (`canManage`) plus een expliciet planningrecht, dat de database
  * ook toestaat. `readonly_werkbonnen` eist een geldig abonnement.
  */
@@ -553,21 +557,21 @@ export function canEditDetail(
 /**
  * Mag deze gebruiker datum/tijd van een werkbon wijzigen? Trigger
  * `bb_werkbon_tijden_planning_recht` eist `bb_planning_recht_vereist()`:
- * gedeelde werkruimte of het planningrecht (admin/planner inbegrepen).
+ * gedeelde werkruimte of het planningrecht (admin inbegrepen).
  */
 export function magPlanningWijzigen(r: WerkbonRechten): boolean {
-  return r.gedeeldeWerkruimte || r.role === 'admin' || r.role === 'planner' || r.can('planning');
+  return r.gedeeldeWerkruimte || r.role === 'admin' || r.can('planning');
 }
 
 /**
  * The next status a job can move to, in the live vocabulary.
- * gepland → in_uitvoering → afgerond, and admin/planner may also step back.
+ * gepland → in_uitvoering → afgerond, and an admin may also step back.
  */
 export function getAllowedNextStatuses(
   current: WorkOrderStatus,
   role: Role | null,
 ): WorkOrderStatus[] {
-  const canRewind = role === 'admin' || role === 'planner';
+  const canRewind = role === 'admin';
   switch (String(current)) {
     case 'gepland':
       return ['in_uitvoering', 'afgerond'];
@@ -651,7 +655,8 @@ export type WerkbonNotitie = WorkOrderNote & {
 
 /**
  * Een notitie naar de klant of terug naar intern zetten
- * (updateWerkbonNotitieZichtbaarheid). RLS: eigen notitie, of admin/planner.
+ * (updateWerkbonNotitieZichtbaarheid). RLS: eigen notitie, of admin/`werkbonnen_bewerken`
+ * (migratie 20261002135952).
  */
 export async function setNoteVoorKlant(
   id: string,
@@ -665,7 +670,7 @@ export async function setNoteVoorKlant(
   if (error) return { data: null, error: describeError('setNoteVoorKlant', error) };
   const row = (data as unknown as WerkbonNotitie[])?.[0];
   if (!row) {
-    return { data: null, error: 'Niet gewijzigd — alleen de schrijver, een admin of een planner kan dat.' };
+    return { data: null, error: 'Niet gewijzigd — alleen de schrijver, een beheerder of wie werkbonnen mag bewerken kan dat.' };
   }
   return { data: row, error: null };
 }
@@ -727,20 +732,22 @@ export async function addWorkOrderNote(input: {
 // Taken en meerwerk aanmaken/verwijderen — tabel `werkbon_taken`
 // ---------------------------------------------------------------------------
 //
-// LET OP het verschil met afvinken. `werkbon_taken_update` staat toe wat de
-// werkbon toestaat (verantwoordelijke, werkbonnen_bewerken, gedeelde
-// werkruimte), maar `werkbon_taken_insert` en `_delete` eisen daarbovenop de
-// RÓL admin of planner. Een uitvoerder mag dus wél afvinken en géén regel
-// toevoegen of weggooien. Zie canAddTask hieronder.
+// Sinds migratie 20261002135952 (dashboard origin/main) volgen
+// `werkbon_taken_insert`/`_delete` en `werkbon_materialen_delete` dezelfde
+// regel als hun update-policy: gedeelde werkruimte, het recht
+// `werkbonnen_bewerken` (admin inbegrepen) of verantwoordelijke van de bon.
+// Voorheen eisten ze de rol admin/planner. Het recht `planning` opent de
+// werkbon zelf wel (werkbonnen_update), maar deze regels niet.
+
+// De regel zelf staat in lib/werkbonRechten (puur, getest).
+export { magWerkbonRegelsBeheren };
 
 /** Mag deze gebruiker taken/meerwerk toevoegen of verwijderen? */
 export function canAddTask(
-  workOrder: Pick<WorkOrderWithRelations, 'ondertekend_op'>,
+  workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids' | 'ondertekend_op'>,
   r: WerkbonRechten,
 ): boolean {
-  if (workOrder.ondertekend_op) return false;
-  if (r.readonly) return false;
-  return r.role === 'admin' || r.role === 'planner';
+  return magWerkbonRegelsBeheren(workOrder, r);
 }
 
 export async function addWorkOrderTask(input: {
@@ -770,7 +777,7 @@ export async function addWorkOrderTask(input: {
   if (!row) {
     return {
       data: null,
-      error: 'De regel is niet opgeslagen — alleen een admin of planner kan taken toevoegen.',
+      error: 'De regel is niet opgeslagen — je hebt hier geen rechten voor.',
     };
   }
   return { data: row, error: null };
@@ -792,10 +799,19 @@ export async function deleteWorkOrderTask(id: string): Promise<{ error: string |
 // Zoals het dashboard (MaterialenSection): een regel kopieert naam, eenheid,
 // verkoopprijs, btw, leverancier en (met recht) inkoopprijs uit de
 // bibliotheek, of is "vrij materiaal". Toevoegen en wijzigen volgt de werkbon
-// (`werkbon_materialen_insert` / `_update`), VERWIJDEREN eist de rol admin of
-// planner. De inkoopprijs staat in `werkbon_materiaal_inkoop` met eigen RLS:
-// zonder het recht `inkoopprijzen` komt er niets binnen en weigert de update
-// stil. De kostregel in `job_costs` maakt de database zelf (trigger).
+// (`werkbon_materialen_insert` / `_update`); VERWIJDEREN volgt sinds migratie
+// 20261002135952 dezelfde regel (gedeelde werkruimte, `werkbonnen_bewerken`
+// of verantwoordelijke) in plaats van de rol admin/planner. De inkoopprijs
+// staat in `werkbon_materiaal_inkoop` met eigen RLS: zonder het recht
+// `inkoopprijzen` komt er niets binnen en weigert de update stil. De
+// kostregel in `job_costs` maakt de database zelf (trigger).
+//
+// Verkoopprijs en subtotaal (dashboard 3-10-2026, migraties 20261003093758 en
+// 093845): `prijs_per` en `subtotaal` zijn voor `authenticated` niet meer
+// leesbaar; een select die ze noemt faalt voor iedereen. Ze komen via
+// `bb_werkbonmateriaal_bedragen(p_ids)`, alleen met het recht
+// `projectbedragen`. Het subtotaal rekent de database zelf uit (trigger
+// `a1_wm_subtotaal`); de app stuurt het niet meer mee.
 
 export type WerkbonMateriaalRegel = WorkOrderMaterial & {
   prijs_per: number;
@@ -808,13 +824,29 @@ export type WerkbonMateriaalRegel = WorkOrderMaterial & {
 };
 
 const MATERIAAL_KOLOMMEN = `
-  id, naam, eenheid, aantal, prijs_per, subtotaal, materiaal_id, leverancier_id,
+  id, naam, eenheid, aantal, materiaal_id, leverancier_id,
   btw_percentage, created_at, werkbon_materiaal_inkoop ( inkoopprijs_per )
 `;
 
-type MateriaalRij = Omit<WerkbonMateriaalRegel, 'inkoopprijs_per'> & {
+type MateriaalRij = Omit<WerkbonMateriaalRegel, 'inkoopprijs_per' | 'prijs_per' | 'subtotaal'> & {
+  prijs_per?: number | null;
+  subtotaal?: number | null;
   werkbon_materiaal_inkoop?: { inkoopprijs_per: number | null } | { inkoopprijs_per: number | null }[] | null;
 };
+
+/** Verkoopprijs en subtotaal erbij via de RPC; zonder recht blijven ze leeg (0). */
+async function metMateriaalBedragen(rijen: MateriaalRij[]): Promise<MateriaalRij[]> {
+  const bedragen: { id: string }[] = [];
+  for (const ids of idBatches(rijen.map((r) => r.id))) {
+    const { data, error } = await supabase.rpc('bb_werkbonmateriaal_bedragen', { p_ids: ids });
+    if (error) {
+      describeError('metMateriaalBedragen', error);
+      break;
+    }
+    bedragen.push(...((data as { id: string }[] | null) ?? []));
+  }
+  return vulBedragen(rijen, bedragen, MATERIAAL_BEDRAG_VELDEN);
+}
 
 function naarRegel(r: MateriaalRij): WerkbonMateriaalRegel {
   const k = Array.isArray(r.werkbon_materiaal_inkoop) ? r.werkbon_materiaal_inkoop[0] : r.werkbon_materiaal_inkoop;
@@ -846,7 +878,8 @@ export async function listWorkOrderMaterials(
   if (error) {
     return { data: [], error: describeError('listWorkOrderMaterials', error) };
   }
-  return { data: ((data as unknown as MateriaalRij[]) ?? []).map(naarRegel), error: null };
+  const rijen = await metMateriaalBedragen((data as unknown as MateriaalRij[]) ?? []);
+  return { data: rijen.map(naarRegel), error: null };
 }
 
 export function canEditMaterials(
@@ -856,18 +889,22 @@ export function canEditMaterials(
   return canEditWorkOrder(workOrder, r);
 }
 
+/**
+ * `werkbon_materialen_delete` (migratie 20261002135952): zelfde regel als
+ * wijzigen — gedeelde werkruimte, `werkbonnen_bewerken` of verantwoordelijke.
+ */
 export function canDeleteMaterial(
-  workOrder: Pick<WorkOrderWithRelations, 'ondertekend_op'>,
+  workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids' | 'ondertekend_op'>,
   r: WerkbonRechten,
 ): boolean {
-  if (workOrder.ondertekend_op) return false;
-  if (r.readonly) return false;
-  return r.role === 'admin' || r.role === 'planner';
+  return magWerkbonRegelsBeheren(workOrder, r);
 }
 
 async function leesRegel(id: string): Promise<WerkbonMateriaalRegel | null> {
   const { data } = await supabase.from('werkbon_materialen').select(MATERIAAL_KOLOMMEN).eq('id', id).maybeSingle();
-  return data ? naarRegel(data as unknown as MateriaalRij) : null;
+  if (!data) return null;
+  const [rij] = await metMateriaalBedragen([data as unknown as MateriaalRij]);
+  return rij ? naarRegel(rij) : null;
 }
 
 export async function addWorkOrderMaterial(input: {
@@ -899,7 +936,6 @@ export async function addWorkOrderMaterial(input: {
       eenheid: input.eenheid?.trim() ? input.eenheid.trim() : null,
       aantal: input.aantal,
       prijs_per: prijs,
-      subtotaal: rond2(input.aantal * prijs),
       materiaal_id: input.materiaal_id ?? null,
       leverancier_id: input.leverancier_id ?? null,
       btw_percentage: input.btw_percentage ?? 21,
@@ -918,12 +954,21 @@ export async function addWorkOrderMaterial(input: {
       .from('werkbon_materiaal_inkoop')
       .update({ inkoopprijs_per: input.inkoopprijs_per, updated_at: new Date().toISOString() })
       .eq('werkbon_materiaal_id', row.id);
-    return { data: (await leesRegel(row.id)) ?? naarRegel(row), error: null };
   }
-  return { data: naarRegel(row), error: null };
+  // Wat we net zelf opsloegen mogen we tonen (zoals het dashboard); bij het
+  // volgende laden komt de prijs alleen terug voor wie hem mag zien.
+  const opgeslagen = input.inkoopprijs_per != null ? await leesRegel(row.id) : null;
+  return {
+    data: {
+      ...(opgeslagen ?? naarRegel(row)),
+      prijs_per: prijs,
+      subtotaal: rond2(input.aantal * prijs),
+    },
+    error: null,
+  };
 }
 
-/** Aantal bijstellen; het subtotaal rekent mee (aantal × prijs_per). */
+/** Aantal bijstellen; het subtotaal rekent de database mee (trigger a1_wm_subtotaal). */
 export async function updateMaterialAmount(
   regel: Pick<WerkbonMateriaalRegel, 'id' | 'prijs_per'>,
   aantal: number,
@@ -933,14 +978,15 @@ export async function updateMaterialAmount(
   }
   const { data, error } = await supabase
     .from('werkbon_materialen')
-    .update({ aantal, subtotaal: rond2(aantal * (Number(regel.prijs_per) || 0)) })
+    .update({ aantal })
     .eq('id', regel.id)
     .select(MATERIAAL_KOLOMMEN);
 
   if (error) return { data: null, error: describeError('updateMaterialAmount', error) };
   const row = (data as unknown as MateriaalRij[])?.[0];
   if (!row) return { data: null, error: 'Het aantal is niet opgeslagen — je hebt hier geen rechten voor.' };
-  return { data: naarRegel(row), error: null };
+  const [metPrijs] = await metMateriaalBedragen([row]);
+  return { data: naarRegel(metPrijs ?? row), error: null };
 }
 
 export async function deleteWorkOrderMaterial(id: string): Promise<{ error: string | null }> {

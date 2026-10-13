@@ -3,7 +3,8 @@
  * (`WidgetCard.jsx` in het dashboard). Pure functies, zonder imports, zodat ze
  * in Node te testen zijn.
  *
- *   open_pipeline_value  som dealwaarde, `deals.status = 'open'`
+ *   open_pipeline_value  som dealwaarde, `deals.status = 'open'` en niet voltooid
+ *                        (`afgerond_op` leeg; dashboard origin/main WidgetCard)
  *   accepted_value       som dealwaarde, `deals.status = 'won'`
  *   new_leads            deals in de eerste pipelinefase (laagste positie)
  *   open_offertes        offertes met status concept of verzonden, som incl. btw
@@ -19,6 +20,8 @@ export type DealKern = {
   stage_id: string | null;
   expected_revenue: number | null;
   final_revenue: number | null;
+  /** Voltooid project: staat niet meer op het bord en telt niet als open. */
+  afgerond_op?: string | null;
 };
 
 export type FaseKern = { id: string; position: number | null };
@@ -52,7 +55,9 @@ export function pipelineWaarden(deals: DealKern[]): {
   open: { aantal: number; waarde: number };
   geaccepteerd: { aantal: number; waarde: number };
 } {
-  const open = deals.filter((d) => dealStatus(d) === 'open');
+  // Een voltooid project (afgerond_op) staat niet meer op het pipelinebord en
+  // telt dus ook niet als open, ook al is de status nog 'open' (dashboard 4-10).
+  const open = deals.filter((d) => dealStatus(d) === 'open' && !d.afgerond_op);
   const won = deals.filter((d) => dealStatus(d) === 'won');
   const som = (r: DealKern[]) => r.reduce((s, d) => s + dealWaarde(d), 0);
   return {
