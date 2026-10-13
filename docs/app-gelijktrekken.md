@@ -3,7 +3,12 @@
 Centraal voortgangs- en overdrachtsdocument. Een nieuwe sessie leest dit eerst.
 
 - **Bron van waarheid (functioneel):** het BossBase-dashboard, repo `/Users/macbook/BossBase website`,
-  branch `main` = `a37a907` (uitgecheckt in worktree `/Users/macbook/BossBase-billing`). Alleen-lezen.
+  **`origin/main` = `331250b` (4-10-2026)**. Alleen-lezen.
+  > Correctie 2026-10-13: de eerste inventaris (docs/inventaris/) is gemaakt op de lokale checkout `a37a907`,
+  > die 162 commits achterliep op `origin/main`. De verschillen (rechten zonder financiële inzage via gedeelde
+  > werkruimte, geen plannerrol, bedragen alleen via `bb_projectbedragen`/`bb_werkbonmateriaal_bedragen`,
+  > alleen-lezen overal, klanttype, IBAN, CSV met puntkomma) zijn verwerkt in commits `f4a8a10`, `f0145db`, `6963359`.
+  > Waar de inventaris en `origin/main` verschillen, geldt `origin/main`.
 - **App:** worktree `/Users/macbook/bossbase-gelijk`, branch `app-gelijktrekken`.
 - **Visuele basis:** de bestaande app-stijl (`src/theme`, `src/components`).
 
@@ -14,7 +19,7 @@ Centraal voortgangs- en overdrachtsdocument. Een nieuwe sessie leest dit eerst.
 | `origin/main` app | `80bcb40` (Merge PR #1, productie op app.bossbase.nl) |
 | Branch | `app-gelijktrekken`, vanaf `origin/main` |
 | Eerste commit op de branch | merge van `origin/feature/ipados-compatibility` (`739aa07`, nog niet op main): centrale breekpunten, leesbreedte, focus, iPad-installatie |
-| Dashboard | `main` `a37a907` |
+| Dashboard | `origin/main` `331250b` (inventaris eerst op verouderde `a37a907`, zie correctie) |
 | Vercel | poort `exit 0`, bescherming `all_except_custom_domains`; niets gedeployed vanuit deze branch |
 | Bestaande niet-gerelateerde wijzigingen | oude checkout `/Users/macbook/bossbase-mobile`: alleen `design-reference/` (ongemoeid) |
 
@@ -38,7 +43,7 @@ niet mergen, niet uitrollen, geen echte verzendacties, alleen testbedrijven of l
 Bron: dashboard `src/App.jsx` (NAV), `src/hooks/usePermissions.js`, `src/config/permissions.js`, `src/lib/features.js`.
 App: `src/lib/permissions.ts` (`ROUTE_GATES`, `canWithRole`, `canZien`), `src/providers/PermissionsProvider.tsx`.
 
-Toegangsregel (dashboard én app): admin → alles; planner → impliciet `planning`; anders `user_permissions`
+Toegangsregel (dashboard én app): admin → alles; anders `user_permissions` (de rol `planner` bestaat niet meer)
 (`granted = true`). **Inzien** (pagina openen, menu-item tonen) is daarnaast vrij als het bedrijf feature
 `gedeelde_werkruimte` (Groei) heeft en het recht in `INZAGE_RECHTEN` staat. **Bewerken** (`mag()`/acties) blijft
 strikt. RLS (`bb_has_permission`) blijft de echte grens; de app-gates zijn alleen UI.
@@ -46,7 +51,7 @@ strikt. RLS (`bb_has_permission`) blijft de echte grens; de app-gates zijn allee
 | Pagina (app-route) | Dashboard-gate | App-gate | Pakket/feature | Inzage via gedeelde werkruimte |
 |---|---|---|---|---|
 | Vandaag (`/today`) | — | — | — | — |
-| Pipeline (`/pipeline`) | `verkoop` | `verkoop` | `crm_pipeline` (alle pakketten) | ja |
+| Pipeline (`/pipeline`) | `verkoop` | `verkoop` | `crm_pipeline` (alle pakketten) | nee (financieel) |
 | Relaties (`/customers`) | — | — | — | — |
 | Activiteiten (`/activities`) | — | — | — | — |
 | Agenda (`/planning`) | — | — | — | (collega's: `agenda_inzien`) |
@@ -55,9 +60,9 @@ strikt. RLS (`bb_has_permission`) blijft de echte grens; de app-gates zijn allee
 | Werkbonnen (`/work-orders`) | — | — | — | — |
 | Materialen (`/materialen`) | — | — | — | — |
 | Uren (`/hours`) | — | — | — | — |
-| Offertes (`/offers`) | `offertes` | `offertes` | — | ja |
-| Facturen (`/invoices`) | `facturen` | `facturen` | — | ja |
-| Kosten (`/expenses`) | `kosten` + feature `kosten_nacalculatie` | idem | Groei/Team | ja |
+| Offertes (`/offers`) | `offertes` | `offertes` | — | nee (financieel) |
+| Facturen (`/invoices`) | `facturen` | `facturen` | — | nee (financieel) |
+| Kosten (`/expenses`) | `kosten` + feature `kosten_nacalculatie` | idem | Groei/Team | nee (financieel) |
 | Database (`/database`) | `database` | `database` | — | ja |
 | Team (`/team`) | `team` | `team` | — | ja |
 | Instellingen (`/settings`) | — (pagina beveiligt zichzelf per tab) | — (idem: tabs volgen `instellingen`/admin/feature) | — | nee |
@@ -67,8 +72,8 @@ Overige rechten (geen eigen pagina): `klanten_bewerken`, `klanten_verwijderen`, 
 `werkbonnen_bewerken`, `alles_inzien`, `agenda_inzien`, `projectbedragen`, `bedrijfsfinancien`, `inkoopprijzen`.
 Ze sturen knoppen en bedragen binnen pagina's; de app gebruikt dezelfde codes (18 in totaal).
 
-Rechten per lid opslaan vereist feature `rollen_rechten` (Team-pakket). Groei: `user_permissions` blijft leeg,
-de gedeelde werkruimte geeft de inzage.
+Rechten per lid opslaan vereist feature `rollen_rechten` (Groei én Team, sinds 4-10-2026). Gedeelde werkruimte
+(Groei) geeft alleen `alles_inzien`, `agenda_inzien`, `projecten`, `database`, `team`; financieel vraagt altijd een recht.
 
 Tests: `tests/rechten.test.mjs`.
 
@@ -138,8 +143,7 @@ Geen enkele wijziging aan database, RLS, functies of Edge Functions gedaan of no
 exceljs/jszip). Wel als toekomstige DB-wens genoteerd:
 - Unieke index op `(company_id, nummer)` voor offertes/facturen (nu: hoogste nummer + 1 in de client, net als het
   dashboard client-side telt).
-- Taken toevoegen/verwijderen en materiaal verwijderen op werkbonnen: RLS staat alleen admin/planner toe, terwijl
-  het dashboard de knop ook aan verantwoordelijken toont. App volgt de database.
+- (Vervallen na delta: RLS op werkbontaken/-materiaal volgt nu werkruimte/`werkbonnen_bewerken`/verantwoordelijke; app gelijk.)
 - @-vermeldingen in notities: het dashboard stuurt melding + mail via `create-notification`; app toont mentions
   maar stuurt ze nog niet (zou mail kunnen versturen).
 
