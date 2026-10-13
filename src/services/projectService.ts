@@ -1,59 +1,39 @@
 import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
+import { haalInStukken } from '@/lib/inStukken';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { PROJECT_STATUS, projectStatusLabel, type FactuurBedrag } from '@/lib/projectLogica';
+
+export { PROJECT_STATUS, projectStatusLabel };
 
 /**
- * Projecten (`projects`) en projectnotities (`project_notes`).
+ * Projecten (`projects`) met alles wat de projectkaart van het dashboard toont:
+ * notities, uren (uit werkbonuren), facturen, werkbonnen, offertes en foto's.
  *
- * De statuswaarden komen letterlijk uit `PROJECT_STATUS` in
- * `projectsService.js` van het dashboard en zijn gecontroleerd tegen de rijen
- * die er nu in staan (concept, lopend, afgerond). De app had eerder een eigen
- * setje (`in_progress`, `on_hold`, `completed`) dat nergens in de database
- * voorkomt — een filter daarop gaf altijd nul resultaten en een schrijfactie
- * zou een status hebben opgeleverd die het dashboard niet kent.
+ * Wat hier eerder stuk was (geverifieerd tegen de live database, 13-10-2026):
+ * - De app kende zeven statussen (concept, lopend, …). De database laat via
+ *   `projects_status_check` alleen `gepland | in_uitvoering | afgerond` toe,
+ *   dus elk nieuw project ('concept') werd geweigerd en elke statuschip gaf
+ *   een fout. De status wordt bovendien niet getypt maar afgeleid uit de
+ *   werkbonnen (trigger `bb_project_status_bijwerken`); de app schrijft hem
+ *   daarom niet meer.
+ * - `listProjects` haalde maar 100 rijen; nu alles, in stukken van 1000.
+ *
+ * Projectwaarde: met `waarde_bron` ('offertes' | 'aanvraag' | 'handmatig').
+ * Een zelf getypte waarde zet 'handmatig'; terug naar automatisch = 'aanvraag'.
  *
  * RLS: SELECT is breed (gedeelde werkruimte, `alles_inzien`, of zelf gekoppeld);
- * INSERT/UPDATE vragen `projecten_bewerken`; DELETE vraagt rol admin. Dat
- * `alles_inzien` géén bewerkrecht geeft is precies waarom de knoppen een eigen
- * gate hebben en niet meeliften op de zichtbaarheid.
+ * INSERT/UPDATE vragen `projecten_bewerken`; DELETE vraagt rol admin.
  */
 
-export const PROJECT_STATUS: Record<string, string> = {
-  concept: 'Concept',
-  offerte_akkoord: 'Offerte akkoord',
-  lopend: 'Lopend',
-  wachten_op_klant: 'Wachten op klant',
-  te_factureren: 'Te factureren',
-  afgerond: 'Afgerond',
-  risico: 'Risico',
-};
-
-export const PROJECT_STATUS_OPTIES = Object.entries(PROJECT_STATUS).map(([id, label]) => ({
-  id,
-  label,
-}));
-
-export function projectStatusLabel(status: string | null | undefined): string {
-  if (!status) return 'Concept';
-  return PROJECT_STATUS[status] ?? status;
-}
-
-/**
- * `used_hours` staat hier bewust NIET bij: die kolom bestaat niet meer in de
- * live database. PostgREST beantwoordde de hele select daarom met 42703
- * ("column projects.used_hours does not exist") en het projectenscherm bleef
- * leeg met een foutmelding.
- *
- * Het dashboard rekent geschreven uren live uit `werkbon_uren` via de werkbon
- * (`werkbonnen.project_id`) — zie `projectsService.js`, dat dezelfde kolom om
- * dezelfde reden liet vallen. De app doet dat hieronder ook.
- */
 const PROJECT_COLUMNS = `
   id, company_id, customer_id, deal_id, offerte_id, name, description, status,
-  project_value, quoted_hours, start_date, deadline,
-  owner_id, assigned_to, created_at,
-  customer:customers ( id, name )
+  project_value, waarde_bron, geschatte_waarde, quoted_hours, start_date, deadline,
+  owner_id, assigned_to, created_by, created_at,
+  customer:customers ( id, name ),
+  deal:deals ( title ),
+  offerte:offertes ( nummer )
 `;
 
 export type ProjectRow = {
@@ -66,23 +46,29 @@ export type ProjectRow = {
   description: string | null;
   status: string | null;
   project_value: number | null;
+  waarde_bron: string | null;
+  geschatte_waarde: number | null;
   quoted_hours: number | null;
   start_date: string | null;
   deadline: string | null;
   owner_id: string | null;
   assigned_to: string | null;
+  created_by: string | null;
   created_at: string;
   customer: { id: string; name: string | null } | null;
+  deal: { title: string | null } | null;
+  offerte: { nummer: string | null } | null;
 };
 
-export async function listProjects(
-  limit = 100,
-): Promise<{ data: ProjectRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select(PROJECT_COLUMNS)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+export async function listProjects(): Promise<{ data: ProjectRow[]; error: string | null }> {
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('projects')
+      .select(PROJECT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(van, tot),
+  );
 
   if (error) {
     console.warn('[projectService.listProjects]', error.message);
@@ -106,13 +92,32 @@ export async function getProject(
   return { data: (data as unknown as ProjectRow | null) ?? null, error: null };
 }
 
+/** Het (oudste) project bij een deal — wat het dashboard opent vanaf de pipeline. */
+export async function getProjectByDeal(
+  dealId: string,
+): Promise<{ data: ProjectRow | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select(PROJECT_COLUMNS)
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error) {
+    console.warn('[projectService.getProjectByDeal]', error.message);
+    return { data: null, error: 'Project kon niet worden geladen.' };
+  }
+  const rijen = (data as unknown as ProjectRow[]) ?? [];
+  return { data: rijen[0] ?? null, error: null };
+}
+
 export type ProjectInput = {
   name: string;
   description?: string | null;
-  status?: string;
   customer_id?: string | null;
   deal_id?: string | null;
+  offerte_id?: string | null;
   project_value?: number | null;
+  waarde_bron?: 'offertes' | 'aanvraag' | 'handmatig';
   quoted_hours?: number | null;
   start_date?: string | null;
   deadline?: string | null;
@@ -121,20 +126,17 @@ export type ProjectInput = {
 
 function valideerProject(input: Partial<ProjectInput>, nieuw: boolean): string | null {
   if ((nieuw || input.name !== undefined) && !input.name?.trim()) {
-    return 'Geef het project een naam.';
-  }
-  if (input.status && !(input.status in PROJECT_STATUS)) {
-    return 'Onbekende projectstatus.';
+    return 'Projectnaam is verplicht.';
   }
   for (const [veld, label] of [
     ['start_date', 'startdatum'],
-    ['deadline', 'deadline'],
+    ['deadline', 'einddatum'],
   ] as const) {
     const v = input[veld];
     if (v && !isGeldigeDatum(v)) return `Vul een geldige ${label} in (JJJJ-MM-DD).`;
   }
   if (input.start_date && input.deadline && input.deadline < input.start_date) {
-    return 'De deadline ligt vóór de startdatum.';
+    return 'De einddatum ligt vóór de startdatum.';
   }
   for (const [veld, label] of [
     ['project_value', 'projectwaarde'],
@@ -152,10 +154,11 @@ function mapProject(input: Partial<ProjectInput>): Record<string, unknown> {
   const p: Record<string, unknown> = {};
   if (input.name !== undefined) p.name = input.name.trim();
   if (input.description !== undefined) p.description = input.description?.trim() || null;
-  if (input.status !== undefined) p.status = input.status;
   if (input.customer_id !== undefined) p.customer_id = input.customer_id || null;
   if (input.deal_id !== undefined) p.deal_id = input.deal_id || null;
+  if (input.offerte_id !== undefined) p.offerte_id = input.offerte_id || null;
   if (input.project_value !== undefined) p.project_value = Number(input.project_value ?? 0);
+  if (input.waarde_bron !== undefined) p.waarde_bron = input.waarde_bron;
   if (input.quoted_hours !== undefined) p.quoted_hours = Number(input.quoted_hours ?? 0);
   if (input.start_date !== undefined) p.start_date = input.start_date || null;
   if (input.deadline !== undefined) p.deadline = input.deadline || null;
@@ -163,15 +166,43 @@ function mapProject(input: Partial<ProjectInput>): Record<string, unknown> {
   return p;
 }
 
-export async function createProject(input: ProjectInput): Promise<WriteResult<ProjectRow>> {
+/**
+ * Nieuw project. Status niet meesturen: de kolomdefault is 'gepland' en de
+ * werkbonnen bepalen de rest. Hoort er al een project bij de gekozen aanvraag
+ * (elke deal krijgt er automatisch één), dan wordt dát bijgewerkt in plaats
+ * van een tweede ernaast te zetten — zoals `createProject` in het dashboard.
+ */
+export async function createProject(
+  input: ProjectInput,
+): Promise<WriteResult<ProjectRow> & { bestond?: boolean }> {
   const fout = valideerProject(input, true);
   if (fout) return writeFout('validatie', fout);
 
-  const basis = mapProject({ status: 'concept', ...input });
+  const basis = mapProject(input);
+  if (Number(input.project_value ?? 0) > 0) basis.waarde_bron = 'handmatig';
+  Object.keys(basis).forEach((k) => basis[k] === null && delete basis[k]);
+
+  if (input.deal_id) {
+    const { data: bestaand } = await getProjectByDeal(input.deal_id);
+    if (bestaand) {
+      const patch = { ...basis };
+      delete patch.deal_id;
+      if (!patch.project_value) {
+        delete patch.project_value;
+        delete patch.waarde_bron;
+      }
+      if (!patch.quoted_hours) delete patch.quoted_hours;
+      const res = await schrijf<ProjectRow>(
+        () => supabase.from('projects').update(patch).eq('id', bestaand.id).select(PROJECT_COLUMNS),
+        { context: 'projectService.createProject(bestaand)', bedrijfReadonly: isReadonly() },
+      );
+      return res.ok ? { ...res, bestond: true } : res;
+    }
+  }
+
   // created_by houdt de audittrail heel — zelfde regel als het dashboard.
   const eigen = getUserId();
   if (eigen) basis.created_by = eigen;
-  Object.keys(basis).forEach((k) => basis[k] === null && delete basis[k]);
 
   const payload = withCompanyId(basis);
   if (!payload) {
@@ -225,14 +256,206 @@ export async function deleteProject(id: string): Promise<WriteStatus> {
   return res.ok ? { ok: true, data: null } : res;
 }
 
+// ── Uren en facturen per project (lijst) ───────────────────────────────────
+
+/** Gewerkte uren per project uit werkbonuren (RPC `bb_uren_per_project`). */
+export async function getProjectUrenMap(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc('bb_uren_per_project');
+  if (error) {
+    if (__DEV__) console.log('[projectService.getProjectUrenMap]', error.message);
+    return {};
+  }
+  const uit: Record<string, number> = {};
+  for (const [pid, uren] of Object.entries((data as Record<string, unknown>) ?? {})) {
+    uit[pid] = Number(uren) || 0;
+  }
+  return uit;
+}
+
+/** Bedragen van alle facturen met een project, gegroepeerd per project. */
+export async function getFactuurBedragenPerProject(): Promise<Record<string, FactuurBedrag[]>> {
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('facturen')
+      .select('id, project_id, status, totaal_incl, totaal_excl')
+      .not('project_id', 'is', null)
+      .order('id', { ascending: true })
+      .range(van, tot),
+  );
+  if (error) {
+    if (__DEV__) console.log('[projectService.getFactuurBedragenPerProject]', error.message);
+    return {};
+  }
+  const uit: Record<string, FactuurBedrag[]> = {};
+  for (const f of (data as (FactuurBedrag & { project_id: string })[]) ?? []) {
+    (uit[f.project_id] ??= []).push(f);
+  }
+  return uit;
+}
+
+// ── Projectdetail ──────────────────────────────────────────────────────────
+
+export type ProjectUur = {
+  id: string;
+  datum: string;
+  uren: number;
+  notitie: string | null;
+  werkbon_id: string | null;
+  medewerker: { full_name: string | null } | null;
+};
+
+export async function listProjectUren(projectId: string): Promise<ProjectUur[]> {
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('werkbon_uren')
+      .select(
+        'id, datum, uren, notitie, werkbon_id, medewerker:profiles!werkbon_uren_profile_id_fkey ( full_name ), werkbonnen!inner ( project_id )',
+      )
+      .eq('werkbonnen.project_id', projectId)
+      .order('datum', { ascending: false })
+      .order('id', { ascending: true })
+      .range(van, tot),
+  );
+  if (error) {
+    if (__DEV__) console.log('[projectService.listProjectUren]', error.message);
+    return [];
+  }
+  return ((data as unknown as ProjectUur[]) ?? []).map((u) => ({ ...u, uren: Number(u.uren) || 0 }));
+}
+
+export type ProjectFactuur = {
+  id: string;
+  nummer: string | null;
+  factuurdatum: string | null;
+  vervaldatum: string | null;
+  status: string | null;
+  totaal_incl: number | null;
+  totaal_excl: number | null;
+};
+
+export async function listProjectFacturen(projectId: string): Promise<ProjectFactuur[]> {
+  const { data, error } = await supabase
+    .from('facturen')
+    .select('id, nummer, factuurdatum, vervaldatum, status, totaal_incl, totaal_excl')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (__DEV__) console.log('[projectService.listProjectFacturen]', error.message);
+    return [];
+  }
+  return (data as ProjectFactuur[]) ?? [];
+}
+
+export type ProjectWerkbon = {
+  id: string;
+  titel: string | null;
+  nummer: string | null;
+  locatie: string | null;
+  status: string | null;
+  gepland_op: string | null;
+  starttijd: string | null;
+  eindtijd: string | null;
+  assigned_to_ids: string[] | null;
+  werkbon_dagen: {
+    datum: string | null;
+    starttijd: string | null;
+    eindtijd: string | null;
+    medewerker_ids: string[] | null;
+  }[] | null;
+};
+
+export async function listProjectWerkbonnen(projectId: string): Promise<ProjectWerkbon[]> {
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .select(
+      'id, titel, nummer, locatie, status, gepland_op, starttijd, eindtijd, assigned_to_ids, werkbon_dagen ( datum, starttijd, eindtijd, medewerker_ids )',
+    )
+    .eq('project_id', projectId)
+    .order('gepland_op', { ascending: true });
+  if (error) {
+    if (__DEV__) console.log('[projectService.listProjectWerkbonnen]', error.message);
+    return [];
+  }
+  return (data as unknown as ProjectWerkbon[]) ?? [];
+}
+
+export type ProjectOfferte = {
+  id: string;
+  nummer: string | null;
+  omschrijving: string | null;
+  status: string | null;
+  totaal_incl: number | null;
+};
+
+/** Offertes van deze klus: zelfde aanvraag, plus de expliciet gekoppelde. */
+export async function listProjectOffertes(
+  dealId: string | null,
+  offerteId: string | null,
+): Promise<ProjectOfferte[]> {
+  const delen = [dealId ? `deal_id.eq.${dealId}` : null, offerteId ? `id.eq.${offerteId}` : null].filter(
+    Boolean,
+  );
+  if (!delen.length) return [];
+  const { data, error } = await supabase
+    .from('offertes')
+    .select('id, nummer, omschrijving, status, totaal_incl')
+    .or(delen.join(','))
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (__DEV__) console.log('[projectService.listProjectOffertes]', error.message);
+    return [];
+  }
+  return (data as ProjectOfferte[]) ?? [];
+}
+
+export type ProjectFoto = { id: string; url: string };
+
+const fotoPad = (val: string) => {
+  const s = String(val || '').split('?')[0] ?? '';
+  const marker = '/project-fotos/';
+  const i = s.indexOf(marker);
+  return i !== -1 ? s.slice(i + marker.length) : s;
+};
+
+/** Foto's bij de aanvraag (privébucket, signed URL van een uur). */
+export async function listProjectFotos(projectId: string): Promise<ProjectFoto[]> {
+  const { data, error } = await supabase
+    .from('project_fotos')
+    .select('id, url')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (error || !data?.length) return [];
+  const rijen = data as { id: string; url: string }[];
+  const { data: signed } = await supabase.storage
+    .from('project-fotos')
+    .createSignedUrls(rijen.map((r) => fotoPad(r.url)), 3600);
+  return rijen
+    .map((r, i) => ({ id: r.id, url: signed?.[i]?.signedUrl ?? '' }))
+    .filter((f) => f.url);
+}
+
+/** Waar de aanvraag vandaan kwam (`inquiries.source`); null zonder rij of zonder recht. */
+export async function getAanvraagBron(
+  dealId: string,
+): Promise<{ bron: string | null; binnenOp: string | null } | null> {
+  const { data, error } = await supabase
+    .from('inquiries')
+    .select('source, created_at')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error || !data?.length) return null;
+  const r = data[0] as { source: string | null; created_at: string | null };
+  return { bron: r.source, binnenOp: r.created_at };
+}
+
 // ── Projectnotities ────────────────────────────────────────────────────────
 //
 // Losse tabel `project_notes`, net als in het dashboard. INSERT vraagt alleen
 // het bedrijf; wijzigen en verwijderen mag de auteur zelf of een admin/planner.
-// Die 'eigen'-helft kan de policy niet uit de UI afleiden, dus tonen we de knop
-// op basis van dezelfde regel — de server blijft de autoriteit.
 
-const NOTE_COLUMNS = 'id, company_id, project_id, created_by, note, created_at';
+const NOTE_COLUMNS =
+  'id, company_id, project_id, created_by, note, created_at, auteur:profiles ( full_name )';
 
 export type ProjectNote = {
   id: string;
@@ -241,6 +464,7 @@ export type ProjectNote = {
   created_by: string | null;
   note: string;
   created_at: string;
+  auteur: { full_name: string | null } | null;
 };
 
 export async function listProjectNotes(
@@ -263,7 +487,7 @@ export async function addProjectNote(
   note: string,
 ): Promise<WriteResult<ProjectNote>> {
   const tekst = note.trim();
-  if (!tekst) return writeFout('validatie', 'Een notitie mag niet leeg zijn.');
+  if (!tekst) return writeFout('validatie', 'Notitie mag niet leeg zijn.');
 
   const basis: Record<string, unknown> = { project_id: projectId, note: tekst };
   const eigen = getUserId();

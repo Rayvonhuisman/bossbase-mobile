@@ -75,7 +75,7 @@ export function routeVoorLink(link: string | null): string | null {
     case 'activities':
       return '/activities';
     case 'projecten':
-      return id ? `/projects?id=${id}` : '/projects';
+      return id ? `/project/${id}` : '/projects';
     case 'offertes':
       return id ? `/offers?id=${id}` : '/offers';
     case 'facturen':
@@ -84,6 +84,7 @@ export function routeVoorLink(link: string | null): string | null {
     case 'calendar':
       return '/planning';
     case 'deal':
+      return id ? `/deal/${id}` : '/pipeline';
     case 'pipeline':
     case 'aanvragen':
       return '/pipeline';
