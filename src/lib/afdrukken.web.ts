@@ -13,8 +13,16 @@ export function kanAfdrukken(): boolean {
 export function drukHtmlAf(html: string): boolean {
   if (!kanAfdrukken()) return false;
   try {
+    // Geen `noopener` in de features: dan geeft window.open null terug en kunnen
+    // we het document niet schrijven. In plaats daarvan knippen we de
+    // terugverwijzing zelf door, zodat het afdrukvenster de app niet kan sturen.
     const venster = window.open('', '_blank');
     if (venster) {
+      try {
+        venster.opener = null;
+      } catch {
+        /* sommige browsers staan dit niet toe; het document bevat geen scripts */
+      }
       venster.document.open();
       venster.document.write(html);
       venster.document.close();
@@ -35,6 +43,11 @@ export function drukHtmlAf(html: string): boolean {
   try {
     const frame = document.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
+    // Sandbox: geen scripts, formulieren, navigatie of pop-ups. `allow-modals`
+    // is nodig voor print(); `allow-same-origin` omdat de app print() van
+    // buitenaf aanroept (een opaque origin weigert dat). Zonder `allow-scripts`
+    // kan de inhoud daar niets mee: het document is ge-escapete HTML.
+    frame.setAttribute('sandbox', 'allow-modals allow-same-origin');
     frame.style.position = 'fixed';
     frame.style.width = '0';
     frame.style.height = '0';

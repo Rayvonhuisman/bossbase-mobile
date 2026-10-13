@@ -85,23 +85,13 @@ export function canWithRole(
 /**
  * Inzagerechten die in een gedeelde werkruimte (pakket Groei, feature
  * `gedeelde_werkruimte`) automatisch gelden — letterlijk `INZAGE_RECHTEN` uit
- * `usePermissions.js` van het dashboard. Bewerkrechten (klanten_bewerken,
- * projecten_bewerken, werkbonnen_bewerken, planning, inkoopprijzen,
- * instellingen, …) horen daar bewust niet bij.
+ * `usePermissions.js` van het dashboard (origin/main, besluit 4-10-2026,
+ * migratie 20261004200000). Financiële inzage (verkoop, offertes, facturen,
+ * kosten, bedrijfsfinancien, projectbedragen) vraagt óók in een gedeelde
+ * werkruimte een expliciet recht; Groei heeft daarvoor rechtenbeheer.
+ * Bewerkrechten horen er evenmin bij.
  */
-export const INZAGE_RECHTEN: readonly string[] = [
-  'verkoop',
-  'offertes',
-  'facturen',
-  'kosten',
-  'bedrijfsfinancien',
-  'projectbedragen',
-  'alles_inzien',
-  'agenda_inzien',
-  'projecten',
-  'database',
-  'team',
-];
+export const INZAGE_RECHTEN: readonly string[] = ['alles_inzien', 'agenda_inzien', 'projecten', 'database', 'team'];
 
 /**
  * "Zien" zoals het dashboard (`can()` in `usePermissions.js`): in een gedeelde

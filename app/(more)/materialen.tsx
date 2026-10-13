@@ -52,6 +52,9 @@ export default function MaterialenScreen() {
   const styles = useMemo(() => makeStyles(t), [t]);
   const { klasse } = useSchermklasse();
   const magInkoop = can('inkoopprijzen');
+  // RLS op `materialen`: INSERT/UPDATE/DELETE vragen het recht `inkoopprijzen`
+  // (en schrijfrecht). Zonder dat recht faalt elke wijziging; dan alleen kijken.
+  const magBeheren = magInkoop && !readonly;
 
   const [lijst, setLijst] = useState<Materiaal[]>([]);
   const [leveranciers, setLeveranciers] = useState<{ id: string; naam: string; actief: boolean }[]>([]);
@@ -103,7 +106,7 @@ export default function MaterialenScreen() {
       subtitle={`${lijst.length} ${lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek`}
       onBack={() => terugOfNaar(router, '/menu')}
       rightAction={
-        !readonly ? <HeaderIconButton icon={Plus} label="Nieuw materiaal" onPress={() => setModal('nieuw')} /> : undefined
+        magBeheren ? <HeaderIconButton icon={Plus} label="Nieuw materiaal" onPress={() => setModal('nieuw')} /> : undefined
       }
     />
   );
@@ -154,9 +157,10 @@ export default function MaterialenScreen() {
                 return (
                   <Pressable
                     key={m.id}
-                    onPress={() => setModal(m)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${m.naam} bewerken`}
+                    onPress={magBeheren ? () => setModal(m) : undefined}
+                    disabled={!magBeheren}
+                    accessibilityRole={magBeheren ? 'button' : undefined}
+                    accessibilityLabel={magBeheren ? `${m.naam} bewerken` : m.naam}
                     style={({ pressed }) => [
                       styles.kaart,
                       tablet && styles.kaartTablet,
@@ -177,7 +181,7 @@ export default function MaterialenScreen() {
                           {[m.artikelnummer, m.eenheid, levNaam(m.leverancierId)].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
-                      <ChevronRight size={18} color={t.muted2} />
+                      {magBeheren ? <ChevronRight size={18} color={t.muted2} /> : null}
                     </View>
                     <View style={styles.prijsRij}>
                       {magInkoop ? (
@@ -210,7 +214,7 @@ export default function MaterialenScreen() {
           leveranciers={leveranciers}
           magInkoop={magInkoop}
           onClose={() => setModal(null)}
-          onVerwijder={modal !== 'nieuw' && !readonly ? () => verwijder(modal) : undefined}
+          onVerwijder={modal !== 'nieuw' && magBeheren ? () => verwijder(modal) : undefined}
           onOpslaan={async (form) => {
             if (!companyId) return 'Je sessie is nog niet geladen.';
             const res = modal === 'nieuw' ? await createMateriaal(companyId, form) : await updateMateriaal(modal.id, form);

@@ -14,8 +14,16 @@ test('admin mag alles; planner krijgt alleen planning automatisch', () => {
 
 test('gedeelde werkruimte (Groei): inzagerechten gelden voor iedereen', () => {
   const groei = ['gedeelde_werkruimte'];
-  for (const r of ['projecten', 'offertes', 'facturen', 'kosten', 'verkoop', 'database', 'team']) {
+  for (const r of ['projecten', 'alles_inzien', 'agenda_inzien', 'database', 'team']) {
     assert.equal(canZien(r, 'medewerker', [], groei), true, r);
+  }
+});
+
+test('gedeelde werkruimte geeft géén financiële inzage (dashboard 4-10-2026)', () => {
+  const groei = ['gedeelde_werkruimte'];
+  for (const r of ['verkoop', 'offertes', 'facturen', 'kosten', 'bedrijfsfinancien', 'projectbedragen']) {
+    assert.equal(canZien(r, 'medewerker', [], groei), false, r);
+    assert.equal(canZien(r, 'medewerker', [r], groei), true, r);
   }
 });
 

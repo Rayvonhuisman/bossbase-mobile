@@ -301,6 +301,18 @@ export function regimeVanPct(pct: number | null | undefined): string {
   return 'normaal';
 }
 
+/**
+ * Btw-percentage voor opslag — `btwPctVoorOpslag` uit het dashboard. Bij
+ * verlegd en vrijgesteld is het altijd 0: de check-constraints
+ * `offerte_items_verlegd_nul_check` en `factuur_regels_verlegd_nul_check`
+ * weigeren anders de regel. `pct || 21` maakte van 0% vroeger 21%.
+ */
+export function btwPctVoorOpslag(pct: number | null | undefined, regime: string | null | undefined): number {
+  if (regime === 'verlegd' || regime === 'vrijgesteld') return 0;
+  const n = Number(pct);
+  return pct !== null && pct !== undefined && Number.isFinite(n) ? n : 21;
+}
+
 export type CreditBronRegel = {
   type: string | null;
   omschrijving: string;
@@ -336,14 +348,17 @@ export function bouwCreditFactuur(regels: CreditBronRegel[]) {
     regels: regels.map((r, i) => {
       const aantal = Number(r.aantal || 1);
       const eenheidsprijs = -Math.abs(Number(r.eenheidsprijs) || 0);
+      const btwRegime = r.btw_regime || regimeVanPct(r.btw_pct);
       return {
         type: r.type || 'stuks',
         omschrijving: r.omschrijving,
         aantal,
         eenheidsprijs,
         regelprijs: rond2(aantal * eenheidsprijs),
-        btw_pct: Number(r.btw_pct || 21),
-        btw_regime: r.btw_regime || regimeVanPct(r.btw_pct),
+        // Niet `btw_pct || 21`: een verlegde of vrijgestelde regel (0%) werd
+        // dan 21% met regime verlegd, en die combinatie weigert de database.
+        btw_pct: btwPctVoorOpslag(r.btw_pct, btwRegime),
+        btw_regime: btwRegime,
         volgorde: i,
       };
     }),

@@ -3,7 +3,7 @@ import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { haalInStukken } from '@/lib/inStukken';
-import { volgendNummer } from '@/lib/documentLogica';
+import { btwPctVoorOpslag, volgendNummer } from '@/lib/documentLogica';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -11,11 +11,9 @@ import { volgendNummer } from '@/lib/documentLogica';
  * Statuswaarden, bevriezingsregel en berekening komen uit
  * `src/services/offerteService.js` op origin/main.
  *
- * Let op de asymmetrie in de RLS, want die is niet af te leiden uit het menu:
- * de offerte zélf hangt op het recht `offertes`, maar de REGELS hangen op de
- * ROL (admin of planner). Een medewerker met offerterecht mag dus wel een
- * offerte openen en de status bijwerken, en geen regels toevoegen. De app toont
- * die knoppen daarom apart.
+ * RLS (live gecontroleerd): zowel `offertes` als `offerte_items` hangen op het
+ * recht `offertes` (`bb_has_permission`) plus het eigen bedrijf. De regels van
+ * een ondertekende offerte zet de trigger `bb_offerte_regels_op_slot` vast.
  */
 
 export const OFFERTE_STATUS: Record<string, string> = {
@@ -586,14 +584,15 @@ export async function createOfferteItem(
     return writeFout('validatie', 'Vul een geldige prijs in.');
   }
 
-  const btwPct = input.btw_pct ?? 21;
+  const btwRegime = input.btw_regime || regimeVanPct(input.btw_pct ?? 21);
   const basis = {
     offerte_id: input.offerte_id,
     omschrijving: input.omschrijving.trim(),
     eenheid: input.eenheid?.trim() || null,
     type: input.type || null,
-    btw_pct: btwPct,
-    btw_regime: input.btw_regime || regimeVanPct(btwPct),
+    // Verlegd/vrijgesteld = 0% (offerte_items_verlegd_nul_check).
+    btw_pct: btwPctVoorOpslag(input.btw_pct, btwRegime),
+    btw_regime: btwRegime,
     aantal: Number(input.aantal),
     prijs_per: Number(input.prijs_per),
     subtotaal: berekenRegelSubtotaal(input.aantal, input.prijs_per),
@@ -608,8 +607,7 @@ export async function createOfferteItem(
     {
       context: 'offerteService.createOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding:
-        'De regel is niet opgeslagen. Offerteregels wijzigen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Offertes nodig.',
     },
   );
 }
@@ -625,7 +623,10 @@ export async function updateOfferteItem(
   }
   if (input.eenheid !== undefined) updates.eenheid = input.eenheid?.trim() || null;
   if (input.btw_pct !== undefined) updates.btw_pct = input.btw_pct;
-  if (input.btw_regime !== undefined) updates.btw_regime = input.btw_regime;
+  if (input.btw_regime !== undefined) {
+    updates.btw_regime = input.btw_regime;
+    if (input.btw_regime === 'verlegd' || input.btw_regime === 'vrijgesteld') updates.btw_pct = 0;
+  }
   if (input.volgorde !== undefined) updates.volgorde = Number(input.volgorde);
 
   if (input.aantal !== undefined || input.prijs_per !== undefined) {
@@ -651,7 +652,7 @@ export async function updateOfferteItem(
     {
       context: 'offerteService.updateOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'Offerteregels wijzigen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet gewijzigd. Je hebt het recht Offertes nodig.',
     },
   );
 }
@@ -663,7 +664,7 @@ export async function deleteOfferteItem(id: string): Promise<WriteStatus> {
       context: 'offerteService.deleteOfferteItem',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Offerteregels verwijderen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet verwijderd. Je hebt het recht Offertes nodig.',
     },
   );
   return res.ok ? { ok: true, data: null } : res;

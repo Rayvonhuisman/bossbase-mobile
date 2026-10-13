@@ -10,7 +10,12 @@ import {
 } from '@/lib/writeResult';
 import { negeerBijImport } from './importPrullenbak';
 import { haalInStukken } from '@/lib/inStukken';
-import { bouwCreditFactuur, magCrediteren, volgendNummer } from '@/lib/documentLogica';
+import {
+  bouwCreditFactuur,
+  btwPctVoorOpslag,
+  magCrediteren,
+  volgendNummer,
+} from '@/lib/documentLogica';
 import { DOCUMENT_KLANT_KOLOMMEN, type DocumentKlant } from './offerteService';
 
 /**
@@ -495,7 +500,9 @@ export async function markeerBetaald(
 
   const { data, error } = await supabase.rpc('mark_factuur_betaald', {
     p_factuur_id: id,
-    p_betaald_op: betaaldOp ?? null,
+    // Vandaag in Nederland, niet `current_date` van de server (UTC): tussen
+    // middernacht en 02:00 zou dat gisteren zijn.
+    p_betaald_op: betaaldOp ?? vandaagIso(),
   });
   if (error) return classificeerFout(error, 'factuurService.markeerBetaald', isReadonly());
 
@@ -535,6 +542,13 @@ export async function deleteFactuur(
     },
   );
   if (!res.ok) {
+    // Trigger `bb_factuur_verzonden_bevriezen`: alleen een concept mag weg.
+    if (res.soort === 'validatie' && /verstuurde factuur|creditnota/i.test(res.technisch ?? '')) {
+      return writeFout(
+        'op-slot',
+        'Een verstuurde factuur of creditnota kun je niet verwijderen. Maak een creditnota om hem te corrigeren.',
+      );
+    }
     if (res.soort === 'conflict') {
       // FK facturen_credit_van_factuur_id_fkey: een creditnota die naar een
       // verdwenen factuur wijst breekt de audittrail.
@@ -583,15 +597,15 @@ export async function createFactuurRegel(
     return writeFout('validatie', 'Vul een geldige prijs in.');
   }
 
-  const btwPct = input.btw_pct ?? 21;
+  const btwRegime = input.btw_regime || (input.btw_pct === 0 ? 'vrijgesteld' : 'normaal');
   const basis = {
     factuur_id: input.factuur_id,
     type: input.type || 'stuks',
     omschrijving: input.omschrijving.trim(),
     aantal: Number(input.aantal),
     eenheidsprijs: Number(input.eenheidsprijs),
-    btw_pct: btwPct,
-    btw_regime: input.btw_regime || (btwPct === 0 ? 'vrijgesteld' : 'normaal'),
+    btw_pct: btwPctVoorOpslag(input.btw_pct, btwRegime),
+    btw_regime: btwRegime,
     regelprijs: berekenRegelprijs(input.aantal, input.eenheidsprijs),
     volgorde: Number(input.volgorde ?? 0),
   };
@@ -604,8 +618,7 @@ export async function createFactuurRegel(
     {
       context: 'factuurService.createFactuurRegel',
       bedrijfReadonly: isReadonly(),
-      leegMelding:
-        'De regel is niet opgeslagen. Factuurregels wijzigen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Facturen nodig.',
     },
   );
 }
@@ -617,7 +630,7 @@ export async function deleteFactuurRegel(id: string): Promise<WriteStatus> {
       context: 'factuurService.deleteFactuurRegel',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Factuurregels verwijderen kan alleen als beheerder.',
+      leegMelding: 'De regel is niet verwijderd. Je hebt het recht Facturen nodig.',
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -644,7 +657,66 @@ export async function herberekenFactuurTotalen(
 }
 
 
-// ── Factuur mét regels in één handeling ────────────────────────────────────
+// ── Factuur mét regels in één transactie ───────────────────────────────────
+
+type RpcRegel = {
+  type: string;
+  omschrijving: string;
+  aantal: number;
+  eenheidsprijs: number;
+  btw_pct: number;
+  btw_regime: string;
+  volgorde: number;
+};
+
+/**
+ * Kop en regels in één transactie via de RPC `bb_factuur_aanmaken` — dezelfde
+ * route als `maakFactuurMetRegels` in het dashboard (SECURITY INVOKER: RLS,
+ * recht `facturen`, alleen-lezen en planlimiet blijven gelden). Faalt één
+ * regel, dan bestaat de factuur niet: geen halve factuur met een verbruikt
+ * nummer. Bij een creditnota zet de RPC het origineel in dezelfde transactie op
+ * `gecrediteerd`.
+ *
+ * Voor een creditnota is dit de énige werkende route: die staat meteen op
+ * `verzonden`, en de trigger `bb_factuur_regels_op_slot` weigert regels op een
+ * niet-concept factuur die niet in dezelfde transactie is aangemaakt.
+ */
+async function maakViaRpc(
+  kop: Record<string, unknown>,
+  regels: RpcRegel[],
+  context: string,
+): Promise<WriteResult<FactuurRow>> {
+  const p_regels = regels.map((r) => ({
+    ...r,
+    btw_pct: btwPctVoorOpslag(r.btw_pct, r.btw_regime),
+  }));
+  const { data: id, error } = await supabase.rpc('bb_factuur_aanmaken', {
+    p_kop: kop,
+    p_regels,
+  });
+  if (error) {
+    const hint = String((error as { hint?: string }).hint ?? '');
+    if (hint === 'limiet') return writeFout('plan-limiet', error.message);
+    if (/verlegd_nul_check/.test(error.message ?? '')) {
+      return writeFout(
+        'validatie',
+        'Bij btw verlegd of vrijgesteld hoort 0% btw. Kies het regime opnieuw en probeer het nog eens.',
+      );
+    }
+    if (error.code === '22023') return writeFout('validatie', error.message);
+    return classificeerFout(error, context, isReadonly());
+  }
+  if (!id) return writeFout('onbekend', 'De factuur is niet aangemaakt.');
+
+  const { data: vers, error: leesFout } = await supabase
+    .from('facturen')
+    .select(FACTUUR_COLUMNS)
+    .eq('id', id as string)
+    .maybeSingle();
+  if (leesFout) return classificeerFout(leesFout, `${context}.lees`);
+  if (!vers) return writeFout('niet-gevonden');
+  return { ok: true, data: vers as unknown as FactuurRow };
+}
 
 export type NieuweFactuurRegelInvoer = {
   omschrijving: string;
@@ -656,17 +728,11 @@ export type NieuweFactuurRegelInvoer = {
 };
 
 /**
- * Maakt een factuur met al zijn regels, in dezelfde volgorde als de
- * factuurmodal van het dashboard: eerst de kop (met de totalen uit de regels),
- * daarna de regels.
+ * Maakt een factuur met al zijn regels in één transactie (`bb_factuur_aanmaken`,
+ * zoals het dashboard). De totalen rekent de databasetrigger uit de regels.
  *
- * Net als bij offertes wordt er teruggelezen. Een door RLS geweigerde regel
- * komt bij PostgREST binnen als een lege uitkomst, niet als een fout; zonder
- * die controle kan er "factuur aangemaakt" op het scherm staan bij een factuur
- * zonder regels — en een factuur van € 0 is erger dan een foutmelding.
- *
- * Bij een halve uitkomst blijft de conceptfactuur staan (verwijderen mag lang
- * niet iedereen) en zegt de melding precies wat er wél en niet is opgeslagen.
+ * Daarna nog de nummercontrole van `createFactuur`: er is geen unique index op
+ * het nummer, en een concept mag nog hernummerd worden.
  */
 export async function createFactuurMetRegels(
   input: FactuurInput,
@@ -675,43 +741,66 @@ export async function createFactuurMetRegels(
   if (regels.length === 0) {
     return writeFout('validatie', 'Voeg minimaal één regel toe.');
   }
+  const fout = valideerFactuur(input);
+  if (fout) return writeFout('validatie', fout);
+  for (const [i, r] of regels.entries()) {
+    if (!r.omschrijving.trim()) return writeFout('validatie', `Regel ${i + 1}: vul een omschrijving in.`);
+    if (!Number.isFinite(r.aantal) || r.aantal <= 0) {
+      return writeFout('validatie', `Regel ${i + 1}: vul een geldig aantal in.`);
+    }
+    if (!Number.isFinite(r.eenheidsprijs) || r.eenheidsprijs < 0) {
+      return writeFout('validatie', `Regel ${i + 1}: vul een geldige prijs in.`);
+    }
+  }
 
-  const kop = await createFactuur(input);
+  const nummerRes = await volgendFactuurNummer();
+  if (!nummerRes.ok) return writeFout('onbekend', nummerRes.melding);
+
+  const factuurdatum = input.factuurdatum || vandaagIso();
+  const termijn = input.betaaltermijn_dagen ?? 14;
+  const kop = await maakViaRpc(
+    {
+      customer_id: input.customer_id || null,
+      project_id: input.project_id || null,
+      nummer: nummerRes.nummer,
+      factuurdatum,
+      vervaldatum: input.vervaldatum || berekenVervaldatum(factuurdatum, termijn),
+      betaaltermijn_dagen: termijn,
+      betalingskenmerk: nummerRes.nummer,
+      notities: input.notities?.trim() || null,
+    },
+    regels.map((r, i) => ({
+      type: r.type || 'stuks',
+      omschrijving: r.omschrijving.trim(),
+      aantal: Number(r.aantal),
+      eenheidsprijs: Number(r.eenheidsprijs),
+      btw_pct: r.btw_pct,
+      btw_regime: r.btw_regime || (r.btw_pct === 0 ? 'vrijgesteld' : 'normaal'),
+      volgorde: i,
+    })),
+    'factuurService.createFactuurMetRegels',
+  );
   if (!kop.ok) return kop;
 
-  const mislukt: string[] = [];
-  for (let i = 0; i < regels.length; i++) {
-    const r = regels[i]!;
-    const res = await createFactuurRegel({
-      factuur_id: kop.data.id,
-      omschrijving: r.omschrijving,
-      type: r.type,
-      aantal: r.aantal,
-      eenheidsprijs: r.eenheidsprijs,
-      btw_pct: r.btw_pct,
-      btw_regime: r.btw_regime,
-      volgorde: i,
-    });
-    if (!res.ok) mislukt.push(`regel ${i + 1}: ${res.melding}`);
+  let factuur = kop.data;
+  if (factuur.nummer && (await nummerAlInGebruik(factuur.nummer, factuur.id))) {
+    const opnieuw = await volgendFactuurNummer();
+    if (opnieuw.ok) {
+      const herstel = await schrijf<FactuurRow>(
+        () =>
+          supabase
+            .from('facturen')
+            .update({ nummer: opnieuw.nummer, betalingskenmerk: opnieuw.nummer })
+            .eq('id', factuur.id)
+            .select(FACTUUR_COLUMNS),
+        { context: 'factuurService.createFactuurMetRegels.hernummer', bedrijfReadonly: isReadonly() },
+      );
+      if (herstel.ok) factuur = herstel.data;
+    }
   }
 
-  const terug = await getFactuurRegels(kop.data.id);
-  if (terug.error) {
-    return writeFout(
-      'onbekend',
-      `Factuur ${kop.data.nummer} is aangemaakt, maar de regels konden niet worden ` +
-        'gecontroleerd. Open de factuur om te kijken wat erin staat.',
-    );
-  }
-  if (mislukt.length > 0 || terug.data.length !== regels.length) {
-    return writeFout(
-      'onbekend',
-      `Factuur ${kop.data.nummer} is aangemaakt, maar ${terug.data.length} van de ` +
-        `${regels.length} regels zijn opgeslagen. ${mislukt[0] ?? ''}`.trim(),
-    );
-  }
-
-  return { ok: true, data: { factuur: kop.data, regels: terug.data } };
+  const terug = await getFactuurRegels(factuur.id);
+  return { ok: true, data: { factuur, regels: terug.data } };
 }
 
 
@@ -727,6 +816,8 @@ const SNAPSHOT_VELDEN = [
   'snapshot_email',
   'snapshot_kvk',
   'snapshot_btw',
+  'snapshot_iban',
+  'snapshot_iban_tnv',
 ] as const;
 
 /**
@@ -734,13 +825,15 @@ const SNAPSHOT_VELDEN = [
  * (`createCreditFactuur`): nummer `BB-CF…`, status meteen `verzonden`,
  * notitie "Creditering van factuur …", alle regels met negatieve prijs, de
  * bevroren bedrijfsgegevens van het origineel, en het origineel krijgt
- * `gecrediteerd = true`.
+ * `gecrediteerd = true` — alles in één transactie via `bb_factuur_aanmaken`.
+ *
+ * De vorige versie deed losse inserts: de kop (status `verzonden`) lukte, de
+ * regels weigerde de trigger `bb_factuur_regels_op_slot`, en er bleef een lege
+ * creditnota met een verbruikt BB-CF-nummer achter die niet meer te
+ * verwijderen is.
  *
  * Gedeeltelijk crediteren (regels kiezen, aantallen aanpassen) kan alleen in
  * het dashboard.
- *
- * Teruglezen zoals bij het aanmaken: het origineel wordt pas als gecrediteerd
- * gemarkeerd als alle creditregels echt zijn opgeslagen.
  */
 export async function createCreditFactuur(
   origineelId: string,
@@ -770,77 +863,23 @@ export async function createCreditFactuur(
   const nummerRes = await volgendCreditNummer();
   if (!nummerRes.ok) return writeFout('onbekend', nummerRes.melding);
 
+  // Kop, regels en `gecrediteerd = true` op het origineel in één transactie,
+  // zoals het dashboard. De totalen rekent de databasetrigger uit de regels.
   const credit = bouwCreditFactuur(regelRes.data);
-  const basis: Record<string, unknown> = {
+  const kop: Record<string, unknown> = {
     customer_id: origineel.customer_id,
     project_id: origineel.project_id,
     nummer: nummerRes.nummer,
     factuurdatum: vandaagIso(),
-    status: 'verzonden',
     notities: `Creditering van factuur ${origineel.nummer}`,
     is_credit: true,
     credit_van_factuur_id: origineelId,
-    totaal_excl: credit.totaal_excl,
-    totaal_incl: credit.totaal_incl,
   };
-  for (const veld of SNAPSHOT_VELDEN) basis[veld] = origineel[veld] ?? null;
+  for (const veld of SNAPSHOT_VELDEN) kop[veld] = origineel[veld] ?? null;
 
-  const payload = withCompanyId(basis);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
-
-  const kop = await schrijf<FactuurRow>(
-    () => supabase.from('facturen').insert(payload).select(FACTUUR_COLUMNS),
-    {
-      context: 'factuurService.createCreditFactuur',
-      bedrijfReadonly: isReadonly(),
-      leegMelding: 'De creditfactuur is niet opgeslagen. Je hebt het recht Facturen nodig.',
-    },
+  return maakViaRpc(
+    kop,
+    credit.regels.map(({ regelprijs: _r, ...r }) => r),
+    'factuurService.createCreditFactuur',
   );
-  if (!kop.ok) return kop;
-
-  const mislukt: string[] = [];
-  for (const r of credit.regels) {
-    const regelPayload = withCompanyId({ factuur_id: kop.data.id, ...r });
-    if (!regelPayload) {
-      mislukt.push('bedrijfsgegevens ontbreken');
-      continue;
-    }
-    const res = await schrijf<FactuurRegel>(
-      () => supabase.from('factuur_regels').insert(regelPayload).select(REGEL_COLUMNS),
-      {
-        context: 'factuurService.createCreditFactuur.regel',
-        bedrijfReadonly: isReadonly(),
-        leegMelding: 'Factuurregels opslaan kan alleen als beheerder of planner.',
-      },
-    );
-    if (!res.ok) mislukt.push(res.melding);
-  }
-
-  const terug = await getFactuurRegels(kop.data.id);
-  if (mislukt.length > 0 || terug.error || terug.data.length !== credit.regels.length) {
-    return writeFout(
-      'onbekend',
-      `Creditfactuur ${kop.data.nummer} is aangemaakt, maar niet alle regels zijn opgeslagen. ` +
-        'De oorspronkelijke factuur is daarom niet als gecrediteerd gemarkeerd. ' +
-        (mislukt[0] ?? ''),
-    );
-  }
-
-  const markeer = await schrijf<{ id: string }>(
-    () =>
-      supabase
-        .from('facturen')
-        .update({ gecrediteerd: true, updated_at: new Date().toISOString() })
-        .eq('id', origineelId)
-        .select('id'),
-    { context: 'factuurService.createCreditFactuur.markeer', bedrijfReadonly: isReadonly() },
-  );
-  if (!markeer.ok) {
-    return writeFout(
-      'onbekend',
-      `Creditfactuur ${kop.data.nummer} is aangemaakt, maar factuur ${origineel.nummer} kon niet ` +
-        'als gecrediteerd worden gemarkeerd.',
-    );
-  }
-  return kop;
 }
