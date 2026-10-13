@@ -271,7 +271,7 @@ export async function laadDatabase(): Promise<{
   for (const d of deals) if (d.lost_reason) redenen.add(d.lost_reason);
 
   const boekhouding = new Set<string>();
-  for (const r of ((accRes.data as { provider: string; connected: boolean }[] | null) ?? [])) {
+  for (const r of (Array.isArray(accRes.data) ? (accRes.data as { provider: string; connected: boolean }[]) : [])) {
     if (r.connected) boekhouding.add(r.provider);
   }
 

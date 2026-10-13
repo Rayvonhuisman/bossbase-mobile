@@ -109,7 +109,7 @@ export async function getIntegratieStand(): Promise<IntegratieStand> {
     if (__DEV__) console.log('[integrationService] get_accounting_status', accRes.error.message);
     fouten.push('De boekhoudkoppeling kon niet worden opgehaald.');
   } else {
-    const rijen = (accRes.data as AccountingStatusRow[] | null) ?? [];
+    const rijen = Array.isArray(accRes.data) ? (accRes.data as AccountingStatusRow[]) : [];
     boekhouding = BOEKHOUD_PROVIDERS.map((p) => {
       const rij = rijen.find((r) => r.provider === p.id);
       const connected = isEchtGekoppeld(p.id, rij);

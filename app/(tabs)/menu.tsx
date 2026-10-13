@@ -173,7 +173,9 @@ export default function MenuScreen() {
                   style={({ pressed }) => [styles.bijNaamKnop, pressed && { opacity: 0.85 }]}
                 >
                   <i.icon size={17} color={t.ink2} strokeWidth={2} />
-                  <Text style={styles.bijNaamTekst}>{i.title}</Text>
+                  <Text style={styles.bijNaamTekst} numberOfLines={1}>
+                    {i.title}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -252,13 +254,14 @@ const makeStyles = (t: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
+      gap: 6,
+      paddingHorizontal: 6,
       borderRadius: t.rLg,
       borderWidth: 1,
       borderColor: t.line,
       backgroundColor: t.card,
     },
-    bijNaamTekst: { fontSize: 14, fontWeight: '600', color: t.ink },
+    bijNaamTekst: { flexShrink: 1, fontSize: 13.5, fontWeight: '600', color: t.ink },
     raster: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
     kolom: { width: '50%' },
     donkerRij: {
