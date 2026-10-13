@@ -17,24 +17,26 @@ import { Dialog } from '@/lib/dialog';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   Circle,
-  Clock,
+  Eye,
   FolderKanban,
   ImageIcon,
   ListChecks,
   Lock,
-  Mail,
   MapPin,
   Package,
+  Pencil,
   Phone,
+  Play,
   Plus,
   PlusCircle,
-  Tag,
+  Send,
   Trash2,
   Truck,
-  User as UserIcon,
-  Users,
+  X,
 } from 'lucide-react-native';
 import {
   AnimatedScreen,
@@ -45,10 +47,11 @@ import {
   FormField,
   LoadingScreen,
   MobielKader,
-  StatusBadge,
+  SelectField,
   StatusBarScrim,
-  statusLabel,
+  TimeField,
 } from '@/components';
+import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -58,62 +61,79 @@ import {
   canAddTask,
   canBookHours,
   canDeleteMaterial,
-  canEditWorkOrder,
+  canEditDetail,
+  canManageWerkbonnen,
   deleteWorkOrderMaterial,
   deleteWorkOrderPhoto,
   deleteWorkOrderTask,
-  getAllowedNextStatuses,
   getWorkOrder,
+  listCompanyProfiles,
+  listLeveranciersNamen,
   listTeamProfiles,
+  listVoertuigen,
   listWorkOrderMaterials,
   listWorkOrderNotes,
   listWorkOrderPhotos,
   listWorkOrderTasks,
+  setNoteVoorKlant,
   setTaskDone,
   updateMaterialAmount,
   updateWorkOrderStatus,
   uploadWorkOrderPhoto,
   type FotoCategorie,
-  listVoertuigen,
+  type Werkbon,
+  type WerkbonMateriaalRegel,
+  type WerkbonNotitie,
+  FOTO_CATEGORIEEN,
 } from '@/services/workOrderService';
+import { listMaterialen, listLeveranciers, type Materiaal } from '@/services/materiaalService';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import { useFocusTerug } from '@/lib/focusTerug';
-import {
-  createWerkbonUur,
-  listWerkbonUren,
-} from '@/services/werkbonUrenService';
+import { createWerkbonUur, listWerkbonUren } from '@/services/werkbonUrenService';
 import { isGeldigeISODatum, vandaagISO } from '@/lib/datum';
+import { lokaalNaarUtc } from '@/lib/nlTijd';
+import { berekenUren } from '@/lib/urenBerekening';
 import { useLaden } from '@/lib/useLaden';
-import {
-  formatDagLabel,
-  formatDateLongNL,
-  formatDateNL,
-  formatHours,
-  formatTimeNL,
-} from '@/lib/format';
+import { formatDateNL, formatEUR, formatHours } from '@/lib/format';
 import { terugOfNaar } from '@/lib/navigatie';
-import { ds, dsShadow, dsShadowGreen, spacing, type ThemeColors } from '@/theme';
-import type {
-  WerkbonUur,
-  WorkOrderMaterial,
-  WorkOrderNote,
-  WorkOrderPhoto,
-  WorkOrderStatus,
-  WorkOrderTask,
-  WorkOrderWithRelations,
-} from '@/types/domain';
+import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
+import type { WerkbonUur, WorkOrderPhoto, WorkOrderTask } from '@/types/domain';
 import { leesbreedte } from '@/lib/schermklasseRegels';
-import { alsTekst } from '@/lib/notitieTekst';
-
-// Dark "ink" surface kept constant across themes (status button).
-/** Vaste inkt op de donkere herokaart — blijft in beide thema's donker. */
-const INK_FIXED = ds.greenInk;
+import { alsHtml, alsTekst } from '@/lib/notitieTekst';
+import {
+  dagVenster,
+  dagWoord,
+  EENHEDEN,
+  FOTO_CATEGORIE_STIJL,
+  hhmm,
+  inclusiefBtw,
+  korteDatum,
+  leesBedrag,
+  materiaalSubtotaal,
+  mijnVolgendeDag,
+  normaliseerStatus,
+  planningLabel,
+  ploegOpDag,
+  rond2,
+  rondAfOpVijf,
+  tijdenVoorPersoon,
+  werkbonDagen,
+  werkbonVenster,
+} from '@/lib/werkbonLogica';
 
 function formatQty(n: number): string {
   if (!Number.isFinite(n)) return '0';
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 }
 
+const vandaag = () => vandaagISO();
+
+/**
+ * Werkbondetail — de blokken van het dashboard (WerkbonPageV2) in dezelfde
+ * volgorde: kop, jouw planning, actierij (bel/route/start-afronden),
+ * slot- en verstuurdmelding, omschrijving, planning, taken, uren, foto's,
+ * materialen, meerwerk, notities (intern/klant) en waarschuwingen.
+ */
 export default function WorkOrderDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -123,104 +143,82 @@ export default function WorkOrderDetailScreen() {
   const { colors: th } = useTheme();
   const styles = useMemo(() => makeStyles(th), [th]);
 
-  const [workOrder, setWorkOrder] = useState<WorkOrderWithRelations | null>(null);
+  const [workOrder, setWorkOrder] = useState<Werkbon | null>(null);
   const [voertuigen, setVoertuigen] = useState<Record<string, { naam: string; kleur: string | null }>>({});
   const [uren, setUren] = useState<WerkbonUur[]>([]);
-  const [materials, setMaterials] = useState<WorkOrderMaterial[]>([]);
+  const [materials, setMaterials] = useState<WerkbonMateriaalRegel[]>([]);
   const [tasks, setTasks] = useState<WorkOrderTask[]>([]);
-  const [notes, setNotes] = useState<WorkOrderNote[]>([]);
+  const [notes, setNotes] = useState<WerkbonNotitie[]>([]);
   const [photos, setPhotos] = useState<WorkOrderPhoto[]>([]);
   const [teamNames, setTeamNames] = useState<Record<string, string>>({});
+  const [leveranciers, setLeveranciers] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  /**
-   * Failures of the child lists are kept apart from the page-level error, so a
-   * blocked sub-query is reported as a failure instead of being rendered as an
-   * empty section ("geen materialen", "0 uren") that looks like real data.
-   */
   const [partialErrors, setPartialErrors] = useState<Record<string, string | null>>({});
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [noteModal, setNoteModal] = useState(false);
+  const [notitieTab, setNotitieTab] = useState<'intern' | 'klant'>('intern');
   const [timeModal, setTimeModal] = useState(false);
   const [taskModal, setTaskModal] = useState<{ meerwerk: boolean } | null>(null);
   const [materialModal, setMaterialModal] = useState(false);
-  const [fotoBezig, setFotoBezig] = useState(false);
+  const [startModal, setStartModal] = useState(false);
+  const [fotoBezig, setFotoBezig] = useState<FotoCategorie | null>(null);
 
-  const load = useCallback(
-    async () => {
-      if (!id) return;
-      setError(null);
+  const load = useCallback(async () => {
+    if (!id) return;
+    setError(null);
 
-      const [woResult, urenResult, matResult, taskResult, noteResult, photoResult] =
-        await Promise.all([
-          getWorkOrder(id),
-          listWerkbonUren(id),
-          listWorkOrderMaterials(id),
-          listWorkOrderTasks(id),
-          listWorkOrderNotes(id),
-          listWorkOrderPhotos(id),
-        ]);
+    const [woResult, urenResult, matResult, taskResult, noteResult, photoResult, levs] = await Promise.all([
+      getWorkOrder(id),
+      listWerkbonUren(id),
+      listWorkOrderMaterials(id),
+      listWorkOrderTasks(id),
+      listWorkOrderNotes(id),
+      listWorkOrderPhotos(id),
+      listLeveranciersNamen(),
+    ]);
 
-      if (woResult.error) {
-        setError(woResult.error);
-        setWorkOrder(null);
-      } else if (!woResult.data) {
-        // No error and no row: RLS filtered it out, or it is gone.
-        setError('Deze werkbon bestaat niet of je hebt er geen toegang toe.');
-        setWorkOrder(null);
-      } else {
-        setWorkOrder(woResult.data);
-        // Names behind assigned_to_ids — the array carries no foreign key.
-        const ids = [
-          ...(woResult.data.assigned_to_ids ?? []),
-          ...(woResult.data.verantwoordelijke_ids ?? []),
-        ];
-        const { data: names } = await listTeamProfiles(ids);
-        setTeamNames(names);
-        // Voertuigen staan sinds de dag-planning in een uuid[] zonder relatie,
-        // dus die namen halen we los op. Mislukt dat, dan blijft de werkbon
-        // gewoon staan — zonder busnaam.
-        const { data: bussen } = await listVoertuigen(woResult.data.voertuig_ids ?? []);
-        setVoertuigen(bussen);
-      }
+    if (woResult.error) {
+      setError(woResult.error);
+      setWorkOrder(null);
+    } else if (!woResult.data) {
+      setError('Deze werkbon bestaat niet of je hebt er geen toegang toe.');
+      setWorkOrder(null);
+    } else {
+      setWorkOrder(woResult.data);
+      const ids = [
+        ...(woResult.data.assigned_to_ids ?? []),
+        ...(woResult.data.verantwoordelijke_ids ?? []),
+        ...(woResult.data.assigned_to ? [woResult.data.assigned_to] : []),
+      ];
+      const { data: names } = await listTeamProfiles(ids);
+      setTeamNames(names);
+      // Voertuigen: ook die per dag, niet alleen die van de werkbon.
+      const busIds = [
+        ...(woResult.data.voertuig_ids ?? []),
+        ...werkbonDagen(woResult.data).flatMap((d) => d.voertuig_ids ?? []),
+      ];
+      const { data: bussen } = await listVoertuigen(busIds);
+      setVoertuigen(bussen);
+    }
 
-      // A child list that fails must not blank the page — show what loaded and
-      // name what did not.
-      setUren(urenResult.data);
-      setMaterials(matResult.data);
-      setTasks(taskResult.data);
-      setNotes(noteResult.data);
-      setPhotos(photoResult.data);
-      setPartialErrors({
-        uren: urenResult.error,
-        materialen: matResult.error,
-        taken: taskResult.error,
-        notities: noteResult.error,
-        fotos: photoResult.error,
-      });
+    setUren(urenResult.data);
+    setMaterials(matResult.data);
+    setTasks(taskResult.data);
+    setNotes(noteResult.data);
+    setPhotos(photoResult.data);
+    setLeveranciers(levs);
+    setPartialErrors({
+      uren: urenResult.error,
+      materialen: matResult.error,
+      taken: taskResult.error,
+      notities: noteResult.error,
+      fotos: photoResult.error,
+    });
+  }, [id]);
 
-    },
-    [id],
-  );
+  const { loading, refreshing, onRefresh, opnieuw, herlaad } = useLaden(load, { onFout: setError });
 
-  /**
-   * Terugkomen op dit scherm leest de bon opnieuw, zodat een wijziging die
-   * intussen op het dashboard is gedaan meteen klopt. Dat gebeurt stil: alleen
-   * een echte pull-to-refresh zet `refreshing` en toont de indicator.
-   */
-  const { loading, refreshing, onRefresh, opnieuw } = useLaden(load, { onFout: setError });
-
-  const voertuigNamen = (workOrder?.voertuig_ids ?? [])
-    .map((id) => voertuigen[id]?.naam)
-    .filter((n): n is string => !!n);
-
-  const isSigned = !!workOrder?.ondertekend_op;
-
-  /**
-   * De rechtenstand, doorgegeven aan de servicelaag die de RLS-predicaten
-   * naspeelt. `gedeelde_werkruimte` komt uit get_plan_status() en is exact
-   * waar bb_gedeelde_werkruimte() op draait — dat gat is hiermee dicht.
-   */
   const rechten = useMemo(
     () => ({
       userId: user?.id ?? null,
@@ -232,89 +230,82 @@ export default function WorkOrderDetailScreen() {
     [user?.id, role, can, hasFeature, readonly],
   );
 
-  // Zolang de rechten laden geldt: niets aanbieden. Anders flitst een knop die
-  // deze gebruiker helemaal niet mag gebruiken.
-  const canManage = workOrder && rechtenGeladen ? canEditWorkOrder(workOrder, rechten) : false;
-  const canBook = workOrder && rechtenGeladen ? canBookHours(workOrder, rechten) : false;
-  // Regels toevoegen/weggooien eist de ROL admin of planner (zie de policies op
-  // werkbon_taken en de delete-policy op werkbon_materialen).
-  const canTasks = workOrder && rechtenGeladen ? canAddTask(workOrder, rechten) : false;
-  const canDelMaterial = workOrder && rechtenGeladen ? canDeleteMaterial(workOrder, rechten) : false;
-  // Notities mag iedereen binnen het bedrijf; alleen een read-only account niet.
-  const canNote = rechtenGeladen && !readonly && !isSigned;
+  const opSlot = !!workOrder?.ondertekend_op;
+  const klaar = rechtenGeladen && !!workOrder;
+  // canManage: admin/planner/werkbonnen_bewerken → Bewerken + Nieuwe werkbon.
+  const canManage = klaar && canManageWerkbonnen(rechten) && !readonly;
+  // canEditDetail: beheerder of verantwoordelijke van deze bon.
+  const editDetail = klaar && canEditDetail(workOrder!, rechten);
+  const viewOnly = klaar && !editDetail;
+  const canEdit = editDetail && !opSlot && !readonly;
+  const canBook = klaar && canBookHours(workOrder!, rechten);
+  // Taken/meerwerk toevoegen of weggooien en materiaal verwijderen: RLS eist
+  // de rol admin of planner.
+  const canTasks = klaar && canAddTask(workOrder!, rechten);
+  const canDelMaterial = klaar && canDeleteMaterial(workOrder!, rechten);
+  const canNote = editDetail && !readonly;
+  const magInkoop = can('inkoopprijzen');
+  const magBedragen = can('projectbedragen');
+  const isAdminPlanner = role === 'admin' || role === 'planner';
 
-  const handleStatusChange = (next: WorkOrderStatus) => {
+  const status = normaliseerStatus(workOrder?.status);
+
+  // ── Status ──────────────────────────────────────────────────────────────
+  const zetStatus = async (next: 'in_uitvoering' | 'afgerond', gestartOp?: string | null) => {
     if (!workOrder) return;
-    Dialog.alert('Status wijzigen', `Werkbon markeren als "${statusLabel(next)}"?`, [
+    setStatusUpdating(true);
+    const { data, error: updateError } = await updateWorkOrderStatus(workOrder, next, gestartOp);
+    setStatusUpdating(false);
+    if (updateError || !data) {
+      Dialog.alert('Status niet opgeslagen', updateError ?? 'Probeer het opnieuw.');
+      return;
+    }
+    setWorkOrder(data);
+    if (next === 'afgerond') Dialog.alert('Klus afgerond.');
+  };
+
+  const startKlus = () =>
+    Dialog.alert('Klus starten', 'De werkbon gaat naar "In uitvoering".', [
       { text: 'Annuleren', style: 'cancel' },
-      {
-        text: 'Bevestigen',
-        onPress: async () => {
-          setStatusUpdating(true);
-          const { data, error: updateError } = await updateWorkOrderStatus(workOrder, next);
-          setStatusUpdating(false);
-          if (updateError || !data) {
-            Dialog.alert('Status niet opgeslagen', updateError ?? 'Probeer het opnieuw.');
-            return;
-          }
-          // Take the row the database returned, not our guess of it.
-          setWorkOrder(data);
-        },
-      },
+      { text: 'Start klus', onPress: () => zetStatus('in_uitvoering') },
+    ]);
+
+  const gewoneTaken = useMemo(() => tasks.filter((t) => !t.is_meerwerk), [tasks]);
+  const meerwerkTaken = useMemo(() => tasks.filter((t) => t.is_meerwerk), [tasks]);
+  const totaalUren = useMemo(() => uren.reduce((sum, u) => sum + Number(u.uren || 0), 0), [uren]);
+
+  /** Afronden (WerkbonAfrondenModal, zonder handtekening). */
+  const bevestigAfronden = (gestartOp?: string | null) => {
+    const done = gewoneTaken.filter((t) => t.afgerond).length;
+    const open = gewoneTaken.length - done;
+    const regels = [
+      `Taken ${done}/${gewoneTaken.length} · Uren ${formatHours(rond2(totaalUren))} · Materiaal ${materials.length} · Foto's ${photos.length}`,
+      open > 0 ? `\n${open} ${open === 1 ? 'taak staat' : 'taken staan'} nog open; die komen niet op de bon die de klant tekent.` : '',
+      uren.length === 0 ? '\nEr zijn nog geen uren op deze werkbon geboekt.' : '',
+      '\nLaten ondertekenen (nu of per mail) doe je op het dashboard.',
+    ].join('');
+    Dialog.alert('Klus afronden', regels, [
+      { text: 'Annuleren', style: 'cancel' },
+      { text: 'Afronden zonder handtekening', onPress: () => zetStatus('afgerond', gestartOp) },
     ]);
   };
 
-  /**
-   * Het label van de primaire knop volgt de toegestane overgang. Is er maar
-   * één volgende status, dan zegt de knop precies wat er gebeurt; zijn er
-   * meerdere, dan opent hij de keuze — hetzelfde gedrag als voorheen.
-   */
-  const volgendeStatussen = workOrder ? getAllowedNextStatuses(workOrder.status, role) : [];
-  const primaireActie =
-    volgendeStatussen.length === 1
-      ? volgendeStatussen[0] === 'in_uitvoering'
-        ? 'Klus starten'
-        : volgendeStatussen[0] === 'afgerond'
-          ? 'Klus afronden'
-          : `Naar ${statusLabel(volgendeStatussen[0]!).toLowerCase()}`
-      : 'Status wijzigen';
-
-  const openStatusActions = () => {
+  const vraagAfronden = () => {
     if (!workOrder) return;
-    if (isSigned) {
-      Dialog.alert(
-        'Werkbon is ondertekend',
-        'Deze werkbon is afgetekend door de klant en staat op slot. Maak een nieuwe werkbon voor een correctie.',
-      );
+    const effectiefGestart = workOrder.gestart_op || (workOrder.gepland_op && workOrder.starttijd);
+    if (!effectiefGestart) {
+      setStartModal(true);
       return;
     }
-    if (!canManage) {
-      Dialog.alert(
-        'Geen rechten',
-        'Alleen de verantwoordelijke voor deze werkbon, een admin of een planner kan de status wijzigen.',
-      );
-      return;
-    }
-    const next = getAllowedNextStatuses(workOrder.status, role);
-    if (next.length === 0) {
-      Dialog.alert('Geen status-wijzigingen mogelijk', 'Deze werkbon kan niet verder.');
-      return;
-    }
-    const buttons = next.map((s) => ({
-      text: statusLabel(s),
-      onPress: () => handleStatusChange(s),
-    }));
-    Dialog.alert('Status wijzigen', undefined, [
-      ...buttons,
-      { text: 'Annuleren', style: 'cancel' as const },
-    ]);
+    bevestigAfronden();
   };
 
+  // ── Taken ───────────────────────────────────────────────────────────────
   const handleToggleTask = async (task: WorkOrderTask) => {
-    if (isSigned || !canManage) {
+    if (!canEdit) {
       Dialog.alert(
-        isSigned ? 'Werkbon is ondertekend' : 'Geen rechten',
-        isSigned
+        opSlot ? 'Werkbon is ondertekend' : 'Alleen inzage',
+        opSlot
           ? 'Deze werkbon staat op slot en kan niet meer worden gewijzigd.'
           : 'Alleen de verantwoordelijke, een admin of een planner kan taken afvinken.',
       );
@@ -330,7 +321,6 @@ export default function WorkOrderDetailScreen() {
     setTasks((prev) => prev.map((t) => (t.id === data.id ? data : t)));
   };
 
-  /** Bevestigen en verwijderen, met de foutmelding van de server als die komt. */
   const bevestigVerwijderen = (titel: string, tekst: string, doe: () => Promise<string | null>) => {
     Dialog.alert(titel, tekst, [
       { text: 'Annuleren', style: 'cancel' },
@@ -363,7 +353,7 @@ export default function WorkOrderDetailScreen() {
   const handleDeleteTask = (task: WorkOrderTask) =>
     bevestigVerwijderen(
       task.is_meerwerk ? 'Meerwerk verwijderen' : 'Taak verwijderen',
-      `"${task.omschrijving}" wordt definitief verwijderd.`,
+      `Taak "${task.omschrijving}" verwijderen?`,
       async () => {
         const { error: e } = await deleteWorkOrderTask(task.id);
         if (!e) setTasks((prev) => prev.filter((t) => t.id !== task.id));
@@ -371,24 +361,10 @@ export default function WorkOrderDetailScreen() {
       },
     );
 
-  const handleAddMaterial = async (naam: string, eenheid: string, aantal: number) => {
-    if (!workOrder) return { error: 'Werkbon niet geladen.' };
-    const { data, error: matError } = await addWorkOrderMaterial({
-      werkbon_id: workOrder.id,
-      company_id: workOrder.company_id,
-      naam,
-      eenheid,
-      aantal,
-    });
-    if (matError || !data) return { error: matError ?? 'Opslaan mislukt.' };
-    setMaterials((prev) => [...prev, data].sort((a, b) => a.naam.localeCompare(b.naam)));
-    return { error: null };
-  };
-
-  /** Aantal bijstellen met +/- knoppen; onder 1 gaat het naar verwijderen. */
-  const handleMaterialAmount = async (m: WorkOrderMaterial, nieuwAantal: number) => {
-    if (nieuwAantal < 1) return;
-    const { data, error: e } = await updateMaterialAmount(m.id, nieuwAantal);
+  // ── Materialen ──────────────────────────────────────────────────────────
+  const handleMaterialAmount = async (m: WerkbonMateriaalRegel, nieuwAantal: number) => {
+    if (nieuwAantal <= 0) return;
+    const { data, error: e } = await updateMaterialAmount(m, nieuwAantal);
     if (e || !data) {
       Dialog.alert('Niet opgeslagen', e ?? 'Probeer het opnieuw.');
       return;
@@ -396,31 +372,27 @@ export default function WorkOrderDetailScreen() {
     setMaterials((prev) => prev.map((x) => (x.id === data.id ? data : x)));
   };
 
-  const handleDeleteMaterial = (m: WorkOrderMaterial) =>
-    bevestigVerwijderen('Materiaal verwijderen', `"${m.naam}" wordt van deze werkbon gehaald.`, async () => {
+  const handleDeleteMaterial = (m: WerkbonMateriaalRegel) =>
+    bevestigVerwijderen('Materiaal verwijderen', `Materiaal "${m.naam}" verwijderen?`, async () => {
       const { error: e } = await deleteWorkOrderMaterial(m.id);
       if (!e) setMaterials((prev) => prev.filter((x) => x.id !== m.id));
       return e;
     });
 
-  /**
-   * Foto toevoegen: eerst waar hij vandaan komt, dan in welke categorie hij
-   * hoort (de CHECK op werkbon_fotos kent alleen voor/tijdens/na).
-   */
-  const kiesFoto = () => {
-    if (!workOrder) return;
-    Dialog.alert('Foto toevoegen', 'Waar komt de foto vandaan?', [
-      { text: 'Camera', onPress: () => kiesCategorie('camera') },
-      { text: 'Fotobibliotheek', onPress: () => kiesCategorie('bibliotheek') },
-      { text: 'Annuleren', style: 'cancel' },
-    ]);
-  };
+  const materiaalTotaal = useMemo(
+    () => ({
+      excl: rond2(materials.reduce((s, m) => s + Number(m.subtotaal || 0), 0)),
+      incl: rond2(materials.reduce((s, m) => s + inclusiefBtw(Number(m.subtotaal || 0), m.btw_percentage), 0)),
+    }),
+    [materials],
+  );
 
-  const kiesCategorie = (bron: 'camera' | 'bibliotheek') => {
-    Dialog.alert('Welke fase?', 'Zo staat de foto straks op de juiste plek op de werkbon.', [
-      { text: 'Voor', onPress: () => pakEnUpload(bron, 'voor') },
-      { text: 'Tijdens', onPress: () => pakEnUpload(bron, 'tijdens') },
-      { text: 'Na', onPress: () => pakEnUpload(bron, 'na') },
+  // ── Foto's ──────────────────────────────────────────────────────────────
+  const kiesFoto = (categorie: FotoCategorie) => {
+    if (!workOrder) return;
+    Dialog.alert(`Foto toevoegen · ${FOTO_CATEGORIE_STIJL[categorie].label}`, 'Waar komt de foto vandaan?', [
+      { text: 'Camera', onPress: () => pakEnUpload('camera', categorie) },
+      { text: 'Fotobibliotheek', onPress: () => pakEnUpload('bibliotheek', categorie) },
       { text: 'Annuleren', style: 'cancel' },
     ]);
   };
@@ -428,9 +400,8 @@ export default function WorkOrderDetailScreen() {
   const pakEnUpload = async (bron: 'camera' | 'bibliotheek', categorie: FotoCategorie) => {
     if (!workOrder) return;
     try {
-      // Op web is er geen toestemming te vragen (de browser opent gewoon een
-      // bestandskiezer), en elke `await` vóór die kiezer kan in Safari de
-      // gebruikersactie laten verlopen — dan opent hij niet. Dus daar overslaan.
+      // Op web geen toestemming vragen: elke await vóór de kiezer kan in
+      // Safari de gebruikersactie laten verlopen.
       if (Platform.OS !== 'web') {
         const rechtenVraag =
           bron === 'camera'
@@ -441,40 +412,24 @@ export default function WorkOrderDetailScreen() {
             'Geen toestemming',
             bron === 'camera'
               ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-              : 'Geef BossBase toegang tot je foto\'s om er een te kiezen.',
+              : "Geef BossBase toegang tot je foto's om er een te kiezen.",
           );
           return;
         }
       }
-
-      // Een telefoonfoto is al gauw een paar megabyte. De werkbon toont hem nooit
-      // groter dan het scherm, dus verkleinen scheelt opslag én wachttijd —
-      // dezelfde afweging als het dashboard maakt bij het uploaden. (Op web
-      // negeert de kiezer `quality`; daar verkleint `bereidFotoVoor`.)
-      const opties: ImagePicker.ImagePickerOptions = {
-        mediaTypes: ['images'],
-        quality: 0.7,
-        base64: FOTO_ALS_BASE64,
-      };
+      const opties: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.7, base64: FOTO_ALS_BASE64 };
       const resultaat =
-        bron === 'camera'
-          ? await ImagePicker.launchCameraAsync(opties)
-          : await ImagePicker.launchImageLibraryAsync(opties);
-
+        bron === 'camera' ? await ImagePicker.launchCameraAsync(opties) : await ImagePicker.launchImageLibraryAsync(opties);
       if (resultaat.canceled) return;
       const asset = resultaat.assets?.[0];
       if (!asset) {
         Dialog.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere foto.');
         return;
       }
-
-      setFotoBezig(true);
-      // Type en extensie komen uit de inhoud van het bestand, niet uit de URI
-      // (op web een `blob:`-adres zonder extensie) of uit de opgegeven naam.
-      // Alleen JPEG, PNG en WebP komen erdoor.
+      setFotoBezig(categorie);
       const foto = await bereidFotoVoor(asset);
       if (!foto.ok) {
-        setFotoBezig(false);
+        setFotoBezig(null);
         Dialog.alert(foto.titel, foto.tekst);
         return;
       }
@@ -486,34 +441,50 @@ export default function WorkOrderDetailScreen() {
         contentType: foto.contentType,
         extensie: foto.extensie,
       });
-      setFotoBezig(false);
+      setFotoBezig(null);
       if (fotoError || !data) {
         Dialog.alert('Foto niet opgeslagen', fotoError ?? 'Probeer het opnieuw.');
         return;
       }
       setPhotos((prev) => [...prev, data]);
     } catch (e) {
-      setFotoBezig(false);
+      setFotoBezig(null);
       if (__DEV__) console.log('[werkbon] foto toevoegen mislukt', e);
       Dialog.alert('Foto niet opgeslagen', 'Er ging iets mis bij het toevoegen van de foto.');
     }
   };
 
   const handleDeletePhoto = (foto: WorkOrderPhoto) =>
-    bevestigVerwijderen('Foto verwijderen', 'De foto wordt definitief verwijderd.', async () => {
+    bevestigVerwijderen('Foto verwijderen?', 'De foto wordt definitief verwijderd.', async () => {
       const { error: e } = await deleteWorkOrderPhoto(foto.id, foto.url);
       if (!e) setPhotos((prev) => prev.filter((f) => f.id !== foto.id));
       return e;
     });
 
+  // ── Notities ────────────────────────────────────────────────────────────
+  const wisselZichtbaarheid = async (n: WerkbonNotitie) => {
+    const { data, error: e } = await setNoteVoorKlant(n.id, !n.voor_klant);
+    if (e || !data) {
+      Dialog.alert('Niet gewijzigd', e ?? 'Probeer het opnieuw.');
+      return;
+    }
+    setNotes((prev) => prev.map((x) => (x.id === data.id ? data : x)));
+    Dialog.alert(data.voor_klant ? 'Staat nu op de werkbon' : 'Weer intern');
+  };
+
   const namesFor = (ids: string[] | null | undefined): string =>
     (ids ?? []).map((uid) => teamNames[uid] ?? 'Onbekend').join(', ');
 
-  const gewoneTaken = useMemo(() => tasks.filter((t) => !t.is_meerwerk), [tasks]);
-  const meerwerkTaken = useMemo(() => tasks.filter((t) => t.is_meerwerk), [tasks]);
-  const totaalUren = useMemo(
-    () => uren.reduce((sum, u) => sum + Number(u.uren || 0), 0),
-    [uren],
+  const openUrl = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Dialog.alert('Kon niet openen', 'Deze actie wordt niet door je toestel ondersteund.');
+    }
+  };
+
+  const topBarLeeg = (
+    <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
   );
 
   if (loading) {
@@ -521,8 +492,8 @@ export default function WorkOrderDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
-          <LoadingScreen label="Werkbon laden..." />
+          {topBarLeeg}
+          <LoadingScreen label="Detail laden..." />
         </View>
       </>
     );
@@ -533,7 +504,7 @@ export default function WorkOrderDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
+          {topBarLeeg}
           <ErrorState
             title="Werkbon niet gevonden"
             message={error ?? 'Deze werkbon bestaat niet of je hebt geen toegang.'}
@@ -544,19 +515,28 @@ export default function WorkOrderDetailScreen() {
     );
   }
 
-  // Assignment comes from assigned_to_ids; the legacy assigned_to column is
-  // only a fallback for rows the dashboard has not touched since the change.
   const assignedIds = workOrder.assigned_to_ids?.length
     ? workOrder.assigned_to_ids
     : workOrder.assigned_to
       ? [workOrder.assigned_to]
       : [];
-  const assignedLabel = assignedIds.length
-    ? namesFor(assignedIds)
-    : 'Niet toegewezen';
-  const responsibleLabel = workOrder.verantwoordelijke_ids?.length
-    ? namesFor(workOrder.verantwoordelijke_ids)
-    : null;
+  const verantwIds = workOrder.verantwoordelijke_ids ?? [];
+  const uitvoerderIds = assignedIds.filter((x) => !verantwIds.includes(x));
+  const dagen = werkbonDagen(workOrder);
+  const venster = werkbonVenster(workOrder);
+  const pLabel = planningLabel(workOrder);
+  const mijn = mijnVolgendeDag(workOrder, user?.id, vandaag());
+  const metVoertuigen = hasFeature('voertuigen');
+  const busNaam = (vid: string) => voertuigen[vid]?.naam ?? 'Voertuig';
+  const klantTel = workOrder.customer?.phone?.replace(/\s/g, '') ?? '';
+  const internNotes = notes.filter((n) => !n.voor_klant);
+  const klantNotes = notes.filter((n) => n.voor_klant);
+  const waarschuwingen = klantNotes.filter((n) => n.waarschuwing_verzonden_op);
+  const takenDone = gewoneTaken.filter((t) => t.afgerond).length;
+
+  // Mijn voertuig (alleen met module, en niet als de planningsmelding al staat)
+  const mijnBus =
+    mijn?.dag && user?.id ? (mijn.dag.medewerker_voertuig?.[user.id] ?? null) : null;
 
   return (
     <>
@@ -578,499 +558,643 @@ export default function WorkOrderDetailScreen() {
             />
           }
         >
-        {/* De kop scrolt mee met de pagina, zoals in het ontwerp. */}
-        <AppTopBar
-          variant="detail"
-          onBack={() => terugOfNaar(router, '/work-orders')}
-          eyebrow={`${workOrder.nummer ?? 'Werkbon'}${
-            workOrder.gepland_op ? ` · ${formatDagLabel(workOrder.gepland_op)}` : ''
-          }`}
-          title={workOrder.titel}
-          subtitle={workOrder.customer?.name ?? undefined}
-          rightAction={<StatusBadge status={workOrder.status} />}
-        />
-        {/* `stack` gives real vertical spacing between cards (the children of
-            AnimatedScreen) — the old gap sat on the wrong container. */}
-        <AnimatedScreen style={[styles.stack, styles.stackPadding]}>
-          {/* 1. De twee getallen uit het ontwerp: wat is gepland, en wat is er
-              daadwerkelijk geschreven. De status staat in de bovenbalk, de
-              statusactie onderaan binnen duimbereik. */}
-          <View style={styles.kernRij}>
-            <View style={styles.kernKaart}>
-              <Text style={styles.kernLabel}>Gepland</Text>
-              <Text style={styles.kernWaarde}>
-                {workOrder.gepland_op
-                  ? [
-                      formatDagLabel(workOrder.gepland_op),
-                      workOrder.starttijd ? formatTimeNL(workOrder.starttijd) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
-                  : 'Niet ingepland'}
-              </Text>
+          <AppTopBar
+            variant="detail"
+            onBack={() => terugOfNaar(router, '/work-orders')}
+            eyebrow={[workOrder.nummer ?? 'Werkbon', pLabel].filter(Boolean).join(' · ')}
+            title={workOrder.titel}
+            subtitle={workOrder.customer?.name ?? undefined}
+            rightAction={<WerkbonStatusBadge status={workOrder.status} />}
+          />
+          <AnimatedScreen style={[styles.stack, styles.stackPadding]}>
+            {/* 1. Kopkaart */}
+            <View style={styles.sectionBody}>
+              <View style={styles.kopRij}>
+                {workOrder.project ? (
+                  <View style={styles.projectPil}>
+                    <FolderKanban size={13} color="#0F7A3F" />
+                    <Text style={styles.projectPilTekst} numberOfLines={1}>
+                      {workOrder.project.name ?? 'Project'}
+                    </Text>
+                  </View>
+                ) : null}
+                {viewOnly ? (
+                  <Pressable
+                    onPress={() =>
+                      Dialog.alert(
+                        'Alleen inzage',
+                        'Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.',
+                      )
+                    }
+                    style={styles.inzagePil}
+                    accessibilityRole="button"
+                  >
+                    <Eye size={13} color={th.muted} />
+                    <Text style={styles.inzageTekst}>Alleen inzage</Text>
+                  </Pressable>
+                ) : null}
+                <View style={{ flex: 1 }} />
+                {canManage ? (
+                  <Pressable
+                    onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.bewerkKnop, pressed && { opacity: 0.8 }]}
+                  >
+                    <Pencil size={15} color={th.ink2} />
+                    <Text style={styles.bewerkTekst}>Bewerken</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {workOrder.customer ? (
+                <Pressable
+                  onPress={() => router.push(`/customers/${workOrder.customer!.id}`)}
+                  accessibilityRole="link"
+                  style={styles.minTouch}
+                >
+                  <Text style={styles.customerName}>{workOrder.customer.name ?? '—'}</Text>
+                </Pressable>
+              ) : null}
+              {workOrder.locatie ? (
+                <View style={styles.infoRegel}>
+                  <MapPin size={15} color={th.muted} />
+                  <Text style={styles.infoRegelTekst}>{workOrder.locatie}</Text>
+                </View>
+              ) : null}
+              <View style={styles.infoRegel}>
+                <CalendarDays size={15} color={th.muted} />
+                <Text style={styles.infoRegelTekst}>
+                  {pLabel
+                    ? `${pLabel}${venster.starttijd ? ` · ${venster.starttijd}${venster.eindtijd ? ` – ${venster.eindtijd}` : ''}` : ''}`
+                    : 'Nog niet ingepland'}
+                </Text>
+              </View>
+              {assignedIds.length ? (
+                <Text style={styles.ploegTekst}>
+                  {verantwIds.length ? `Verantwoordelijk: ${namesFor(verantwIds)}` : ''}
+                  {verantwIds.length && uitvoerderIds.length ? '\n' : ''}
+                  {uitvoerderIds.length ? `Medewerkers: ${namesFor(uitvoerderIds)}` : ''}
+                </Text>
+              ) : (
+                <Text style={styles.ploegTekst}>Nog niemand gekoppeld.</Text>
+              )}
+              {metVoertuigen && (workOrder.voertuig_ids ?? []).length && !mijn ? (
+                <View style={styles.infoRegel}>
+                  <Truck size={15} color={th.muted} />
+                  <Text style={styles.infoRegelTekst}>
+                    Voertuigen: {(workOrder.voertuig_ids ?? []).map(busNaam).join(', ')}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-            <View style={styles.kernKaart}>
-              <Text style={styles.kernLabel}>Geschreven</Text>
-              <Text style={[styles.kernWaarde, { color: th.green700 }]}>
-                {formatHours(totaalUren)}
-              </Text>
-            </View>
-          </View>
 
-          {/* A signed work order is locked by the database itself: triggers
-              reject every write on its tasks, materials and hours. Say so up
-              front instead of letting an action fail. */}
-          {isSigned ? (
-            <View style={styles.lockBanner}>
-              <Lock size={16} color={th.muted} />
-              <Text style={styles.lockText}>
-                Ondertekend
-                {workOrder.ondertekend_door_naam ? ` door ${workOrder.ondertekend_door_naam}` : ''}
-                {workOrder.ondertekend_op ? ` op ${formatDateNL(workOrder.ondertekend_op)}` : ''}.
-                Deze werkbon staat op slot — maak een nieuwe werkbon voor een correctie.
-              </Text>
-            </View>
-          ) : null}
-
-          {/* 2. Customer + route/call */}
-          {workOrder.customer ? (
-            <Section styles={styles} title="Klant">
-              <Text style={styles.customerName}>{workOrder.customer.name ?? '—'}</Text>
-              <CustomerActions styles={styles} customer={workOrder.customer} locatie={workOrder.locatie} />
-            </Section>
-          ) : null}
-
-          {/* 3. Assignment / planning / description */}
-          <Section styles={styles} title="Informatie">
-            <InfoRow
-              styles={styles}
-              icon={<UserIcon size={16} color={th.muted} />}
-              label={assignedIds.length > 1 ? 'Uitvoerders' : 'Toegewezen aan'}
-              value={assignedLabel}
-            />
-            {responsibleLabel ? (
-              <InfoRow
-                styles={styles}
-                icon={<Users size={16} color={th.muted} />}
-                label="Verantwoordelijk"
-                value={responsibleLabel}
-              />
-            ) : null}
-            <InfoRow
-              styles={styles}
-              icon={<Clock size={16} color={th.muted} />}
-              label="Gepland"
-              value={
-                workOrder.gepland_op
-                  ? `${formatDateLongNL(workOrder.gepland_op)}${workOrder.starttijd ? ` · ${formatTimeNL(workOrder.starttijd)}` : ''}${workOrder.eindtijd ? `–${formatTimeNL(workOrder.eindtijd)}` : ''}`
-                  : '—'
-              }
-            />
-            {workOrder.locatie ? (
-              <InfoRow
-                styles={styles}
-                icon={<MapPin size={16} color={th.muted} />}
-                label="Locatie"
-                value={workOrder.locatie}
-              />
-            ) : null}
-            {workOrder.project ? (
-              <InfoRow
-                styles={styles}
-                icon={<FolderKanban size={16} color={th.muted} />}
-                label="Project"
-                value={workOrder.project.name ?? '—'}
-              />
-            ) : null}
-            {voertuigNamen.length > 0 ? (
-              <InfoRow
-                styles={styles}
-                icon={<Truck size={16} color={th.muted} />}
-                label={voertuigNamen.length > 1 ? 'Voertuigen' : 'Voertuig'}
-                value={voertuigNamen.join(', ')}
-              />
-            ) : null}
-            {workOrder.gestart_op || workOrder.afgerond_op ? (
-              <InfoRow
-                styles={styles}
-                icon={<Clock size={16} color={th.muted} />}
-                label="Verloop"
-                value={[
-                  workOrder.gestart_op ? `gestart ${formatDateNL(workOrder.gestart_op)}` : null,
-                  workOrder.afgerond_op ? `afgerond ${formatDateNL(workOrder.afgerond_op)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              />
-            ) : null}
-            {workOrder.deal_id || workOrder.offerte_id ? (
-              <InfoRow
-                styles={styles}
-                icon={<Tag size={16} color={th.muted} />}
-                label="Gekoppeld"
-                value={[workOrder.deal_id ? 'Deal' : null, workOrder.offerte_id ? 'Offerte' : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              />
-            ) : null}
-            {workOrder.omschrijving ? (
-              <View style={styles.descriptionBlock}>
-                <Text style={styles.descriptionLabel}>Omschrijving</Text>
-                <Text style={styles.descriptionText}>{alsTekst(workOrder.omschrijving)}</Text>
+            {/* 2. Jouw planning */}
+            {mijn ? (
+              <View style={styles.mijnMelding}>
+                <Text style={styles.mijnTekst}>
+                  <Text style={{ fontWeight: '800' }}>
+                    Jij bent {dagWoord(mijn.dag.datum, vandaag())} ingepland
+                  </Text>
+                  {mijn.tijd.starttijd ? ` van ${mijn.tijd.starttijd}${mijn.tijd.eindtijd ? ` tot ${mijn.tijd.eindtijd}` : ''}` : ''}
+                  {metVoertuigen && mijnBus ? ` · ${busNaam(mijnBus)}` : ''}
+                  {mijn.collegas ? ` · samen met ${mijn.collegas} ${mijn.collegas === 1 ? 'collega' : "collega's"}` : ''}
+                </Text>
               </View>
             ) : null}
-          </Section>
 
-          {/* 4. Materials / benodigdheden — what to bring */}
-          <Section
-            styles={styles}
-            title="Materialen"
-            icon={<Package size={16} color={ds.green700} />}
-            action={
-              canManage ? (
-                <Pressable onPress={() => setMaterialModal(true)} hitSlop={8}>
-                  <View style={styles.addRow}>
-                    <Plus size={16} color={ds.green700} />
-                    <Text style={styles.addText}>Toevoegen</Text>
+            {/* 3. Actierij */}
+            <View style={styles.actieRij}>
+              <Pressable
+                onPress={() =>
+                  klantTel
+                    ? openUrl(`tel:${klantTel}`)
+                    : Dialog.alert('Geen telefoonnummer bekend voor deze klant')
+                }
+                disabled={!workOrder.customer}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.actieTegel, !workOrder.customer && styles.uit, pressed && { opacity: 0.8 }]}
+              >
+                <Phone size={18} color={ds.green700} />
+                <Text style={styles.actieTegelTekst}>Bel klant</Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  workOrder.locatie && openUrl(`https://maps.google.com/?q=${encodeURIComponent(workOrder.locatie)}`)
+                }
+                disabled={!workOrder.locatie}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.actieTegel, !workOrder.locatie && styles.uit, pressed && { opacity: 0.8 }]}
+              >
+                <MapPin size={18} color={ds.green700} />
+                <Text style={styles.actieTegelTekst}>Route</Text>
+              </Pressable>
+              <Pressable
+                onPress={status === 'gepland' ? startKlus : vraagAfronden}
+                disabled={!canEdit || status === 'afgerond' || statusUpdating}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.actieTegel,
+                  styles.actieTegelHoofd,
+                  (!canEdit || status === 'afgerond') && styles.uit,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                {statusUpdating ? (
+                  <ActivityIndicator size="small" color={ds.greenInk} />
+                ) : status === 'gepland' ? (
+                  <Play size={18} color={ds.greenInk} />
+                ) : (
+                  <CheckCircle2 size={18} color={ds.greenInk} />
+                )}
+                <Text style={[styles.actieTegelTekst, { color: ds.greenInk }]}>
+                  {status === 'gepland' ? 'Start klus' : status === 'in_uitvoering' ? 'Afronden' : 'Afgerond'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* 4. Slot- en verstuurdmelding */}
+            {opSlot ? (
+              <View style={[styles.melding, { borderLeftColor: '#0f9d58' }]}>
+                <Lock size={16} color={th.muted} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.meldingTitel}>
+                    Ondertekend{workOrder.ondertekend_door_naam ? ` door ${workOrder.ondertekend_door_naam}` : ''}
+                  </Text>
+                  <Text style={styles.meldingTekst}>
+                    {workOrder.ondertekend_op ? formatDatumTijd(workOrder.ondertekend_op) : ''}
+                    {'\n'}Uren, taken en materiaal staan op slot. Een correctie loopt via een nieuwe werkbon.
+                    {!workOrder.ondertekende_pdf_url ? '\nGetekend, PDF ontbreekt — open de werkbon op het dashboard.' : ''}
+                  </Text>
+                </View>
+              </View>
+            ) : workOrder.verstuurd_op ? (
+              <View style={[styles.melding, { borderLeftColor: '#FDBA74' }]}>
+                <Send size={16} color={th.muted} />
+                <Text style={[styles.meldingTekst, { flex: 1 }]}>
+                  Ter ondertekening gestuurd naar {workOrder.verstuurd_naar_email ?? 'de klant'} op{' '}
+                  {formatDateNL(workOrder.verstuurd_op)}. Nog niet getekend.
+                </Text>
+              </View>
+            ) : null}
+
+            {/* 5. Omschrijving */}
+            {workOrder.omschrijving || workOrder.notes ? (
+              <Section styles={styles} title="Omschrijving">
+                {workOrder.omschrijving ? (
+                  <Text style={styles.descriptionText}>{alsTekst(workOrder.omschrijving)}</Text>
+                ) : null}
+                {workOrder.notes?.trim() ? (
+                  <View style={styles.interneBalk}>
+                    <Text style={styles.interneLabel}>Interne notitie:</Text>
+                    <Text style={styles.descriptionText}>{alsTekst(workOrder.notes)}</Text>
                   </View>
-                </Pressable>
-              ) : null
-            }
-          >
-            {partialErrors.materialen ? (
-              <Text style={styles.sectionError}>{partialErrors.materialen}</Text>
-            ) : materials.length === 0 ? (
-              <Text style={styles.empty}>Geen materialen gekoppeld aan deze werkbon.</Text>
-            ) : (
-              <View style={{ gap: spacing.sm }}>
-                {materials.map((m) => (
-                  <View key={m.id} style={styles.materialRow}>
-                    <View style={styles.qtyPill}>
-                      <Text style={styles.qtyPillText}>
-                        {m.eenheid ? `${formatQty(m.aantal)} ${m.eenheid}` : `${formatQty(m.aantal)}×`}
+                ) : null}
+              </Section>
+            ) : null}
+
+            {/* 6. Planning */}
+            <Section
+              styles={styles}
+              title={`Planning · ${dagen.length} ${dagen.length === 1 ? 'dag' : 'dagen'}`}
+              icon={<CalendarDays size={16} color={ds.green700} />}
+              action={
+                canManage && can('planning') && !opSlot ? (
+                  <KopKnop styles={styles} label="Planning aanpassen" onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)} />
+                ) : null
+              }
+            >
+              {dagen.length === 0 ? (
+                <Text style={styles.empty}>Deze werkbon staat nog niet ingepland.</Text>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  {dagen.map((d) => {
+                    const v = dagVenster(workOrder, d);
+                    const ploeg = ploegOpDag(workOrder, d);
+                    const bussen = metVoertuigen
+                      ? (Array.isArray(d.voertuig_ids) ? d.voertuig_ids : (workOrder.voertuig_ids ?? []))
+                      : [];
+                    return (
+                      <View key={d.id ?? d.datum} style={styles.dagRij}>
+                        <Text style={styles.dagDatum}>
+                          {korteDatum(d.datum)}
+                          {v.starttijd ? ` · ${v.starttijd}${v.eindtijd ? `–${v.eindtijd}` : ''}` : ''}
+                        </Text>
+                        <Text style={styles.dagWie}>
+                          {ploeg.length
+                            ? ploeg
+                                .map((pid) => {
+                                  const eigen = d.medewerker_tijden?.[pid];
+                                  const tp = tijdenVoorPersoon(workOrder, d, pid);
+                                  return `${teamNames[pid] ?? 'Onbekend'}${eigen?.starttijd ? ` (${tp.starttijd}–${tp.eindtijd ?? ''})` : ''}`;
+                                })
+                                .join(', ')
+                            : 'Niemand ingepland'}
+                        </Text>
+                        {bussen.map((vid) => {
+                          const vt = d.voertuig_tijden?.[vid];
+                          const inzittenden = Object.entries(d.medewerker_voertuig ?? {})
+                            .filter(([, b]) => b === vid)
+                            .map(([pid]) => teamNames[pid] ?? 'Onbekend');
+                          return (
+                            <Text key={vid} style={styles.dagBus}>
+                              {busNaam(vid)}
+                              {vt?.starttijd ? ` · ${hhmm(vt.starttijd)}–${hhmm(vt.eindtijd)}` : ''}
+                              {inzittenden.length ? ` · ${inzittenden.join(', ')}` : ''}
+                            </Text>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </Section>
+
+            {/* 7. Taken */}
+            <Section
+              styles={styles}
+              title={`Taken · ${takenDone} / ${gewoneTaken.length}`}
+              icon={<ListChecks size={16} color={ds.green700} />}
+              action={canTasks ? <KopKnop styles={styles} label="+ Taak" onPress={() => setTaskModal({ meerwerk: false })} /> : null}
+            >
+              {partialErrors.taken ? (
+                <Text style={styles.sectionError}>{partialErrors.taken}</Text>
+              ) : (
+                <>
+                  {gewoneTaken.length ? (
+                    <View style={styles.balk}>
+                      <View
+                        style={[styles.balkVulling, { width: `${Math.round((takenDone / gewoneTaken.length) * 100)}%` }]}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={styles.empty}>Nog geen taken.</Text>
+                  )}
+                  <View style={{ gap: spacing.sm }}>
+                    {gewoneTaken.map((t) => (
+                      <TaskRow
+                        key={t.id}
+                        styles={styles}
+                        th={th}
+                        task={t}
+                        busy={busyTaskId === t.id}
+                        disabled={!canEdit}
+                        onToggle={() => handleToggleTask(t)}
+                        onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+            </Section>
+
+            {/* 8. Uren — alleen lezen; boeken via het formulier */}
+            <Section
+              styles={styles}
+              title={`Uren · ${formatHours(rond2(totaalUren))}`}
+              action={canBook ? <KopKnop styles={styles} label="+ Boeken" onPress={() => setTimeModal(true)} /> : null}
+            >
+              {partialErrors.uren ? (
+                <Text style={styles.sectionError}>{partialErrors.uren}</Text>
+              ) : uren.length === 0 ? (
+                <Text style={styles.empty}>Nog geen uren geboekt.</Text>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  {[...uren]
+                    .sort((a, b) => a.datum.localeCompare(b.datum) || (a.start_tijd ?? '').localeCompare(b.start_tijd ?? ''))
+                    .map((u) => (
+                      <View key={u.id} style={styles.timeEntry}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.timeEntryDate}>
+                            {korteDatum(u.datum)} · {u.medewerker?.full_name ?? 'Onbekend'}
+                          </Text>
+                          {u.pauze_minuten || u.reis_km || u.notitie ? (
+                            <Text style={styles.timeEntryNote} numberOfLines={2}>
+                              {[
+                                u.pauze_minuten ? `${u.pauze_minuten} min pauze` : null,
+                                u.reis_km ? `${u.reis_km} km` : null,
+                                u.notitie,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {u.start_tijd ? (
+                            <Text style={styles.timeEntryNote}>
+                              {hhmm(u.start_tijd)}–{hhmm(u.eind_tijd)}
+                            </Text>
+                          ) : null}
+                          <Text style={styles.timeEntryHours}>{Number(u.uren).toFixed(2).replace('.', ',')}</Text>
+                        </View>
+                      </View>
+                    ))}
+                </View>
+              )}
+              {!canBook && !opSlot ? (
+                <Text style={styles.photoHint}>
+                  Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.
+                </Text>
+              ) : null}
+            </Section>
+
+            {/* 9. Foto's per fase */}
+            <Section styles={styles} title={`Foto's · ${photos.length}`} icon={<ImageIcon size={16} color={ds.green700} />}>
+              {partialErrors.fotos ? (
+                <Text style={styles.sectionError}>{partialErrors.fotos}</Text>
+              ) : !canEdit && photos.length === 0 ? (
+                <Text style={styles.empty}>Geen foto&apos;s</Text>
+              ) : (
+                FOTO_CATEGORIEEN.map((cat) => {
+                  const stijl = FOTO_CATEGORIE_STIJL[cat];
+                  const lijst = photos.filter((p) => (p.categorie ?? 'tijdens') === cat);
+                  if (!canEdit && lijst.length === 0) return null;
+                  return (
+                    <View key={cat} style={{ gap: 8 }}>
+                      <View style={[styles.fotoLabel, { backgroundColor: stijl.bg }]}>
+                        <Text style={[styles.fotoLabelTekst, { color: stijl.kleur }]}>
+                          {stijl.label} · {lijst.length}
+                        </Text>
+                      </View>
+                      <View style={styles.photoGrid}>
+                        {lijst.map((ph) => (
+                          <View key={ph.id}>
+                            <Pressable
+                              onPress={() => openUrl(ph.url)}
+                              accessibilityLabel={`Foto ${stijl.label} openen`}
+                              style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+                            >
+                              <Image source={{ uri: ph.url }} style={styles.photo} />
+                            </Pressable>
+                            {canEdit ? (
+                              <Pressable
+                                onPress={() => handleDeletePhoto(ph)}
+                                accessibilityLabel="Foto verwijderen"
+                                hitSlop={8}
+                                style={styles.fotoWeg}
+                              >
+                                <X size={14} color="#fff" strokeWidth={3} />
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        ))}
+                        {canEdit ? (
+                          <Pressable
+                            onPress={() => kiesFoto(cat)}
+                            disabled={!!fotoBezig}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Foto toevoegen bij ${stijl.label}`}
+                            style={({ pressed }) => [styles.fotoToevoegen, pressed && { opacity: 0.8 }]}
+                          >
+                            {fotoBezig === cat ? (
+                              <ActivityIndicator size="small" color={ds.green700} />
+                            ) : (
+                              <Plus size={20} color={th.muted} />
+                            )}
+                            <Text style={styles.fotoToevoegenTekst}>{fotoBezig === cat ? 'Uploaden…' : 'Foto toevoegen'}</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </Section>
+
+            {/* 10. Materialen */}
+            <Section
+              styles={styles}
+              title="Materialen"
+              icon={<Package size={16} color={ds.green700} />}
+              action={canEdit ? <KopKnop styles={styles} label="+ Materiaal" onPress={() => setMaterialModal(true)} /> : null}
+            >
+              {partialErrors.materialen ? (
+                <Text style={styles.sectionError}>{partialErrors.materialen}</Text>
+              ) : materials.length === 0 ? (
+                <Text style={styles.empty}>Geen materialen op deze werkbon.</Text>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  {materials.map((m) => (
+                    <View key={m.id} style={styles.materialKaart}>
+                      <View style={styles.materialRow}>
+                        <View style={styles.qtyPill}>
+                          <Text style={styles.qtyPillText}>
+                            {formatQty(m.aantal)} {m.eenheid ?? '×'}
+                          </Text>
+                        </View>
+                        <Text style={styles.materialName} numberOfLines={2}>
+                          {m.naam}
+                        </Text>
+                        {canEdit ? (
+                          <View style={styles.stepper}>
+                            <Pressable
+                              onPress={() => handleMaterialAmount(m, m.aantal - 1)}
+                              disabled={m.aantal <= 1}
+                              accessibilityLabel={`Eén ${m.naam} minder`}
+                              style={({ pressed }) => [styles.stepBtn, m.aantal <= 1 && styles.uit, pressed && { opacity: 0.6 }]}
+                            >
+                              <Text style={styles.stepText}>−</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleMaterialAmount(m, m.aantal + 1)}
+                              accessibilityLabel={`Eén ${m.naam} meer`}
+                              style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }]}
+                            >
+                              <Text style={styles.stepText}>+</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+                        {canDelMaterial ? (
+                          <Pressable
+                            onPress={() => handleDeleteMaterial(m)}
+                            accessibilityLabel={`${m.naam} verwijderen`}
+                            style={({ pressed }) => [styles.iconKnop, pressed && { opacity: 0.6 }]}
+                          >
+                            <Trash2 size={16} color={th.muted} strokeWidth={2} />
+                          </Pressable>
+                        ) : null}
+                      </View>
+                      <Text style={styles.materialMeta}>
+                        {[
+                          magBedragen ? `Verkoop ${formatEUR(m.prijs_per)}` : null,
+                          magInkoop && m.inkoopprijs_per != null ? `Inkoop ${formatEUR(m.inkoopprijs_per)}` : null,
+                          m.leverancier_id ? (leveranciers[m.leverancier_id] ?? null) : null,
+                          magBedragen ? `Subtotaal ${formatEUR(m.subtotaal)} (${formatEUR(inclusiefBtw(m.subtotaal, m.btw_percentage))} incl.)` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </Text>
                     </View>
-                    <Text style={styles.materialName} numberOfLines={2}>
-                      {m.naam}
-                    </Text>
-                    {canManage ? (
-                      <View style={styles.stepper}>
-                        <Pressable
-                          onPress={() => handleMaterialAmount(m, m.aantal - 1)}
-                          hitSlop={6}
-                          accessibilityLabel={`Eén ${m.naam} minder`}
-                          style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }]}
-                        >
-                          <Text style={styles.stepText}>−</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleMaterialAmount(m, m.aantal + 1)}
-                          hitSlop={6}
-                          accessibilityLabel={`Eén ${m.naam} meer`}
-                          style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }]}
-                        >
-                          <Text style={styles.stepText}>+</Text>
-                        </Pressable>
+                  ))}
+                  {magBedragen ? (
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalLabel}>Totaal materiaal (excl. BTW)</Text>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.totalValue}>{formatEUR(materiaalTotaal.excl)}</Text>
+                        <Text style={styles.timeEntryNote}>{formatEUR(materiaalTotaal.incl)} incl. BTW</Text>
                       </View>
-                    ) : null}
-                    {canDelMaterial ? (
-                      <Pressable
-                        onPress={() => handleDeleteMaterial(m)}
-                        hitSlop={6}
-                        accessibilityLabel={`${m.naam} verwijderen`}
-                        style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-                      >
-                        <Trash2 size={16} color={th.muted} strokeWidth={2} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            )}
-          </Section>
-
-          {/* 5. Werkzaamheden — tickable when the job allows it.
-              Meerwerk is the same table with is_meerwerk set (migration
-              20260905130000), so it renders as its own block but behaves
-              exactly like a normal task. */}
-          {partialErrors.taken ? (
-            <Section
-              styles={styles}
-              title="Werkzaamheden"
-              icon={<ListChecks size={16} color={ds.green700} />}
-            >
-              <Text style={styles.sectionError}>{partialErrors.taken}</Text>
-            </Section>
-          ) : gewoneTaken.length > 0 ? (
-            <Section
-              styles={styles}
-              title="Werkzaamheden"
-              icon={<ListChecks size={16} color={ds.green700} />}
-              action={
-                <View style={styles.sectionActions}>
-                  <Text style={styles.sectionMeta}>
-                    {gewoneTaken.filter((t) => t.afgerond).length}/{gewoneTaken.length} af
-                  </Text>
-                  {canTasks ? (
-                    <Pressable onPress={() => setTaskModal({ meerwerk: false })} hitSlop={8}>
-                      <View style={styles.addRow}>
-                        <Plus size={16} color={ds.green700} />
-                        <Text style={styles.addText}>Toevoegen</Text>
-                      </View>
-                    </Pressable>
+                    </View>
                   ) : null}
                 </View>
-              }
-            >
-              <View style={{ gap: spacing.sm }}>
-                {gewoneTaken.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    styles={styles}
-                    th={th}
-                    task={t}
-                    busy={busyTaskId === t.id}
-                    disabled={isSigned || !canManage}
-                    onToggle={() => handleToggleTask(t)}
-                    onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
-                  />
-                ))}
-              </View>
+              )}
             </Section>
-          ) : null}
 
-          {meerwerkTaken.length > 0 || canTasks ? (
+            {/* 11. Meerwerk */}
             <Section
               styles={styles}
               title="Meerwerk"
               icon={<PlusCircle size={16} color={ds.green700} />}
-              action={
-                canTasks ? (
-                  <Pressable onPress={() => setTaskModal({ meerwerk: true })} hitSlop={8}>
-                    <View style={styles.addRow}>
-                      <Plus size={16} color={ds.green700} />
-                      <Text style={styles.addText}>Toevoegen</Text>
-                    </View>
-                  </Pressable>
-                ) : null
-              }
+              action={canTasks ? <KopKnop styles={styles} label="+ Meerwerk" onPress={() => setTaskModal({ meerwerk: true })} /> : null}
             >
               <Text style={styles.meerwerkHint}>
-                Tijdens de klus erbij gevraagd — zat niet in de oorspronkelijke opdracht.
+                Werk dat er tijdens de klus bij kwam. Telt niet mee in de taakvoortgang.
               </Text>
-              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-                {meerwerkTaken.length === 0 ? (
-                  <Text style={styles.empty}>Geen meerwerk op deze klus.</Text>
-                ) : null}
-                {meerwerkTaken.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    styles={styles}
-                    th={th}
-                    task={t}
-                    busy={busyTaskId === t.id}
-                    disabled={isSigned || !canManage}
-                    onToggle={() => handleToggleTask(t)}
-                    onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
-                  />
-                ))}
-              </View>
+              {meerwerkTaken.length === 0 ? <Text style={styles.empty}>Geen meerwerk op deze klus.</Text> : null}
+              {meerwerkTaken.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  styles={styles}
+                  th={th}
+                  task={t}
+                  busy={busyTaskId === t.id}
+                  disabled={!canEdit}
+                  onToggle={() => handleToggleTask(t)}
+                  onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
+                />
+              ))}
             </Section>
-          ) : null}
 
-          {/* 6. Notities — real rows in werkbon_notities, so each note keeps its
-              own author and timestamp and the dashboard shows the same log. */}
-          <Section
-            styles={styles}
-            title="Notities"
-            action={
-              canNote ? (
-                <Pressable onPress={() => setNoteModal(true)} hitSlop={8}>
-                  <View style={styles.addRow}>
-                    <Plus size={16} color={ds.green700} />
-                    <Text style={styles.addText}>Toevoegen</Text>
-                  </View>
-                </Pressable>
-              ) : null
-            }
-          >
-            {partialErrors.notities ? (
-              <Text style={styles.sectionError}>{partialErrors.notities}</Text>
-            ) : notes.length === 0 ? (
-              <Text style={styles.empty}>Nog geen notities.</Text>
-            ) : (
-              <View style={{ gap: spacing.md }}>
-                {notes.map((n) => (
-                  <View key={n.id} style={styles.noteCard}>
-                    <View style={styles.noteMetaRow}>
-                      <Text style={styles.noteMeta}>
-                        {[n.auteur?.full_name ?? 'Onbekend', formatDateNL(n.created_at)]
-                          .filter(Boolean)
-                          .join(' · ')}
+            {/* 12. Notities: Intern / Voor de klant */}
+            <Section
+              styles={styles}
+              title="Notities"
+              action={canNote ? <KopKnop styles={styles} label="+ Notitie" onPress={() => setNoteModal(true)} /> : null}
+            >
+              <View style={styles.tabRij}>
+                {(['intern', 'klant'] as const).map((tab) => {
+                  const aan = notitieTab === tab;
+                  return (
+                    <Pressable
+                      key={tab}
+                      onPress={() => setNotitieTab(tab)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: aan }}
+                      style={[styles.tab, aan && styles.tabAan]}
+                    >
+                      <Text style={[styles.tabTekst, aan && styles.tabTekstAan]}>
+                        {tab === 'intern' ? `Intern · ${internNotes.length}` : `Voor de klant · ${klantNotes.length}`}
                       </Text>
-                      {n.voor_klant ? (
-                        <View style={styles.notePill}>
-                          <Text style={styles.notePillText}>Voor klant</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.noteBody}>{alsTekst(n.note)}</Text>
-                  </View>
-                ))}
+                    </Pressable>
+                  );
+                })}
               </View>
-            )}
-          </Section>
-
-          {/* The planner's own remark on the job, if there is one. Read-only:
-              it belongs to the work order, not to the note log. */}
-          {workOrder.notes?.trim() ? (
-            <Section styles={styles} title="Opmerking van kantoor">
-              <Text style={styles.descriptionText}>{alsTekst(workOrder.notes)}</Text>
-            </Section>
-          ) : null}
-
-          {/* 7. Uren — table werkbon_uren, the same rows the dashboard's work
-              order shows. Working-day hours live in urenregistratie and are a
-              different thing entirely; they are not mixed in here. */}
-          <Section
-            styles={styles}
-            title="Uren"
-            action={
-              !canBook ? null : (
-                <Pressable onPress={() => setTimeModal(true)} hitSlop={8}>
-                  <View style={styles.addRow}>
-                    <Plus size={16} color={ds.green700} />
-                    <Text style={styles.addText}>Toevoegen</Text>
-                  </View>
-                </Pressable>
-              )
-            }
-          >
-            {partialErrors.uren ? (
-              <Text style={styles.sectionError}>{partialErrors.uren}</Text>
-            ) : uren.length === 0 ? (
-              <Text style={styles.empty}>Nog geen uren geboekt.</Text>
-            ) : (
-              <View style={{ gap: spacing.sm }}>
-                {uren.map((u) => (
-                  <View key={u.id} style={styles.timeEntry}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.timeEntryDate}>{formatDateLongNL(u.datum)}</Text>
-                      <Text style={styles.timeEntryNote} numberOfLines={2}>
-                        {[u.medewerker?.full_name, u.notitie].filter(Boolean).join(' · ') || ' '}
-                      </Text>
-                    </View>
-                    <Text style={styles.timeEntryHours}>{formatHours(Number(u.uren))}</Text>
-                  </View>
-                ))}
-                <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Totaal</Text>
-                  <Text style={styles.totalValue}>{formatHours(totaalUren)}</Text>
+              {notitieTab === 'klant' ? (
+                <View style={styles.klantInfo}>
+                  <Text style={styles.klantInfoTekst}>
+                    Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.
+                  </Text>
                 </View>
-              </View>
-            )}
-          </Section>
-
-          {/* 7b. Foto's — camera en fotorol, upload naar de privébucket
-              werkbon-fotos. Verwijderen via lang indrukken. */}
-          <Section
-            styles={styles}
-            title="Foto's"
-            icon={<ImageIcon size={16} color={ds.green700} />}
-            action={
-              canManage ? (
-                <Pressable onPress={kiesFoto} hitSlop={8} disabled={fotoBezig}>
-                  <View style={styles.addRow}>
-                    {fotoBezig ? (
-                      <ActivityIndicator size="small" color={ds.green700} />
-                    ) : (
-                      <Plus size={16} color={ds.green700} />
-                    )}
-                    <Text style={styles.addText}>{fotoBezig ? 'Uploaden…' : 'Toevoegen'}</Text>
-                  </View>
-                </Pressable>
-              ) : null
-            }
-          >
-            {partialErrors.fotos ? (
-              <Text style={styles.sectionError}>{partialErrors.fotos}</Text>
-            ) : photos.length === 0 ? (
-              <Text style={styles.empty}>
-                {canManage ? 'Nog geen foto\'s. Leg de klus vast met de camera.' : "Nog geen foto's."}
-              </Text>
-            ) : (
-              <View style={styles.photoGrid}>
-                {photos.map((ph) => (
-                  <Pressable
-                    key={ph.id}
-                    onLongPress={canManage ? () => handleDeletePhoto(ph) : undefined}
-                    accessibilityLabel={`Foto ${ph.categorie ?? ''}`}
-                    style={({ pressed }) => [pressed && { opacity: 0.85 }]}
-                  >
-                    <Image source={{ uri: ph.url }} style={styles.photo} />
-                    {ph.categorie ? (
-                      <View style={styles.photoTag}>
-                        <Text style={styles.photoTagText}>{ph.categorie}</Text>
+              ) : null}
+              {partialErrors.notities ? (
+                <Text style={styles.sectionError}>{partialErrors.notities}</Text>
+              ) : (notitieTab === 'intern' ? internNotes : klantNotes).length === 0 ? (
+                <Text style={styles.empty}>
+                  {notitieTab === 'intern' ? 'Nog geen interne notities.' : 'Nog geen notities voor de klant.'}
+                </Text>
+              ) : (
+                <View style={{ gap: spacing.md }}>
+                  {(notitieTab === 'intern' ? internNotes : klantNotes).map((n) => {
+                    const magWisselen = canNote && (n.created_by === user?.id || isAdminPlanner);
+                    return (
+                      <View key={n.id} style={styles.noteCard}>
+                        <View style={styles.noteMetaRow}>
+                          <Text style={styles.noteMeta}>
+                            {[n.auteur?.full_name ?? 'Onbekend', formatDateNL(n.created_at)].join(' · ')}
+                          </Text>
+                          {n.waarschuwing_verzonden_op ? (
+                            <View style={styles.notePill}>
+                              <Text style={styles.notePillText}>Gewaarschuwd</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text style={styles.noteBody}>{alsTekst(n.note)}</Text>
+                        {magWisselen ? (
+                          <Pressable
+                            onPress={() => wisselZichtbaarheid(n)}
+                            accessibilityRole="button"
+                            style={styles.linkKnop}
+                          >
+                            <Text style={styles.addText}>{n.voor_klant ? 'Naar intern' : 'Naar de klant'}</Text>
+                          </Pressable>
+                        ) : null}
                       </View>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            {canManage && photos.length > 0 ? (
-              <Text style={styles.photoHint}>Houd een foto ingedrukt om hem te verwijderen.</Text>
-            ) : null}
-          </Section>
+                    );
+                  })}
+                </View>
+              )}
+            </Section>
 
-          {/* 8. Metadata */}
-          <View style={styles.metaBlock}>
-            <Text style={styles.metaText}>
-              Aangemaakt {formatDateNL(workOrder.created_at)}
-              {workOrder.updated_at ? ` · bijgewerkt ${formatDateNL(workOrder.updated_at)}` : ''}
-            </Text>
-          </View>
-        </AnimatedScreen>
+            {waarschuwingen.length ? (
+              <Section
+                styles={styles}
+                title="Waarschuwingen aan de klant"
+                icon={<AlertTriangle size={16} color="#F59E0B" />}
+              >
+                {waarschuwingen.map((n) => (
+                  <View key={n.id} style={styles.waarschuwing}>
+                    <Text style={styles.waarschuwingKop}>GECONSTATEERD</Text>
+                    <Text style={styles.waarschuwingTekst}>{alsTekst(n.note)}</Text>
+                    {n.gevolg ? (
+                      <>
+                        <Text style={styles.waarschuwingKop}>MOGELIJK GEVOLG</Text>
+                        <Text style={styles.waarschuwingTekst}>{alsTekst(n.gevolg)}</Text>
+                      </>
+                    ) : null}
+                    <Text style={styles.waarschuwingVoet}>
+                      Schriftelijk gemeld op {formatDateNL(n.waarschuwing_verzonden_op)}
+                      {n.waarschuwing_verzonden_naar ? ` aan ${n.waarschuwing_verzonden_naar}` : ''}
+                    </Text>
+                  </View>
+                ))}
+              </Section>
+            ) : null}
+
+            {/* 13. Eindactie */}
+            {opSlot ? (
+              <View style={[styles.eindKnop, styles.eindKnopKlaar]}>
+                <Text style={styles.eindKnopTekst}>
+                  Ondertekend en afgerond · {formatDateNL(workOrder.ondertekend_op)}
+                </Text>
+              </View>
+            ) : status !== 'afgerond' && editDetail && !readonly ? (
+              <Button label="Klus afronden" onPress={vraagAfronden} loading={statusUpdating} />
+            ) : null}
+
+            <View style={styles.metaBlock}>
+              <Text style={styles.metaText}>
+                Aangemaakt {formatDateNL(workOrder.created_at)}
+                {workOrder.updated_at ? ` · bijgewerkt ${formatDateNL(workOrder.updated_at)}` : ''}
+              </Text>
+            </View>
+          </AnimatedScreen>
         </ScrollView>
         <StatusBarScrim />
-
-        {/* De primaire actie staat vast onderaan, zoals in het ontwerp. Geen
-            rechten of een ondertekende bon? Dan staat hij er niet — een knop
-            die tóch weigert is erger dan geen knop. */}
-        {!isSigned && canManage && volgendeStatussen.length > 0 ? (
-          <View style={[styles.actieBalk, { paddingBottom: Math.max(insets.bottom, 16) + 6 }]}>
-            <Pressable
-              onPress={openStatusActions}
-              disabled={statusUpdating}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.actieKnop,
-                pressed && { opacity: 0.9 },
-                statusUpdating && { opacity: 0.6 },
-              ]}
-            >
-              <Text style={styles.actieTekst}>
-                {statusUpdating ? 'Bijwerken…' : primaireActie}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
 
       <AddNoteModal
         styles={styles}
         th={th}
         visible={noteModal}
+        voorKlant={notitieTab === 'klant'}
         onClose={() => setNoteModal(false)}
-        onSubmit={async (body, voorKlant) => {
+        onSubmit={async (body) => {
           if (!user?.id) return { error: 'Sessie niet geladen.' };
-          // Write into the work order's own company, so a note can never end up
-          // under another tenant even if the profile were stale.
           const { data, error: noteError } = await addWorkOrderNote({
             werkbon_id: workOrder.id,
             company_id: workOrder.company_id,
             created_by: user.id,
-            note: body,
-            voor_klant: voorKlant,
+            note: alsHtml(body),
+            voor_klant: notitieTab === 'klant',
           });
           if (noteError || !data) return { error: noteError ?? 'Notitie kon niet worden toegevoegd.' };
           setNotes((prev) => [data, ...prev]);
@@ -1087,40 +1211,74 @@ export default function WorkOrderDetailScreen() {
         onSubmit={(omschrijving) => handleAddTask(omschrijving, taskModal?.meerwerk ?? false)}
       />
 
-      <AddMaterialModal
-        styles={styles}
-        th={th}
-        visible={materialModal}
-        onClose={() => setMaterialModal(false)}
-        onSubmit={handleAddMaterial}
-      />
+      {materialModal ? (
+        <AddMaterialModal
+          styles={styles}
+          th={th}
+          magInkoop={magInkoop}
+          magBedragen={magBedragen}
+          onClose={() => setMaterialModal(false)}
+          onSubmit={async (regel) => {
+            const { data, error: matError } = await addWorkOrderMaterial({
+              werkbon_id: workOrder.id,
+              company_id: workOrder.company_id,
+              ...regel,
+            });
+            if (matError || !data) return { error: matError ?? 'Opslaan mislukt.' };
+            setMaterials((prev) => [...prev, data]);
+            if (data.leverancier_id && !leveranciers[data.leverancier_id]) herlaad();
+            return { error: null };
+          }}
+        />
+      ) : null}
 
-      <AddTimeEntryModal
-        styles={styles}
-        th={th}
-        visible={timeModal}
-        onClose={() => setTimeModal(false)}
-        onSubmit={async (input) => {
-          if (!user?.id) return { error: 'Sessie niet geladen.' };
-          // company_id follows the work order, never a separately held value:
-          // that is what keeps the hours in the same tenant as the job.
-          const res = await createWerkbonUur({
-            company_id: workOrder.company_id,
-            werkbon_id: workOrder.id,
-            profile_id: user.id,
-            datum: input.datum,
-            uren: input.uren,
-            notitie: input.notitie,
-          });
-          // Alleen bij een teruggegeven rij is er écht geschreven; alles
-          // anders is een mislukking met de melding uit de classificatie.
-          if (!res.ok) return { error: res.melding };
-          setUren((prev) => [res.data, ...prev]);
-          return { error: null };
-        }}
-      />
+      {timeModal ? (
+        <AddTimeEntryModal
+          styles={styles}
+          th={th}
+          ikzelf={user?.id ?? null}
+          kiesMedewerker={isAdminPlanner}
+          onClose={() => setTimeModal(false)}
+          onSubmit={async (input) => {
+            if (!user?.id) return { error: 'Sessie niet geladen.' };
+            const res = await createWerkbonUur({
+              company_id: workOrder.company_id,
+              werkbon_id: workOrder.id,
+              profile_id: input.profileId ?? user.id,
+              datum: input.datum,
+              start_tijd: input.start,
+              eind_tijd: input.eind,
+              pauze_minuten: input.pauze,
+              uren: input.uren,
+              reis_km: input.km,
+              notitie: input.notitie,
+            });
+            if (!res.ok) return { error: res.melding };
+            setUren((prev) => [res.data, ...prev]);
+            return { error: null };
+          }}
+        />
+      ) : null}
+
+      {startModal ? (
+        <StartMomentModal
+          styles={styles}
+          th={th}
+          onClose={() => setStartModal(false)}
+          onSubmit={(iso) => {
+            setStartModal(false);
+            bevestigAfronden(iso);
+          }}
+        />
+      ) : null}
     </>
   );
+}
+
+function formatDatumTijd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // ---------------------------------------------------------------------------
@@ -1156,11 +1314,14 @@ function Section({
   );
 }
 
-/**
- * One checklist line. Ticking it writes straight to `werkbon_taken`; when the
- * job is signed or the user is not a responsible, the row stays readable but
- * does not pretend to be actionable.
- */
+function KopKnop({ styles, label, onPress }: { styles: Styles; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.kopKnop, pressed && { opacity: 0.7 }]}>
+      <Text style={styles.addText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function TaskRow({
   styles,
   th,
@@ -1176,7 +1337,6 @@ function TaskRow({
   busy: boolean;
   disabled: boolean;
   onToggle: () => void;
-  /** Alleen meegegeven als deze gebruiker regels mag weggooien. */
   onDelete?: () => void;
 }) {
   return (
@@ -1190,9 +1350,9 @@ function TaskRow({
         style={({ pressed }) => [styles.taskPress, pressed && !busy && { opacity: 0.7 }]}
       >
         {task.afgerond ? (
-          <CheckCircle2 size={18} color={ds.green700} strokeWidth={2.2} />
+          <CheckCircle2 size={20} color={ds.green700} strokeWidth={2.2} />
         ) : (
-          <Circle size={18} color={disabled ? th.muted2 : th.muted} strokeWidth={2} />
+          <Circle size={20} color={disabled ? th.muted2 : th.muted} strokeWidth={2} />
         )}
         <Text style={[styles.taskText, task.afgerond && styles.taskTextDone]} numberOfLines={3}>
           {task.omschrijving}
@@ -1202,9 +1362,8 @@ function TaskRow({
       {onDelete ? (
         <Pressable
           onPress={onDelete}
-          hitSlop={6}
           accessibilityLabel={`${task.omschrijving} verwijderen`}
-          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.iconKnop, pressed && { opacity: 0.6 }]}
         >
           <Trash2 size={16} color={th.muted} strokeWidth={2} />
         </Pressable>
@@ -1213,133 +1372,47 @@ function TaskRow({
   );
 }
 
-function InfoRow({
-  styles,
-  icon,
-  label,
-  value,
-}: {
-  styles: Styles;
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.infoRow}>
-      <View style={styles.infoIcon}>{icon}</View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
-function CustomerActions({
-  styles,
-  customer,
-  locatie,
-}: {
-  styles: Styles;
-  customer: NonNullable<WorkOrderWithRelations['customer']>;
-  locatie: string | null;
-}) {
-  const address = [customer.address, customer.postcode, customer.city].filter(Boolean).join(', ');
-
-  const handle = async (url: string) => {
-    try {
-      await Linking.openURL(url);
-    } catch (e) {
-      console.warn('[CustomerActions] openURL failed', e);
-      Dialog.alert('Kon niet openen', 'Deze actie wordt niet door je toestel ondersteund.');
-    }
-  };
-
-  const mapsQuery = locatie ?? address;
-
-  return (
-    <View style={styles.customerActions}>
-      {customer.phone ? (
-        <ActionButton
-          styles={styles}
-          icon={<Phone size={18} color={ds.green700} />}
-          label="Bel"
-          onPress={() => handle(`tel:${customer.phone!.replace(/\s/g, '')}`)}
-        />
-      ) : null}
-      {customer.email ? (
-        <ActionButton
-          styles={styles}
-          icon={<Mail size={18} color={ds.green700} />}
-          label="Mail"
-          onPress={() => handle(`mailto:${customer.email!}`)}
-        />
-      ) : null}
-      {mapsQuery ? (
-        <ActionButton
-          styles={styles}
-          icon={<MapPin size={18} color={ds.green700} />}
-          label="Route"
-          onPress={() => handle(`https://maps.google.com/?q=${encodeURIComponent(mapsQuery)}`)}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function ActionButton({
-  styles,
-  icon,
-  label,
-  onPress,
-}: {
-  styles: Styles;
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-    >
-      {icon}
-      <Text style={styles.actionBtnLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Modals
 // ---------------------------------------------------------------------------
+
+function ModalKop({ styles, titel, onClose }: { styles: Styles; titel: string; onClose: () => void }) {
+  return (
+    <View style={styles.modalHeader}>
+      <Pressable onPress={onClose} hitSlop={8} style={styles.minTouch} accessibilityRole="button">
+        <Text style={styles.modalCancel}>Annuleren</Text>
+      </Pressable>
+      <Text style={styles.modalTitle}>{titel}</Text>
+      <View style={{ width: 64 }} />
+    </View>
+  );
+}
 
 function AddNoteModal({
   styles,
   th,
   visible,
+  voorKlant,
   onClose,
   onSubmit,
 }: {
   styles: Styles;
   th: ThemeColors;
   visible: boolean;
+  /** Waar je typt bepaalt de zichtbaarheid (tab van het dashboard). */
+  voorKlant: boolean;
   onClose: () => void;
-  onSubmit: (body: string, voorKlant: boolean) => Promise<{ error: string | null }>;
+  onSubmit: (body: string) => Promise<{ error: string | null }>;
 }) {
   useFocusTerug(visible);
   const [body, setBody] = useState('');
-  const [voorKlant, setVoorKlant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const reset = () => {
+  const close = () => {
     setBody('');
-    setVoorKlant(false);
     setSubmitting(false);
     setErrorMsg(null);
-  };
-  const close = () => {
-    reset();
     onClose();
   };
   const submit = async () => {
@@ -1349,7 +1422,7 @@ function AddNoteModal({
     }
     setSubmitting(true);
     setErrorMsg(null);
-    const { error: submitError } = await onSubmit(body, voorKlant);
+    const { error: submitError } = await onSubmit(body);
     setSubmitting(false);
     if (submitError) {
       setErrorMsg(submitError);
@@ -1361,49 +1434,29 @@ function AddNoteModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
       <MobielKader soort="formulier">
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: th.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.modalHeader}>
-          <Pressable onPress={close} hitSlop={8}>
-            <Text style={styles.modalCancel}>Annuleren</Text>
-          </Pressable>
-          <Text style={styles.modalTitle}>Notitie</Text>
-          <View style={{ width: 64 }} />
-        </View>
-        <ScrollView contentContainerStyle={styles.modalBody}>
-          <FormField
-            label="Notitie"
-            value={body}
-            onChangeText={setBody}
-            multiline
-            placeholder="Wat moet er bewaard blijven?"
-            autoFocus
-            editable={!submitting}
-          />
-          {/* werkbon_notities.voor_klant — an internal note stays internal
-              unless it is explicitly meant for the customer. */}
-          <Pressable
-            onPress={() => setVoorKlant((v) => !v)}
-            disabled={submitting}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: voorKlant }}
-            style={({ pressed }) => [styles.checkRow, pressed && { opacity: 0.7 }]}
-          >
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ModalKop styles={styles} titel={voorKlant ? 'Notitie voor de klant' : 'Interne notitie'} onClose={close} />
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             {voorKlant ? (
-              <CheckCircle2 size={20} color={ds.green700} strokeWidth={2.2} />
-            ) : (
-              <Circle size={20} color={th.muted} strokeWidth={2} />
-            )}
-            <Text style={styles.checkLabel}>
-              Zichtbaar voor de klant op de werkbon
-            </Text>
-          </Pressable>
-          {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-          <Button label="Opslaan" onPress={submit} loading={submitting} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+              <View style={styles.klantInfo}>
+                <Text style={styles.klantInfoTekst}>
+                  Deze regel komt op de werkbon-PDF en op de pagina waar de klant tekent.
+                </Text>
+              </View>
+            ) : null}
+            <FormField
+              label="Notitie"
+              value={body}
+              onChangeText={setBody}
+              multiline
+              placeholder="Wat moet er bewaard blijven?"
+              autoFocus
+              editable={!submitting}
+            />
+            {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
+            <Button label="Opslaan" onPress={submit} loading={submitting} />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </MobielKader>
     </Modal>
   );
@@ -1449,251 +1502,394 @@ function AddTaskModal({
       setErrorMsg(e);
       return;
     }
-    close();
+    // Dashboard: na opslaan meteen de volgende regel kunnen typen.
+    setOmschrijving('');
   };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
       <MobielKader soort="formulier">
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: th.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.modalHeader}>
-          <Pressable onPress={close} hitSlop={8}>
-            <Text style={styles.modalCancel}>Annuleren</Text>
-          </Pressable>
-          <Text style={styles.modalTitle}>{meerwerk ? 'Meerwerk' : 'Taak'}</Text>
-          <View style={{ width: 64 }} />
-        </View>
-        <ScrollView contentContainerStyle={styles.modalBody}>
-          {meerwerk ? (
-            <Text style={styles.meerwerkHint}>
-              Meerwerk is werk dat tijdens de klus is bijgevraagd en niet in de opdracht zat. Het
-              komt in een eigen blok op de werkbon te staan.
-            </Text>
-          ) : null}
-          <FormField
-            label="Omschrijving"
-            value={omschrijving}
-            onChangeText={setOmschrijving}
-            placeholder={meerwerk ? 'Bijv. kozijn extra schilderen' : 'Wat moet er gebeuren?'}
-            multiline
-            autoFocus
-            editable={!submitting}
-          />
-          {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-          <Button label="Opslaan" onPress={submit} loading={submitting} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ModalKop styles={styles} titel={meerwerk ? 'Meerwerk' : 'Taak'} onClose={close} />
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+            {meerwerk ? (
+              <Text style={styles.meerwerkHint}>
+                Werk dat er tijdens de klus bij kwam. Telt niet mee in de taakvoortgang.
+              </Text>
+            ) : null}
+            <FormField
+              label="Omschrijving"
+              value={omschrijving}
+              onChangeText={setOmschrijving}
+              placeholder={meerwerk ? 'Wat is er extra gedaan?' : 'Nieuwe taak…'}
+              autoFocus
+              editable={!submitting}
+              onSubmitEditing={submit}
+              returnKeyType="done"
+            />
+            {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
+            <Button label={meerwerk ? '+ Meerwerk' : '+ Taak'} onPress={submit} loading={submitting} />
+            <Button label="Klaar" variant="secondary" onPress={close} disabled={submitting} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </MobielKader>
+    </Modal>
+  );
+}
+
+type NieuweRegel = {
+  naam: string;
+  eenheid: string;
+  aantal: number;
+  prijs_per: number | null;
+  btw_percentage: number;
+  materiaal_id: string | null;
+  leverancier_id: string | null;
+  inkoopprijs_per?: number | null;
+};
+
+const VRIJ = '__vrij__';
+
+/**
+ * Materiaal op de werkbon (MaterialenSection): kies uit de actieve
+ * bibliotheek (prijs, btw, inkoop en leverancier liggen dan vast) of vul vrij
+ * materiaal in. Verkoopprijs alleen met `projectbedragen`, inkoop alleen met
+ * `inkoopprijzen`; zonder die rechten komt vrij materiaal op € 0.
+ */
+function AddMaterialModal({
+  styles,
+  th,
+  magInkoop,
+  magBedragen,
+  onClose,
+  onSubmit,
+}: {
+  styles: Styles;
+  th: ThemeColors;
+  magInkoop: boolean;
+  magBedragen: boolean;
+  onClose: () => void;
+  onSubmit: (regel: NieuweRegel) => Promise<{ error: string | null }>;
+}) {
+  useFocusTerug(true);
+  const [bibliotheek, setBibliotheek] = useState<Materiaal[]>([]);
+  const [leveranciers, setLeveranciers] = useState<{ id: string; naam: string }[]>([]);
+  const [keuze, setKeuze] = useState<string | null>(null);
+  const [naam, setNaam] = useState('');
+  const [eenheid, setEenheid] = useState('stuk');
+  const [aantalStr, setAantalStr] = useState('1');
+  const [prijsStr, setPrijsStr] = useState('');
+  const [inkoopStr, setInkoopStr] = useState('');
+  const [leverancierId, setLeverancierId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const laad = useCallback(async () => {
+    const [m, l] = await Promise.all([listMaterialen({ inclusiefInactief: false }), listLeveranciers()]);
+    setBibliotheek(m.data);
+    setLeveranciers(l.data.filter((x) => x.actief));
+  }, []);
+  useLaden(laad, { bijFocus: false });
+
+  const gekozen = bibliotheek.find((m) => m.id === keuze) ?? null;
+  const vrij = keuze === VRIJ;
+
+  const submit = async () => {
+    const aantal = Number(aantalStr.replace(',', '.'));
+    if (!keuze) return setErrorMsg('Kies een materiaal of vrij materiaal.');
+    const regelNaam = gekozen ? gekozen.naam : naam;
+    if (!regelNaam.trim()) return setErrorMsg('Vul een naam in.');
+    if (!Number.isFinite(aantal) || aantal <= 0) return setErrorMsg('Vul een geldig aantal in.');
+    const regel: NieuweRegel = gekozen
+      ? {
+          naam: gekozen.naam,
+          eenheid: gekozen.eenheid,
+          aantal,
+          prijs_per: gekozen.verkoopprijs ?? 0,
+          btw_percentage: gekozen.btwPct,
+          materiaal_id: gekozen.id,
+          leverancier_id: gekozen.leverancierId,
+          ...(magInkoop && gekozen.inkoopprijs != null ? { inkoopprijs_per: gekozen.inkoopprijs } : {}),
+        }
+      : {
+          naam: naam.trim(),
+          eenheid,
+          aantal,
+          prijs_per: magBedragen ? (leesBedrag(prijsStr) ?? 0) : 0,
+          btw_percentage: 21,
+          materiaal_id: null,
+          leverancier_id: leverancierId,
+          ...(magInkoop && leesBedrag(inkoopStr) != null ? { inkoopprijs_per: leesBedrag(inkoopStr) } : {}),
+        };
+    setSubmitting(true);
+    setErrorMsg(null);
+    const { error: e } = await onSubmit(regel);
+    setSubmitting(false);
+    if (e) return setErrorMsg(e);
+    onClose();
+  };
+
+  const aantalNum = Number(aantalStr.replace(',', '.')) || 0;
+  const prijs = gekozen ? (gekozen.verkoopprijs ?? 0) : (leesBedrag(prijsStr) ?? 0);
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
+      <MobielKader soort="formulier">
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ModalKop styles={styles} titel="Materiaal" onClose={onClose} />
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+            <SelectField
+              label="Kies materiaal"
+              value={keuze}
+              onChange={setKeuze}
+              placeholder="Kies materiaal"
+              searchable
+              options={[
+                { id: VRIJ, label: 'Vrij materiaal (zelf invullen)…' },
+                ...bibliotheek.map((m) => ({
+                  id: m.id,
+                  label: m.naam,
+                  sub: [m.eenheid, m.artikelnummer, magBedragen && m.verkoopprijs != null ? formatEUR(m.verkoopprijs) : null]
+                    .filter(Boolean)
+                    .join(' · '),
+                })),
+              ]}
+            />
+            {vrij ? (
+              <>
+                <FormField label="Naam" value={naam} onChangeText={setNaam} placeholder="Bijv. Installatiedraad 2,5mm²" editable={!submitting} />
+                <View>
+                  <Text style={styles.veldLabel}>Eenheid</Text>
+                  <View style={styles.chipRij}>
+                    {EENHEDEN.map((e) => (
+                      <Pressable
+                        key={e}
+                        onPress={() => setEenheid(e)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: eenheid === e }}
+                        style={[styles.keuzeChip, eenheid === e && styles.keuzeChipAan]}
+                      >
+                        <Text style={[styles.keuzeChipTekst, eenheid === e && { color: th.green700 }]}>{e}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </>
+            ) : gekozen ? (
+              <Text style={styles.meerwerkHint}>
+                {gekozen.eenheid}
+                {magBedragen && gekozen.verkoopprijs != null ? ` · verkoop ${formatEUR(gekozen.verkoopprijs)}` : ''}
+                {magInkoop && gekozen.inkoopprijs != null ? ` · inkoop ${formatEUR(gekozen.inkoopprijs)}` : ''}
+                {'\n'}Prijs en leverancier liggen vast op het materiaal in de bibliotheek.
+              </Text>
+            ) : null}
+            <FormField label="Aantal" value={aantalStr} onChangeText={setAantalStr} keyboardType="decimal-pad" editable={!submitting} />
+            {vrij && magBedragen ? (
+              <FormField label="Verkoopprijs per eenheid (excl. btw)" value={prijsStr} onChangeText={setPrijsStr} keyboardType="decimal-pad" placeholder="0,00" />
+            ) : null}
+            {vrij && magInkoop ? (
+              <FormField label="Inkoop per eenheid (excl. btw · intern)" value={inkoopStr} onChangeText={setInkoopStr} keyboardType="decimal-pad" placeholder="0,00" />
+            ) : null}
+            {vrij ? (
+              <SelectField
+                label="Leverancier"
+                value={leverancierId}
+                onChange={setLeverancierId}
+                allowEmpty
+                emptyLabel="— Geen leverancier —"
+                placeholder="— Geen leverancier —"
+                options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
+              />
+            ) : null}
+            {magBedragen && keuze ? (
+              <Text style={styles.meerwerkHint}>Subtotaal {formatEUR(materiaalSubtotaal(aantalNum, prijs))} (excl. btw)</Text>
+            ) : null}
+            {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
+            <Button label="Toevoegen" onPress={submit} loading={submitting} disabled={!keuze || (vrij && !naam.trim())} />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </MobielKader>
     </Modal>
   );
 }
 
 /**
- * Materiaal bijzetten. Bewust géén prijsveld: bedragen zijn kantoorwerk en de
- * inkoopprijs is server-side afgeschermd op het recht `inkoopprijzen`. Een
- * monteur noteert wát hij nodig heeft en hoevéél.
+ * Uren boeken (HoursQuickAdd): datum, (admin/planner) medewerker, begin en eind
+ * (afgerond op 5 min), pauze, gereden kilometers en notitie. Uren = eind −
+ * begin − pauze.
  */
-function AddMaterialModal({
+function AddTimeEntryModal({
   styles,
   th,
-  visible,
+  ikzelf,
+  kiesMedewerker,
   onClose,
   onSubmit,
 }: {
   styles: Styles;
   th: ThemeColors;
-  visible: boolean;
+  ikzelf: string | null;
+  kiesMedewerker: boolean;
   onClose: () => void;
-  onSubmit: (naam: string, eenheid: string, aantal: number) => Promise<{ error: string | null }>;
+  onSubmit: (input: {
+    profileId: string | null;
+    datum: string;
+    start: string;
+    eind: string;
+    pauze: number;
+    uren: number;
+    km: number | null;
+    notitie: string | null;
+  }) => Promise<{ error: string | null }>;
 }) {
-  useFocusTerug(visible);
-  const [naam, setNaam] = useState('');
-  const [eenheid, setEenheid] = useState('');
-  const [aantalStr, setAantalStr] = useState('1');
+  useFocusTerug(true);
+  const [datum, setDatum] = useState(vandaagISO());
+  const [profileId, setProfileId] = useState<string | null>(ikzelf);
+  const [team, setTeam] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [start, setStart] = useState('');
+  const [eind, setEind] = useState('');
+  const [pauzeStr, setPauzeStr] = useState('0');
+  const [kmStr, setKmStr] = useState('');
+  const [notitie, setNotitie] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const close = () => {
-    setNaam('');
-    setEenheid('');
-    setAantalStr('1');
-    setSubmitting(false);
+  const laad = useCallback(async () => {
+    if (!kiesMedewerker) return;
+    const { data } = await listCompanyProfiles();
+    setTeam(data);
+  }, [kiesMedewerker]);
+  useLaden(laad, { bijFocus: false });
+
+  const pauze = Math.max(0, Math.round(Number(pauzeStr.replace(',', '.')) || 0));
+  const uren = start && eind ? berekenUren(start, eind, pauze) : null;
+  const tijdFout =
+    start && eind
+      ? eind <= start
+        ? 'Eindtijd moet later zijn dan starttijd'
+        : uren === null || uren <= 0
+          ? 'Er blijft geen tijd over na aftrek van de pauze'
+          : null
+      : null;
+
+  const submit = async () => {
+    if (!isGeldigeISODatum(datum)) return setErrorMsg('Kies een geldige datum.');
+    if (!start || !eind) return setErrorMsg('Vul een begin- en eindtijd in.');
+    if (tijdFout || uren === null) return setErrorMsg(tijdFout ?? 'Controleer de tijden.');
+    const km = kmStr.trim() ? Math.round(Number(kmStr.replace(',', '.'))) : null;
+    if (km !== null && (!Number.isFinite(km) || km < 0)) return setErrorMsg('Vul een geldig aantal kilometers in.');
+    setSubmitting(true);
     setErrorMsg(null);
+    const { error: e } = await onSubmit({
+      profileId,
+      datum,
+      start,
+      eind,
+      pauze,
+      uren,
+      km,
+      notitie: notitie.trim() || null,
+    });
+    setSubmitting(false);
+    if (e) return setErrorMsg(e);
     onClose();
   };
 
-  const submit = async () => {
-    const aantal = parseFloat(aantalStr.replace(',', '.'));
-    if (!naam.trim()) {
-      setErrorMsg('Vul een naam in.');
-      return;
-    }
-    if (!Number.isFinite(aantal) || aantal <= 0) {
-      setErrorMsg('Vul een geldig aantal in.');
-      return;
-    }
-    setSubmitting(true);
-    setErrorMsg(null);
-    const { error: e } = await onSubmit(naam, eenheid, aantal);
-    setSubmitting(false);
-    if (e) {
-      setErrorMsg(e);
-      return;
-    }
-    close();
-  };
-
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: th.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.modalHeader}>
-          <Pressable onPress={close} hitSlop={8}>
-            <Text style={styles.modalCancel}>Annuleren</Text>
-          </Pressable>
-          <Text style={styles.modalTitle}>Materiaal</Text>
-          <View style={{ width: 64 }} />
-        </View>
-        <ScrollView contentContainerStyle={styles.modalBody}>
-          <FormField
-            label="Naam"
-            value={naam}
-            onChangeText={setNaam}
-            placeholder="Bijv. Keramische dakpan"
-            autoFocus
-            editable={!submitting}
-          />
-          <FormField
-            label="Aantal"
-            value={aantalStr}
-            onChangeText={setAantalStr}
-            keyboardType="decimal-pad"
-            editable={!submitting}
-          />
-          <FormField
-            label="Eenheid (optioneel)"
-            value={eenheid}
-            onChangeText={setEenheid}
-            placeholder="stuk, m2, meter…"
-            autoCapitalize="none"
-            editable={!submitting}
-          />
-          {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-          <Button label="Opslaan" onPress={submit} loading={submitting} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ModalKop styles={styles} titel="Uren boeken" onClose={onClose} />
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+            <DateField label="Datum *" value={datum} onChange={setDatum} disabled={submitting} />
+            {kiesMedewerker ? (
+              <SelectField
+                label="Medewerker"
+                value={profileId}
+                onChange={setProfileId}
+                options={team.map((c) => ({
+                  id: c.id,
+                  label: `${c.full_name ?? 'Naamloos'}${c.id === ikzelf ? ' (ikzelf)' : ''}`,
+                }))}
+              />
+            ) : null}
+            <View style={styles.tijdRij}>
+              <View style={{ flex: 1 }}>
+                <TimeField label="Starttijd *" value={start || null} onChange={(v) => setStart(rondAfOpVijf(v))} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TimeField label="Eindtijd *" value={eind || null} onChange={(v) => setEind(rondAfOpVijf(v))} />
+              </View>
+            </View>
+            <View>
+              <Text style={styles.veldLabel}>Pauze (minuten)</Text>
+              <View style={styles.chipRij}>
+                {[0, 15, 30, 45, 60].map((m) => (
+                  <Pressable
+                    key={m}
+                    onPress={() => setPauzeStr(String(m))}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: pauze === m }}
+                    style={[styles.keuzeChip, pauze === m && styles.keuzeChipAan]}
+                  >
+                    <Text style={[styles.keuzeChipTekst, pauze === m && { color: th.green700 }]}>{m}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <FormField label="Of zelf (minuten)" value={pauzeStr} onChangeText={setPauzeStr} keyboardType="number-pad" />
+            {uren !== null && !tijdFout ? (
+              <Text style={styles.meerwerkHint}>
+                ≈ {uren.toFixed(2).replace('.', ',')} uur{pauze ? ` (${pauze} min pauze eraf)` : ''}
+              </Text>
+            ) : null}
+            {tijdFout ? <Text style={styles.modalError}>{tijdFout}</Text> : null}
+            <FormField label="Gereden kilometers (optioneel)" value={kmStr} onChangeText={setKmStr} keyboardType="number-pad" />
+            <FormField label="Notitie" value={notitie} onChangeText={setNotitie} multiline placeholder="Wat is er gedaan?" />
+            {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
+            <Button label="Opslaan" onPress={submit} loading={submitting} disabled={!start || !eind || !!tijdFout} />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </MobielKader>
     </Modal>
   );
 }
 
-function AddTimeEntryModal({
+/** "Wanneer is de klus gestart?" — nodig om af te ronden zonder startmoment. */
+function StartMomentModal({
   styles,
   th,
-  visible,
   onClose,
   onSubmit,
 }: {
   styles: Styles;
   th: ThemeColors;
-  visible: boolean;
   onClose: () => void;
-  onSubmit: (input: {
-    datum: string;
-    uren: number;
-    notitie: string | null;
-  }) => Promise<{ error: string | null }>;
+  onSubmit: (iso: string) => void;
 }) {
-  useFocusTerug(visible);
+  useFocusTerug(true);
   const [datum, setDatum] = useState(vandaagISO());
-  const [urenStr, setUrenStr] = useState('');
-  const [notitie, setNotitie] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const reset = () => {
-    setDatum(vandaagISO());
-    setUrenStr('');
-    setNotitie('');
-    setSubmitting(false);
-    setErrorMsg(null);
+  const [tijd, setTijd] = useState('');
+  const [fout, setFout] = useState<string | null>(null);
+  const opslaan = () => {
+    if (!isGeldigeISODatum(datum) || datum > vandaagISO()) return setFout('Kies een startdatum van vandaag of eerder.');
+    if (!tijd) return setFout('Vul de starttijd in.');
+    const d = lokaalNaarUtc(datum, tijd);
+    if (!d) return setFout('Controleer datum en tijd.');
+    onSubmit(d.toISOString());
   };
-  const close = () => {
-    reset();
-    onClose();
-  };
-  const submit = async () => {
-    const hours = parseFloat(urenStr.replace(',', '.'));
-    if (!isGeldigeISODatum(datum)) {
-      setErrorMsg('Kies een geldige datum.');
-      return;
-    }
-    if (Number.isNaN(hours) || hours <= 0) {
-      setErrorMsg('Vul het aantal uren in.');
-      return;
-    }
-    setSubmitting(true);
-    setErrorMsg(null);
-    const { error: submitError } = await onSubmit({
-      datum,
-      uren: hours,
-      notitie: notitie.trim() || null,
-    });
-    setSubmitting(false);
-    if (submitError) {
-      setErrorMsg(submitError);
-      return;
-    }
-    close();
-  };
-
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: th.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.modalHeader}>
-          <Pressable onPress={close} hitSlop={8}>
-            <Text style={styles.modalCancel}>Annuleren</Text>
-          </Pressable>
-          <Text style={styles.modalTitle}>Uren toevoegen</Text>
-          <View style={{ width: 64 }} />
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
+          <ModalKop styles={styles} titel="Wanneer is de klus gestart?" onClose={onClose} />
+          <ScrollView contentContainerStyle={styles.modalBody}>
+            <DateField label="Startdatum" value={datum} onChange={setDatum} maximum={vandaagISO()} />
+            <TimeField label="Starttijd" value={tijd || null} onChange={setTijd} />
+            {fout ? <Text style={styles.modalError}>{fout}</Text> : null}
+            <Button label="Opslaan & verder" onPress={opslaan} />
+          </ScrollView>
         </View>
-        <ScrollView contentContainerStyle={styles.modalBody}>
-          <DateField
-            label="Datum"
-            value={datum}
-            onChange={setDatum}
-            disabled={submitting}
-          />
-          <FormField
-            label="Uren"
-            value={urenStr}
-            onChangeText={setUrenStr}
-            keyboardType="decimal-pad"
-            placeholder="bijv. 1,5"
-            editable={!submitting}
-          />
-          <FormField
-            label="Notitie (optioneel)"
-            value={notitie}
-            onChangeText={setNotitie}
-            multiline
-            placeholder="Wat is er gedaan?"
-            editable={!submitting}
-          />
-          {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-          <Button label="Opslaan" onPress={submit} loading={submitting} />
-        </ScrollView>
-      </KeyboardAvoidingView>
       </MobielKader>
     </Modal>
   );
@@ -1715,6 +1911,8 @@ const makeStyles = (t: ThemeColors) =>
     // De kop staat bovenaan de scrollinhoud en heeft zijn eigen marges; de
     // kaarten eronder houden de vertrouwde binnenruimte.
     stackPadding: {
+      // Op iPad/desktop niet uitrekken: één leeskolom, zoals de rest.
+      ...leesbreedte,
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
     },
@@ -1897,46 +2095,6 @@ const makeStyles = (t: ThemeColors) =>
       marginTop: 4,
       fontVariant: ['tabular-nums'],
     },
-    actieBalk: {
-      paddingHorizontal: 16,
-      paddingTop: 12,
-      backgroundColor: t.bg,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: t.line,
-    },
-    actieKnop: {
-      // Op een iPad of desktop niet over de volle kolombreedte.
-      ...leesbreedte,
-      height: 52,
-      borderRadius: 16,
-      backgroundColor: ds.green,
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...dsShadowGreen,
-    },
-    actieTekst: { fontSize: 15, fontWeight: '700', color: ds.greenInk },
-    statusRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: spacing.md,
-    },
-    statusButton: {
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderRadius: 12,
-      backgroundColor: INK_FIXED,
-    },
-    statusButtonDisabled: {
-      opacity: 0.6,
-    },
-    statusButtonText: {
-      fontSize: 13,
-      color: '#fff',
-      fontWeight: '700',
-      letterSpacing: -0.1,
-    },
-
     section: {
       gap: 8,
     },
@@ -2190,4 +2348,165 @@ const makeStyles = (t: ThemeColors) =>
       color: t.statusRejectFg,
       fontWeight: '600',
     },
+      // ── Dashboardblokken ────────────────────────────────────────────────
+    minTouch: { minHeight: 44, justifyContent: 'center' },
+    uit: { opacity: 0.45 },
+    kopRij: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+    projectPil: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: '#E8FBEF',
+      maxWidth: 220,
+    },
+    projectPilTekst: { fontSize: 12, fontWeight: '700', color: '#0F7A3F' },
+    inzagePil: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      minHeight: 32,
+      borderRadius: 999,
+      backgroundColor: t.bgAlt,
+    },
+    inzageTekst: { fontSize: 12, fontWeight: '700', color: t.muted },
+    bewerkKnop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.line,
+      backgroundColor: t.bg,
+    },
+    bewerkTekst: { fontSize: 13.5, fontWeight: '700', color: t.ink2 },
+    infoRegel: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+    infoRegelTekst: { flex: 1, fontSize: 14, color: t.ink, lineHeight: 20 },
+    ploegTekst: { fontSize: 13, color: t.muted, lineHeight: 19 },
+    mijnMelding: {
+      padding: 12,
+      borderRadius: t.rMd,
+      backgroundColor: t.green50,
+      borderWidth: 1,
+      borderColor: t.green100,
+    },
+    mijnTekst: { fontSize: 13.5, lineHeight: 20, color: t.ink },
+    actieRij: { flexDirection: 'row', gap: 10 },
+    actieTegel: {
+      flex: 1,
+      minHeight: 56,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+      ...dsShadow,
+    },
+    actieTegelHoofd: { backgroundColor: ds.green, borderColor: ds.green },
+    actieTegelTekst: { fontSize: 12.5, fontWeight: '700', color: ds.green700 },
+    melding: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 12,
+      borderRadius: t.rMd,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+      borderLeftWidth: 4,
+    },
+    meldingTitel: { fontSize: 14, fontWeight: '700', color: t.ink },
+    meldingTekst: { fontSize: 12.5, lineHeight: 18, color: t.ink2 },
+    interneBalk: {
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: '#FFFBEB',
+      borderWidth: 1,
+      borderColor: '#FDE68A',
+      gap: 4,
+    },
+    interneLabel: { fontSize: 12, fontWeight: '800', color: '#92400E' },
+    dagRij: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.line, gap: 2 },
+    dagDatum: { fontSize: 14, fontWeight: '700', color: t.ink, fontVariant: ['tabular-nums'] },
+    dagWie: { fontSize: 13, color: t.ink2, lineHeight: 18 },
+    dagBus: { fontSize: 12.5, color: t.muted },
+    balk: { height: 6, borderRadius: 3, backgroundColor: t.bgAlt, overflow: 'hidden' },
+    balkVulling: { height: 6, borderRadius: 3, backgroundColor: ds.green },
+    fotoLabel: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+    fotoLabelTekst: { fontSize: 12, fontWeight: '800' },
+    fotoWeg: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(11,15,18,0.72)',
+    },
+    fotoToevoegen: {
+      width: 96,
+      height: 96,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: t.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      padding: 6,
+    },
+    fotoToevoegenTekst: { fontSize: 11, fontWeight: '700', color: t.muted, textAlign: 'center' },
+    materialKaart: { backgroundColor: t.bg, borderRadius: t.rMd, paddingBottom: 8 },
+    materialMeta: { fontSize: 12, color: t.muted, paddingHorizontal: 12, lineHeight: 17 },
+    iconKnop: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    tabRij: { flexDirection: 'row', gap: 6, backgroundColor: t.bgAlt, borderRadius: 12, padding: 3 },
+    tab: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    tabAan: { backgroundColor: t.card, ...dsShadow },
+    tabTekst: { fontSize: 13, fontWeight: '600', color: t.muted },
+    tabTekstAan: { color: t.ink, fontWeight: '700' },
+    klantInfo: { padding: 10, borderRadius: 10, backgroundColor: '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD' },
+    klantInfoTekst: { fontSize: 12.5, lineHeight: 18, color: '#075985' },
+    linkKnop: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+    kopKnop: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 4 },
+    waarschuwing: {
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: '#FFFBEB',
+      borderWidth: 1,
+      borderColor: '#FDE68A',
+      borderLeftWidth: 4,
+      borderLeftColor: '#F59E0B',
+      gap: 4,
+    },
+    waarschuwingKop: { fontSize: 11, fontWeight: '800', color: '#92400E', letterSpacing: 0.5 },
+    waarschuwingTekst: { fontSize: 13.5, lineHeight: 19, color: '#1f2937' },
+    waarschuwingVoet: { fontSize: 12, color: '#92400E', marginTop: 4 },
+    eindKnop: { minHeight: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+    eindKnopKlaar: { backgroundColor: t.green50, borderWidth: 1, borderColor: t.green100 },
+    eindKnopTekst: { fontSize: 14, fontWeight: '700', color: t.green700, textAlign: 'center' },
+    veldLabel: { fontSize: 12, fontWeight: '500', color: t.ink2, marginBottom: 6 },
+    chipRij: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    keuzeChip: {
+      minHeight: 44,
+      minWidth: 52,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.line,
+      backgroundColor: t.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    keuzeChipAan: { borderColor: ds.green, backgroundColor: t.green50 },
+    keuzeChipTekst: { fontSize: 13.5, fontWeight: '600', color: t.ink2 },
+    tijdRij: { flexDirection: 'row', gap: spacing.md },
   });

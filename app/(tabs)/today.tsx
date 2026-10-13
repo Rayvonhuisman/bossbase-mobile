@@ -12,6 +12,7 @@ import {
 import { AppCard, AppScreen, AppTopBar, NoticeBanner, StatusBadge, statusKey } from '@/components';
 import { ActiviteitRij } from '@/components/ActiviteitRij';
 import { useAuth, usePermissions, useTheme } from '@/providers';
+import { canCreateWorkOrder } from '@/services/workOrderService';
 import { listUrenForProfile } from '@/services/timeEntryService';
 import {
   getNextPlanningItem,
@@ -150,7 +151,11 @@ export default function TodayScreen() {
   const { user, profile, role } = useAuth();
   const { colors: c } = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  const { loaded: rechtenGeladen, can, mag, allowsRoute } = usePermissions();
+  const { loaded: rechtenGeladen, can, mag, allowsRoute, hasFeature, readonly } = usePermissions();
+  // Zelfde regel als de knop op Werkbonnen (policy `werkbonnen_insert`).
+  const magWerkbonMaken =
+    rechtenGeladen &&
+    canCreateWorkOrder({ userId: user?.id ?? null, role, can, gedeeldeWerkruimte: hasFeature('gedeelde_werkruimte'), readonly });
   const { klasse } = useSchermklasse();
   const tablet = klasse === 'tablet';
 
@@ -460,12 +465,14 @@ export default function TodayScreen() {
             label="Nieuwe activiteit"
             onPress={() => router.push('/activities?nieuw=1')}
           />
-          <QuickAction
-            styles={styles}
-            icon={<FileText size={20} color={c.green700} strokeWidth={1.9} />}
-            label="Nieuwe werkbon"
-            onPress={() => router.push('/work-orders/new')}
-          />
+          {magWerkbonMaken ? (
+            <QuickAction
+              styles={styles}
+              icon={<FileText size={20} color={c.green700} strokeWidth={1.9} />}
+              label="Nieuwe werkbon"
+              onPress={() => router.push('/work-orders/new')}
+            />
+          ) : null}
           <QuickAction
             styles={styles}
             icon={<Users size={20} color={c.green700} strokeWidth={1.9} />}

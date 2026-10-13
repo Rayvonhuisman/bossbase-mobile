@@ -122,6 +122,8 @@ export type CreateWerkbonUurInput = {
   start_tijd?: string | null; // HH:MM
   eind_tijd?: string | null; // HH:MM
   pauze_minuten?: number;
+  /** Gereden kilometers; leeg = null (niet 0), zoals het dashboard. */
+  reis_km?: number | null;
   notitie?: string | null;
 };
 
@@ -150,6 +152,9 @@ export async function createWerkbonUur(
   if (input.pauze_minuten !== undefined && (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)) {
     return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
   }
+  if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+  }
 
   return schrijf<WerkbonUur>(
     () =>
@@ -164,6 +169,7 @@ export async function createWerkbonUur(
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
+          reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
         })
         .select(UREN_COLUMNS),

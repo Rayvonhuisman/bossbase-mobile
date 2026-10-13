@@ -17,109 +17,55 @@ import {
   HeaderIconButton,
   LoadingScreen,
   NoticeBanner,
-  StatusBadge,
   type ChipDef,
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import {
   canCreateWorkOrder,
+  listTakenTellingen,
   listTeamProfiles,
   listWorkOrders,
+  type Werkbon,
 } from '@/services/workOrderService';
-import { formatDateLongNL, formatTimeNL } from '@/lib/format';
 import { avatarKleuren, initialen } from '@/lib/avatar';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
-import type { WorkOrderWithCustomer } from '@/types/domain';
 import { useLaden } from '@/lib/useLaden';
 import { alsTekst } from '@/lib/notitieTekst';
+import { vandaagIso } from '@/lib/nlTijd';
+import {
+  matchtStatus,
+  matchtZoekterm,
+  planningLabel,
+  telStatussen,
+  werkbonDagen,
+  werkbonVenster,
+  WERKBON_STATUS_STIJL,
+  type StatusFilter,
+} from '@/lib/werkbonLogica';
+import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
 
-type ChipKey =
-  | 'alles'
-  | 'open'
-  | 'lopend'
-  | 'klaar'
-  | 'mij';
+type ChipKey = StatusFilter | 'mij';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function buildTimeLabel(wo: WorkOrderWithCustomer): string {
-  if (!wo.gepland_op) return '—';
-  const planned = new Date(wo.gepland_op);
-  if (Number.isNaN(planned.getTime())) return '—';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const start = wo.starttijd ? formatTimeNL(wo.starttijd) : '';
-  let datePart: string;
-  if (isSameDay(planned, today)) datePart = 'Vandaag';
-  else if (isSameDay(planned, tomorrow)) datePart = 'Morgen';
-  else datePart = formatDateLongNL(wo.gepland_op);
-  return start ? `${datePart} · ${start}` : datePart;
-}
-
-function matchesQuery(wo: WorkOrderWithCustomer, q: string): boolean {
-  if (!q) return true;
-  const lower = q.toLowerCase();
-  return [
-    wo.nummer,
-    wo.titel,
-    wo.omschrijving,
-    wo.locatie,
-    wo.customer?.name,
-    wo.customer?.address,
-    wo.customer?.city,
-  ].some((f) => f?.toLowerCase().includes(lower));
-}
-
-/**
- * Status buckets. The live vocabulary is gepland / in_uitvoering / afgerond;
- * the older English spellings are still accepted so a legacy row is never
- * dropped from every filter at once.
- */
-function isOpen(s: string) {
-  return s === 'gepland' || s === 'concept' || s === 'open';
-}
-function isLopend(s: string) {
-  return s === 'in_uitvoering' || s === 'in_progress' || s === 'bezig';
-}
-function isKlaar(s: string) {
-  return s === 'afgerond' || s === 'completed' || s === 'voltooid';
+/** "ma 3 nov · 08:00" of "ma 3 nov – vr 7 nov · 5 dagen · 08:00" (dashboardkaart). */
+function datumLabel(wo: Werkbon): string {
+  const label = planningLabel(wo);
+  if (!label) return 'Niet ingepland';
+  const { starttijd } = werkbonVenster(wo);
+  return starttijd ? `${label} · ${starttijd}` : label;
 }
 
 /** Everyone working on the job — the array is the live model. */
-function worksOn(wo: WorkOrderWithCustomer, userId: string): boolean {
+function worksOn(wo: Werkbon, userId: string): boolean {
   return (wo.assigned_to_ids ?? []).includes(userId) || wo.assigned_to === userId;
 }
 
-function matchesChip(
-  wo: WorkOrderWithCustomer,
-  chip: ChipKey,
-  userId: string | null,
-): boolean {
-  const s = String(wo.status ?? '').toLowerCase();
-  switch (chip) {
-    case 'alles':
-      return true;
-    case 'open':
-      return isOpen(s);
-    case 'lopend':
-      return isLopend(s);
-    case 'klaar':
-      return isKlaar(s);
-    case 'mij':
-      return userId ? worksOn(wo, userId) : true;
-  }
+function matchesChip(wo: Werkbon, chip: ChipKey, userId: string | null): boolean {
+  if (chip === 'mij') return userId ? worksOn(wo, userId) : true;
+  return matchtStatus(wo, chip);
 }
 
 // ---------------------------------------------------------------------------
@@ -146,16 +92,12 @@ export default function WorkOrdersScreen() {
       readonly,
     });
 
-  const [items, setItems] = useState<WorkOrderWithCustomer[]>([]);
-  const [namen, setNamen] = useState<Record<string, string>>({});  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<Werkbon[]>([]);
+  const [namen, setNamen] = useState<Record<string, string>>({});
+  const [taken, setTaken] = useState<Record<string, { done: number; total: number }>>({});
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState<ChipKey>(isField ? 'mij' : 'alles');
-
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  const [chip, setChip] = useState<ChipKey>(isField ? 'mij' : 'alle');
 
   const load = useCallback(
     async () => {
@@ -175,7 +117,12 @@ export default function WorkOrdersScreen() {
       // 'planning' permission). Filtering client-side by role hid work orders
       // from people the database explicitly grants them to. The personal view
       // is the "Mijn werkbonnen" chip, which defaults on for a medewerker.
-      const { data, error: fetchError } = await listWorkOrders();
+      const [{ data, error: fetchError }, takenRes] = await Promise.all([
+        listWorkOrders(),
+        listTakenTellingen(),
+      ]);
+      // De voortgangsbalk is bijzaak: mislukt hij, dan blijft de lijst staan.
+      if (!takenRes.error) setTaken(takenRes.data);
       if (__DEV__) {
         console.log('[werkbonnen] query klaar', {
           fout: fetchError ?? null,
@@ -212,87 +159,55 @@ export default function WorkOrdersScreen() {
 
 
 
-  // Counts for chips
-  const counts = useMemo(() => {
-    let open = 0, lopend = 0, klaar = 0;
-    items.forEach((w) => {
-      const s = String(w.status ?? '').toLowerCase();
-      if (isOpen(s)) open++;
-      if (isLopend(s)) lopend++;
-      if (isKlaar(s)) klaar++;
-    });
-    return { all: items.length, open, lopend, klaar };
-  }, [items]);
+  // Tellers per status, zoals de chips van het dashboard.
+  const counts = useMemo(() => telStatussen(items), [items]);
 
   const chips: ChipDef<ChipKey>[] = useMemo(
     () => [
-      { id: 'alles', label: 'Alles', count: counts.all },
-      { id: 'open', label: 'Open', count: counts.open },
-      { id: 'lopend', label: 'Lopend', count: counts.lopend },
-      { id: 'klaar', label: 'Klaar', count: counts.klaar },
+      { id: 'alle', label: 'Alle', count: counts.alle },
+      { id: 'gepland', label: WERKBON_STATUS_STIJL.gepland.label, count: counts.gepland },
+      { id: 'in_uitvoering', label: WERKBON_STATUS_STIJL.in_uitvoering.label, count: counts.in_uitvoering },
+      { id: 'afgerond', label: WERKBON_STATUS_STIJL.afgerond.label, count: counts.afgerond },
       { id: 'mij', label: 'Mijn werkbonnen' },
     ],
     [counts],
   );
 
   const filtered = useMemo(
-    () =>
-      items.filter(
-        (w) => matchesChip(w, chip, user?.id ?? null) && matchesQuery(w, query),
-      ),
+    () => items.filter((w) => matchesChip(w, chip, user?.id ?? null) && matchtZoekterm(w, query)),
     [items, chip, query, user?.id],
   );
 
   /**
-   * De drie groepen uit het ontwerp: Vandaag, Binnenkort, Eerder. Bonnen zonder
-   * planningsdatum bestaan in de praktijk wél (het ontwerp kent ze niet), dus
-   * die krijgen een eigen groep onderaan in plaats van stilletjes te verdwijnen.
+   * Vandaag / Binnenkort / Eerder / Niet ingepland. Een meerdaagse bon telt als
+   * "Vandaag" zodra één van zijn dagen vandaag is, en als "Binnenkort" zolang er
+   * nog een dag komt.
    */
   const groepen = useMemo(() => {
-    const dagVan = (w: WorkOrderWithCustomer): number | null => {
-      if (!w.gepland_op) return null;
-      const d = new Date(w.gepland_op);
-      if (Number.isNaN(d.getTime())) return null;
-      d.setHours(0, 0, 0, 0);
-      return d.getTime();
+    const vandaag = vandaagIso();
+    const sleutel = (w: Werkbon) => {
+      const dagen = werkbonDagen(w).map((d) => d.datum);
+      return dagen.find((d) => d >= vandaag) ?? dagen[dagen.length - 1] ?? '';
     };
-    const vandaag = today.getTime();
-    const tijd = (w: WorkOrderWithCustomer) => w.starttijd ?? '';
-    const buckets: { key: string; label: string; items: WorkOrderWithCustomer[] }[] = [
+    const tijd = (w: Werkbon) => werkbonVenster(w).starttijd ?? '';
+    const buckets: { key: string; label: string; items: Werkbon[] }[] = [
       { key: 'vandaag', label: 'Vandaag', items: [] },
       { key: 'binnenkort', label: 'Binnenkort', items: [] },
       { key: 'eerder', label: 'Eerder', items: [] },
       { key: 'open', label: 'Niet ingepland', items: [] },
     ];
     filtered.forEach((w) => {
-      const d = dagVan(w);
-      if (d === null) buckets[3]!.items.push(w);
-      else if (d === vandaag) buckets[0]!.items.push(w);
-      else if (d > vandaag) buckets[1]!.items.push(w);
+      const dagen = werkbonDagen(w).map((d) => d.datum);
+      if (!dagen.length) buckets[3]!.items.push(w);
+      else if (dagen.includes(vandaag)) buckets[0]!.items.push(w);
+      else if (dagen.some((d) => d > vandaag)) buckets[1]!.items.push(w);
       else buckets[2]!.items.push(w);
     });
     buckets[0]!.items.sort((a, b) => tijd(a).localeCompare(tijd(b)));
-    buckets[1]!.items.sort(
-      (a, b) => (dagVan(a)! - dagVan(b)!) || tijd(a).localeCompare(tijd(b)),
-    );
-    buckets[2]!.items.sort(
-      (a, b) => (dagVan(b)! - dagVan(a)!) || tijd(b).localeCompare(tijd(a)),
-    );
-    const zichtbaar = buckets.filter((g) => g.items.length > 0);
-    if (__DEV__) {
-      // Wat er ná filteren en groeperen overblijft. Staat hier één van deze op
-      // nul terwijl de query wél rijen gaf, dan zit het probleem in het filter
-      // of de groepering — niet in de database.
-      console.log('[werkbonnen] render', {
-        opgehaald: items.length,
-        naFilter: filtered.length,
-        groepen: zichtbaar.length,
-        chip,
-        zoekterm: query ? 'ja' : 'nee',
-      });
-    }
-    return zichtbaar;
-  }, [filtered, today, items.length, chip, query]);
+    buckets[1]!.items.sort((a, b) => sleutel(a).localeCompare(sleutel(b)) || tijd(a).localeCompare(tijd(b)));
+    buckets[2]!.items.sort((a, b) => sleutel(b).localeCompare(sleutel(a)) || tijd(b).localeCompare(tijd(a)));
+    return buckets.filter((g) => g.items.length > 0);
+  }, [filtered]);
 
   const onOpen = (id: string) => router.push(`/work-orders/${id}`);
 
@@ -314,7 +229,7 @@ export default function WorkOrdersScreen() {
              zwevende knop meer: die legde zich over de onderste lijstrijen. */
           <AppTopBar
             title="Werkbonnen"
-            subtitle={`${items.length} totaal · ${counts.open + counts.lopend} open · ${counts.klaar} klaar`}
+            subtitle={`${items.length} totaal · ${counts.gepland + counts.in_uitvoering} open · ${counts.afgerond} afgerond`}
             rightAction={
               canCreate ? (
                 <HeaderIconButton
@@ -348,7 +263,7 @@ export default function WorkOrdersScreen() {
           <AppSearchBar
             value={query}
             onChange={setQuery}
-            placeholder="Zoek werkbon, klant of nummer…"
+            placeholder="Zoek op titel, klant of locatie…"
           />
         </View>
 
@@ -368,17 +283,29 @@ export default function WorkOrdersScreen() {
               <Text style={styles.emptyBody}>
                 {items.length === 0
                   ? 'Er zijn nog geen werkbonnen aangemaakt of toegewezen.'
-                  : 'Geen werkbonnen die passen bij deze filter.'}
+                  : 'Pas de filters aan of maak een nieuwe werkbon aan.'}
               </Text>
-              <Pressable
-                onPress={() => {
-                  setQuery('');
-                  setChip(isField ? 'mij' : 'alles');
-                }}
-                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
-              >
-                <Text style={styles.emptyBtnText}>Filters wissen</Text>
-              </Pressable>
+              <View style={styles.emptyKnoppen}>
+                <Pressable
+                  onPress={() => {
+                    setQuery('');
+                    setChip(isField ? 'mij' : 'alle');
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
+                >
+                  <Text style={styles.emptyBtnText}>Filters wissen</Text>
+                </Pressable>
+                {canCreate ? (
+                  <Pressable
+                    onPress={() => router.push('/work-orders/new')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.emptyBtn, styles.emptyBtnLicht, pressed && { opacity: 0.85 }]}
+                  >
+                    <Text style={[styles.emptyBtnText, { color: t.ink }]}>Nieuwe werkbon</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </AppCard>
           </View>
         ) : (
@@ -395,6 +322,7 @@ export default function WorkOrdersScreen() {
                   donker={colorMode === 'dark'}
                   wo={w}
                   namen={namen}
+                  taken={taken[w.id]}
                   onPress={() => onOpen(w.id)}
                 />
               ))}
@@ -426,13 +354,16 @@ function WerkbonKaart({
   donker,
   wo,
   namen,
+  taken,
   onPress,
 }: {
   styles: ReturnType<typeof makeStyles>;
   donker: boolean;
-  wo: WorkOrderWithCustomer;
+  wo: Werkbon;
   /** profile-id → full name, for the uuid[] assignment columns. */
   namen: Record<string, string>;
+  /** Takenvoortgang (meerwerk telt niet mee). */
+  taken?: { done: number; total: number };
   onPress: () => void;
 }) {
   const assignees = wo.assigned_to_ids?.length
@@ -449,23 +380,22 @@ function WerkbonKaart({
 
   const klant = wo.customer?.name ?? null;
   const av = avatarKleuren(klant ?? wo.titel, donker);
-  const adres =
-    wo.locatie ??
-    [wo.customer?.address, wo.customer?.city].filter(Boolean).join(', ') ??
-    null;
-  const meta = [wo.nummer ?? '—', buildTimeLabel(wo)].filter(Boolean).join(' · ');
+  const adres = wo.locatie || [wo.customer?.address, wo.customer?.city].filter(Boolean).join(', ') || null;
+  const meta = [wo.nummer ?? '—', datumLabel(wo)].join(' · ');
+  const pct = taken && taken.total > 0 ? Math.round((taken.done / taken.total) * 100) : null;
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={`${wo.titel}${klant ? `, ${klant}` : ''}`}
       style={({ pressed }) => [styles.kaart, pressed && { opacity: 0.95 }]}
     >
       <View style={styles.kaartTop}>
         <Text style={styles.kaartMeta} numberOfLines={1}>
           {meta}
         </Text>
-        <StatusBadge status={wo.status} />
+        <WerkbonStatusBadge status={wo.status} klein />
       </View>
       <Text style={styles.kaartTitel} numberOfLines={2}>
         {wo.titel || alsTekst(wo.omschrijving) || 'Werkbon'}
@@ -480,6 +410,16 @@ function WerkbonKaart({
           {[klant, adres].filter(Boolean).join(' · ') || (assigneeLabel ?? 'Niet toegewezen')}
         </Text>
       </View>
+      {pct !== null && taken ? (
+        <View style={styles.voortgang}>
+          <View style={styles.voortgangBalk}>
+            <View style={[styles.voortgangVulling, { width: `${pct}%` }]} />
+          </View>
+          <Text style={styles.voortgangTekst}>
+            {taken.done}/{taken.total}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -531,6 +471,12 @@ const makeStyles = (t: ThemeColors) =>
   },
   kaartAvatarText: { fontSize: 9.5, fontWeight: '700' },
   kaartKlant: { flex: 1, fontSize: 12.5, color: t.muted },
+  voortgang: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  voortgangBalk: { flex: 1, height: 5, borderRadius: 3, backgroundColor: t.bgAlt, overflow: 'hidden' },
+  voortgangVulling: { height: 5, borderRadius: 3, backgroundColor: ds.green },
+  voortgangTekst: { fontSize: 11.5, fontWeight: '700', color: t.muted, fontVariant: ['tabular-nums'] },
+  emptyKnoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginTop: 16 },
+  emptyBtnLicht: { backgroundColor: t.bgAlt, borderWidth: 1, borderColor: t.line },
 
 
   // Empty
@@ -558,7 +504,8 @@ const makeStyles = (t: ThemeColors) =>
     textAlign: 'center',
   },
   emptyBtn: {
-    marginTop: 16,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 12,

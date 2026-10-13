@@ -26,6 +26,7 @@ export default function WorkOrdersLayout() {
     >
       <Stack.Screen name="[id]" options={{ title: 'Werkbon' }} />
       <Stack.Screen name="new" options={{ title: 'Nieuwe werkbon' }} />
+      <Stack.Screen name="bewerk/[id]" options={{ title: 'Werkbon bewerken' }} />
     </Stack>
   );
 }
