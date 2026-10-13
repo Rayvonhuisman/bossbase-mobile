@@ -1,21 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
-import {
-  Clock,
-  Plus,
-} from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ClipboardList, Clock, Plus } from 'lucide-react-native';
 import {
   AppCard,
   AppFilterChips,
   AppScreen,
-  AppSection,
   AppTopBar,
   DateField,
   ErrorState,
@@ -24,9 +15,12 @@ import {
   FormSheet,
   LoadingScreen,
   NoticeBanner,
+  SelectField,
   TimeField,
   type ChipDef,
+  type SelectOption,
 } from '@/components';
+import { PauzeKeuze } from '@/components/PauzeKeuze';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import {
   deleteTimeEntry,
@@ -35,199 +29,184 @@ import {
   listUrenForProfile,
   updateTimeEntry,
 } from '@/services/timeEntryService';
-import { todayISO, formatDagLabel, formatHours } from '@/lib/format';
+import { listCompanyProfiles } from '@/services/workOrderService';
+import { todayISO, formatHours } from '@/lib/format';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
-import type { TimeEntryType, UrenRegel } from '@/types/domain';
+import type { UrenRegel } from '@/types/domain';
 import type { DagUren } from '@/lib/urenTotalen';
-import { deleteWerkbonUur, updateWerkbonUur } from '@/services/werkbonUrenService';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, urenVanDag } from '@/lib/urenTotalen';
 import { berekenUren } from '@/lib/urenBerekening';
+import {
+  dagKop,
+  dagenVanWeek,
+  filterUren,
+  groepeerPerDag,
+  leesKm,
+  maandagVan,
+  plusDagen,
+  rondAfOpVijf,
+  urenKpi,
+  weekLabel,
+  type UrenFilter,
+} from '@/lib/urenRegels';
 
-const NL_DAYS_SHORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function startOfWeek(d: Date): Date {
-  const x = new Date(d);
-  const day = x.getDay();
-  const diff = (day + 6) % 7;
-  x.setDate(x.getDate() - diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function toISODate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 function formatHM(hours: number): string {
   if (!hours) return '0u';
   if (Number.isInteger(hours)) return `${hours}u`;
-  return `${hours.toFixed(1).replace('.', ',')}u`;
+  return `${hours.toFixed(2).replace(/0$/, '').replace('.', ',')}u`;
 }
 
-function timeRange(entry: UrenRegel): string {
+function timeRange(entry: UrenRegel): string | null {
   if (entry.start_tijd && entry.eind_tijd) {
     return `${entry.start_tijd.slice(0, 5)} – ${entry.eind_tijd.slice(0, 5)}`;
   }
-  return `${formatHours(entry.uren)}`;
+  return null;
 }
 
-function typeLabel(
-  type: TimeEntryType,
-  t: ThemeColors,
-): { label: string; bg: string; fg: string } {
-  switch (type) {
-    case 'arbeid':
-      return { label: 'Facturabel', bg: t.green50, fg: ds.green700 };
-    case 'reistijd':
-      return { label: 'Reistijd', bg: t.statusSubmitBg, fg: t.statusSubmitFg };
-    case 'overhead':
-      return { label: 'Niet-facturabel', bg: t.bgAlt, fg: t.muted };
-    case 'overig':
-      return { label: 'Overig', bg: t.statusWarnBg, fg: t.statusWarnFg };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Filter
-// ---------------------------------------------------------------------------
-
-type FilterKey = 'vandaag' | 'week' | 'open' | 'mij' | 'team';
+type Scope = 'ik' | 'team';
 
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
+/**
+ * Uren — gelijk aan de urenpagina van het dashboard:
+ *
+ * - **Werkdaguren** (`urenregistratie`) zijn hier te bewerken en verwijderen.
+ * - **Werkbonuren** (`werkbon_uren`) staan er ter inzage; wijzigen gebeurt op
+ *   de werkbon (tik → werkbon).
+ * - De twee worden nooit opgeteld: totalen per soort, met het verschil.
+ * - Weeknavigatie (ma t/m zo), tijden afgerond op vijf minuten.
+ * - Admin en planner (dashboard: `canBookForOthers`) zien ook het team, met
+ *   een medewerkerfilter; KPI's tellen over de periode, niet over dat filter.
+ */
 export default function HoursScreen() {
   const router = useRouter();
   const { user, role } = useAuth();
   const { readonly, loaded: rechtenGeladen } = usePermissions();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const isTeamScope = role === 'admin' || role === 'planner';
+  const magTeam = role === 'admin' || role === 'planner';
 
-  const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => startOfWeek(today), [today]);
-  const weekEnd = useMemo(() => {
-    const e = new Date(weekStart);
-    e.setDate(e.getDate() + 6);
-    return e;
-  }, [weekStart]);
-  const todayISOStr = useMemo(() => todayISO(), []);
+  const vandaag = todayISO();
+  const [maandag, setMaandag] = useState(() => maandagVan(todayISO()));
+  const weekDatums = useMemo(() => dagenVanWeek(maandag), [maandag]);
+  const zondag = weekDatums[6]!;
+  const isDezeWeek = weekDatums.includes(vandaag);
 
-  const [entries, setEntries] = useState<UrenRegel[]>([]);  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterKey>('vandaag');
+  const [scope, setScope] = useState<Scope>('ik');
+  const team = scope === 'team' && magTeam;
+  const [medewerker, setMedewerker] = useState<string | null>(null);
+  const [namen, setNamen] = useState<Record<string, string>>({});
+
+  const [entries, setEntries] = useState<UrenRegel[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<UrenFilter>('alles');
   const [bewerken, setBewerken] = useState<UurConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
   const userId = user?.id;
-  const load = useCallback(
-    async () => {
-      if (!userId) return;
-      setError(null);
+  const load = useCallback(async () => {
+    if (!userId) return;
+    setError(null);
+    const { data, error: fetchError } = team
+      ? await listCompanyUren(maandag, zondag)
+      : await listUrenForProfile(userId, maandag, zondag);
+    // Faalt één van de twee tabellen, dan is het totaal onvolledig — dat
+    // melden we in plaats van een te laag getal als echt totaal te tonen.
+    setError(fetchError);
+    setEntries(data);
+    if (team) {
+      const p = await listCompanyProfiles();
+      if (!p.error) {
+        setNamen(Object.fromEntries(p.data.map((x) => [x.id, x.full_name ?? 'Medewerker'])));
+      }
+    }
+  }, [userId, team, maandag, zondag]);
 
-      const from = toISODate(weekStart);
-      const to = toISODate(weekEnd);
-      const { data, error: fetchError } =
-        filter === 'team' && isTeamScope
-          ? await listCompanyUren(from, to)
-          : await listUrenForProfile(userId, from, to);
-
-      // Werkbonuren en werkdaguren komen uit twee tabellen. Faalt er één, dan
-      // is het totaal onvolledig — dat melden we, want een te laag getal dat
-      // eruitziet als een echt totaal is erger dan een foutmelding.
-      setError(fetchError);
-      setEntries(data);
-    },
-    [userId, weekStart, weekEnd, filter, isTeamScope],
-  );
-
-  /**
-   * Eerste load, stille verversing bij focus en pull-to-refresh zijn drie
-   * verschillende dingen. Alleen de laatste zet `refreshing`; terugkeren op
-   * dit scherm ververst dus stil, zonder dat de lijst omlaag schuift.
-   */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
-
-
-  // Aggregates
-  const todayEntries = useMemo(
-    () => entries.filter((e) => e.datum === todayISOStr),
-    [entries, todayISOStr],
+  // Medewerkerfilter (alleen team). KPI's en weekbalken tellen over de periode.
+  const zichtbaar = useMemo(
+    () => (team && medewerker ? entries.filter((e) => e.profile_id === medewerker) : entries),
+    [entries, team, medewerker],
   );
-  // Werkdag- en werkbonuren apart, zoals het dashboard (zie lib/urenTotalen):
-  // de norm van 8 uur per dag en 40 per week gaat over werkdaguren; werkbonuren
-  // en het verschil staan ernaast. De lijst hieronder toont wél elke regel.
-  const vandaagUren = useMemo(
-    () => urenVanDag(todayEntries, todayISOStr),
-    [todayEntries, todayISOStr],
-  );
+
+  const vandaagUren = useMemo(() => urenVanDag(entries, vandaag), [entries, vandaag]);
+  const vandaagAantal = useMemo(() => entries.filter((e) => e.datum === vandaag).length, [entries, vandaag]);
   const expectedToday = 8;
   const missingToday = Math.max(0, expectedToday - vandaagUren.werkdag);
   const pct = Math.min(100, (vandaagUren.werkdag / expectedToday) * 100);
 
-  const weekDagen = useMemo(() => {
-    const dagen = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return toISODate(d);
-    });
-    return urenPerDag(entries, dagen);
-  }, [entries, weekStart]);
+  const weekDagen = useMemo(() => urenPerDag(entries, weekDatums), [entries, weekDatums]);
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
+  const kpiWerkdag = useMemo(() => urenKpi(entries.filter((e) => e.bron === 'werkdag')), [entries]);
 
-  // Bewerken: staan begin én eind er, dan zijn de uren eind − begin − pauze
-  // (dezelfde regel als het dashboard en het nieuwe-urenformulier). Anders
-  // blijft het ingevulde aantal staan.
+  const gefilterd = useMemo(() => filterUren(zichtbaar, filter), [zichtbaar, filter]);
+  const groepen = useMemo(() => groepeerPerDag(gefilterd), [gefilterd]);
+
+  const chips: ChipDef<UrenFilter>[] = useMemo(
+    () => [
+      { id: 'alles', label: 'Alles', count: zichtbaar.length },
+      { id: 'werkdag', label: 'Werkdaguren', count: filterUren(zichtbaar, 'werkdag').length },
+      { id: 'werkbon', label: 'Werkbonuren', count: filterUren(zichtbaar, 'werkbon').length },
+      { id: 'open', label: 'Open', count: filterUren(zichtbaar, 'open').length },
+    ],
+    [zichtbaar],
+  );
+
+  const medewerkerOpties: SelectOption[] = useMemo(() => {
+    const ids = Array.from(new Set(entries.map((e) => e.profile_id)));
+    return ids
+      .map((id) => ({ id, label: namen[id] ?? 'Medewerker' }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'nl'));
+  }, [entries, namen]);
+
+  // Bewerken: staan begin én eind er, dan zijn de uren eind − begin − pauze.
+  // Anders blijft het ingevulde aantal staan (oude regels zonder tijden).
   const bewerkUren = useMemo(() => {
     if (!bewerken) return { waarde: '', berekend: false, fout: null as string | null };
     if (bewerken.van && bewerken.tot) {
-      const uren = berekenUren(bewerken.van, bewerken.tot, bewerken.pauze.replace(',', '.'));
+      const uren = berekenUren(bewerken.van, bewerken.tot, bewerken.pauze);
       if (uren === null) {
+        const eindVoorStart = berekenUren(bewerken.van, bewerken.tot, 0) === null;
         return {
           waarde: bewerken.uren,
           berekend: false,
-          fout: 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.',
+          fout: eindVoorStart
+            ? 'Eindtijd moet later zijn dan starttijd.'
+            : 'Er blijft geen tijd over na aftrek van de pauze.',
         };
       }
       return { waarde: String(uren).replace('.', ','), berekend: true, fout: null };
     }
     return { waarde: bewerken.uren, berekend: false, fout: null };
   }, [bewerken]);
+  const kmWaarde = bewerken ? leesKm(bewerken.km) : null;
 
-  /** Weektotaal werkdaguren — de noemer die het ontwerp in de bovenbalk en de weekkaart toont. */
-  const weekTotal = week.werkdag;
-
-  const filteredList = useMemo(() => {
-    if (filter === 'vandaag') return todayEntries;
-    if (filter === 'mij') return entries.filter((e) => e.profile_id === user?.id);
-    return entries;
-  }, [filter, entries, todayEntries, user?.id]);
-
-  const chips: ChipDef<FilterKey>[] = useMemo(
-    () => [
-      { id: 'vandaag', label: 'Vandaag', count: todayEntries.length },
-      { id: 'week', label: 'Deze week', count: entries.length },
-      { id: 'open', label: 'Open' },
-      { id: 'mij', label: 'Mijn uren' },
-      ...(isTeamScope ? [{ id: 'team' as FilterKey, label: 'Team' }] : []),
-    ],
-    [todayEntries.length, entries.length, isTeamScope],
-  );
-
-  // Uren toevoegen gaat via een formulier dat een werkbon laat kiezen; die uren
-  // worden geboekt in werkbon_uren, dezelfde tabel die de werkbon in het
-  // dashboard toont.
-  const onAddPlaceholder = () => router.push('/hours/new');
+  const naarNieuw = () => router.push('/hours/new');
+  const openRegel = (e: UrenRegel) => {
+    if (e.bron === 'werkbon') {
+      // Werkbonuren zijn hier alleen ter inzage; wijzigen doe je op de werkbon.
+      if (e.werkbon_id) router.push(`/work-orders/${e.werkbon_id}`);
+      return;
+    }
+    setSaveError(null);
+    setBewerken({
+      id: echteUurId(e.id),
+      datum: e.datum,
+      van: e.start_tijd ? e.start_tijd.slice(0, 5) : null,
+      tot: e.eind_tijd ? e.eind_tijd.slice(0, 5) : null,
+      uren: String(e.uren ?? '').replace('.', ','),
+      pauze: e.pauze_minuten ?? 0,
+      km: (e as { reis_km?: number | null }).reis_km != null ? String((e as { reis_km?: number | null }).reis_km).replace('.', ',') : '',
+      notitie: e.notitie ?? '',
+    });
+  };
 
   if (loading && entries.length === 0) {
     return <LoadingScreen label="Uren laden..." />;
@@ -235,12 +214,13 @@ export default function HoursScreen() {
   if (error && entries.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <ErrorState title="Uren niet geladen" message={error} onRetry={opnieuw} />
+        <ErrorState title="Uren niet geladen" message={`Kon urenregistraties niet laden — ${error}`} onRetry={opnieuw} />
       </View>
     );
   }
 
-  const todayWeekIdx = (today.getDay() + 6) % 7;
+  const todayWeekIdx = weekDatums.indexOf(vandaag);
+  const magSchrijven = rechtenGeladen && !readonly;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -248,19 +228,10 @@ export default function HoursScreen() {
         header={
           <AppTopBar
             title="Uren"
-            subtitle={
-              isTeamScope
-                ? `Bedrijfsuren · ${formatHM(weekTotal)} deze week`
-                : `${formatHM(weekTotal)} van 40 u deze week`
-            }
+            subtitle={team ? `Team · ${formatHM(week.werkdag)} werkdaguren` : `${formatHM(week.werkdag)} van 40 u deze week`}
             rightAction={
-              rechtenGeladen && !readonly ? (
-                <HeaderIconButton
-                  icon={Plus}
-                  label="Uren toevoegen"
-                  size={42}
-                  onPress={onAddPlaceholder}
-                />
+              magSchrijven ? (
+                <HeaderIconButton icon={Plus} label="Uren registreren" size={42} onPress={naarNieuw} />
               ) : undefined
             }
             showProfileButton
@@ -269,65 +240,129 @@ export default function HoursScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
-        {/* Today summary card */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
-          <AppCard padding={18}>
-            <View style={styles.summaryTop}>
-              <ProgressRing pct={pct} styles={styles} t={t} />
-              <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
-                <Text style={styles.summaryKicker}>Werkdag vandaag</Text>
-                <View style={styles.summaryNumberRow}>
-                  <Text style={styles.summaryNumber}>
-                    {vandaagUren.werkdag.toString().replace('.', ',')}
-                  </Text>
-                  <Text style={styles.summaryNumberSub}>/ {expectedToday} uur</Text>
-                </View>
-                <Text style={missingToday > 0 ? styles.summaryMissing : styles.summaryDone}>
-                  {missingToday > 0
-                    ? `Nog ${formatHM(missingToday)} te schrijven`
-                    : 'Dag compleet'}{' '}
-                  · {todayEntries.length}{' '}
-                  {todayEntries.length === 1 ? 'registratie' : 'registraties'}
-                </Text>
-              </View>
-            </View>
-            {/* Werkdag, klus en het verschil naast elkaar — nooit opgeteld. */}
-            <View style={styles.summaryStats}>
-              <UrenStat label="Werkdag" uren={vandaagUren.werkdag} styles={styles} />
-              <UrenStat label="Op werkbonnen" uren={vandaagUren.werkbon} styles={styles} />
-              <UrenStat
-                label="Niet aan een klus"
-                uren={Math.max(0, vandaagUren.verschil)}
-                styles={styles}
-                leeg={vandaagUren.werkdag === 0}
-              />
-            </View>
-          </AppCard>
+        {/* Weeknavigatie: ma t/m zo, zoals de periodekeuze in het dashboard. */}
+        <View style={styles.navRow}>
+          <Pressable
+            onPress={() => setMaandag((m) => plusDagen(m, -7))}
+            accessibilityRole="button"
+            accessibilityLabel="Vorige week"
+            style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
+          >
+            <ChevronLeft size={20} color={t.ink} strokeWidth={2.4} />
+          </Pressable>
+          <Text style={styles.navLabel} numberOfLines={1}>
+            {weekLabel(maandag)}
+          </Text>
+          {!isDezeWeek ? (
+            <Pressable
+              onPress={() => setMaandag(maandagVan(todayISO()))}
+              accessibilityRole="button"
+              accessibilityLabel="Naar deze week"
+              style={({ pressed }) => [styles.todayBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.todayBtnText}>Vandaag</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() => setMaandag((m) => plusDagen(m, 7))}
+            accessibilityRole="button"
+            accessibilityLabel="Volgende week"
+            style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
+          >
+            <ChevronRight size={20} color={t.ink} strokeWidth={2.4} />
+          </Pressable>
         </View>
-        <UrenSignaal
-          dag={vandaagUren}
-          wie={filter === 'team' && isTeamScope ? 'team' : 'ik'}
-          styles={styles}
-        />
 
-        {/* Weekoverzicht — kop in de kaart, zoals in het ontwerp */}
+        {magTeam ? (
+          <View style={styles.scopeWrap}>
+            <View style={styles.scopeGroep}>
+              {(['ik', 'team'] as const).map((k) => {
+                const on = scope === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      setScope(k);
+                      setMedewerker(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    style={[styles.scopeKnop, on && [styles.scopeKnopAan, dsShadow]]}
+                  >
+                    <Text style={[styles.scopeTekst, on && styles.scopeTekstAan]}>
+                      {k === 'ik' ? 'Mijn uren' : 'Team'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {team ? (
+              <SelectField
+                label="Medewerker"
+                value={medewerker}
+                options={medewerkerOpties}
+                onChange={setMedewerker}
+                allowEmpty
+                emptyLabel="Alle medewerkers"
+                placeholder="Alle medewerkers"
+                searchable={medewerkerOpties.length > 8}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Vandaag — alleen in de lopende week en voor je eigen uren. */}
+        {isDezeWeek && !team ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
+            <AppCard padding={18}>
+              <View style={styles.summaryTop}>
+                <ProgressRing pct={pct} styles={styles} t={t} />
+                <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
+                  <Text style={styles.summaryKicker}>Werkdag vandaag</Text>
+                  <View style={styles.summaryNumberRow}>
+                    <Text style={styles.summaryNumber}>{vandaagUren.werkdag.toString().replace('.', ',')}</Text>
+                    <Text style={styles.summaryNumberSub}>/ {expectedToday} uur</Text>
+                  </View>
+                  <Text style={missingToday > 0 ? styles.summaryMissing : styles.summaryDone}>
+                    {missingToday > 0 ? `Nog ${formatHM(missingToday)} te schrijven` : 'Dag compleet'} · {vandaagAantal}{' '}
+                    {vandaagAantal === 1 ? 'registratie' : 'registraties'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.summaryStats}>
+                <UrenStat label="Werkdag" uren={vandaagUren.werkdag} styles={styles} />
+                <UrenStat label="Op werkbonnen" uren={vandaagUren.werkbon} styles={styles} />
+                <UrenStat
+                  label="Niet aan een klus"
+                  uren={Math.max(0, vandaagUren.verschil)}
+                  styles={styles}
+                  leeg={vandaagUren.werkdag === 0}
+                />
+              </View>
+            </AppCard>
+          </View>
+        ) : null}
+        {isDezeWeek ? <UrenSignaal dag={vandaagUren} wie={team ? 'team' : 'ik'} styles={styles} /> : null}
+
+        {/* Weekoverzicht */}
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <AppCard padding={16}>
             <View style={styles.weekKop}>
               <Text style={styles.weekKopTitel}>Weekoverzicht</Text>
-              <Text style={styles.weekKopMeta}>{formatHM(weekTotal)} van 40 u werkdag</Text>
+              <Text style={styles.weekKopMeta}>
+                {team ? `${formatHM(week.werkdag)} werkdag` : `${formatHM(week.werkdag)} van 40 u werkdag`}
+              </Text>
             </View>
             <View style={styles.weekRow}>
-              {NL_DAYS_SHORT.slice(1).concat('Zo').map((label, idx) => {
+              {NL_DAYS_SHORT.map((label, idx) => {
                 const dag = weekDagen[idx];
                 const hours = dag?.werkdag ?? 0;
-                // Een dag die niet klopt (klus zonder werkdag, of meer klus
-                // dan werkdag) krijgt de waarschuwingskleur.
                 const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                 const on = idx === todayWeekIdx;
-                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / 8) * 52));
+                const norm = team ? Math.max(8, ...weekDagen.map((d) => d.werkdag)) : 8;
+                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / norm) * 52));
                 return (
-                  <View key={label + idx} style={styles.weekItem}>
+                  <View key={label} style={styles.weekItem}>
                     <Text style={[styles.weekHours, on && { color: t.ink }, signaal && styles.weekHoursLet]}>
                       {hours ? formatHM(hours) : signaal ? '!' : ''}
                     </Text>
@@ -348,9 +383,7 @@ export default function HoursScreen() {
                         ]}
                       />
                     </View>
-                    <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
-                      {label}
-                    </Text>
+                    <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>{label}</Text>
                   </View>
                 );
               })}
@@ -358,13 +391,15 @@ export default function HoursScreen() {
             <View style={styles.summaryStats}>
               <UrenStat label="Werkdag" uren={week.werkdag} styles={styles} />
               <UrenStat label="Op werkbonnen" uren={week.werkbon} styles={styles} />
-              <UrenStat
-                label="Niet aan een klus"
-                uren={Math.max(0, week.verschil)}
-                styles={styles}
-                leeg={week.werkdag === 0}
-              />
+              <UrenStat label="Niet aan een klus" uren={Math.max(0, week.verschil)} styles={styles} leeg={week.werkdag === 0} />
             </View>
+            {team ? (
+              <Text style={styles.kpiRegel}>
+                {kpiWerkdag.medewerkers} {kpiWerkdag.medewerkers === 1 ? 'medewerker' : 'medewerkers'} · gem.{' '}
+                {formatHM(kpiWerkdag.gemPerDag)} per dag over {kpiWerkdag.dagen}{' '}
+                {kpiWerkdag.dagen === 1 ? 'dag' : 'dagen'}
+              </Text>
+            ) : null}
             {week.dagenZonderWerkdag > 0 || week.dagenKlusGroter > 0 ? (
               <Text style={styles.weekLetTekst}>
                 {[
@@ -382,129 +417,129 @@ export default function HoursScreen() {
           </AppCard>
         </View>
 
-        {/* Filter chips + entries */}
-        <AppSection title="Registraties" count={filteredList.length} />
         {error && entries.length > 0 ? (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-            <NoticeBanner
-              toon="fout"
-              message={`${error} Het totaal hierboven kan daardoor onvolledig zijn.`}
-            />
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <NoticeBanner toon="fout" message={`${error} Het totaal hierboven kan daardoor onvolledig zijn.`} />
           </View>
         ) : null}
+
+        <View style={{ height: 12 }} />
         <AppFilterChips chips={chips} active={filter} onChange={setFilter} />
+        {filter === 'werkbon' ? (
+          <Text style={styles.uitleg}>Hier alleen ter inzage; wijzigen doe je op de werkbon.</Text>
+        ) : filter === 'open' ? (
+          <Text style={styles.uitleg}>
+            Dagen met werkbonuren waarbij de werkdaguren ontbreken of korter zijn dan de klusuren.
+          </Text>
+        ) : null}
 
         <View style={{ paddingHorizontal: 16, gap: 10, marginTop: 12 }}>
-          {filteredList.length === 0 ? (
+          {groepen.length === 0 ? (
             <AppCard padding={26} style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
                 <Clock size={28} color={ds.green} strokeWidth={1.8} />
               </View>
-              <Text style={styles.emptyTitle}>Nog geen uren geregistreerd</Text>
-              <Text style={styles.emptyBody}>
-                Voeg je eerste urenregistratie voor vandaag toe.
+              <Text style={styles.emptyTitle}>
+                {filter === 'werkbon'
+                  ? 'Geen werkbonuren in deze periode'
+                  : filter === 'open'
+                    ? 'Niets open in deze periode'
+                    : 'Geen urenregistraties gevonden'}
               </Text>
-              {rechtenGeladen && !readonly ? (
+              {magSchrijven && filter !== 'werkbon' && filter !== 'open' ? (
                 <Pressable
-                  onPress={onAddPlaceholder}
+                  onPress={naarNieuw}
+                  accessibilityRole="button"
                   style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
                 >
                   <Plus size={18} color={ds.greenInk} strokeWidth={2.4} />
-                  <Text style={styles.emptyBtnText}>Uren toevoegen</Text>
+                  <Text style={styles.emptyBtnText}>Uren registreren</Text>
                 </Pressable>
               ) : null}
             </AppCard>
           ) : (
-            filteredList.map((e) => (
-              <EntryCard
-                key={e.id}
-                entry={e}
-                styles={styles}
-                t={t}
-                onEdit={
-                  rechtenGeladen
-                    ? () => {
-                        setSaveError(null);
-                        setBewerken({
-                          // De lijst prefixt id's (wb:/ur:); de update wil de
-                          // echte tabel-id.
-                          id: echteUurId(e.id),
-                          bron: e.bron,
-                          datum: e.datum,
-                          van: e.start_tijd ? e.start_tijd.slice(0, 5) : null,
-                          tot: e.eind_tijd ? e.eind_tijd.slice(0, 5) : null,
-                          uren: String(e.uren ?? '').replace('.', ','),
-                          pauze: String(e.pauze_minuten ?? 0),
-                          notitie: e.notitie ?? '',
-                        });
-                      }
-                    : undefined
-                }
-              />
+            groepen.map((g) => (
+              <View key={g.datum} style={{ gap: 8 }}>
+                <View style={styles.groepKop}>
+                  <Text style={styles.groepTitel}>{dagKop(g.datum, vandaag)}</Text>
+                  <Text style={styles.groepTotaal}>
+                    {[
+                      g.werkdag ? `${formatHours(g.werkdag)} werkdag` : null,
+                      g.werkbon ? `${formatHours(g.werkbon)} werkbon` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
+                {g.regels.map((e) => (
+                  <EntryCard
+                    key={e.id}
+                    entry={e}
+                    naam={team ? (namen[e.profile_id] ?? null) : null}
+                    styles={styles}
+                    t={t}
+                    onPress={
+                      e.bron === 'werkbon'
+                        ? e.werkbon_id
+                          ? () => openRegel(e)
+                          : undefined
+                        : rechtenGeladen
+                          ? () => openRegel(e)
+                          : undefined
+                    }
+                  />
+                ))}
+              </View>
             ))
           )}
         </View>
-        {/*
-          TODO(backend): "Team vandaag"-aggregaat per medewerker is verwijderd
-          (was mock). Echte per-persoon-aggregaten vereisen een view + een manier
-          om profile_id → naam op te halen (profiles RLS toont alleen eigen rij).
-          Het Team-filter hierboven toont wel de echte bedrijfsregistraties.
-        */}
       </AppScreen>
 
-      {/* Uren bijwerken. Werkbonuren en werkdaguren zijn twee tabellen met
-          twee verschillende policies; het formulier is hetzelfde, de
-          bestemming niet. */}
+      {/* Werkdaguren bewerken. Werkbonuren wijzig je op de werkbon zelf. */}
       <FormSheet
         visible={bewerken !== null}
-        title="Uren bewerken"
-        subtitle={bewerken?.bron === 'werkbon' ? 'Uren op een werkbon' : 'Werkdaguren'}
+        title="Werkdaguren bewerken"
         error={saveError}
         saving={saving}
-        submitDisabled={!bewerkUren.waarde.trim() || !!bewerkUren.fout}
+        submitDisabled={readonly || !bewerkUren.waarde.trim() || !!bewerkUren.fout || kmWaarde === undefined}
         onSubmit={() => {
-          if (!bewerken || bewerkUren.fout) return;
-          const pauze = Math.max(0, Math.round(Number(bewerken.pauze.replace(',', '.')) || 0));
-          // Met begin- en eindtijd rekent de service de uren zelf opnieuw uit
-          // (eind − begin − pauze, zoals het dashboard); zonder tijden telt
-          // het ingevulde aantal.
+          if (!bewerken || bewerkUren.fout || kmWaarde === undefined) return;
           const velden = {
             datum: bewerken.datum,
             start_tijd: bewerken.van,
             eind_tijd: bewerken.tot,
             uren: Number(bewerkUren.waarde.replace(',', '.')),
-            pauze_minuten: pauze,
+            pauze_minuten: bewerken.pauze,
+            reis_km: kmWaarde,
             notitie: bewerken.notitie,
           };
-          save(
-            () =>
-              bewerken.bron === 'werkbon'
-                ? updateWerkbonUur(bewerken.id, velden)
-                : updateTimeEntry(bewerken.id, velden),
-            {
-              onSuccess: async () => {
-                setBewerken(null);
-                await herlaad();
-              },
+          save(() => updateTimeEntry(bewerken.id, velden), {
+            onSuccess: async () => {
+              setBewerken(null);
+              await herlaad();
             },
-          );
+          });
         }}
         onClose={() => setBewerken(null)}
-        destructive={{
-          label: 'Uren verwijderen',
-          onPress: () => {
-            if (!bewerken) return;
-            const { id, bron } = bewerken;
-            bevestigVerwijderen('Uren', () => {
-              save(() => (bron === 'werkbon' ? deleteWerkbonUur(id) : deleteTimeEntry(id)), {
-                onSuccess: async () => {
-                  setBewerken(null);
-                  await herlaad();
+        destructive={
+          readonly
+            ? undefined
+            : {
+                label: 'Uren verwijderen',
+                onPress: () => {
+                  if (!bewerken) return;
+                  const { id } = bewerken;
+                  bevestigVerwijderen('Uren', () => {
+                    save(() => deleteTimeEntry(id), {
+                      onSuccess: async () => {
+                        setBewerken(null);
+                        await herlaad();
+                      },
+                    });
+                  });
                 },
-              });
-            });
-          },
-        }}
+              }
+        }
       >
         <DateField
           label="Datum"
@@ -514,47 +549,49 @@ export default function HoursScreen() {
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
             <TimeField
-              label="Van"
+              label="Starttijd"
               value={bewerken?.van ?? null}
-              onChange={(v) => setBewerken((c) => (c ? { ...c, van: v } : c))}
+              onChange={(v) => setBewerken((c) => (c ? { ...c, van: rondAfOpVijf(v) } : c))}
               placeholder="Kies"
             />
           </View>
           <View style={{ flex: 1 }}>
             <TimeField
-              label="Tot"
+              label="Eindtijd"
               value={bewerken?.tot ?? null}
-              onChange={(v) => setBewerken((c) => (c ? { ...c, tot: v } : c))}
+              onChange={(v) => setBewerken((c) => (c ? { ...c, tot: rondAfOpVijf(v) } : c))}
               placeholder="Kies"
             />
           </View>
         </View>
+        <PauzeKeuze
+          waarde={bewerken?.pauze ?? 0}
+          onChange={(m) => setBewerken((c) => (c ? { ...c, pauze: m } : c))}
+        />
         {bewerkUren.fout ? <NoticeBanner toon="waarschuwing" message={bewerkUren.fout} /> : null}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <FormField
-              label="Uren"
-              value={bewerkUren.waarde}
-              onChangeText={(v) => setBewerken((c) => (c ? { ...c, uren: v } : c))}
-              placeholder="1,5"
-              keyboardType="decimal-pad"
-              editable={!bewerkUren.berekend}
-              hint={bewerkUren.berekend ? 'Berekend uit de tijden' : undefined}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <FormField
-              label="Pauze"
-              value={bewerken?.pauze ?? ''}
-              onChangeText={(v) => setBewerken((c) => (c ? { ...c, pauze: v } : c))}
-              placeholder="0"
-              keyboardType="number-pad"
-              hint="minuten"
-            />
-          </View>
-        </View>
         <FormField
-          label="Omschrijving"
+          label="Uren"
+          value={bewerkUren.waarde}
+          onChangeText={(v) => setBewerken((c) => (c ? { ...c, uren: v } : c))}
+          placeholder="1,5"
+          keyboardType="decimal-pad"
+          editable={!bewerkUren.berekend}
+          hint={
+            bewerkUren.berekend
+              ? `≈ ${bewerkUren.waarde} uur${bewerken?.pauze ? ` (${bewerken.pauze} min pauze eraf)` : ''}`
+              : undefined
+          }
+        />
+        <FormField
+          label="Gereden kilometers"
+          value={bewerken?.km ?? ''}
+          onChangeText={(v) => setBewerken((c) => (c ? { ...c, km: v } : c))}
+          placeholder="Optioneel"
+          keyboardType="decimal-pad"
+          hint={kmWaarde === undefined ? 'Vul een getal van 0 of meer in.' : undefined}
+        />
+        <FormField
+          label="Notitie"
           value={bewerken?.notitie ?? ''}
           onChangeText={(v) => setBewerken((c) => (c ? { ...c, notitie: v } : c))}
           placeholder="Wat is er gedaan?"
@@ -681,73 +718,63 @@ function ProgressRing({
 
 
 /** De bewerkbare velden van een uurregel, ongeacht uit welke tabel hij komt. */
+/** De bewerkbare velden van een werkdaguur (`urenregistratie`). */
 type UurConcept = {
   id: string;
-  bron: 'werkdag' | 'werkbon';
   datum: string;
   /** `HH:MM` of leeg. */
   van: string | null;
   tot: string | null;
   uren: string;
-  pauze: string;
+  pauze: number;
+  /** Tekst; leeg = niet ingevuld. */
+  km: string;
   notitie: string;
 };
 
 /**
- * Eén urenregistratie, in de vorm uit het ontwerp:
- *
- *   [ 004 ]  Schilderij verhuizen                        2,5 u
- *            Vandaag · 08:30–11:00 · 30 min pauze
- *
- * Het tegeltje links draagt het werkbonnummer (groen) of "ALG" voor
- * werkdaguren (grijs) — zo is met één blik te zien of een regel aan een klus
- * hangt, en dus in welke tabel hij staat.
+ * Eén urenregistratie. Het tegeltje links draagt het werkbonnummer (groen,
+ * werkbonuur, alleen-lezen → tik opent de werkbon) of "ALG" voor een
+ * werkdaguur (grijs, tik = bewerken).
  */
 function EntryCard({
   entry,
+  naam,
   styles,
   t,
-  onEdit,
+  onPress,
 }: {
   entry: UrenRegel;
+  /** Naam van de medewerker (teamoverzicht). */
+  naam: string | null;
   styles: ReturnType<typeof makeStyles>;
   t: ThemeColors;
-  /** Ontbreekt als deze gebruiker niets mag wijzigen. */
-  onEdit?: () => void;
+  onPress?: () => void;
 }) {
   const werkbon = entry.bron === 'werkbon';
-  const tag = werkbon
-    ? (entry.werkbonLabel ?? 'WB').replace(/^WB-?/i, '') || 'WB'
-    : 'ALG';
-  const tt = typeLabel(entry.type, t);
-  const titel = entry.werkbonLabel ?? entry.notitie ?? tt.label;
+  const tag = werkbon ? (entry.werkbonLabel ?? 'WB').split(' · ')[0]!.replace(/^WB-?/i, '') || 'WB' : 'ALG';
+  const titel = werkbon ? (entry.werkbonLabel ?? 'Werkbon') : entry.notitie?.trim() || 'Werkdag';
+  const km = (entry as { reis_km?: number | null }).reis_km;
   const meta = [
-    formatDagLabel(entry.datum),
+    naam,
     timeRange(entry),
     entry.pauze_minuten ? `${entry.pauze_minuten} min pauze` : null,
-    werkbon ? null : tt.label,
+    km != null ? `${String(km).replace('.', ',')} km` : null,
+    werkbon ? 'Werkbonuur' : 'Werkdaguur',
   ]
     .filter(Boolean)
     .join(' · ');
 
   return (
     <Pressable
-      onPress={onEdit}
-      disabled={!onEdit}
-      accessibilityRole={onEdit ? 'button' : undefined}
-      accessibilityLabel={onEdit ? 'Uren bewerken' : undefined}
-      style={({ pressed }) => [styles.entry, pressed && onEdit && { opacity: 0.95 }]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? (werkbon ? 'Werkbon openen' : 'Werkdaguren bewerken') : undefined}
+      style={({ pressed }) => [styles.entry, pressed && onPress && { opacity: 0.95 }]}
     >
-      <View
-        style={[
-          styles.entryTag,
-          { backgroundColor: werkbon ? t.green50 : t.bgAlt },
-        ]}
-      >
-        <Text
-          style={[styles.entryTagText, { color: werkbon ? t.green700 : t.muted }]}
-          numberOfLines={1}
-        >
+      <View style={[styles.entryTag, { backgroundColor: werkbon ? t.green50 : t.bgAlt }]}>
+        <Text style={[styles.entryTagText, { color: werkbon ? t.green700 : t.muted }]} numberOfLines={1}>
           {tag}
         </Text>
       </View>
@@ -755,11 +782,12 @@ function EntryCard({
         <Text style={styles.entryTitle} numberOfLines={1}>
           {titel}
         </Text>
-        <Text style={styles.entryMeta} numberOfLines={1}>
+        <Text style={styles.entryMeta} numberOfLines={2}>
           {meta}
         </Text>
       </View>
       <Text style={styles.entryDur}>{formatHours(Number(entry.uren) || 0)}</Text>
+      {werkbon && onPress ? <ClipboardList size={16} color={t.muted} strokeWidth={2} /> : null}
     </Pressable>
   );
 }
@@ -770,6 +798,51 @@ function EntryCard({
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  navBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: t.card,
+    borderWidth: 1,
+    borderColor: t.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navLabel: { flex: 1, fontSize: 15, fontWeight: '700', color: t.ink, textAlign: 'center' },
+  todayBtn: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: t.green50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayBtnText: { fontSize: 13, fontWeight: '700', color: t.green700 },
+  scopeWrap: { paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
+  scopeGroep: { flexDirection: 'row', backgroundColor: t.bgAlt, borderRadius: 14, padding: 4, gap: 4 },
+  scopeKnop: { flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  scopeKnopAan: { backgroundColor: t.card },
+  scopeTekst: { fontSize: 13.5, fontWeight: '600', color: t.muted },
+  scopeTekstAan: { color: t.ink },
+  kpiRegel: { marginTop: 10, fontSize: 12, fontWeight: '600', color: t.muted },
+  uitleg: { paddingHorizontal: 16, marginTop: 8, fontSize: 12.5, color: t.muted },
+  groepKop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 6,
+    gap: 8,
+  },
+  groepTitel: { fontSize: 13, fontWeight: '700', color: t.ink },
+  groepTotaal: { fontSize: 12, fontWeight: '600', color: t.muted, flexShrink: 1, textAlign: 'right' },
   summaryTop: {
     flexDirection: 'row',
     alignItems: 'center',

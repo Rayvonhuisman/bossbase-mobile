@@ -144,6 +144,8 @@ export const ROUTE_GATES: Record<string, NavGate> = {
   '/pipeline': { permission: 'verkoop' },
   // Zoals het menu van het dashboard (NAV: projecten → recht `projecten`).
   '/projects': { permission: 'projecten' },
+  // Planning (weekrooster): recht én pakketfeature, zoals NAV in het dashboard.
+  '/planningbord': { permission: 'planning', feature: 'planning' },
   '/offers': { permission: 'offertes' },
   '/invoices': { permission: 'facturen' },
   '/expenses': { permission: 'kosten', feature: 'kosten_nacalculatie' },

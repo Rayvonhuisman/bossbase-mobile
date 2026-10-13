@@ -32,10 +32,21 @@ import { useAuth, usePermissions, useTheme } from '@/providers';
 import {
   createAfspraak,
   deleteAfspraak,
-  listPlanningItemsForRange,
   updateAfspraak,
   type PlanningItem,
 } from '@/services/activityService';
+import {
+  listAgendaEvents,
+  listAlleVoertuigen,
+  listWerkbonnenInBereik,
+  type AgendaEvent,
+  type PlanWerkbon,
+} from '@/services/planningService';
+import {
+  agendaWerkbonItems,
+  magAfspraakBewerken,
+  zichtbareAfspraken,
+} from '@/lib/planningRegels';
 import { listCustomers } from '@/services/customerService';
 import {
   addDays,
@@ -73,6 +84,74 @@ function cap(s: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Agenda-items, zoals het dashboard (CalendarPage)
+// ---------------------------------------------------------------------------
+
+/** Typelabels van `calendar_events` (dashboard calendarService). */
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  job: 'Klus',
+  visit: 'Opname',
+  activity: 'Activiteit',
+  event: 'Afspraak',
+};
+
+function eventType(e: AgendaEvent): string {
+  if (e.type && EVENT_TYPE_LABEL[e.type]) return e.type;
+  if (e.activiteit_id) return 'activity';
+  if (e.customer_id) return 'visit';
+  return 'event';
+}
+
+function adresVan(c: AgendaEvent['customer']): string | null {
+  if (!c) return null;
+  return [c.address, c.postcode, c.city].filter(Boolean).join(', ') || null;
+}
+
+/** Lokale datum + HH:MM als tijdstip; null zonder tijd. */
+function lokaalTijdstip(datum: string, tijd: string | null): string | null {
+  if (!tijd) return null;
+  const d = new Date(`${datum}T${tijd.slice(0, 5)}:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function eventStatus(e: AgendaEvent): string {
+  const nu = Date.now();
+  const van = e.start_at ? new Date(e.start_at).getTime() : NaN;
+  const tot = e.end_at ? new Date(e.end_at).getTime() : NaN;
+  if (van <= nu && nu <= tot) return 'in_progress';
+  if (tot < nu) return 'completed';
+  return 'gepland';
+}
+
+function eventNaarItem(e: AgendaEvent): PlanningItem {
+  return {
+    id: `event-${e.id}`,
+    source: 'calendar_event',
+    number: null,
+    title: e.title ?? 'Afspraak',
+    customerName: e.customer?.name ?? null,
+    customerId: e.customer_id,
+    description: e.notes,
+    address: e.location ?? adresVan(e.customer),
+    phone: e.customer?.phone ?? null,
+    startAt: e.start_at,
+    endAt: e.end_at,
+    date: e.start_at ? toLocalISODate(new Date(e.start_at)) : '',
+    status: eventStatus(e),
+    assigneeName: null,
+    assigneeId: e.assigned_to,
+    workOrderId: null,
+    typeLabel: EVENT_TYPE_LABEL[eventType(e)] ?? 'Afspraak',
+  };
+}
+
+function sorteerMs(item: PlanningItem): number {
+  const ms = item.startAt ? new Date(item.startAt).getTime() : NaN;
+  if (!Number.isNaN(ms)) return ms;
+  return new Date(`${item.date}T23:59:59`).getTime();
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -87,20 +166,29 @@ type AfspraakConcept = {
   location: string;
   notes: string;
   customerId: string | null;
+  /**
+   * Mag deze gebruiker het item wijzigen/verwijderen? Spiegelt de RLS: recht
+   * `planning`, of je eigen item dat niet uit de planning komt.
+   */
+  magBewerken: boolean;
 };
 
 export default function PlanningScreen() {
   const router = useRouter();
-  const { user, profile, role } = useAuth();
+  const { user } = useAuth();
   const { colors: th } = useTheme();
   const styles = useStyles(themaStijlen);
-  const { loaded: rechtenGeladen, mag } = usePermissions();
+  const { loaded: rechtenGeladen, mag, can, hasFeature } = usePermissions();
 
-  const isTeamScope = role === 'admin' || role === 'planner';
-  // medewerker only sees own assigned werkbonnen; admin/planner see company-wide.
-  const assignedToUserId = role === 'medewerker' ? user?.id ?? null : null;
+  /**
+   * Persoonlijke agenda, zoals het dashboard: iedereen — ook admin en planner —
+   * ziet alleen zijn eigen afspraken en de werkbondagen waarop hij in de ploeg
+   * staat. Alleen in een gedeelde werkruimte ziet iedereen alles.
+   */
+  const gedeeld = rechtenGeladen && hasFeature('gedeelde_werkruimte');
+  const metVoertuigen = rechtenGeladen && hasFeature('voertuigen');
+  const planningRecht = rechtenGeladen && can('planning');
   const currentUserId = user?.id ?? null;
-  const currentUserName = profile?.full_name ?? user?.email ?? null;
 
   /**
    * De weergave staat ook in de route: `/(tabs)/planning?view=week`. Dat kost
@@ -109,11 +197,14 @@ export default function PlanningScreen() {
    */
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const [view, setView] = useState<ViewMode>(
-    viewParam === 'week' || viewParam === 'maand' ? viewParam : 'dag',
+    // Zelfde standaard als het dashboard: de week.
+    viewParam === 'dag' || viewParam === 'maand' ? viewParam : 'week',
   );
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [items, setItems] = useState<PlanningItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [deelFout, setDeelFout] = useState<string | null>(null);
+  const [events, setEvents] = useState<Map<string, AgendaEvent>>(() => new Map());
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
   const [afspraak, setAfspraak] = useState<AfspraakConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
@@ -130,22 +221,64 @@ export default function PlanningScreen() {
     async () => {
       setError(null);
 
-      const result = await listPlanningItemsForRange({
-        startISO: range.startISO,
-        endISO: range.endISO,
-        startDate: range.startDate,
-        endDate: range.endDate,
-        assignedToUserId,
-        currentUserId,
-        currentUserName,
+      const [evRes, wbRes, vRes] = await Promise.all([
+        listAgendaEvents(range.startISO, range.endISO),
+        listWerkbonnenInBereik(range.startDate, range.endDate),
+        metVoertuigen ? listAlleVoertuigen() : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (evRes.error && wbRes.error) {
+        setError('Agenda laden is mislukt.');
+        setItems([]);
+        return;
+      }
+      setDeelFout(
+        evRes.error
+          ? 'Je afspraken konden niet worden geladen; alleen de werkbonnen staan hieronder.'
+          : wbRes.error
+            ? 'De werkbonnen konden niet worden geladen; alleen je afspraken staan hieronder.'
+            : null,
+      );
+
+      // 1. Handmatige agenda-items (geen werkbon-gekoppelde: die staan er als
+      //    werkbon al in), persoonlijk tenzij gedeelde werkruimte.
+      const eigen = zichtbareAfspraken(evRes.data, { uid: currentUserId, gedeeld });
+      setEvents(new Map(eigen.map((e) => [`event-${e.id}`, e])));
+
+      // 2. Werkbonnen per geplande dag, met jouw tijd (en jouw voertuig).
+      const voertuigNaam = new Map(vRes.data.map((v) => [v.id, v.naam]));
+      const wbItems = agendaWerkbonItems<PlanWerkbon>(wbRes.data, {
+        uid: currentUserId,
+        gedeeld,
+        van: range.startDate,
+        tot: range.endDate,
+      }).map((i): PlanningItem => {
+        const w = i.werkbon;
+        const voertuig = i.voertuigId ? voertuigNaam.get(i.voertuigId) : null;
+        return {
+          id: i.sleutel,
+          source: 'work_order',
+          number: w.nummer,
+          title: w.titel || 'Werkbon',
+          customerName: w.customer?.name ?? null,
+          customerId: w.customer_id,
+          description: null,
+          address: w.locatie ?? adresVan(w.customer),
+          phone: w.customer?.phone ?? null,
+          startAt: lokaalTijdstip(i.datum, i.starttijd),
+          endAt: lokaalTijdstip(i.datum, i.eindtijd),
+          date: i.datum,
+          status: w.status,
+          assigneeName: null,
+          assigneeId: null,
+          workOrderId: w.id,
+          typeLabel: voertuig ? `Werkbon · ${voertuig}` : 'Werkbon',
+        };
       });
 
-      if (result.error) {
-        setError(result.error);
-        setItems([]);
-      } else {
-        setItems(result.items);
-      }
+      const alles = [...eigen.map(eventNaarItem), ...wbItems];
+      alles.sort((a, b) => sorteerMs(a) - sorteerMs(b));
+      setItems(alles);
 
       // De klantenlijst is alleen voor het keuzeveld in het afspraakformulier;
       // mislukt hij, dan blijft de afspraak gewoon te maken — zonder klant.
@@ -153,19 +286,19 @@ export default function PlanningScreen() {
       if (!klantRes.error) {
         setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
       }
-
     },
-    // Primitive deps so re-selecting a day within the same period doesn't refetch.
-    [range.startISO, range.endISO, range.startDate, range.endDate, assignedToUserId, currentUserId, currentUserName],
+    [range.startISO, range.endISO, range.startDate, range.endDate, currentUserId, gedeeld, metVoertuigen],
   );
-
 
   /**
    * Eerste load, stille verversing bij focus en pull-to-refresh zijn drie
    * verschillende dingen. Alleen de laatste zet `refreshing`; een
    * automatische verversing laat het scherm dus niet omlaag hangen.
    */
-  const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
+  const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, {
+    onFout: setError,
+    klaarOmTeLaden: rechtenGeladen && !!currentUserId,
+  });
 
   // ── Period navigation ────────────────────────────────────────────────────
   const step = (dir: -1 | 1) => {
@@ -212,7 +345,9 @@ export default function PlanningScreen() {
     if (p.source === 'calendar_event') {
       setSaveError(null);
       const { date, time } = splitsLokaal(p.startAt);
+      const ev = events.get(p.id);
       setAfspraak({
+        magBewerken: !!ev && magAfspraakBewerken(ev, { uid: currentUserId, planningRecht }),
         id: p.id.replace(/^event-/, ''),
         title: p.title,
         date: date || toLocalISODate(selectedDate),
@@ -230,6 +365,7 @@ export default function PlanningScreen() {
   const nieuweAfspraak = () => {
     setSaveError(null);
     setAfspraak({
+      magBewerken: true,
       id: null,
       title: '',
       date: toLocalISODate(selectedDate),
@@ -348,6 +484,12 @@ export default function PlanningScreen() {
           </Pressable>
         </View>
 
+        {deelFout && !loading && !error ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <NoticeBanner toon="waarschuwing" message={deelFout} />
+          </View>
+        ) : null}
+
         {/* Body */}
         {loading ? (
           <LoadingCard />
@@ -396,9 +538,9 @@ export default function PlanningScreen() {
         {/* Role hint: company-wide vs eigen (honest, no fake team data) */}
         {!loading && !error && items.length > 0 ? (
           <Text style={[styles.scopeNote, { color: th.muted }]}>
-            {isTeamScope
-              ? 'Bedrijfsbrede agenda'
-              : 'Je eigen agenda'}
+            {gedeeld
+              ? 'Gedeelde agenda: afspraken en werkbonnen van het hele team'
+              : 'Je eigen agenda: jouw afspraken en de werkbondagen waarop jij staat'}
           </Text>
         ) : null}
       </AppScreen>
@@ -408,10 +550,13 @@ export default function PlanningScreen() {
           afspraken (herkomst 'zelf'). */}
       <FormSheet
         visible={afspraak !== null}
-        title={afspraak?.id ? 'Afspraak bewerken' : 'Nieuwe afspraak'}
+        title={
+          !afspraak?.id ? 'Nieuwe afspraak' : afspraak.magBewerken ? 'Afspraak bewerken' : 'Afspraak'
+        }
         error={saveError}
         saving={saving}
         submitDisabled={
+          !afspraak?.magBewerken ||
           !afspraak?.title.trim() ||
           !afspraak?.date.trim() ||
           (!!afspraak?.time &&
@@ -421,11 +566,17 @@ export default function PlanningScreen() {
         onSubmit={afspraakOpslaan}
         onClose={() => setAfspraak(null)}
         destructive={
-          afspraak?.id && mag('agenda', 'verwijderen')
+          afspraak?.id && afspraak.magBewerken && mag('agenda', 'verwijderen')
             ? { label: 'Afspraak verwijderen', onPress: afspraakVerwijderen }
             : undefined
         }
       >
+        {afspraak?.id && !afspraak.magBewerken ? (
+          <NoticeBanner
+            toon="info"
+            message="Alleen-lezen: dit item komt uit de planning of is van een collega. Wijzigen kan met het recht Planning."
+          />
+        ) : null}
         <FormField
           label="Titel"
           value={afspraak?.title ?? ''}

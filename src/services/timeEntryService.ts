@@ -20,7 +20,7 @@ import type { TimeEntry, UrenRegel, WerkbonUur } from '@/types/domain';
 // daarom precies de kolommen die in productie bestaan.
 const TIME_ENTRY_COLUMNS = `
   id, company_id, profile_id,
-  datum, start_tijd, eind_tijd, pauze_minuten, uren, type, notitie,
+  datum, start_tijd, eind_tijd, pauze_minuten, uren, reis_km, type, notitie,
   created_at, updated_at
 `;
 
@@ -195,6 +195,8 @@ export type CreateWerkdagUurInput = {
   start_tijd?: string | null; // HH:MM
   eind_tijd?: string | null; // HH:MM
   pauze_minuten?: number;
+  /** Gereden kilometers; null = niet ingevuld (≠ 0), zoals het dashboard. */
+  reis_km?: number | null;
   notitie?: string | null;
 };
 
@@ -231,6 +233,9 @@ export async function createWerkdagUur(
   for (const v of [input.start_tijd, input.eind_tijd]) {
     if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
   }
+  if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+  }
   if (
     input.pauze_minuten !== undefined &&
     (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)
@@ -250,6 +255,7 @@ export async function createWerkdagUur(
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
+          reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
         })
         .select(TIME_ENTRY_COLUMNS),
@@ -281,6 +287,7 @@ export async function updateTimeEntry(
     eind_tijd?: string | null;
     pauze_minuten?: number;
     uren?: number;
+    reis_km?: number | null;
     notitie?: string | null;
   },
 ): Promise<WriteResult<TimeEntry>> {
@@ -318,6 +325,12 @@ export async function updateTimeEntry(
     updates.uren = uren;
   }
   if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
+  if (input.reis_km !== undefined) {
+    if (input.reis_km !== null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+      return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+    }
+    updates.reis_km = input.reis_km;
+  }
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
   updates.updated_at = new Date().toISOString();
