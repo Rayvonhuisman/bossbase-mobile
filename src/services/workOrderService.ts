@@ -411,18 +411,32 @@ export async function uploadWorkOrderPhoto(input: {
   return { data: { ...row, url: signed?.signedUrl ?? row.url }, error: null };
 }
 
-/** Een foto verwijderen: eerst het bestand, dan de rij. */
+/**
+ * Een foto verwijderen: eerst de rij, dan het bestand.
+ *
+ * Bewust in deze volgorde. De rij kent een slot (trigger
+ * `bb_werkbon_kind_op_slot` op een ondertekende bon) naast RLS; de
+ * storage-policy van `werkbon-fotos` kent dat slot niet. Ging het bestand
+ * eerst, dan bleef bij een geweigerde rij-delete een rij achter die naar een
+ * verdwenen bestand wijst. Nu blijft bij een weigering alles staan; mislukt
+ * alleen het opruimen van het bestand, dan resteert een los bestand zonder rij.
+ */
 export async function deleteWorkOrderPhoto(
   id: string,
   bewaardeUrl: string,
 ): Promise<{ error: string | null }> {
-  const pad = opslagpad(bewaardeUrl);
-  if (pad) await supabase.storage.from(FOTO_BUCKET).remove([pad]);
-
   const { data, error } = await supabase.from('werkbon_fotos').delete().eq('id', id).select('id');
   if (error) return { error: describeError('deleteWorkOrderPhoto', error) };
   if (!((data as { id: string }[]) ?? []).length) {
     return { error: 'De foto is niet verwijderd — je hebt hier geen rechten voor.' };
+  }
+
+  const pad = opslagpad(bewaardeUrl);
+  if (pad) {
+    const { error: opslagFout } = await supabase.storage.from(FOTO_BUCKET).remove([pad]);
+    if (opslagFout && __DEV__) {
+      console.log('[workOrderService.deleteWorkOrderPhoto] bestand bleef staan', opslagFout.message);
+    }
   }
   return { error: null };
 }
