@@ -4,6 +4,7 @@ import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { listWorkOrdersForPlanningRange } from './workOrderService';
 import { toLocalISODate } from '@/lib/dateRange';
+import { haalInStukken } from '@/lib/inStukken';
 import type { WorkOrderWithCustomer } from '@/types/domain';
 
 /**
@@ -80,6 +81,10 @@ export type ActivityRow = {
   // Live schema: activities heeft geen `updated_at`.
   created_at: string;
   customer: CalendarEvent['customer'];
+  /** Alleen in de volledige lijst (`listAllActivities`): alle toegewezenen. */
+  assigned_to_ids?: string[] | null;
+  /** Alleen in de volledige lijst: naam van de primaire toegewezene. */
+  assigned_profile?: { full_name: string | null } | null;
 };
 
 /** Calendar events binnen `[fromISO, toISO]`, oplopend op start_at. */
@@ -142,24 +147,67 @@ export async function listRecentActivities(
   return { data: (data as unknown as ActivityRow[]) ?? [], error: null };
 }
 
-/** Open taken (type=task, niet voltooid) voor het Taken-scherm. */
-export async function listOpenTasks(
-  limit = 100,
-): Promise<{ data: ActivityRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('activities')
-    .select(ACTIVITY_COLUMNS)
-    .eq('type', 'task')
-    .eq('completed', false)
-    .order('due_at', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
+/**
+ * Zelfde selectie als `ACTIVITY_SELECT` in het dashboard: alle kolommen (`*`,
+ * dus ook `assigned_to_ids`, `end_time` en `location` als ze bestaan), de klant
+ * en de naam van de primaire toegewezene via de expliciete FK-naam — zo tonen
+ * we nooit een ruw profiel-id.
+ */
+const ACTIVITY_LIST_SELECT = `
+  *,
+  customer:customers ( id, name, phone, address, postcode, city ),
+  assigned_profile:profiles!activities_assigned_to_fkey ( full_name )
+`;
 
+/**
+ * Alle activiteiten die je mag zien (RLS), oplopend op `due_at` en daarna `id`
+ * — `listActivities()` uit het dashboard. In stukken van 1000, dus geen
+ * stille afkap bij grote bedrijven.
+ */
+export async function listAllActivities(): Promise<{ data: ActivityRow[]; error: string | null }> {
+  const { data, error } = await haalInStukken<ActivityRow, { message: string }>((van, tot) =>
+    supabase
+      .from('activities')
+      .select(ACTIVITY_LIST_SELECT)
+      .order('due_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(van, tot)
+      .then((r) => ({ data: (r.data as unknown as ActivityRow[] | null) ?? null, error: r.error })),
+  );
   if (error) {
-    console.warn('[activityService.listOpenTasks]', error.message);
-    return { data: [], error: 'Taken konden niet worden geladen.' };
+    console.warn('[activityService.listAllActivities]', error.message);
+    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
   }
-  return { data: (data as unknown as ActivityRow[]) ?? [], error: null };
+  return { data, error: null };
+}
+
+/**
+ * Eigen open activiteiten met `due_at` tot en met `totISO` (einde van vandaag):
+ * de bron voor "Activiteiten vandaag" en "te laat" op de homepage. "Eigen" =
+ * primair toegewezen óf in `assigned_to_ids`, net als het Persoonlijk-filter
+ * van het dashboard (`myActivities`).
+ */
+export async function listEigenOpenActiviteitenTot(
+  userId: string,
+  totISO: string,
+): Promise<{ data: ActivityRow[]; error: string | null }> {
+  const { data, error } = await haalInStukken<ActivityRow, { message: string }>((van, tot) =>
+    supabase
+      .from('activities')
+      .select(ACTIVITY_LIST_SELECT)
+      .eq('completed', false)
+      .lte('due_at', totISO)
+      .or(`assigned_to.eq.${userId},assigned_to_ids.cs.{${userId}}`)
+      .order('due_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(van, tot)
+      .then((r) => ({ data: (r.data as unknown as ActivityRow[] | null) ?? null, error: r.error })),
+  );
+  if (error) {
+    console.warn('[activityService.listEigenOpenActiviteitenTot]', error.message);
+    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
+  }
+  return { data, error: null };
 }
 
 /** Eerstvolgende calendar-event vanaf nu. */

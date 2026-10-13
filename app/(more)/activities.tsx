@@ -1,136 +1,185 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import {
-  CalendarCheck,
-  Check,
-  CheckCircle2,
-  ListChecks,
-  Mail,
-  Phone,
-  Plus,
-  RotateCcw,
-  Users,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { CheckCircle2, Plus } from 'lucide-react-native';
 import {
   ActivityFormSheet,
+  AppFilterChips,
   AppListGroup,
-  AppListItem,
   AppScreen,
+  AppSearchBar,
   AppSection,
   AppTopBar,
+  Button,
   EmptyState,
   ErrorState,
   HeaderIconButton,
   LoadingScreen,
+  SelectField,
   conceptVanActiviteit,
   leegConcept,
   type ActivityConcept,
   type SelectOption,
 } from '@/components';
-import { usePermissions, useTheme } from '@/providers';
+import { ActiviteitRij } from '@/components/ActiviteitRij';
+import { useAuth, usePermissions, useTheme } from '@/providers';
 import {
-  activiteitTypeLabel,
-  listRecentActivities,
+  listAllActivities,
   setActivityCompleted,
   type ActivityRow,
 } from '@/services/activityService';
 import { listCustomers } from '@/services/customerService';
 import { listCompanyProfiles } from '@/services/teamService';
+import {
+  activiteitStatus,
+  filterActiviteiten,
+  groepeerActiviteiten,
+  telActiviteiten,
+  ACTIVITEIT_FILTERS,
+  type ActiviteitFilter,
+} from '@/lib/activiteitStatus';
+import { lokaleDatum, vandaagIso } from '@/lib/nlTijd';
 import { useSave } from '@/lib/useSave';
-import { formatDateNL } from '@/lib/format';
-import { ds, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
+import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
+import { ds, spacing, type ThemeColors } from '@/theme';
 
 /**
- * Activiteiten — bellen, mailen, bezoeken, taken en opvolgacties.
+ * Activiteiten — gelijk aan `ActivitiesPageV2` in het dashboard.
  *
- * De RLS op `activities` geeft schrijfrecht aan iedereen binnen het bedrijf;
- * alleen aanmaken valt onder de read-onlygate. De SELECT-policy is juist
- * stréngér dan de schrijfpolicies (gedeelde werkruimte, planning- of
- * agenda_inzien-recht, of zelf toegewezen zijn) — daarom wijst de service een
- * nieuwe activiteit standaard aan jezelf toe, anders is hij na het opslaan
- * onvindbaar voor de maker.
+ * - Status wordt afgeleid uit `completed` en de Nederlandse dag van `due_at`
+ *   (te laat / vandaag / binnenkort / afgerond), zie `lib/activiteitStatus`.
+ * - Filters: status (met tellers), verantwoordelijke en zoeken op titel of
+ *   klant; lijst in datumgroepen (Te laat, Vandaag, Morgen, Deze week, Later,
+ *   Afgerond).
+ * - Aanmaken mag iedereen (behalve read-only); wijzigen en verwijderen alleen
+ *   admin en planner, net als `ActivityEditModal`; afronden en heropenen mag
+ *   iedereen die de activiteit ziet.
+ * - `?id=<id>` opent een activiteit (de homepage linkt zo), `?nieuw=1` opent
+ *   een nieuwe. De oude pagina Taken (`/tasks`) verwijst hierheen.
+ *
+ * RLS: een gewone medewerker krijgt alleen zijn eigen activiteiten terug
+ * (gedeelde werkruimte, planning, agenda_inzien of zelf toegewezen).
  */
 
-const TYPE_ICON: Record<string, LucideIcon> = {
-  call: Phone,
-  email: Mail,
-  visit: Users,
-  meeting: Users,
-  task: ListChecks,
-  follow: RotateCcw,
-  note: ListChecks,
+const FILTER_LABEL: Record<ActiviteitFilter, string> = {
+  all: 'Alle',
+  overdue: 'Te laat',
+  today: 'Vandaag',
+  open: 'Binnenkort',
+  done: 'Afgerond',
 };
 
-function iconFor(type: string | null): LucideIcon {
-  return (type && TYPE_ICON[type]) || CalendarCheck;
-}
+const dagVan = (iso: string) => lokaleDatum(iso);
 
-function subtitleFor(a: ActivityRow): string {
-  const delen: string[] = [activiteitTypeLabel(a.type)];
-  if (a.customer?.name) delen.push(a.customer.name);
-  if (a.due_at) delen.push(formatDateNL(a.due_at));
-  if (a.completed) delen.push('Voltooid');
-  return delen.join(' · ');
-}
+type TeamLid = { id: string; full_name: string; role: string; actief: boolean };
 
 export default function ActivitiesScreen() {
   const router = useRouter();
+  const { id: openId, nieuw } = useLocalSearchParams<{ id?: string; nieuw?: string }>();
+  const { role } = useAuth();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const { klasse } = useSchermklasse();
+  const tablet = klasse === 'tablet';
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
 
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
-  const [medewerkers, setMedewerkers] = useState<SelectOption[]>([]);  const [error, setError] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamLid[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [concept, setConcept] = useState<ActivityConcept | null>(null);
 
-  // Aparte opslag-hook voor de afvinkknop in de lijst: die staat los van het
-  // formulier en mag zijn eigen bezig-stand hebben.
+  const [filter, setFilter] = useState<ActiviteitFilter>('all');
+  const [zoek, setZoek] = useState('');
+  const [medewerker, setMedewerker] = useState<string | null>(null);
+
   const { save: saveVink, saving: vinkBezig, error: vinkFout } = useSave<unknown>();
 
   const magMaken = mag('activiteiten', 'maken');
-  const magWijzigen = mag('activiteiten', 'wijzigen');
   const magAfronden = mag('activiteiten', 'afronden');
+  // Dashboard: wijzigen en verwijderen alleen voor admin en planner.
+  const magBewerken = mag('activiteiten', 'wijzigen') && (role === 'admin' || role === 'planner');
 
   const load = useCallback(async () => {
     setError(null);
-
     const [actRes, klantRes, teamRes] = await Promise.all([
-      listRecentActivities(),
+      listAllActivities(),
       listCustomers(),
       listCompanyProfiles(),
     ]);
-
     if (actRes.error) setError(actRes.error);
     else setItems(actRes.data);
-
-    // De keuzelijsten zijn hulpmiddelen: mislukken ze, dan blijft de activiteit
-    // gewoon te maken — zonder klant of zonder expliciete toewijzing.
+    // Keuzelijsten zijn hulpmiddelen: mislukken ze, dan werkt de lijst nog.
     if (!klantRes.error) {
-      setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant', sub: k.city ?? undefined })));
-    }
-    if (!teamRes.error) {
-      setMedewerkers(
-        teamRes.data
-          .filter((p) => p.actief)
-          .map((p) => ({ id: p.id, label: p.full_name, sub: p.role })),
+      setKlanten(
+        klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant', sub: k.city ?? undefined })),
       );
     }
+    if (!teamRes.error) setTeam(teamRes.data);
   }, []);
 
-
-  /**
-   * Eerste load, stille verversing bij focus en pull-to-refresh zijn hier
-   * drie verschillende dingen. Alleen de laatste zet `refreshing`, dus het
-   * scherm hangt niet meer omlaag bij een automatische verversing.
-   */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
+  // Deep links vanaf de homepage: ?id=<id> opent de activiteit, ?nieuw=1 een nieuwe.
+  useEffect(() => {
+    if (loading || !rechtenGeladen) return;
+    if (openId) {
+      const a = items.find((x) => x.id === openId);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (a) setConcept(conceptVanActiviteit(a));
+      router.setParams({ id: undefined });
+    } else if (nieuw) {
+      if (magMaken) setConcept(leegConcept('task'));
+      router.setParams({ nieuw: undefined });
+    }
+  }, [loading, rechtenGeladen, openId, nieuw, items, magMaken, router]);
 
+  const vandaag = vandaagIso();
+
+  const naamVan = useMemo(() => {
+    const namen = new Map(team.map((p) => [p.id, p.full_name]));
+    return (a: ActivityRow): string => {
+      if (!a.assigned_to) return '';
+      return namen.get(a.assigned_to) || a.assigned_profile?.full_name || 'Onbekend';
+    };
+  }, [team]);
+
+  // Unieke verantwoordelijken uit de lijst zelf (primair én meegewezen).
+  const medewerkerOpties = useMemo<SelectOption[]>(() => {
+    const namen = new Map(team.map((p) => [p.id, p.full_name]));
+    const gevonden = new Map<string, string>();
+    for (const a of items) {
+      const ids = [a.assigned_to, ...(a.assigned_to_ids ?? [])].filter(
+        (x): x is string => typeof x === 'string' && x.length > 0,
+      );
+      for (const id of ids) {
+        if (gevonden.has(id)) continue;
+        const naam =
+          namen.get(id) || (id === a.assigned_to ? a.assigned_profile?.full_name : null) || 'Onbekend';
+        gevonden.set(id, naam);
+      }
+    }
+    return [...gevonden.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((x, y) => x.label.localeCompare(y.label, 'nl'));
+  }, [items, team]);
+
+  const medewerkersVoorFormulier = useMemo<SelectOption[]>(
+    () => team.filter((p) => p.actief).map((p) => ({ id: p.id, label: p.full_name, sub: p.role })),
+    [team],
+  );
+
+  const telling = useMemo(() => telActiviteiten(items, vandaag, dagVan), [items, vandaag]);
+  const gefilterd = useMemo(
+    () => filterActiviteiten(items, { filter, medewerker, zoek }, vandaag, dagVan),
+    [items, filter, medewerker, zoek, vandaag],
+  );
+  const groepen = useMemo(
+    () => groepeerActiviteiten(gefilterd, vandaag, dagVan),
+    [gefilterd, vandaag],
+  );
 
   const vink = (a: ActivityRow) => {
     if (!magAfronden || vinkBezig) return;
@@ -139,6 +188,15 @@ export default function ActivitiesScreen() {
     });
   };
 
+  const filtersWissen = () => {
+    setFilter('all');
+    setZoek('');
+    setMedewerker(null);
+  };
+
+  const terug = () => terugOfNaar(router, '/menu');
+  const nieuwKnop = () => setConcept(leegConcept('task'));
+
   if (loading || !rechtenGeladen) return <LoadingScreen label="Activiteiten laden..." />;
 
   if (error) {
@@ -146,46 +204,33 @@ export default function ActivitiesScreen() {
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Activiteiten" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title="Activiteiten" onBack={terug} />}
         >
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState
+            title="Activiteiten konden niet worden geladen"
+            message={error}
+            onRetry={opnieuw}
+          />
         </AppScreen>
       </View>
     );
   }
 
-  const open = items.filter((a) => !a.completed);
-  const gedaan = items.filter((a) => a.completed);
+  const openstaand = telling.open + telling.today + telling.overdue;
+  const subtitel = `${openstaand} openstaand${telling.overdue > 0 ? ` · ${telling.overdue} te laat` : ''}`;
 
-  const lijst = (rijen: ActivityRow[]) => (
-    <AppListGroup>
-      {rijen.map((a, i) => (
-        <AppListItem
-          key={a.id}
-          first={i === 0}
-          icon={iconFor(a.type)}
-          title={a.title || 'Activiteit'}
-          subtitle={subtitleFor(a)}
-          onPress={magWijzigen ? () => setConcept(conceptVanActiviteit(a)) : undefined}
-          trailing={
-            magAfronden ? (
-              <Pressable
-                onPress={() => vink(a)}
-                disabled={vinkBezig}
-                hitSlop={10}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: a.completed }}
-                accessibilityLabel={a.completed ? 'Heropenen' : 'Afronden'}
-                style={[styles.vink, a.completed && styles.vinkAan, vinkBezig && { opacity: 0.5 }]}
-              >
-                {a.completed ? <Check size={15} color={ds.greenInk} strokeWidth={3} /> : null}
-              </Pressable>
-            ) : undefined
-          }
-        />
-      ))}
-    </AppListGroup>
-  );
+  const samenvatting: {
+    id: ActiviteitFilter;
+    label: string;
+    aantal: number;
+    sub: string;
+    kleur: string;
+  }[] = [
+    { id: 'overdue', label: 'Te laat', aantal: telling.overdue, sub: 'Pak deze het eerst aan', kleur: t.statusRejectFg },
+    { id: 'today', label: 'Vandaag', aantal: telling.today, sub: 'Gepland voor vandaag', kleur: t.statusSubmitFg },
+    { id: 'open', label: 'Binnenkort', aantal: telling.open, sub: 'Nog niet aan de beurt', kleur: t.ink2 },
+    { id: 'done', label: 'Afgerond', aantal: telling.done, sub: 'Gereed gemeld', kleur: t.green700 },
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -194,15 +239,11 @@ export default function ActivitiesScreen() {
           <AppTopBar
             variant="detail"
             title="Activiteiten"
-            subtitle={`${open.length} open · ${gedaan.length} afgerond`}
-            onBack={() => terugOfNaar(router, '/menu')}
+            subtitle={subtitel}
+            onBack={terug}
             rightAction={
               magMaken ? (
-                <HeaderIconButton
-                  icon={Plus}
-                  label="Nieuwe activiteit"
-                  onPress={() => setConcept(leegConcept('call'))}
-                />
+                <HeaderIconButton icon={Plus} label="Nieuwe activiteit" onPress={nieuwKnop} />
               ) : undefined
             }
           />
@@ -210,45 +251,133 @@ export default function ActivitiesScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
+        {/* Samenvattingstegels (klikbaar = filter), zoals bovenaan het dashboard. */}
+        <View style={styles.tegels}>
+          {samenvatting.map((s) => {
+            const aan = filter === s.id;
+            return (
+              <Pressable
+                key={s.id}
+                onPress={() => setFilter(aan ? 'all' : s.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: aan }}
+                accessibilityLabel={`${s.label}: ${s.aantal}`}
+                style={({ pressed }) => [
+                  styles.tegel,
+                  tablet ? styles.tegelTablet : styles.tegelTelefoon,
+                  aan && { borderColor: s.kleur, borderWidth: 1.5 },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <Text style={styles.tegelLabel}>{s.label}</Text>
+                <Text
+                  style={[
+                    styles.tegelGetal,
+                    s.id === 'overdue' && s.aantal > 0 ? { color: s.kleur } : null,
+                  ]}
+                >
+                  {s.aantal}
+                </Text>
+                {tablet ? <Text style={styles.tegelSub}>{s.sub}</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.filterblok}>
+          <AppFilterChips
+            chips={ACTIVITEIT_FILTERS.map((id) => ({
+              id,
+              label: FILTER_LABEL[id],
+              count: telling[id],
+            }))}
+            active={filter}
+            onChange={setFilter}
+          />
+          <View style={[styles.zoekRij, tablet && styles.zoekRijTablet]}>
+            <View style={tablet ? styles.zoekVak : undefined}>
+              <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek activiteit of klant…" />
+            </View>
+            {medewerkerOpties.length > 0 ? (
+              <View style={tablet ? styles.medewerkerVak : undefined}>
+                <SelectField
+                  label="Verantwoordelijke"
+                  value={medewerker}
+                  options={medewerkerOpties}
+                  onChange={setMedewerker}
+                  allowEmpty
+                  emptyLabel="Alle medewerkers"
+                  placeholder="Alle medewerkers"
+                />
+              </View>
+            ) : null}
+          </View>
+        </View>
+
         {vinkFout ? (
           <View style={styles.foutBanner}>
             <Text style={styles.foutTekst}>{vinkFout}</Text>
           </View>
         ) : null}
 
-        {items.length === 0 ? (
-          <EmptyState
-            icon={<CheckCircle2 size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen activiteiten"
-            message={
-              magMaken
-                ? 'Leg met de plusknop je eerste actie vast.'
-                : (waaromNiet('activiteiten', 'maken') ??
-                  'Er staan nog geen activiteiten klaar voor dit bedrijf.')
-            }
-          />
+        {gefilterd.length === 0 ? (
+          <View>
+            <EmptyState
+              icon={<CheckCircle2 size={40} color={ds.green} strokeWidth={1.6} />}
+              title="Geen activiteiten"
+              message={
+                items.length > 0
+                  ? 'Geen activiteiten die aan deze filters voldoen.'
+                  : magMaken
+                    ? 'Alles bijgewerkt. Plan een nieuwe activiteit of geniet van de rust.'
+                    : (waaromNiet('activiteiten', 'maken') ?? 'Er staan nog geen activiteiten klaar.')
+              }
+            />
+            <View style={styles.legeKnoppen}>
+              {magMaken ? <Button label="Nieuwe activiteit" onPress={nieuwKnop} /> : null}
+              {items.length > 0 ? (
+                <Button label="Filters wissen" variant="secondary" onPress={filtersWissen} />
+              ) : null}
+            </View>
+          </View>
         ) : (
-          <>
-            {open.length > 0 ? (
-              <>
-                <AppSection title="Open" count={open.length} variant="eyebrow" />
-                {lijst(open)}
-              </>
-            ) : null}
-            {gedaan.length > 0 ? (
-              <>
-                <AppSection title="Afgerond" count={gedaan.length} variant="eyebrow" />
-                {lijst(gedaan)}
-              </>
-            ) : null}
-          </>
+          groepen.map((g) => (
+            <View key={g.key}>
+              {g.key === 'overdue' ? (
+                // De groep "Te laat" in rood, net als in het dashboard.
+                <View style={styles.groepKop}>
+                  <Text style={[styles.groepTitel, { color: t.statusRejectFg }]}>{g.titel}</Text>
+                  <Text style={[styles.groepAantal, { color: t.statusRejectFg }]}>
+                    {g.rijen.length}
+                  </Text>
+                </View>
+              ) : (
+                <AppSection title={g.titel} count={g.rijen.length} variant="eyebrow" />
+              )}
+              <AppListGroup>
+                {g.rijen.map((a, i) => (
+                  <ActiviteitRij
+                    key={a.id}
+                    activiteit={a}
+                    status={activiteitStatus(a, vandaag, dagVan)}
+                    medewerker={naamVan(a)}
+                    first={i === 0}
+                    onPress={() => setConcept(conceptVanActiviteit(a))}
+                    onVink={magAfronden ? () => vink(a) : undefined}
+                    vinkBezig={vinkBezig}
+                  />
+                ))}
+              </AppListGroup>
+            </View>
+          ))
         )}
       </AppScreen>
 
       <ActivityFormSheet
         concept={concept}
         klanten={klanten}
-        medewerkers={medewerkers}
+        medewerkers={medewerkersVoorFormulier}
+        magBewerken={magBewerken}
         onClose={() => setConcept(null)}
         onSaved={() => herlaad()}
       />
@@ -258,16 +387,61 @@ export default function ActivitiesScreen() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
-    vink: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      borderWidth: 1.6,
-      borderColor: t.lineStrong,
-      alignItems: 'center',
-      justifyContent: 'center',
+    tegels: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      paddingHorizontal: 16,
+      marginTop: spacing.sm,
     },
-    vinkAan: { backgroundColor: ds.green, borderColor: ds.green },
+    tegel: {
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+      borderRadius: t.rMd,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      minHeight: 44,
+    },
+    tegelTablet: { flex: 1 },
+    // Twee per rij op een telefoon.
+    tegelTelefoon: { flexBasis: '46%', flexGrow: 1 },
+    tegelLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.66,
+      textTransform: 'uppercase',
+      color: t.muted2,
+    },
+    tegelGetal: { fontSize: 22, fontWeight: '700', marginTop: 2, color: t.ink },
+    tegelSub: { fontSize: 12, color: t.muted, marginTop: 2 },
+    filterblok: { marginTop: spacing.md, gap: spacing.sm },
+    zoekRij: { paddingHorizontal: 16, gap: spacing.sm },
+    zoekRijTablet: { flexDirection: 'row', alignItems: 'flex-end' },
+    zoekVak: { flex: 1.4 },
+    medewerkerVak: { flex: 1 },
+    groepKop: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingTop: 22,
+      paddingBottom: 8,
+    },
+    groepTitel: {
+      fontSize: 12,
+      lineHeight: 15,
+      fontWeight: '700',
+      letterSpacing: 0.72,
+      textTransform: 'uppercase',
+    },
+    groepAantal: { fontSize: 12, fontWeight: '600' },
+    legeKnoppen: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: 16,
+    },
     foutBanner: {
       marginHorizontal: spacing.lg,
       marginTop: spacing.sm,

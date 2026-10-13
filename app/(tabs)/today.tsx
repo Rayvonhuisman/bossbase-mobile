@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  Camera,
+  CalendarPlus,
   Clock,
   FileText,
   Navigation as NavigationIcon,
@@ -10,17 +10,43 @@ import {
   Users,
 } from 'lucide-react-native';
 import { AppCard, AppScreen, AppTopBar, NoticeBanner, StatusBadge, statusKey } from '@/components';
-import { useAuth, useTheme } from '@/providers';
+import { ActiviteitRij } from '@/components/ActiviteitRij';
+import { useAuth, usePermissions, useTheme } from '@/providers';
 import { listUrenForProfile } from '@/services/timeEntryService';
 import {
   getNextPlanningItem,
+  listEigenOpenActiviteitenTot,
   listPlanningItemsForRange,
+  setActivityCompleted,
+  type ActivityRow,
   type PlanningItem,
 } from '@/services/activityService';
+import {
+  listDealKernen,
+  listFactuurKernen,
+  listFaseKernen,
+  listOpenOfferteKernen,
+  telKlanten,
+} from '@/services/overzichtService';
+import {
+  nieuweAanvragen,
+  omzetDezeMaand,
+  openFacturen,
+  openOffertes,
+  pipelineWaarden,
+  type DealKern,
+  type FactuurKern,
+  type FaseKern,
+  type OfferteKern,
+} from '@/lib/overzichtCijfers';
+import { activiteitStatus, eigenActiviteitenVandaag } from '@/lib/activiteitStatus';
+import { lokaleDatum, vandaagIso } from '@/lib/nlTijd';
+import { useSchermklasse } from '@/lib/schermklasse';
+import { useSave } from '@/lib/useSave';
 import { getDayRange } from '@/lib/dateRange';
 import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
-import { formatPlanningTime } from '@/lib/format';
+import { formatEUR, formatPlanningTime } from '@/lib/format';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
@@ -51,6 +77,27 @@ function firstNameOf(fullName: string | null | undefined, fallback: string): str
 }
 
 const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+/** Zoveel activiteiten toont de homepage, net als `FEED_LIMIET` in het dashboard. */
+const ACTIVITEITEN_MAX = 8;
+
+const dagVan = (iso: string) => lokaleDatum(iso);
+
+type Overzicht = {
+  deals: DealKern[] | null;
+  fases: FaseKern[] | null;
+  offertes: OfferteKern[] | null;
+  facturen: FactuurKern[] | null;
+  klanten: number | null;
+};
+
+const LEEG_OVERZICHT: Overzicht = {
+  deals: null,
+  fases: null,
+  offertes: null,
+  facturen: null,
+  klanten: null,
+};
 
 /** De normwerkdag uit het ontwerp — dezelfde 8 uur als de oude KPI-kaart. */
 const NORM_UREN = 8;
@@ -103,6 +150,16 @@ export default function TodayScreen() {
   const { user, profile, role } = useAuth();
   const { colors: c } = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { loaded: rechtenGeladen, can, mag, allowsRoute } = usePermissions();
+  const { klasse } = useSchermklasse();
+  const tablet = klasse === 'tablet';
+
+  // Welke dashboardtegels deze gebruiker mag zien — `WIDGET_PERMISSION`.
+  const zieFinancien = can('bedrijfsfinancien');
+  const zieVerkoop = can('verkoop');
+  const zieOffertes = can('offertes');
+  const zieFacturen = can('facturen');
+  const toonOverzicht = zieFinancien || zieVerkoop || zieOffertes || zieFacturen;
 
   const firstName = firstNameOf(profile?.full_name, user?.email?.split('@')[0] ?? 'gebruiker');
   const currentUserName = profile?.full_name ?? user?.email ?? null;
@@ -124,6 +181,10 @@ export default function TodayScreen() {
   const [weekDagen, setWeekDagen] = useState<DagUren[]>([]);
   const [nextItem, setNextItem] = useState<PlanningItem | null>(null);
   const [todayItems, setTodayItems] = useState<PlanningItem[]>([]);
+  const [activiteiten, setActiviteiten] = useState<ActivityRow[]>([]);
+  const [activiteitenFout, setActiviteitenFout] = useState<string | null>(null);
+  const [overzicht, setOverzicht] = useState<Overzicht>(LEEG_OVERZICHT);
+  const { save: saveVink, saving: vinkBezig, error: vinkFout } = useSave<unknown>();
 
   const userId = user?.id;
   const load = useCallback(
@@ -131,7 +192,28 @@ export default function TodayScreen() {
       if (!userId) return;
 
       const dayRange = getDayRange(new Date());
-      const [planRes, weekRes, nextRes] = await Promise.all([
+
+      // Overzichtstegels: alleen ophalen wat de gebruiker mag zien. Los van de
+      // rest, zodat een trage of geweigerde bron de dag niet ophoudt.
+      const overzichtKlaar = toonOverzicht
+        ? Promise.all([
+            zieFinancien || zieVerkoop ? listDealKernen() : null,
+            zieVerkoop ? listFaseKernen() : null,
+            zieOffertes ? listOpenOfferteKernen() : null,
+            zieFinancien || zieFacturen ? listFactuurKernen() : null,
+            telKlanten(),
+          ]).then(([deals, fases, offertes, facturen, klanten]) => {
+            setOverzicht({
+              deals: deals && !deals.error ? deals.data : null,
+              fases: fases && !fases.error ? fases.data : null,
+              offertes: offertes && !offertes.error ? offertes.data : null,
+              facturen: facturen && !facturen.error ? facturen.data : null,
+              klanten: klanten.error ? null : klanten.aantal,
+            });
+          })
+        : Promise.resolve();
+
+      const [planRes, weekRes, nextRes, actRes] = await Promise.all([
         listPlanningItemsForRange({
           startISO: dayRange.startISO,
           endISO: dayRange.endISO,
@@ -145,9 +227,13 @@ export default function TodayScreen() {
         // boekt, zag hier anders altijd 0.
         listUrenForProfile(userId, toISODate(weekStart), toISODate(weekEnd)),
         getNextPlanningItem({ assignedToUserId, currentUserId: userId, currentUserName }),
+        // Eigen open activiteiten tot en met vandaag: vandaag én te laat.
+        listEigenOpenActiviteitenTot(userId, dayRange.endISO),
       ]);
 
       setTodayItems(planRes.items);
+      setActiviteitenFout(actRes.error);
+      if (!actRes.error) setActiviteiten(actRes.data);
       setNextItem(nextRes.item);
 
       if (!weekRes.error && weekRes.data) {
@@ -161,8 +247,20 @@ export default function TodayScreen() {
         setWeekDagen(urenPerDag(weekRes.data, dagen));
       }
 
+      await overzichtKlaar;
     },
-    [userId, assignedToUserId, currentUserName, weekStart, weekEnd],
+    [
+      userId,
+      assignedToUserId,
+      currentUserName,
+      weekStart,
+      weekEnd,
+      toonOverzicht,
+      zieFinancien,
+      zieVerkoop,
+      zieOffertes,
+      zieFacturen,
+    ],
   );
 
 
@@ -171,7 +269,29 @@ export default function TodayScreen() {
    * pull-to-refresh. Alleen de laatste zet `refreshing`, zodat een
    * automatische verversing het scherm niet omlaag duwt.
    */
-  const { loading, refreshing, onRefresh } = useLaden(load);
+  const { loading, refreshing, onRefresh, herlaad } = useLaden(load, {
+    // Pas laden als de rechten er zijn: de overzichtstegels hangen ervan af.
+    klaarOmTeLaden: rechtenGeladen,
+  });
+
+  // ─── Activiteiten (los van de planning) ─────────────────────────────────
+  const vandaag = vandaagIso();
+  const eigen = useMemo(
+    () => eigenActiviteitenVandaag(activiteiten, userId, vandaag, dagVan),
+    [activiteiten, userId, vandaag],
+  );
+  const activiteitenLijst = useMemo(
+    () => [...eigen.teLaat, ...eigen.vandaag].slice(0, ACTIVITEITEN_MAX),
+    [eigen],
+  );
+  const activiteitenTotaal = eigen.teLaat.length + eigen.vandaag.length;
+  const magAfronden = mag('activiteiten', 'afronden');
+  const vinkActiviteit = (a: ActivityRow) => {
+    if (!magAfronden || vinkBezig) return;
+    saveVink(() => setActivityCompleted(a.id, !a.completed), {
+      onSuccess: async () => herlaad(),
+    });
+  };
 
   // De norm (8 uur per dag) gaat over werkdaguren; werkbonuren staan ernaast.
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
@@ -185,8 +305,15 @@ export default function TodayScreen() {
     () => todayItems.filter((i) => i.source === 'work_order'),
     [todayItems],
   );
+  // Activiteiten staan in hun eigen blok onder de planning (zoals de tegel
+  // "Activiteiten vandaag" in het dashboard); de tijdlijn toont werkbonnen en
+  // agenda-afspraken.
+  const planning = useMemo(
+    () => todayItems.filter((i) => i.source !== 'activity'),
+    [todayItems],
+  );
   const afspraken = useMemo(
-    () => todayItems.filter((i) => i.source !== 'work_order'),
+    () => todayItems.filter((i) => i.source === 'calendar_event'),
     [todayItems],
   );
   const klaar = useMemo(() => werkbonnen.filter((w) => isAfgerond(w.status)).length, [werkbonnen]);
@@ -329,9 +456,9 @@ export default function TodayScreen() {
           />
           <QuickAction
             styles={styles}
-            icon={<Camera size={20} color={c.green700} strokeWidth={1.9} />}
-            label="Foto bij werk"
-            onPress={() => router.push('/(tabs)/work-orders')}
+            icon={<CalendarPlus size={20} color={c.green700} strokeWidth={1.9} />}
+            label="Nieuwe activiteit"
+            onPress={() => router.push('/activities?nieuw=1')}
           />
           <QuickAction
             styles={styles}
@@ -347,138 +474,318 @@ export default function TodayScreen() {
           />
         </View>
 
-        {/* ── Nu bezig / Volgende ─────────────────────────────────────── */}
-        {huidige ? (
+        {/* Op een iPad twee kolommen: links de dag, rechts activiteiten en uren. */}
+        <View style={tablet ? styles.kolommen : undefined}>
+          <View style={tablet ? styles.kolom : undefined}>
+            {/* ── Nu bezig / Volgende ─────────────────────────────────────── */}
+            {huidige ? (
+              <View style={styles.block}>
+                <View style={styles.blockHead}>
+                  <Text style={styles.blockTitle}>{huidigeIsBezig ? 'Nu bezig' : 'Volgende'}</Text>
+                  {huidigeTijd ? <Text style={styles.blockMeta}>{huidigeTijd}</Text> : null}
+                </View>
+                <View style={styles.currentCard}>
+                  <Pressable onPress={() => openPlanningItem(huidige)} style={{ gap: 10 }}>
+                    <View style={styles.currentTopRow}>
+                      <Text style={styles.currentId}>
+                        {huidige.number ?? huidige.typeLabel.toUpperCase()}
+                      </Text>
+                      {huidige.status ? <StatusBadge status={huidige.status} /> : null}
+                    </View>
+                    <View>
+                      <Text style={styles.currentTitle}>{huidige.title}</Text>
+                      <Text style={styles.currentSub} numberOfLines={2}>
+                        {[huidige.customerName, huidige.address].filter(Boolean).join(' · ') || '—'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <View style={styles.currentActions}>
+                    <FlatBtn
+                      styles={styles}
+                      icon={<Phone size={17} color={c.ink} strokeWidth={1.9} />}
+                      label="Bel"
+                      onPress={() => onCall(huidige.phone)}
+                    />
+                    <FlatBtn
+                      styles={styles}
+                      icon={<NavigationIcon size={17} color={c.ink} strokeWidth={1.9} />}
+                      label="Route"
+                      onPress={() => onNavigate(huidige.address)}
+                    />
+                    <FlatBtn
+                      styles={styles}
+                      grow={1.3}
+                      primary
+                      icon={<Clock size={17} color={c.greenInk} strokeWidth={2} />}
+                      label="Uren"
+                      onPress={() => router.push('/hours/new')}
+                    />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ── Planning vandaag ────────────────────────────────────────── */}
+            <View style={styles.block}>
+              <View style={styles.blockHead}>
+                <Text style={styles.blockTitle}>Planning vandaag</Text>
+                <Pressable onPress={() => router.push('/(tabs)/planning')} hitSlop={8}>
+                  <Text style={styles.blockLink}>Agenda ›</Text>
+                </Pressable>
+              </View>
+
+              {planning.length === 0 ? (
+                <AppCard padding={18} style={{ alignItems: 'center' }}>
+                  <Text style={styles.emptyText}>
+                    {loading ? 'Laden…' : 'Niets gepland voor vandaag.'}
+                  </Text>
+                </AppCard>
+              ) : (
+                planning.map((t, idx) => (
+                  <TimelineRow
+                    key={t.id}
+                    styles={styles}
+                    c={c}
+                    item={t}
+                    laatste={idx === planning.length - 1}
+                    onPress={() => openPlanningItem(t)}
+                  />
+                ))
+              )}
+            </View>
+          </View>
+
+          <View style={tablet ? styles.kolom : undefined}>
+            {/* ── Activiteiten vandaag (tegel `actions_today`) ────────────── */}
+            <View style={styles.block}>
+              <View style={styles.blockHead}>
+                <Text style={styles.blockTitle}>Activiteiten vandaag</Text>
+                {!loading && !activiteitenFout ? (
+                  <View
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor:
+                          eigen.teLaat.length > 0 ? c.statusRejectBg : c.statusApproveBg,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        {
+                          color: eigen.teLaat.length > 0 ? c.statusRejectFg : c.statusApproveFg,
+                        },
+                      ]}
+                    >
+                      {eigen.teLaat.length > 0 ? `${eigen.teLaat.length} te laat` : 'Op schema'}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {vinkFout ? (
+                <NoticeBanner toon="fout" title="Niet bijgewerkt" message={vinkFout} />
+              ) : null}
+
+              {activiteitenFout ? (
+                <AppCard padding={18} style={{ alignItems: 'center' }}>
+                  <Text style={styles.emptyText}>{activiteitenFout}</Text>
+                </AppCard>
+              ) : activiteitenLijst.length === 0 ? (
+                <AppCard padding={18} style={{ alignItems: 'center', gap: 4 }}>
+                  <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>
+                    {loading ? 'Laden…' : 'Geen activiteiten vandaag'}
+                  </Text>
+                  {loading ? null : (
+                    <Text style={styles.emptyText}>
+                      Tijd om vooruit te plannen of even adem te halen.
+                    </Text>
+                  )}
+                </AppCard>
+              ) : (
+                <View style={styles.lijstKaart}>
+                  {activiteitenLijst.map((a, i) => (
+                    <ActiviteitRij
+                      key={a.id}
+                      activiteit={a}
+                      status={activiteitStatus(a, vandaag, dagVan)}
+                      first={i === 0}
+                      onPress={() =>
+                        router.push({ pathname: '/activities', params: { id: a.id } })
+                      }
+                      onVink={magAfronden ? () => vinkActiviteit(a) : undefined}
+                      vinkBezig={vinkBezig}
+                    />
+                  ))}
+                </View>
+              )}
+              <Pressable
+                onPress={() => router.push('/activities')}
+                accessibilityRole="link"
+                style={({ pressed }) => [styles.voetLink, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.blockLink}>
+                  {activiteitenTotaal > ACTIVITEITEN_MAX
+                    ? `Alle activiteiten (${activiteitenTotaal}) ›`
+                    : 'Alle activiteiten ›'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* ── Deze week ───────────────────────────────────────────────── */}
+            <View style={styles.block}>
+              <View style={styles.blockHead}>
+                <Text style={styles.blockTitle}>Deze week</Text>
+                <Pressable onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
+                  <Text style={styles.blockLink}>Uren ›</Text>
+                </Pressable>
+              </View>
+              <AppCard padding={16}>
+                <View style={styles.weekHeader}>
+                  <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
+                  <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
+                </View>
+                <View style={styles.weekRow}>
+                  {NL_DAYS_SHORT.map((label, idx) => {
+                    const dag = weekDagen[idx];
+                    const hours = dag?.werkdag ?? 0;
+                    const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
+                    const on = idx === todayWeekIdx;
+                    const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
+                    return (
+                      <View key={label + idx} style={styles.weekItem}>
+                        <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
+                          {hours ? formatUren(hours) : signaal ? '!' : ''}
+                        </Text>
+                        <View style={styles.weekBarFrame}>
+                          <View
+                            style={[
+                              styles.weekBar,
+                              { height },
+                              signaal
+                                ? styles.weekBarLet
+                                : on
+                                  ? styles.weekBarOn
+                                  : hours >= NORM_UREN
+                                    ? styles.weekBarVol
+                                    : hours > 0
+                                      ? styles.weekBarDeels
+                                      : styles.weekBarIdle,
+                            ]}
+                          />
+                        </View>
+                        <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={styles.weekKlus}>
+                  Op werkbonnen {formatUrenLang(week.werkbon)}
+                  {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
+                </Text>
+              </AppCard>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Overzicht: de cijfertegels van het dashboard, per recht ─── */}
+        {toonOverzicht ? (
           <View style={styles.block}>
             <View style={styles.blockHead}>
-              <Text style={styles.blockTitle}>{huidigeIsBezig ? 'Nu bezig' : 'Volgende'}</Text>
-              {huidigeTijd ? <Text style={styles.blockMeta}>{huidigeTijd}</Text> : null}
+              <Text style={styles.blockTitle}>Overzicht</Text>
             </View>
-            <View style={styles.currentCard}>
-              <Pressable onPress={() => openPlanningItem(huidige)} style={{ gap: 10 }}>
-                <View style={styles.currentTopRow}>
-                  <Text style={styles.currentId}>
-                    {huidige.number ?? huidige.typeLabel.toUpperCase()}
-                  </Text>
-                  {huidige.status ? <StatusBadge status={huidige.status} /> : null}
-                </View>
-                <View>
-                  <Text style={styles.currentTitle}>{huidige.title}</Text>
-                  <Text style={styles.currentSub} numberOfLines={2}>
-                    {[huidige.customerName, huidige.address].filter(Boolean).join(' · ') || '—'}
-                  </Text>
-                </View>
-              </Pressable>
-              <View style={styles.currentActions}>
-                <FlatBtn
+            <View style={styles.tegels}>
+              {zieFinancien ? (
+                <KpiTegel
                   styles={styles}
-                  icon={<Phone size={17} color={c.ink} strokeWidth={1.9} />}
-                  label="Bel"
-                  onPress={() => onCall(huidige.phone)}
+                  tablet={tablet}
+                  label="Open pipeline"
+                  waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).open.waarde) : '—'}
+                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).open.aantal} deals` : undefined}
+                  onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
-                <FlatBtn
+              ) : null}
+              {zieFinancien ? (
+                <KpiTegel
                   styles={styles}
-                  icon={<NavigationIcon size={17} color={c.ink} strokeWidth={1.9} />}
-                  label="Route"
-                  onPress={() => onNavigate(huidige.address)}
+                  tablet={tablet}
+                  label="Geaccepteerd"
+                  waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).geaccepteerd.waarde) : '—'}
+                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).geaccepteerd.aantal} deals` : undefined}
+                  onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
-                <FlatBtn
+              ) : null}
+              {zieFinancien ? (
+                <KpiTegel
                   styles={styles}
-                  grow={1.3}
-                  primary
-                  icon={<Clock size={17} color={c.greenInk} strokeWidth={2} />}
-                  label="Uren"
-                  onPress={() => router.push('/hours/new')}
+                  tablet={tablet}
+                  label="Omzet deze maand"
+                  waarde={overzicht.facturen ? formatEUR(omzetDezeMaand(overzicht.facturen, vandaag)) : '—'}
+                  sub="excl. btw"
+                  onPress={allowsRoute('/invoices') ? () => router.push('/invoices') : undefined}
                 />
-              </View>
+              ) : null}
+              {zieVerkoop ? (
+                <KpiTegel
+                  styles={styles}
+                  tablet={tablet}
+                  label="Nieuwe aanvragen"
+                  waarde={
+                    overzicht.deals && overzicht.fases
+                      ? String(nieuweAanvragen(overzicht.deals, overzicht.fases).aantal)
+                      : '—'
+                  }
+                  sub={
+                    overzicht.deals && overzicht.fases && zieFinancien
+                      ? `${formatEUR(nieuweAanvragen(overzicht.deals, overzicht.fases).waarde)} potentieel`
+                      : undefined
+                  }
+                  onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
+                />
+              ) : null}
+              {zieOffertes ? (
+                <KpiTegel
+                  styles={styles}
+                  tablet={tablet}
+                  label="Open offertes"
+                  waarde={overzicht.offertes ? String(openOffertes(overzicht.offertes).aantal) : '—'}
+                  sub={overzicht.offertes ? formatEUR(openOffertes(overzicht.offertes).waarde) : undefined}
+                  onPress={allowsRoute('/offers') ? () => router.push('/offers') : undefined}
+                />
+              ) : null}
+              {zieFacturen ? (
+                <KpiTegel
+                  styles={styles}
+                  tablet={tablet}
+                  label="Openstaande facturen"
+                  waarde={overzicht.facturen ? formatEUR(openFacturen(overzicht.facturen, vandaag).waarde) : '—'}
+                  sub={
+                    overzicht.facturen
+                      ? `${openFacturen(overzicht.facturen, vandaag).aantal} open${
+                          openFacturen(overzicht.facturen, vandaag).teLaat > 0
+                            ? ` · ${openFacturen(overzicht.facturen, vandaag).teLaat} te laat`
+                            : ''
+                        }`
+                      : undefined
+                  }
+                  waarschuwing={!!overzicht.facturen && openFacturen(overzicht.facturen, vandaag).teLaat > 0}
+                  onPress={allowsRoute('/invoices') ? () => router.push('/invoices') : undefined}
+                />
+              ) : null}
+              <KpiTegel
+                styles={styles}
+                tablet={tablet}
+                label="Klanten"
+                waarde={overzicht.klanten === null ? '—' : String(overzicht.klanten)}
+                sub="in je klantenbestand"
+                onPress={() => router.push('/(tabs)/customers')}
+              />
             </View>
           </View>
         ) : null}
-
-        {/* ── Planning vandaag ────────────────────────────────────────── */}
-        <View style={styles.block}>
-          <View style={styles.blockHead}>
-            <Text style={styles.blockTitle}>Planning vandaag</Text>
-            <Pressable onPress={() => router.push('/(tabs)/planning')} hitSlop={8}>
-              <Text style={styles.blockLink}>Agenda ›</Text>
-            </Pressable>
-          </View>
-
-          {todayItems.length === 0 ? (
-            <AppCard padding={18} style={{ alignItems: 'center' }}>
-              <Text style={styles.emptyText}>
-                {loading ? 'Laden…' : 'Niets gepland voor vandaag.'}
-              </Text>
-            </AppCard>
-          ) : (
-            todayItems.map((t, idx) => (
-              <TimelineRow
-                key={t.id}
-                styles={styles}
-                c={c}
-                item={t}
-                laatste={idx === todayItems.length - 1}
-                onPress={() => openPlanningItem(t)}
-              />
-            ))
-          )}
-        </View>
-
-        {/* ── Deze week ───────────────────────────────────────────────── */}
-        <View style={styles.block}>
-          <View style={styles.blockHead}>
-            <Text style={styles.blockTitle}>Deze week</Text>
-            <Pressable onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
-              <Text style={styles.blockLink}>Uren ›</Text>
-            </Pressable>
-          </View>
-          <AppCard padding={16}>
-            <View style={styles.weekHeader}>
-              <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
-              <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
-            </View>
-            <View style={styles.weekRow}>
-              {NL_DAYS_SHORT.map((label, idx) => {
-                const dag = weekDagen[idx];
-                const hours = dag?.werkdag ?? 0;
-                const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
-                const on = idx === todayWeekIdx;
-                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
-                return (
-                  <View key={label + idx} style={styles.weekItem}>
-                    <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
-                      {hours ? formatUren(hours) : signaal ? '!' : ''}
-                    </Text>
-                    <View style={styles.weekBarFrame}>
-                      <View
-                        style={[
-                          styles.weekBar,
-                          { height },
-                          signaal
-                            ? styles.weekBarLet
-                            : on
-                              ? styles.weekBarOn
-                              : hours >= NORM_UREN
-                                ? styles.weekBarVol
-                                : hours > 0
-                                  ? styles.weekBarDeels
-                                  : styles.weekBarIdle,
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
-                      {label}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-            <Text style={styles.weekKlus}>
-              Op werkbonnen {formatUrenLang(week.werkbon)}
-              {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
-            </Text>
-          </AppCard>
-        </View>
       </AppScreen>
     </View>
   );
@@ -511,6 +818,50 @@ function QuickAction({
       <Text style={styles.quickLabel} numberOfLines={2}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+function KpiTegel({
+  styles,
+  tablet,
+  label,
+  waarde,
+  sub,
+  waarschuwing,
+  onPress,
+}: {
+  styles: Styles;
+  tablet: boolean;
+  label: string;
+  waarde: string;
+  sub?: string;
+  waarschuwing?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${label}: ${waarde}${sub ? `, ${sub}` : ''}`}
+      style={({ pressed }) => [
+        styles.tegel,
+        tablet ? styles.tegelTablet : styles.tegelTelefoon,
+        pressed && onPress && { opacity: 0.9 },
+      ]}
+    >
+      <Text style={styles.tegelLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.tegelWaarde} numberOfLines={1} adjustsFontSizeToFit>
+        {waarde}
+      </Text>
+      {sub ? (
+        <Text style={[styles.tegelSub, waarschuwing && styles.tegelSubWaarschuwing]} numberOfLines={1}>
+          {sub}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -806,4 +1157,46 @@ const makeStyles = (c: ThemeColors) =>
     weekHoursLet: { color: c.statusWarnFg },
     weekKlus: { marginTop: 12, fontSize: 12, fontWeight: '600', color: c.muted },
     signaalWrap: { paddingHorizontal: 16, paddingTop: 12 },
+
+    // ── iPad-kolommen ──────────────────────────────────────────────────
+    kolommen: { flexDirection: 'row', alignItems: 'flex-start' },
+    kolom: { flex: 1, minWidth: 0 },
+
+    // ── Activiteiten ───────────────────────────────────────────────────
+    chip: { height: 24, paddingHorizontal: 10, borderRadius: 12, justifyContent: 'center' },
+    chipText: { fontSize: 12, fontWeight: '700' },
+    lijstKaart: {
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.line,
+      borderRadius: c.rMd,
+      overflow: 'hidden',
+    },
+    voetLink: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+
+    // ── Overzichtstegels ───────────────────────────────────────────────
+    tegels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    tegel: {
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.line,
+      borderRadius: c.rMd,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      minHeight: 44,
+      gap: 2,
+    },
+    // Twee per rij op een telefoon, drie op een iPad.
+    tegelTelefoon: { flexBasis: '46%', flexGrow: 1 },
+    tegelTablet: { flexBasis: '31%', flexGrow: 1 },
+    tegelLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.66,
+      textTransform: 'uppercase',
+      color: c.muted2,
+    },
+    tegelWaarde: { fontSize: 20, fontWeight: '700', color: c.ink },
+    tegelSub: { fontSize: 12, fontWeight: '600', color: c.muted },
+    tegelSubWaarschuwing: { color: c.statusRejectFg },
   });
