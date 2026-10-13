@@ -173,7 +173,7 @@ export default function ProfileScreen() {
                       {
                         icon: Plug,
                         title: 'Integraties',
-                        sub: 'Moneybird, SnelStart, AFAS, Google',
+                        sub: 'Moneybird, Stripe, SnelStart en AFAS',
                         onPress: () => router.push('/integrations'),
                       },
                     ]

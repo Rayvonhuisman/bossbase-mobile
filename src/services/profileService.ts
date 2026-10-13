@@ -244,3 +244,91 @@ export async function wijzigWachtwoord(nieuw: string): Promise<WriteStatus> {
   }
   return { ok: true, data: null };
 }
+
+/**
+ * Wachtwoord wijzigen zoals `changePassword` in het dashboard: eerst het
+ * huidige wachtwoord controleren, dan het nieuwe zetten. De controle is een
+ * aanmelding met je eigen e-mailadres; de sessie blijft dezelfde gebruiker.
+ */
+export async function wijzigWachtwoordMetHuidig(
+  huidig: string,
+  nieuw: string,
+): Promise<WriteStatus> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const email = session?.user?.email;
+  if (!email) return writeFout('geen-rechten', 'Geen actieve sessie gevonden — log opnieuw in.');
+  const { error: aanmeldFout } = await supabase.auth.signInWithPassword({ email, password: huidig });
+  if (aanmeldFout) return writeFout('validatie', 'Huidig wachtwoord is onjuist');
+  const { error } = await supabase.auth.updateUser({ password: nieuw });
+  if (error) return writeFout('onbekend', translateAuthError(error.message));
+  return { ok: true, data: null };
+}
+
+/**
+ * Eigen profielfoto: bucket `avatars`, pad `{companyId}/{profileId}/avatar-{ts}.{ext}`
+ * (zelfde conventie als `avatarService.js`), daarna `profiles.avatar_url`.
+ * Max 5 MB, JPG/PNG/WebP. De vorige foto wordt best-effort opgeruimd.
+ */
+export async function uploadEigenAvatar(input: {
+  companyId: string;
+  bytes: ArrayBuffer;
+  contentType: string;
+  extensie: string;
+  vorigeUrl: string | null;
+}): Promise<WriteStatus> {
+  const userId = getUserId();
+  if (!userId) return writeFout('geen-rechten', 'Je bent niet ingelogd.');
+  if (input.bytes.byteLength > 5 * 1024 * 1024) {
+    return writeFout('validatie', 'Maximaal 5 MB per foto');
+  }
+  const pad = `${input.companyId}/${userId}/avatar-${Date.now()}.${input.extensie}`;
+  const { error: upErr } = await supabase.storage
+    .from('avatars')
+    .upload(pad, input.bytes, { contentType: input.contentType, upsert: false, cacheControl: '3600' });
+  if (upErr) return writeFout('onbekend', 'De foto kon niet worden geüpload.', upErr.message);
+  const { data: pub } = supabase.storage.from('avatars').getPublicUrl(pad);
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('profiles').update({ avatar_url: pub.publicUrl }).eq('id', userId).select('id'),
+    { context: 'profileService.uploadEigenAvatar', bedrijfReadonly: isReadonly() },
+  );
+  if (!res.ok) return res;
+  await ruimAvatarOp(input.vorigeUrl);
+  return { ok: true, data: null };
+}
+
+export async function verwijderEigenAvatar(vorigeUrl: string | null): Promise<WriteStatus> {
+  const userId = getUserId();
+  if (!userId) return writeFout('geen-rechten', 'Je bent niet ingelogd.');
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('profiles').update({ avatar_url: null }).eq('id', userId).select('id'),
+    { context: 'profileService.verwijderEigenAvatar', bedrijfReadonly: isReadonly() },
+  );
+  if (!res.ok) return res;
+  await ruimAvatarOp(vorigeUrl);
+  return { ok: true, data: null };
+}
+
+async function ruimAvatarOp(url: string | null): Promise<void> {
+  if (!url) return;
+  const m = /\/storage\/v1\/object\/public\/avatars\/(.+)$/.exec(url.split('?')[0] ?? '');
+  const pad = m?.[1] ? decodeURIComponent(m[1]) : null;
+  if (!pad) return;
+  try {
+    await supabase.storage.from('avatars').remove([pad]);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Eigen account deactiveren (RPC `delete_own_account`), zoals de Gevarenzone
+ * van het dashboard voor iemand die niet de eigenaar is. Het bedrijf sluiten
+ * (eigenaar) zegt ook het abonnement op en loopt daarom via het dashboard.
+ */
+export async function deactiveerEigenAccount(): Promise<WriteStatus> {
+  const { error } = await supabase.rpc('delete_own_account');
+  if (error) return writeFout('onbekend', error.message || 'Deactiveren mislukt');
+  return { ok: true, data: null };
+}

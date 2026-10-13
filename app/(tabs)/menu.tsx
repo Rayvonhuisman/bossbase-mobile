@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChevronRight,
   ClipboardList,
+  Database,
   Clock,
   FileText,
   FolderKanban,
@@ -55,8 +56,8 @@ type Groep = { titel: string; items: Item[] };
 
 /**
  * Menu — dezelfde indeling en volgorde als de zijbalk van het dashboard
- * (Hoofdmenu, Uitvoering, Financieel, Bedrijf). Instellingen en Team staan
- * bij je naam, zoals onderaan de zijbalk van het dashboard.
+ * (Hoofdmenu, Uitvoering, Financieel, Bedrijf). Database, Team en Instellingen
+ * (sectie Bedrijf) staan bij je naam, zoals onderaan de zijbalk van het dashboard.
  *
  * Wat iemand niet mag zien laat `allowsRoute` weg — dezelfde poort als de
  * routebewaking, met dezelfde rechten en pakketregels als het dashboard. Een
@@ -64,7 +65,7 @@ type Groep = { titel: string; items: Item[] };
  *
  * Bewust niet (meer) hier: "Vrije notities" (bestaat niet in het dashboard;
  * klantnotities staan bij de relatie), "Foto's & bestanden" (foto's horen bij
- * de werkbon) en "Taken" (onderdeel van Activiteiten).
+ * de werkbon; het overzicht staat onder Database) en "Taken" (onderdeel van Activiteiten).
  */
 export default function MenuScreen() {
   const router = useRouter();
@@ -120,8 +121,9 @@ export default function MenuScreen() {
   if (!loaded) return <LoadingScreen label="Menu laden..." />;
 
   const bijNaam = zichtbaar([
-    { icon: Settings, title: 'Instellingen', route: '/settings', onPress: ga('/settings') },
+    { icon: Database, title: 'Database', route: '/database', onPress: ga('/database') },
     { icon: UsersRound, title: 'Team', route: '/team', onPress: ga('/team') },
+    { icon: Settings, title: 'Instellingen', route: '/settings', onPress: ga('/settings') },
   ]);
 
   const ondersteuning: Item[] = [

@@ -150,7 +150,9 @@ export const ROUTE_GATES: Record<string, NavGate> = {
   '/invoices': { permission: 'facturen' },
   '/expenses': { permission: 'kosten', feature: 'kosten_nacalculatie' },
   '/team': { permission: 'team' },
-  '/settings': { permission: 'instellingen' },
+  // Instellingen zelf is open (Mijn profiel is voor iedereen); de pagina
+  // toont per tab wat je mag, zoals het dashboard.
+  '/database': { permission: 'database' },
   '/integrations': { permission: 'instellingen' },
   // Activiteiten, werkbonnen, uren, agenda en relaties kennen in het
   // dashboard géén rechtgate: RLS bepaalt of je alleen je eigen werk ziet of
