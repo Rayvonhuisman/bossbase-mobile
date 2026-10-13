@@ -236,6 +236,11 @@ export type InviteInput = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/** Fout van de gebruikerslimiet-trigger (HINT 'gebruikerslimiet'). */
+function isGebruikerslimiet(e: { hint?: string | null } | null | undefined): boolean {
+  return (e?.hint ?? '') === 'gebruikerslimiet';
+}
+
 /**
  * Nodigt een teamlid uit. Zelfde rij, zelfde token en dezelfde geldigheidsduur
  * van 48 uur als het dashboard, en dezelfde uitnodigingslink op bossbase.nl.
@@ -285,8 +290,19 @@ export async function inviteTeamMember(
     return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
   }
 
+  const antwoord = await supabase.from('company_members').insert(payload).select(MEMBER_COLUMNS);
+  // De database telt de gebruikerslimiet (trigger, migratie
+  // 20261001122357_gebruikerslimiet_afdwingen) en geeft dan een leesbare
+  // melding met HINT 'gebruikerslimiet' (check_violation). Die melding tonen,
+  // niet het algemene "niet alle gegevens zijn geldig".
+  if (antwoord.error && isGebruikerslimiet(antwoord.error)) {
+    return writeFout(
+      'plan-limiet',
+      antwoord.error.message || 'Je pakket zit vol. Upgrade om meer gebruikers toe te voegen.',
+    );
+  }
   const res = await schrijf<MemberDb>(
-    () => supabase.from('company_members').insert(payload).select(MEMBER_COLUMNS),
+    () => Promise.resolve(antwoord as { data: MemberDb[] | null; error: typeof antwoord.error }),
     {
       context: 'teamService.inviteTeamMember',
       bedrijfReadonly: isReadonly(),

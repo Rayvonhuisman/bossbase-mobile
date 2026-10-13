@@ -62,40 +62,8 @@ export async function markeerAllesGelezen(userId: string): Promise<void> {
     .is('read_at', null);
 }
 
-/**
- * Een link uit het dashboard (`werkbonnen/<id>`, `deal/<id>`, `planning`, …)
- * → het scherm in de app. Onbekend → null (melding is dan alleen tekst).
- */
-export function routeVoorLink(link: string | null): string | null {
-  if (!link) return null;
-  const [pagina, id] = link.replace(/^\/+/, '').split(/[/?]/);
-  switch (pagina) {
-    case 'werkbonnen':
-      return id ? `/work-orders/${id}` : '/work-orders';
-    case 'activities':
-      return '/activities';
-    case 'projecten':
-      return id ? `/project/${id}` : '/projects';
-    case 'offertes':
-      return id ? `/offers?id=${id}` : '/offers';
-    case 'facturen':
-      return id ? `/invoices?id=${id}` : '/invoices';
-    case 'planning':
-    case 'calendar':
-      return '/planning';
-    case 'deal':
-      return id ? `/deal/${id}` : '/pipeline';
-    case 'pipeline':
-    case 'aanvragen':
-      return '/pipeline';
-    case 'customers':
-      return id ? `/customers/${id}` : '/customers';
-    case 'uren':
-      return '/hours';
-    default:
-      return null;
-  }
-}
+// Van link naar scherm: zie lib/meldingLink (puur, getest).
+export { routeVoorLink } from '@/lib/meldingLink';
 
 /** "zojuist", "5 min geleden", "3 uur geleden", "2 dagen geleden" — als het dashboard. */
 export function relatieveTijd(iso: string, nu = Date.now()): string {

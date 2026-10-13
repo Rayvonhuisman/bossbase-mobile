@@ -52,6 +52,12 @@ export function valideerKvk(waarde: string | null | undefined): string | null {
  * IBAN volgens de mod-97-controle (ISO 13616): land en controlegetal naar
  * achteren, letters naar cijfers, de rest bij deling door 97 moet 1 zijn.
  */
+/** IBAN zoals de database hem opslaat: zonder spaties, hoofdletters; leeg = null (dashboard `ibanOpslaan`). */
+export function normaliseerIban(waarde: string | null | undefined): string | null {
+  const v = String(waarde ?? '').replace(/\s+/g, '').toUpperCase();
+  return v || null;
+}
+
 export function valideerIban(waarde: string | null | undefined): string | null {
   const v = schoon(waarde);
   if (!v) return null;

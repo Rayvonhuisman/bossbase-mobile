@@ -92,6 +92,11 @@ export async function listLeverancierKostenTotalen(): Promise<Record<string, Lev
       .from('job_costs')
       .select('id, leverancier_id, amount')
       .not('leverancier_id', 'is', null)
+      // Alleen wat geboekt is (dashboard origin/main): werkbonmateriaal is de
+      // kostprijs van een klus; de inkoopfactuur staat er al als boeking in,
+      // dus meetellen telde dezelfde inkoop dubbel — en wie geen inkoopprijzen
+      // mag zien kreeg een ander totaal.
+      .is('werkbon_materiaal_id', null)
       .order('id', { ascending: true })
       .range(van, tot),
   );

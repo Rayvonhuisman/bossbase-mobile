@@ -256,3 +256,27 @@ export function komendePlanRegels(regels: readonly PlanRegel[], vandaag: string,
   const komend = regels.filter((r) => r.datum >= vandaag);
   return (komend.length ? komend : regels).slice(0, max);
 }
+
+// ---------------------------------------------------------------------------
+// Klanttype (customers.type, dashboard 1-10-2026, migratie 20261001135212)
+// ---------------------------------------------------------------------------
+
+/** De vaste keuzes; de database dwingt dezelfde lijst af (customers_type_check). */
+export const KLANT_TYPES = ['Particulier', 'Zakelijk', 'VvE', 'Aannemer'] as const;
+export type KlantType = (typeof KLANT_TYPES)[number];
+
+/**
+ * Het type dat de klantkaart toont. Het dashboard slaat het type sinds 1-10
+ * op; staat er (nog) niets, dan leiden we het af zoals de app altijd deed:
+ * met KvK-nummer zakelijk, anders particulier.
+ */
+export function klantType(c: { type?: string | null; kvk_number?: string | null }): KlantType {
+  const t = c.type ?? null;
+  if (t && (KLANT_TYPES as readonly string[]).includes(t)) return t as KlantType;
+  return c.kvk_number && c.kvk_number.trim() ? 'Zakelijk' : 'Particulier';
+}
+
+/** Voor het filter Zakelijk/Particulier: VvE en aannemer zijn geen particulier. */
+export function isZakelijkeKlant(c: { type?: string | null; kvk_number?: string | null }): boolean {
+  return klantType(c) !== 'Particulier';
+}

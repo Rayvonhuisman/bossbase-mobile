@@ -80,8 +80,8 @@ export default function WorkOrdersScreen() {
   const styles = useMemo(() => makeStyles(t), [t]);
   const isField = role === 'medewerker';
 
-  // Aanmaken volgt policy `werkbonnen_insert`: de ROL admin of planner, en een
-  // account dat mag schrijven. Zolang de rechten laden: geen knop.
+  // Aanmaken volgt policy `werkbonnen_insert`: admin, recht planning of
+  // werkbonnen_bewerken, en een account dat mag schrijven. Zolang de rechten laden: geen knop.
   const canCreate =
     rechtenGeladen &&
     canCreateWorkOrder({

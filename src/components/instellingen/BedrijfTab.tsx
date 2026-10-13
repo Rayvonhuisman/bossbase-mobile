@@ -28,6 +28,8 @@ type Form = {
   postal_code: string;
   city: string;
   branding_color: string;
+  iban: string;
+  iban_tnv: string;
 };
 
 const naarForm = (c: CompanyRow | null): Form => ({
@@ -42,6 +44,8 @@ const naarForm = (c: CompanyRow | null): Form => ({
   postal_code: c?.postal_code ?? '',
   city: c?.city ?? '',
   branding_color: c?.branding_color || '#1DDB62',
+  iban: c?.iban ?? '',
+  iban_tnv: c?.iban_tnv ?? '',
 });
 
 /**
@@ -267,6 +271,22 @@ export function BedrijfTab({
             <FormField label="Stad" value={form.city} onChangeText={zet('city')} editable={magWijzigen} />
           </View>
         </View>
+        <FormField
+          label="IBAN (komt op je facturen)"
+          value={form.iban}
+          onChangeText={zet('iban')}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          placeholder="NL00 BANK 0123 4567 89"
+          editable={magWijzigen}
+        />
+        <FormField
+          label="Ten name van"
+          value={form.iban_tnv}
+          onChangeText={zet('iban_tnv')}
+          placeholder={form.name || 'Naam rekeninghouder'}
+          editable={magWijzigen}
+        />
         {error ? <Uitleg toon="fout">{error}</Uitleg> : null}
         {magWijzigen ? (
           <Button label="Opslaan" loading={saving} disabled={saving || !form.name.trim()} onPress={opslaan} />

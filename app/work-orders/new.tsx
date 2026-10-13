@@ -10,8 +10,8 @@ import { terugOfNaar } from '@/lib/navigatie';
 /**
  * Nieuwe werkbon — de `WerkbonModal` (modus nieuw) van het dashboard.
  *
- * Policy `werkbonnen_insert` eist `planning` of `werkbonnen_bewerken` (admin en
- * planner vallen daaronder), plus een account dat mag schrijven.
+ * Policy `werkbonnen_insert` eist `planning` of `werkbonnen_bewerken` (admin
+ * valt daaronder), plus een account dat mag schrijven.
  */
 export default function NewWorkOrderScreen() {
   const router = useRouter();
@@ -47,7 +47,7 @@ export default function NewWorkOrderScreen() {
             message={
               readonly
                 ? 'Je account staat op alleen-lezen; er kan niets worden aangemaakt.'
-                : 'Een werkbon aanmaken kan een admin, een planner of iemand met het recht werkbonnen bewerken.'
+                : 'Een werkbon aanmaken kan een beheerder of iemand met het recht planning of werkbonnen bewerken.'
             }
           />
         ) : (

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { normaliseerIban, valideerIban } from '@/lib/relatieValidatie';
 import { getCompanyId, getSessionStand, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { classificeerFout, schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 
@@ -270,7 +271,7 @@ export async function upsertCompanySettings(
 
 const COMPANY_COLUMNS = `
   id, name, kvk, btw_number, email, phone, address, city, postal_code,
-  website, logo_url, branding_color, reply_to_email
+  website, logo_url, branding_color, reply_to_email, iban, iban_tnv
 `;
 
 export type CompanyRow = {
@@ -287,6 +288,9 @@ export type CompanyRow = {
   logo_url: string | null;
   branding_color: string | null;
   reply_to_email: string | null;
+  /** Komt op de facturen (migratie 20261002132507_iban_op_factuur). */
+  iban: string | null;
+  iban_tnv: string | null;
 };
 
 export async function getCompany(): Promise<{ data: CompanyRow | null; error: string | null }> {
@@ -318,6 +322,8 @@ export type CompanyInput = Partial<
     | 'website'
     | 'reply_to_email'
     | 'branding_color'
+    | 'iban'
+    | 'iban_tnv'
   >
 >;
 
@@ -343,8 +349,17 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
     return writeFout('validatie', 'Kies een merkkleur als hexcode, bijvoorbeeld #1DDB62.');
   }
 
+  // IBAN: dezelfde mod-97-controle als de database (bb_iban_geldig); opslaan
+  // zonder spaties in hoofdletters, zoals het dashboard.
+  if (input.iban) {
+    const fout = valideerIban(input.iban);
+    if (fout) return writeFout('validatie', fout);
+  }
+
   const updates: Record<string, unknown> = {};
+  if (input.iban !== undefined) updates.iban = normaliseerIban(input.iban);
   for (const veld of [
+    'iban_tnv',
     'name',
     'kvk',
     'btw_number',

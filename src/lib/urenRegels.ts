@@ -165,3 +165,38 @@ export function leesKm(tekst: string): number | null | undefined {
   const n = Number(t);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
+
+// ── Wie mag uren van een ander zien of boeken ──────────────────────────────
+//
+// Dashboard origin/main (UrenPageV2, WerkbonPageV2) en de policies sinds
+// 20261002135712 / 20261004201000. De rol 'planner' bestaat niet meer
+// (20261002135952): het gaat om het RECHT `planning`.
+
+/** Minimale rechtenstand; `can` is de rechtencheck uit usePermissions. */
+export type UrenRechten = {
+  userId: string | null;
+  role: string | null;
+  can: (recht: string) => boolean;
+};
+
+/**
+ * Werkdaguren (`urenregistratie`) van collega's zien en boeken:
+ * `bb_is_admin_or_permission('planning')`. Dashboard: `canBookForOthers =
+ * magBewerken('planning')`.
+ */
+export function magTeamWerkdagen(r: UrenRechten): boolean {
+  return r.role === 'admin' || r.can('planning');
+}
+
+/**
+ * Werkbonuren voor een collega boeken (en diens regels op deze bon zien):
+ * `bb_mag_uren_voor_ander(werkbon)` — actieve admin, recht planning, of
+ * verantwoordelijke van díé bon. Uitvoerders boeken alleen voor zichzelf.
+ */
+export function magWerkbonUrenVoorAnder(
+  werkbon: { verantwoordelijke_ids?: readonly string[] | null } | null | undefined,
+  r: UrenRechten,
+): boolean {
+  if (magTeamWerkdagen(r)) return true;
+  return !!werkbon && !!r.userId && (werkbon.verantwoordelijke_ids ?? []).includes(r.userId);
+}

@@ -14,6 +14,7 @@ import { alsHtml } from '@/lib/notitieTekst';
 import { negeerRelatieBijImport } from './leverancierService';
 import type { FactuurVoorTotaal, PlanWerkbon } from '@/lib/relaties';
 import type { ActivityRow } from './activityService';
+import { metProjectBedragen } from './projectService';
 
 /**
  * Columns we actually need. We intentionally do NOT select `updated_at`:
@@ -25,7 +26,7 @@ import type { ActivityRow } from './activityService';
  */
 const SAFE_COLUMNS = `
   id, company_id, name, email, phone, address, postcode, city,
-  kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at
+  kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at, type
 `;
 
 /** Sortable, known-to-exist columns in preference order. */
@@ -394,15 +395,24 @@ export const listKlantFacturen = (customerId: string): Lijst<KlantFactuur> =>
     'Facturen konden niet worden geladen.',
   );
 
-export const listKlantProjecten = (customerId: string): Lijst<KlantProject> =>
-  perKlant<KlantProject>(
+/**
+ * `project_value` is niet direct leesbaar (kolomrecht, dashboard 3-10-2026):
+ * de waarde komt via `bb_projectbedragen`, alleen voor wie het recht
+ * `projectbedragen` heeft. Zonder recht blijft hij `null`.
+ */
+export const listKlantProjecten = async (customerId: string): Lijst<KlantProject> => {
+  const res = await perKlant<Omit<KlantProject, 'project_value'>>(
     'projects',
-    'id, name, status, project_value, created_at',
+    'id, name, status, created_at',
     customerId,
     'created_at',
     'listKlantProjecten',
     'Projecten konden niet worden geladen.',
   );
+  if (res.error || !res.data.length) return { data: [], error: res.error };
+  const metBedrag = await metProjectBedragen(res.data);
+  return { data: metBedrag.data, error: null };
+};
 
 /** Zelfde kolommen als `activityService`, zodat het activiteitformulier past. */
 export const listKlantActiviteiten = (customerId: string): Lijst<ActivityRow> =>

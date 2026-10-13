@@ -68,7 +68,7 @@ import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
-import { klantTotalen, komendePlanRegels, lokaleDatumTijd, planRegels } from '@/lib/relaties';
+import { klantTotalen, klantType, komendePlanRegels, lokaleDatumTijd, planRegels } from '@/lib/relaties';
 
 /**
  * Klantkaart — de blokken van `CustomerPage` in het dashboard: planning,
@@ -105,10 +105,6 @@ function initials(name: string | null | undefined): string {
   return parts.map((p) => p.charAt(0).toUpperCase()).join('') || '?';
 }
 
-function isZakelijk(c: Customer): boolean {
-  return !!(c.kvk_number && c.kvk_number.trim());
-}
-
 function vandaagIso(): string {
   return lokaleDatumTijd(new Date().toISOString())?.datum ?? new Date().toISOString().slice(0, 10);
 }
@@ -136,10 +132,10 @@ export default function CustomerDetailScreen() {
   const styles = useStyles(themaStijlen);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { companyId, role } = useAuth();
+  const { companyId } = useAuth();
   const { colors: th, colorMode } = useTheme();
   const insets = useSafeAreaInsets();
-  const { loaded: rechtenGeladen, mag, can } = usePermissions();
+  const { loaded: rechtenGeladen, mag, can, readonly } = usePermissions();
 
   const magOffertes = rechtenGeladen && can('offertes');
   const magFacturen = rechtenGeladen && can('facturen');
@@ -278,19 +274,22 @@ export default function CustomerDetailScreen() {
   }
 
   const name = customer.name ?? '—';
-  const tag = isZakelijk(customer) ? 'Zakelijk' : 'Particulier';
+  // Opgeslagen klanttype (dashboard 1-10), anders afgeleid van het KvK-nummer.
+  const tag = klantType(customer);
   const fullAddress = [customer.address, customer.postcode, customer.city]
     .filter(Boolean)
     .join(', ');
   const klantOptie: SelectOption[] = [{ id: customer.id, label: name, sub: customer.city ?? undefined }];
 
-  // Inplannen: een werkbon vraagt planning of werkbonnen_bewerken (en de rol
-  // die werkbonnen mag aanmaken); een los item mag iedereen.
+  // Inplannen: een werkbon vraagt planning of werkbonnen_bewerken (policy
+  // `werkbonnen_insert`; admin inbegrepen, geen rol 'planner' meer) en een
+  // account dat mag schrijven; een los item mag iedereen.
   const magWerkbonInplannen =
-    rechtenGeladen && (can('planning') || can('werkbonnen_bewerken')) && mag('werkbonnen', 'maken');
+    rechtenGeladen && !readonly && (can('planning') || can('werkbonnen_bewerken'));
   const magActiviteitMaken = rechtenGeladen && mag('activiteiten', 'maken');
   const magActiviteitBewerken =
-    mag('activiteiten', 'wijzigen') && (role === 'admin' || role === 'planner');
+    // Dashboard ActivityEditModal: canEdit = magBewerken('planning').
+    mag('activiteiten', 'wijzigen') && can('planning');
   const magNotitie = rechtenGeladen && mag('notities', 'maken');
 
   const nieuweActiviteit = () => setActiviteitConcept({ ...leegConcept(), customerId: customer.id });

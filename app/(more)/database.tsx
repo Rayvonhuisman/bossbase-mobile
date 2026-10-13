@@ -19,7 +19,7 @@ import {
   NoticeBanner,
   PermissionGate,
 } from '@/components';
-import { usePermissions, useTheme } from '@/providers';
+import { useAuth, usePermissions, useTheme } from '@/providers';
 import { Dialog } from '@/lib/dialog';
 import { useLaden, type LaadBron } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
@@ -39,6 +39,7 @@ import {
   naarCsv,
   pagina,
   projectStatusLabel,
+  segmentSleutel,
   sumBetaald,
   type DatabaseData,
   type DbFilters,
@@ -70,7 +71,6 @@ import { FotoOverzicht } from '@/components/database/FotoOverzicht';
 
 type Weergave = 'klanten' | 'fotos';
 type Segment = { name: string; filters: DbFilters };
-const SEGMENT_SLEUTEL = 'bb_db_segments';
 
 export default function DatabaseScreen() {
   return (
@@ -85,6 +85,10 @@ function DatabaseInhoud() {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { mag } = usePermissions();
+  const { user } = useAuth();
+  // Per gebruiker, zoals het dashboard: een gedeeld toestel toont de volgende
+  // gebruiker niet de segmenten van de vorige.
+  const sleutel = segmentSleutel(user?.id);
   const params = useLocalSearchParams<{ weergave?: string; tab?: string }>();
 
   const weergave: Weergave = params.weergave === 'fotos' ? 'fotos' : 'klanten';
@@ -122,19 +126,27 @@ function DatabaseInhoud() {
 
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
-  // Segmenten: lokaal per toestel, zoals het dashboard ze per browser bewaart.
+  // Segmenten: lokaal per toestel én per gebruiker, zoals het dashboard ze per
+  // browser en profiel bewaart.
   useEffect(() => {
-    AsyncStorage.getItem(SEGMENT_SLEUTEL)
+    let actief = true;
+    AsyncStorage.getItem(sleutel)
       .then((v) => {
+        if (!actief) return;
         const lijst = v ? (JSON.parse(v) as Segment[]) : [];
-        if (Array.isArray(lijst)) setSegmenten(lijst.map((x) => ({ ...x, filters: { ...LEGE_FILTERS, ...x.filters } })));
+        setSegmenten(
+          Array.isArray(lijst) ? lijst.map((x) => ({ ...x, filters: { ...LEGE_FILTERS, ...x.filters } })) : [],
+        );
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      actief = false;
+    };
+  }, [sleutel]);
 
   const bewaarSegmenten = (lijst: Segment[]) => {
     setSegmenten(lijst);
-    AsyncStorage.setItem(SEGMENT_SLEUTEL, JSON.stringify(lijst)).catch(() => {});
+    AsyncStorage.setItem(sleutel, JSON.stringify(lijst)).catch(() => {});
   };
 
   const perKlant = useMemo(() => (data ? indexeerPerKlant(data) : new Map()), [data]);

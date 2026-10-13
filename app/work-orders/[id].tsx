@@ -93,6 +93,7 @@ import { createWerkbonUur, listWerkbonUren } from '@/services/werkbonUrenService
 import { isGeldigeISODatum, vandaagISO } from '@/lib/datum';
 import { lokaalNaarUtc } from '@/lib/nlTijd';
 import { berekenUren } from '@/lib/urenBerekening';
+import { magWerkbonUrenVoorAnder } from '@/lib/urenRegels';
 import { useLaden } from '@/lib/useLaden';
 import { formatDateNL, formatEUR, formatHours } from '@/lib/format';
 import { terugOfNaar } from '@/lib/navigatie';
@@ -232,21 +233,30 @@ export default function WorkOrderDetailScreen() {
 
   const opSlot = !!workOrder?.ondertekend_op;
   const klaar = rechtenGeladen && !!workOrder;
-  // canManage: admin/planner/werkbonnen_bewerken → Bewerken + Nieuwe werkbon.
+  // canManage: admin/werkbonnen_bewerken → Bewerken + Nieuwe werkbon.
   const canManage = klaar && canManageWerkbonnen(rechten) && !readonly;
   // canEditDetail: beheerder of verantwoordelijke van deze bon.
   const editDetail = klaar && canEditDetail(workOrder!, rechten);
   const viewOnly = klaar && !editDetail;
   const canEdit = editDetail && !opSlot && !readonly;
   const canBook = klaar && canBookHours(workOrder!, rechten);
-  // Taken/meerwerk toevoegen of weggooien en materiaal verwijderen: RLS eist
-  // de rol admin of planner.
+  // Taken/meerwerk toevoegen of weggooien en materiaal verwijderen: zelfde
+  // regel als wijzigen (gedeelde werkruimte, werkbonnen_bewerken of
+  // verantwoordelijke; 20261002135952).
   const canTasks = klaar && canAddTask(workOrder!, rechten);
   const canDelMaterial = klaar && canDeleteMaterial(workOrder!, rechten);
-  const canNote = editDetail && !readonly;
+  // Notities: ook die staan op slot na ondertekenen (trigger
+  // bb_werkbon_kind_op_slot op werkbon_notities, 20261002135135).
+  const canNote = editDetail && !readonly && !opSlot;
   const magInkoop = can('inkoopprijzen');
   const magBedragen = can('projectbedragen');
-  const isAdminPlanner = role === 'admin' || role === 'planner';
+  // Notitie voor-klant/intern wisselen: policy `werkbon_notities_update` —
+  // schrijver, of admin/`werkbonnen_bewerken` (20261002135952, geen rol planner).
+  const magNotitiesBeheren = role === 'admin' || can('werkbonnen_bewerken');
+  // Uren voor een collega boeken: `bb_mag_uren_voor_ander` — admin, recht
+  // planning of verantwoordelijke van deze bon (dashboard HoursQuickAdd).
+  const magUrenVoorAnder =
+    klaar && magWerkbonUrenVoorAnder(workOrder, { userId: user?.id ?? null, role, can });
 
   const status = normaliseerStatus(workOrder?.status);
 
@@ -307,7 +317,7 @@ export default function WorkOrderDetailScreen() {
         opSlot ? 'Werkbon is ondertekend' : 'Alleen inzage',
         opSlot
           ? 'Deze werkbon staat op slot en kan niet meer worden gewijzigd.'
-          : 'Alleen de verantwoordelijke, een admin of een planner kan taken afvinken.',
+          : 'Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan taken afvinken.',
       );
       return;
     }
@@ -1104,7 +1114,7 @@ export default function WorkOrderDetailScreen() {
               ) : (
                 <View style={{ gap: spacing.md }}>
                   {(notitieTab === 'intern' ? internNotes : klantNotes).map((n) => {
-                    const magWisselen = canNote && (n.created_by === user?.id || isAdminPlanner);
+                    const magWisselen = canNote && (n.created_by === user?.id || magNotitiesBeheren);
                     return (
                       <View key={n.id} style={styles.noteCard}>
                         <View style={styles.noteMetaRow}>
@@ -1237,7 +1247,7 @@ export default function WorkOrderDetailScreen() {
           styles={styles}
           th={th}
           ikzelf={user?.id ?? null}
-          kiesMedewerker={isAdminPlanner}
+          kiesMedewerker={magUrenVoorAnder}
           onClose={() => setTimeModal(false)}
           onSubmit={async (input) => {
             if (!user?.id) return { error: 'Sessie niet geladen.' };
@@ -1714,7 +1724,7 @@ function AddMaterialModal({
 }
 
 /**
- * Uren boeken (HoursQuickAdd): datum, (admin/planner) medewerker, begin en eind
+ * Uren boeken (HoursQuickAdd): datum, (admin/planning/verantwoordelijke) medewerker, begin en eind
  * (afgerond op 5 min), pauze, gereden kilometers en notitie. Uren = eind −
  * begin − pauze.
  */

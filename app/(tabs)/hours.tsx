@@ -50,6 +50,7 @@ import {
   urenKpi,
   weekLabel,
   type UrenFilter,
+  magTeamWerkdagen,
 } from '@/lib/urenRegels';
 
 const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -81,16 +82,18 @@ type Scope = 'ik' | 'team';
  *   de werkbon (tik → werkbon).
  * - De twee worden nooit opgeteld: totalen per soort, met het verschil.
  * - Weeknavigatie (ma t/m zo), tijden afgerond op vijf minuten.
- * - Admin en planner (dashboard: `canBookForOthers`) zien ook het team, met
+ * - Admin en wie het recht planning heeft (dashboard: `canBookForOthers`) zien ook het team, met
  *   een medewerkerfilter; KPI's tellen over de periode, niet over dat filter.
  */
 export default function HoursScreen() {
   const router = useRouter();
   const { user, role } = useAuth();
-  const { readonly, loaded: rechtenGeladen } = usePermissions();
+  const { can, readonly, loaded: rechtenGeladen } = usePermissions();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const magTeam = role === 'admin' || role === 'planner';
+  // Dashboard: canBookForOthers = magBewerken('planning'); RLS op
+  // urenregistratie: eigen rijen, of admin/recht planning.
+  const magTeam = magTeamWerkdagen({ userId: user?.id ?? null, role, can });
 
   const vandaag = todayISO();
   const [maandag, setMaandag] = useState(() => maandagVan(todayISO()));

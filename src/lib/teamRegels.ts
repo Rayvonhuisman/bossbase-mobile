@@ -96,13 +96,17 @@ export function beheerStand(
   };
 }
 
-/** Rolkeuze bij bewerken: planner alleen tonen als het de huidige waarde is. */
-export function rolOpties(huidig: string | null | undefined): { id: string; label: string }[] {
-  const basis = [
+/**
+ * Rolkeuze bij bewerken: alleen admin en medewerker. De rol 'planner' bestaat
+ * niet meer (migratie 20261002135952: `profiles_role_check` en
+ * `bb_teamlid_bijwerken` weigeren hem; het dashboard toont hem niet meer).
+ * Plannen is het RECHT `planning`.
+ */
+export function rolOpties(_huidig?: string | null): { id: string; label: string }[] {
+  return [
     { id: 'medewerker', label: 'Medewerker' },
     { id: 'admin', label: 'Admin' },
   ];
-  return huidig === 'planner' ? [...basis, { id: 'planner', label: 'Planner' }] : basis;
 }
 
 /** HTML-escape voor tekst die in de uitnodigingsmail komt. */

@@ -10,7 +10,7 @@ import { useLaden } from '@/lib/useLaden';
 
 /**
  * Werkbon bewerken — `WerkbonModal` (modus bewerken) van het dashboard. Alleen
- * voor wie werkbonnen beheert (admin, planner, `werkbonnen_bewerken`), net als
+ * voor wie werkbonnen beheert (admin of `werkbonnen_bewerken`), net als
  * de knop "Bewerken" op kantoor.
  */
 export default function BewerkWerkbonScreen() {
@@ -53,7 +53,7 @@ export default function BewerkWerkbonScreen() {
         ) : !mag ? (
           <ErrorState
             title="Geen rechten"
-            message="Bewerken kan een admin, een planner of iemand met het recht werkbonnen bewerken."
+            message="Bewerken kan een beheerder of iemand met het recht werkbonnen bewerken."
           />
         ) : fout || !werkbon ? (
           <ErrorState title="Werkbon niet gevonden" message={fout ?? 'Probeer het opnieuw.'} onRetry={opnieuw} />

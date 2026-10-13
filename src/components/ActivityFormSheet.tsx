@@ -73,7 +73,7 @@ type Props = {
   toonType?: boolean;
   /**
    * Mag deze gebruiker een bestaande activiteit wijzigen en verwijderen? Het
-   * dashboard staat dat alleen admin en planner toe (`ActivityEditModal`);
+   * dashboard staat dat alleen admin of het recht planning toe (`ActivityEditModal`);
    * afronden en heropenen mag iedereen. Standaard: ja.
    */
   magBewerken?: boolean;

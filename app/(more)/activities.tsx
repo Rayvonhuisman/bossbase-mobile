@@ -22,7 +22,7 @@ import {
   type SelectOption,
 } from '@/components';
 import { ActiviteitRij } from '@/components/ActiviteitRij';
-import { useAuth, usePermissions, useTheme } from '@/providers';
+import { usePermissions, useTheme } from '@/providers';
 import {
   listAllActivities,
   setActivityCompleted,
@@ -54,7 +54,7 @@ import { ds, spacing, type ThemeColors } from '@/theme';
  *   klant; lijst in datumgroepen (Te laat, Vandaag, Morgen, Deze week, Later,
  *   Afgerond).
  * - Aanmaken mag iedereen (behalve read-only); wijzigen en verwijderen alleen
- *   admin en planner, net als `ActivityEditModal`; afronden en heropenen mag
+ *   admin of recht planning, net als `ActivityEditModal`; afronden en heropenen mag
  *   iedereen die de activiteit ziet.
  * - `?id=<id>` opent een activiteit (de homepage linkt zo), `?nieuw=1` opent
  *   een nieuwe. De oude pagina Taken (`/tasks`) verwijst hierheen.
@@ -78,12 +78,11 @@ type TeamLid = { id: string; full_name: string; role: string; actief: boolean };
 export default function ActivitiesScreen() {
   const router = useRouter();
   const { id: openId, nieuw } = useLocalSearchParams<{ id?: string; nieuw?: string }>();
-  const { role } = useAuth();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { klasse } = useSchermklasse();
   const tablet = klasse === 'tablet';
-  const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
+  const { loaded: rechtenGeladen, mag, can, waaromNiet } = usePermissions();
 
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
@@ -99,8 +98,10 @@ export default function ActivitiesScreen() {
 
   const magMaken = mag('activiteiten', 'maken');
   const magAfronden = mag('activiteiten', 'afronden');
-  // Dashboard: wijzigen en verwijderen alleen voor admin en planner.
-  const magBewerken = mag('activiteiten', 'wijzigen') && (role === 'admin' || role === 'planner');
+  // Dashboard (ActivityEditModal): wijzigen en verwijderen met
+  // magBewerken('planning') — admin of het recht planning. De rol 'planner'
+  // bestaat niet meer (20261002135952).
+  const magBewerken = mag('activiteiten', 'wijzigen') && can('planning');
 
   const load = useCallback(async () => {
     setError(null);

@@ -26,7 +26,7 @@ const TIME_ENTRY_COLUMNS = `
 
 /**
  * Time entries for one profile in an inclusive date-range (YYYY-MM-DD).
- * RLS guarantees medewerkers only see their own rows; admin/planner can see all,
+ * RLS guarantees medewerkers only see their own rows; admin and the `planning` right see all,
  * but we still pin the filter to the caller's profile-id to keep the query intent
  * obvious.
  */
@@ -52,7 +52,7 @@ export async function listTimeEntriesForProfile(
 }
 
 /**
- * Company-wide entries in a range (admin/planner only — RLS enforces).
+ * Company-wide entries in a range (admin or `planning` right — RLS enforces).
  * Used for the team-section on Uren.
  */
 export async function listCompanyTimeEntries(
@@ -168,7 +168,7 @@ export async function listUrenForProfile(
   return { data, error: error ? 'Niet alle uren konden worden geladen.' : null };
 }
 
-/** Bedrijfsbreed overzicht in een periode (admin/planner). */
+/** Bedrijfsbreed overzicht in een periode (admin of recht planning; RLS). */
 export async function listCompanyUren(
   fromISO: string,
   toISO: string,
@@ -188,7 +188,7 @@ export async function listCompanyUren(
 
 export type CreateWerkdagUurInput = {
   company_id: string;
-  /** Van wie de uren zijn — de policy staat alleen je eigen rij toe (admin/planner breder). */
+  /** Van wie de uren zijn — de policy staat alleen je eigen rij toe (admin/recht planning breder). */
   profile_id: string;
   datum: string; // YYYY-MM-DD
   uren: number;
@@ -271,7 +271,7 @@ export async function createWerkdagUur(
 /**
  * Werkdaguren (`urenregistratie`) wijzigen en verwijderen.
  *
- * De policy laat dit toe aan admin en planner, én aan de medewerker voor zijn
+ * De policy laat dit toe aan admin en het recht planning, én aan de medewerker voor zijn
  * eigen rijen. De 'eigen rij'-helft toetst de server; de app toont de knop en
  * meldt eerlijk als er niets is geraakt.
  *

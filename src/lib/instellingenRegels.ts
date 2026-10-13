@@ -118,7 +118,7 @@ export type TemplateConfig = {
 export const TEMPLATE_CONFIGS: TemplateConfig[] = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer', 'totaal_bedrag', 'vervaldatum', 'link'], showAutoToggle: false, showAutoDagen: false },
   { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'factuur', label: 'Factuur', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum', 'betaalinstructie'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'factuur', label: 'Factuur', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum', 'betaalinstructie', 'iban'], showAutoToggle: false, showAutoDagen: false },
   { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
   { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
   { type: 'aanvraag_ontvangen', label: 'Aanvraag ontvangen', vars: ['klant_naam', 'bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },

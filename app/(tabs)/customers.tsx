@@ -37,6 +37,7 @@ import {
   type Leverancier,
 } from '@/services/leverancierService';
 import {
+  isZakelijkeKlant,
   klantPastBijZoek,
   leverancierPastBijZoek,
   totalenPerKlant,
@@ -93,8 +94,9 @@ function activityLabel(c: Customer): string {
  * naam bepaalt welke van de vier het wordt, zodat dezelfde klant altijd
  * dezelfde kleur houdt.
  */
+// Opgeslagen klanttype (dashboard 1-10), anders afgeleid van het KvK-nummer.
 function isZakelijk(c: Customer): boolean {
-  return !!(c.kvk_number && c.kvk_number.trim());
+  return isZakelijkeKlant(c);
 }
 
 function matchesFilter(c: Customer, key: FilterKey, todayMs: number): boolean {

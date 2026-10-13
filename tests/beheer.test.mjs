@@ -49,9 +49,9 @@ test('team: actiekolom — Jij, Beschermd of acties', () => {
   assert.equal(team.beheerStand(alleen[0], alleen, null, 'mw').geblokkeerd, team.LAATSTE_ADMIN_REDEN);
 });
 
-test('team: planner alleen als keuze bij de huidige rol', () => {
+test('team: alleen admin en medewerker als rol (planner bestaat niet meer, 20261002135952)', () => {
   assert.deepEqual(team.rolOpties('medewerker').map((r) => r.id), ['medewerker', 'admin']);
-  assert.deepEqual(team.rolOpties('planner').map((r) => r.id), ['medewerker', 'admin', 'planner']);
+  assert.deepEqual(team.rolOpties('planner').map((r) => r.id), ['medewerker', 'admin']);
 });
 
 test('team: uitnodigingsmail escapet namen en noemt de rol', () => {
@@ -215,7 +215,8 @@ test('database: bedragen en export zoals het dashboard', () => {
   assert.equal(r['Laatste project naam'], 'Dak');
   assert.equal(r['Moneybird gesynchroniseerd'], 'Nee');
   const csv = db.naarCsv([r]);
-  assert.ok(csv.startsWith('﻿"Naam","Email"'));
+  // Puntkomma, zoals het dashboard (c40abf9): NL-Excel opent het in kolommen.
+  assert.ok(csv.startsWith('﻿"Naam";"Email"'));
   assert.equal(csv.split('\n').length, 2);
   assert.equal(db.EXPORT_KOLOMMEN.length, 24);
 });

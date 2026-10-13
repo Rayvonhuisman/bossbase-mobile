@@ -24,7 +24,7 @@ import {
 import { useAuth, usePermissions, useTheme, useToast } from '@/providers';
 import { canBookHours, listCompanyProfiles, listWorkOrders } from '@/services/workOrderService';
 import { PauzeKeuze } from '@/components/PauzeKeuze';
-import { leesKm, rondAfOpVijf } from '@/lib/urenRegels';
+import { leesKm, magTeamWerkdagen, rondAfOpVijf } from '@/lib/urenRegels';
 import { createWerkbonUur } from '@/services/werkbonUrenService';
 import { createWerkdagUur } from '@/services/timeEntryService';
 import { isGeldigeISODatum, minutenVanTijd, vandaagISO } from '@/lib/datum';
@@ -56,7 +56,7 @@ import { leesbreedte } from '@/lib/schermklasseRegels';
 type Soort = 'werkbon' | 'overig';
 
 /*
- * Gelijk aan het dashboard (UrenModal): werkdaguren met datum, (admin/planner)
+ * Gelijk aan het dashboard (UrenModal): werkdaguren met datum, (admin/planning)
  * medewerker, start- en eindtijd afgerond op vijf minuten, pauzeknoppen,
  * gereden kilometers en een notitie. Werkdag is de standaard; "Werkbon" blijft
  * beschikbaar voor wie vanaf de telefoon op een klus boekt
@@ -73,8 +73,10 @@ export default function NewTimeEntryScreen() {
 
   const params = useLocalSearchParams<{ soort?: string; werkbon?: string }>();
   const [soort, setSoort] = useState<Soort>(params.soort === 'werkbon' || params.werkbon ? 'werkbon' : 'overig');
-  // Uren voor een ander boeken: alleen admin/planner, zoals het dashboard.
-  const magVoorAnderen = role === 'admin' || role === 'planner';
+  // Werkdaguren voor een ander boeken: admin of recht planning, zoals het
+  // dashboard (`canBookForOthers = magBewerken('planning')`) en de policy op
+  // urenregistratie. De rol 'planner' bestaat niet meer.
+  const magVoorAnderen = rechtenGeladen && magTeamWerkdagen({ userId: user?.id ?? null, role, can });
   const [voorWie, setVoorWie] = useState<string | null>(null);
   const [collegas, setCollegas] = useState<SelectOption[]>([]);
   const [km, setKm] = useState('');
@@ -96,7 +98,9 @@ export default function NewTimeEntryScreen() {
   const loadWo = useCallback(async () => {
     setLoadingWo(true);
     setWoError(null);
-    const assignedToUserId = role === 'medewerker' ? (user?.id ?? null) : null;
+    // Met het recht planning (of als admin) mag je op elke bon boeken; anders
+    // alleen op je eigen bonnen. canBookHours filtert daarna precies.
+    const assignedToUserId = magVoorAnderen ? null : (user?.id ?? null);
     const { data, error: e } = await listWorkOrders({ assignedToUserId });
     if (e) setWoError('Werkbonnen konden niet worden geladen.');
     else setWorkOrders(data);
@@ -112,7 +116,7 @@ export default function NewTimeEntryScreen() {
       }
     }
     setLoadingWo(false);
-  }, [role, user?.id, magVoorAnderen]);
+  }, [user?.id, magVoorAnderen]);
 
   useEffect(() => {
     // Gegevens laden bij openen; loadWo zet zelf de laadstatus.

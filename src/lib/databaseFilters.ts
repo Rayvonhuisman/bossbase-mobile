@@ -486,12 +486,26 @@ export function csvVeilig(v: unknown): string {
   return `'${s}`;
 }
 
-/** CSV zoals het dashboard: komma-gescheiden, alles gequote, met UTF-8 BOM. */
+/**
+ * CSV zoals het dashboard (c40abf9): puntkomma-gescheiden — Nederlandse Excel
+ * opent een komma-CSV in één kolom — alles gequote, met UTF-8 BOM.
+ */
+export const CSV_SCHEIDING = ';';
+
 export function naarCsv(regels: readonly Record<string, string | number>[]): string {
   const q = (v: unknown) => `"${csvVeilig(v).replace(/"/g, '""')}"`;
-  const kop = EXPORT_KOLOMMEN.map(q).join(',');
-  const rijen = regels.map((r) => EXPORT_KOLOMMEN.map((k) => q(r[k])).join(','));
+  const kop = EXPORT_KOLOMMEN.map(q).join(CSV_SCHEIDING);
+  const rijen = regels.map((r) => EXPORT_KOLOMMEN.map((k) => q(r[k])).join(CSV_SCHEIDING));
   return '﻿' + [kop, ...rijen].join('\n');
+}
+
+/**
+ * Opslagsleutel voor segmenten, per gebruiker (dashboard c40abf9): op een
+ * gedeeld toestel zag de volgende gebruiker — ook van een ander bedrijf — anders
+ * de opgeslagen filters van de vorige.
+ */
+export function segmentSleutel(profielId: string | null | undefined): string {
+  return `bb_db_segments:${profielId || 'anoniem'}`;
 }
 
 // ── Keuzelijsten ───────────────────────────────────────────────────────────
