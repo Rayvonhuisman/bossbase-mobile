@@ -36,6 +36,7 @@ import { formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
 
 /**
  * Pipeline — deals per fase, uit dezelfde `deals`-tabel als het dashboard.
@@ -168,7 +169,7 @@ function PipelineScreenInhoud() {
       stageId: d.stage_id,
       bedrag: d.expected_revenue != null ? String(d.expected_revenue) : '',
       priority: d.priority ?? 'med',
-      description: d.description ?? '',
+      description: alsTekst(d.description),
     });
   };
 

@@ -60,6 +60,7 @@ import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
+import { alsTekst } from '@/lib/notitieTekst';
 
 type ViewMode = 'dag' | 'week' | 'maand';
 
@@ -218,7 +219,7 @@ export default function PlanningScreen() {
         time,
         end: splitsLokaal(p.endAt).time,
         location: p.address ?? '',
-        notes: p.description ?? '',
+        notes: alsTekst(p.description),
         customerId: p.customerId,
       });
       return;

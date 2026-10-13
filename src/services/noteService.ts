@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
+import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 
 /**
  * Klantnotities — rijen in `klant_tijdlijn` met `type = 'notitie_toegevoegd'`.
@@ -66,38 +67,11 @@ export type NoteRow = {
   customer: { id: string; name: string | null } | null;
 };
 
-/** HTML uit het dashboard → leesbare platte tekst. */
-function naarPlatteTekst(html: string | null): string {
-  if (!html) return '';
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-/** Platte tekst → veilige HTML, zodat het dashboard hem ongeschonden toont. */
-function naarHtml(tekst: string): string {
-  return tekst
-    .trim()
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>');
-}
-
 const toNote = (row: NoteDbRow): NoteRow => ({
   id: row.id,
   company_id: row.company_id,
   customer_id: row.customer_id,
-  body: naarPlatteTekst(row.omschrijving),
+  body: alsTekst(row.omschrijving),
   created_at: row.aangemaakt_op,
   created_by: row.created_by,
   auteurNaam: row.auteur?.full_name ?? '',
@@ -158,7 +132,7 @@ export async function createNote(input: NoteInput): Promise<WriteResult<NoteRow>
   const payload = withCompanyId({
     customer_id: input.customer_id,
     type: NOTITIE_TYPE,
-    omschrijving: naarHtml(input.body),
+    omschrijving: alsHtml(input.body),
     aangemaakt_op: new Date().toISOString(),
     // Net als het dashboard: expliciet meegeven wie het schreef. De kolom heeft
     // ook een default (`auth.uid()`), maar dan staat het nergens zwart op wit.

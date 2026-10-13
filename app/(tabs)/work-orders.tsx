@@ -31,6 +31,7 @@ import { avatarKleuren, initialen } from '@/lib/avatar';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { WorkOrderWithCustomer } from '@/types/domain';
 import { useLaden } from '@/lib/useLaden';
+import { alsTekst } from '@/lib/notitieTekst';
 
 type ChipKey =
   | 'alles'
@@ -467,7 +468,7 @@ function WerkbonKaart({
         <StatusBadge status={wo.status} />
       </View>
       <Text style={styles.kaartTitel} numberOfLines={2}>
-        {wo.titel || wo.omschrijving || 'Werkbon'}
+        {wo.titel || alsTekst(wo.omschrijving) || 'Werkbon'}
       </Text>
       <View style={styles.kaartVoet}>
         <View style={[styles.kaartAvatar, { backgroundColor: av.bg }]}>

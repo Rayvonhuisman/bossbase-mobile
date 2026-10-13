@@ -103,6 +103,7 @@ import type {
   WorkOrderWithRelations,
 } from '@/types/domain';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { alsTekst } from '@/lib/notitieTekst';
 
 // Dark "ink" surface kept constant across themes (status button).
 /** Vaste inkt op de donkere herokaart — blijft in beide thema's donker. */
@@ -715,7 +716,7 @@ export default function WorkOrderDetailScreen() {
             {workOrder.omschrijving ? (
               <View style={styles.descriptionBlock}>
                 <Text style={styles.descriptionLabel}>Omschrijving</Text>
-                <Text style={styles.descriptionText}>{workOrder.omschrijving}</Text>
+                <Text style={styles.descriptionText}>{alsTekst(workOrder.omschrijving)}</Text>
               </View>
             ) : null}
           </Section>
@@ -913,7 +914,7 @@ export default function WorkOrderDetailScreen() {
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.noteBody}>{n.note}</Text>
+                    <Text style={styles.noteBody}>{alsTekst(n.note)}</Text>
                   </View>
                 ))}
               </View>
@@ -924,7 +925,7 @@ export default function WorkOrderDetailScreen() {
               it belongs to the work order, not to the note log. */}
           {workOrder.notes?.trim() ? (
             <Section styles={styles} title="Opmerking van kantoor">
-              <Text style={styles.descriptionText}>{workOrder.notes.trim()}</Text>
+              <Text style={styles.descriptionText}>{alsTekst(workOrder.notes)}</Text>
             </Section>
           ) : null}
 

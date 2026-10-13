@@ -56,6 +56,7 @@ import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
@@ -95,7 +96,7 @@ const LEGE_REGEL: RegelConcept = { omschrijving: '', aantal: '1', prijs: '', een
 function subtitleFor(o: OfferteRow): string {
   const delen: string[] = [];
   if (o.customer?.name) delen.push(o.customer.name);
-  if (o.omschrijving) delen.push(o.omschrijving);
+  if (o.omschrijving) delen.push(alsTekst(o.omschrijving));
   if (o.geldig_tot) delen.push(`Geldig t/m ${formatDateNL(o.geldig_tot)}`);
   return delen.join(' · ') || 'Offerte';
 }
@@ -209,7 +210,7 @@ function OffersScreenInhoud() {
       omschrijving: o.omschrijving ?? '',
       geldigTot: o.geldig_tot ?? '',
       btwPct: o.btw_pct != null ? String(o.btw_pct) : standaardBtw,
-      notes: o.notes ?? '',
+      notes: alsTekst(o.notes),
       status: o.status ?? 'concept',
       opSlot: inhoudLigtVast(o),
     });

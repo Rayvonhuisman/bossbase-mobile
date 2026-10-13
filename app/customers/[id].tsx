@@ -46,6 +46,7 @@ import type { Customer, WorkOrderWithCustomer } from '@/types/domain';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,7 +236,7 @@ export default function CustomerDetailScreen() {
                       city: customer.city ?? '',
                       kvk: customer.kvk_number ?? '',
                       btw: customer.btw_number ?? '',
-                      notes: customer.notes ?? '',
+                      notes: alsTekst(customer.notes),
                     });
                   }}
                 />

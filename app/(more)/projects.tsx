@@ -39,6 +39,7 @@ import { getUserId } from '@/lib/sessionContext';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
 
 /**
  * Projecten — dezelfde `projects`-tabel en dezelfde statussen als het dashboard.
@@ -141,7 +142,7 @@ export default function ProjectsScreen() {
       begroteUren: p.quoted_hours != null ? String(p.quoted_hours) : '',
       startDatum: p.start_date ?? '',
       deadline: p.deadline ?? '',
-      description: p.description ?? '',
+      description: alsTekst(p.description),
     });
   };
 
@@ -434,7 +435,7 @@ export default function ProjectsScreen() {
             {notities.map((n) => (
               <View key={n.id} style={styles.notitie}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.notitieTekst}>{n.note}</Text>
+                  <Text style={styles.notitieTekst}>{alsTekst(n.note)}</Text>
                   <Text style={styles.notitieMeta}>{formatDateNL(n.created_at)}</Text>
                 </View>
                 {/* De policy laat de auteur en admin/planner verwijderen; die
