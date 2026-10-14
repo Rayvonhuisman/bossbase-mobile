@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   BookOpen,
@@ -18,7 +18,6 @@ import {
   ListChecks,
   type LucideIcon,
   MessageCircleQuestion,
-  Moon,
   Package,
   Phone,
   Receipt,
@@ -73,7 +72,7 @@ export default function MenuScreen() {
   const router = useRouter();
   const { company, profile, user, role } = useAuth();
   const { loaded, allowsRoute, readonly, readonlyReden } = usePermissions();
-  const { colors: t, colorMode, toggleColorMode } = useTheme();
+  const { colors: t, colorMode } = useTheme();
   const { openBoss, openMelden } = useHulp();
   const { klasse } = useSchermklasse();
   const tablet = klasse === 'tablet';
@@ -146,27 +145,6 @@ export default function MenuScreen() {
       gewicht: sectieGewicht(g.items.length),
       inhoud: <Group title={g.titel} items={g.items} />,
     })),
-    {
-      key: 'Weergave',
-      gewicht: sectieGewicht(1),
-      inhoud: (
-        <>
-          <AppSection title="Weergave" variant="eyebrow" />
-          <View style={styles.donkerRij}>
-            <View style={styles.donkerIcoon}>
-              <Moon size={18} color={t.ink2} />
-            </View>
-            <Text style={styles.donkerTitel}>Donkere modus</Text>
-            <Switch
-              value={colorMode === 'dark'}
-              onValueChange={toggleColorMode}
-              accessibilityLabel="Donkere modus"
-              trackColor={{ true: t.green, false: t.lineStrong }}
-            />
-          </View>
-        </>
-      ),
-    },
   ];
 
   return (
@@ -287,19 +265,4 @@ const makeStyles = (t: ThemeColors) =>
     bijNaamTekst: { flexShrink: 1, fontSize: 13.5, fontWeight: '600', color: t.ink },
     kolommen: { flexDirection: 'row', alignItems: 'flex-start' },
     kolom: { flex: 1, minWidth: 0 },
-    donkerRij: {
-      marginHorizontal: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      minHeight: 56,
-      backgroundColor: t.card,
-      borderWidth: 1,
-      borderColor: t.line,
-      borderRadius: t.rLg,
-    },
-    donkerIcoon: { width: 36, height: 36, borderRadius: 10, backgroundColor: t.bgAlt, alignItems: 'center', justifyContent: 'center' },
-    donkerTitel: { flex: 1, fontSize: 15, fontWeight: '600', color: t.ink },
   });

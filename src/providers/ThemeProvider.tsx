@@ -8,11 +8,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Appearance } from 'react-native';
 import { darkTheme, lightTheme, type ThemeColors } from '@/theme';
+import { bepaalThema, leesOpgeslagenThemaDirect, THEMA_SLEUTEL } from '@/lib/themaKeuze';
 
 export type ColorMode = 'light' | 'dark';
 
-const STORAGE_KEY = 'bb.colorMode';
+const STORAGE_KEY = THEMA_SLEUTEL;
 
 type ThemeContextValue = {
   colorMode: ColorMode;
@@ -25,15 +27,18 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /**
- * App-wide light/dark theme. Defaults to light; the saved preference is loaded
- * from AsyncStorage on launch and persisted on every change. Non-sensitive, so
+ * App-wide light/dark theme. The saved choice wins; without one the system
+ * preference is followed. Persisted on every change. Non-sensitive, so
  * AsyncStorage (already a dependency) is used rather than SecureStore.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [colorMode, setColorModeState] = useState<ColorMode>('light');
+  // Eerste weergave meteen goed: op web is de opgeslagen keuze synchroon te
+  // lezen (geen licht→donker-flits); zonder keuze volgt de app het systeem.
+  const [colorMode, setColorModeState] = useState<ColorMode>(() =>
+    bepaalThema(leesOpgeslagenThemaDirect(), Appearance.getColorScheme()),
+  );
 
-  // Load saved preference once on mount. A brief light→dark correction on cold
-  // start is acceptable and avoids blocking the first render.
+  // Native: de opgeslagen keuze komt asynchroon binnen en wint van het systeem.
   useEffect(() => {
     let mounted = true;
     AsyncStorage.getItem(STORAGE_KEY)

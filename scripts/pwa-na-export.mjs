@@ -38,6 +38,7 @@ const precache = bestanden
       url === '/index.html' ||
       url === '/manifest.webmanifest' ||
       url === '/favicon.ico' ||
+      url === '/thema-start.js' ||
       url === '/apple-touch-icon.png' ||
       /^\/icons\/[^/]+\.png$/.test(url) ||
       /^\/_expo\/static\/(js|css)\/web\/[^/]+\.(js|css)$/.test(url) ||
