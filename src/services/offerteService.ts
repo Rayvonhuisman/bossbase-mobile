@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { haalInStukken } from '@/lib/inStukken';
+import { btwPctVoorOpslag, volgendNummer } from '@/lib/documentLogica';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -9,11 +11,9 @@ import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/wr
  * Statuswaarden, bevriezingsregel en berekening komen uit
  * `src/services/offerteService.js` op origin/main.
  *
- * Let op de asymmetrie in de RLS, want die is niet af te leiden uit het menu:
- * de offerte zélf hangt op het recht `offertes`, maar de REGELS hangen op de
- * ROL (admin of planner). Een medewerker met offerterecht mag dus wel een
- * offerte openen en de status bijwerken, en geen regels toevoegen. De app toont
- * die knoppen daarom apart.
+ * RLS (live gecontroleerd): zowel `offertes` als `offerte_items` hangen op het
+ * recht `offertes` (`bb_has_permission`) plus het eigen bedrijf. De regels van
+ * een ondertekende offerte zet de trigger `bb_offerte_regels_op_slot` vast.
  */
 
 export const OFFERTE_STATUS: Record<string, string> = {
@@ -90,20 +90,119 @@ export function inhoudLigtVast(o: Pick<OfferteRow, 'status' | 'signed_at'>): boo
   return o.status !== 'concept' || Boolean(o.signed_at);
 }
 
+/**
+ * Alle offertes, nieuwste eerst — net als het dashboard, dat geen paginering
+ * kent en zoekt en filtert over de hele lijst. Zonder `limit` in stukken van
+ * 1000 (`haalInStukken`), zodat een groot bedrijf niet stil wordt afgekapt.
+ * `id` als tweede sleutel: `created_at` is niet uniek.
+ */
 export async function listOffertes(
-  limit = 100,
+  limit?: number,
 ): Promise<{ data: OfferteRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('offertes')
-    .select(OFFERTE_COLUMNS)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const basis = () =>
+    supabase
+      .from('offertes')
+      .select(OFFERTE_COLUMNS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true });
+
+  const { data, error } =
+    limit !== undefined
+      ? await basis().limit(limit)
+      : await haalInStukken((van, tot) => basis().range(van, tot));
 
   if (error) {
     console.warn('[offerteService.listOffertes]', error.message);
     return { data: [], error: 'Offertes konden niet worden geladen.' };
   }
   return { data: (data as unknown as OfferteRow[]) ?? [], error: null };
+}
+
+/** Klantgegevens voor het klantblok van de offerte- en factuurweergave. */
+export type DocumentKlant = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  postcode: string | null;
+  city: string | null;
+  kvk_number: string | null;
+  btw_number: string | null;
+};
+
+export const DOCUMENT_KLANT_KOLOMMEN =
+  'id, name, email, phone, address, postcode, city, kvk_number, btw_number';
+
+/**
+ * Eén offerte met alles wat de detailweergave nodig heeft. `*` in plaats van
+ * een kolomlijst: de ondertekening, de vervangen-velden en de bevroren
+ * bedrijfsgegevens (`snapshot_*`) zijn alleen hier nodig, en een kolom die op
+ * een oudere database ontbreekt mag de lijst niet laten mislukken.
+ */
+export type OfferteDetail = Omit<OfferteRow, 'customer'> & {
+  signed_by_name?: string | null;
+  signed_by_email?: string | null;
+  sent_to_email?: string | null;
+  vervangen_op?: string | null;
+  vervangen_door_nummer?: string | null;
+  snapshot_bedrijfsnaam?: string | null;
+  snapshot_logo_url?: string | null;
+  snapshot_branding_color?: string | null;
+  snapshot_adres?: string | null;
+  snapshot_postcode?: string | null;
+  snapshot_plaats?: string | null;
+  snapshot_email?: string | null;
+  snapshot_kvk?: string | null;
+  snapshot_btw?: string | null;
+  customer: DocumentKlant | null;
+};
+
+export async function getOfferteDetail(
+  id: string,
+): Promise<{ data: OfferteDetail | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('offertes')
+    .select(`*, customer:customers ( ${DOCUMENT_KLANT_KOLOMMEN} )`)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    console.warn('[offerteService.getOfferteDetail]', error.message);
+    return { data: null, error: 'De offerte kon niet worden geladen.' };
+  }
+  return { data: (data as unknown as OfferteDetail | null) ?? null, error: null };
+}
+
+/**
+ * Tijdelijke link naar de ondertekende offerte-PDF. De bucket
+ * `signed-offertes` is alleen voor de server; het dashboard vraagt de link op
+ * via de bestaande Edge Function `offerte-pdf-url` (alleen-lezen).
+ */
+export async function getOndertekendeOffertePdfUrl(
+  offerteId: string,
+): Promise<{ url: string | null; melding: string | null }> {
+  const { data, error } = await supabase.functions.invoke('offerte-pdf-url', {
+    body: { offerte_id: offerteId },
+  });
+  if (error) {
+    let melding: string | null = null;
+    try {
+      const ctx = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+      const body = await ctx?.json?.();
+      if (body?.error) melding = body.error;
+    } catch {
+      /* geen json */
+    }
+    return { url: null, melding: melding ?? 'De ondertekende PDF kon niet worden opgehaald.' };
+  }
+  const res = data as { url?: string; error?: string } | null;
+  if (!res?.url) {
+    return {
+      url: null,
+      melding: res?.error ?? 'Er is geen ondertekende PDF bewaard bij deze offerte.',
+    };
+  }
+  return { url: res.url, melding: null };
 }
 
 export async function getOfferteItems(
@@ -141,17 +240,15 @@ export async function getOfferteItems(
 export async function volgendOfferteNummer(): Promise<
   { ok: true; nummer: string } | { ok: false; melding: string }
 > {
-  const { data, error } = await supabase.from('offertes').select('nummer');
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase.from('offertes').select('id, nummer').order('id', { ascending: true }).range(van, tot),
+  );
   if (error) {
     console.warn('[offerteService.volgendOfferteNummer]', error.message);
     return { ok: false, melding: 'Het offertenummer kon niet worden bepaald. Probeer het opnieuw.' };
   }
-  let hoogste = 0;
-  for (const r of (data as { nummer: string | null }[]) ?? []) {
-    const m = /^BB-(\d+)/.exec(r.nummer ?? '');
-    if (m) hoogste = Math.max(hoogste, Number(m[1]));
-  }
-  return { ok: true, nummer: `BB-${String(hoogste + 1).padStart(3, '0')}` };
+  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
+  return { ok: true, nummer: volgendNummer(nummers, 'offerte') };
 }
 
 /** Bestaat dit nummer al binnen het bedrijf? Voor de controle ná het opslaan. */
@@ -398,22 +495,13 @@ export async function updateOfferte(
     if (input.status === 'geaccepteerd') updates.geaccepteerd_op = new Date().toISOString();
   }
 
-  const financieel = (
-    ['arbeidsuren', 'uurtarief', 'materiaalkosten', 'reiskosten', 'btw_pct'] as const
-  ).some((k) => input[k] !== undefined);
-
-  if (financieel) {
-    const { data: cur } = await supabase.from('offertes').select('*').eq('id', id).maybeSingle();
-    const huidig = (cur ?? {}) as Record<string, number>;
-    const samen = {
-      arbeidsuren: input.arbeidsuren ?? Number(huidig.arbeidsuren ?? 0),
-      uurtarief: input.uurtarief ?? Number(huidig.uurtarief ?? 55),
-      materiaalkosten: input.materiaalkosten ?? Number(huidig.materiaalkosten ?? 0),
-      reiskosten: input.reiskosten ?? Number(huidig.reiskosten ?? 0),
-      marge_pct: Number(huidig.marge_pct ?? 0),
-      btw_pct: input.btw_pct ?? Number(huidig.btw_pct ?? 21),
-    };
-    Object.assign(updates, samen, berekenOfferteTotalen(samen));
+  // Totalen rekent de database: trg_offertes_totalen_forceren zet bij elke
+  // update totaal_excl/incl uit de regels (bb_offertetotalen); een offerte
+  // zonder regels laat hij met rust. Hier niets meer herberekenen, zoals
+  // `updateOfferte` in het dashboard (origin/main) — de oude marge-formule
+  // gaf bij een mislukte leesactie verzonnen standaardwaarden.
+  for (const k of ['arbeidsuren', 'uurtarief', 'materiaalkosten', 'reiskosten', 'btw_pct'] as const) {
+    if (input[k] !== undefined) updates[k] = Number(input[k]);
   }
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
@@ -487,14 +575,15 @@ export async function createOfferteItem(
     return writeFout('validatie', 'Vul een geldige prijs in.');
   }
 
-  const btwPct = input.btw_pct ?? 21;
+  const btwRegime = input.btw_regime || regimeVanPct(input.btw_pct ?? 21);
   const basis = {
     offerte_id: input.offerte_id,
     omschrijving: input.omschrijving.trim(),
     eenheid: input.eenheid?.trim() || null,
     type: input.type || null,
-    btw_pct: btwPct,
-    btw_regime: input.btw_regime || regimeVanPct(btwPct),
+    // Verlegd/vrijgesteld = 0% (offerte_items_verlegd_nul_check).
+    btw_pct: btwPctVoorOpslag(input.btw_pct, btwRegime),
+    btw_regime: btwRegime,
     aantal: Number(input.aantal),
     prijs_per: Number(input.prijs_per),
     subtotaal: berekenRegelSubtotaal(input.aantal, input.prijs_per),
@@ -509,8 +598,7 @@ export async function createOfferteItem(
     {
       context: 'offerteService.createOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding:
-        'De regel is niet opgeslagen. Offerteregels wijzigen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Offertes nodig.',
     },
   );
 }
@@ -526,7 +614,10 @@ export async function updateOfferteItem(
   }
   if (input.eenheid !== undefined) updates.eenheid = input.eenheid?.trim() || null;
   if (input.btw_pct !== undefined) updates.btw_pct = input.btw_pct;
-  if (input.btw_regime !== undefined) updates.btw_regime = input.btw_regime;
+  if (input.btw_regime !== undefined) {
+    updates.btw_regime = input.btw_regime;
+    if (input.btw_regime === 'verlegd' || input.btw_regime === 'vrijgesteld') updates.btw_pct = 0;
+  }
   if (input.volgorde !== undefined) updates.volgorde = Number(input.volgorde);
 
   if (input.aantal !== undefined || input.prijs_per !== undefined) {
@@ -552,7 +643,7 @@ export async function updateOfferteItem(
     {
       context: 'offerteService.updateOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'Offerteregels wijzigen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet gewijzigd. Je hebt het recht Offertes nodig.',
     },
   );
 }
@@ -564,7 +655,7 @@ export async function deleteOfferteItem(id: string): Promise<WriteStatus> {
       context: 'offerteService.deleteOfferteItem',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Offerteregels verwijderen kan alleen als beheerder of planner.',
+      leegMelding: 'De regel is niet verwijderd. Je hebt het recht Offertes nodig.',
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -612,7 +703,7 @@ export type NieuweRegelInvoer = {
  *   uitkomst; zonder deze controle zou "offerte aangemaakt" kunnen verschijnen
  *   bij een offerte zonder enkele regel.
  * - **Geen halve waarheid.** Mislukt een regel, dan blijft de offerte staan
- *   (weggooien kan een medewerker niet altijd — DELETE vraagt admin/planner) en
+ *   (niet automatisch weggooien: de oorzaak kan ook het verwijderen raken) en
  *   krijgt de gebruiker te zien wélke regel niet is opgeslagen, met het nummer
  *   van de aangemaakte offerte erbij. Beter een eerlijke halve uitkomst dan een
  *   groen vinkje op een document dat niet klopt.

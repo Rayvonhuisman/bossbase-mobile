@@ -22,6 +22,7 @@ export function AppFab({ label, onPress, icon, bottom }: Props) {
   const bottomOffset = bottom ?? insets.bottom + 88;
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.fab,

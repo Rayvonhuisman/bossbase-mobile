@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { FormField } from './FormField';
+import { DateField, TimeField } from './DateField';
 import { FormSheet } from './FormSheet';
 import { SelectField, type SelectOption } from './SelectField';
 import { usePermissions, useTheme } from '@/providers';
@@ -13,6 +14,7 @@ import {
   type ActivityRow,
 } from '@/services/activityService';
 import { splitsLokaal, vandaagIso } from '@/lib/nlTijd';
+import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { spacing, typography, radius, type ThemeColors } from '@/theme';
 
@@ -23,7 +25,10 @@ export type ActivityConcept = {
   type: string;
   date: string;
   time: string;
+  /** Platte tekst om te bewerken; het dashboard bewaart notities als HTML. */
   notes: string;
+  /** De notitie zoals hij in de database stond (mogelijk HTML). */
+  notesOrigineel?: string | null;
   customerId: string | null;
   assigneeId: string | null;
   completed: boolean;
@@ -38,7 +43,8 @@ export function conceptVanActiviteit(a: ActivityRow): ActivityConcept {
     type: a.type ?? 'task',
     date,
     time,
-    notes: a.notes ?? '',
+    notes: alsTekst(a.notes),
+    notesOrigineel: a.notes,
     customerId: a.customer_id,
     assigneeId: a.assigned_to,
     completed: a.completed,
@@ -63,8 +69,14 @@ type Props = {
   concept: ActivityConcept | null;
   klanten: SelectOption[];
   medewerkers: SelectOption[];
-  /** Toon het type-veld. Op het Taken-scherm ligt het type vast op 'task'. */
+  /** Toon het type-veld. */
   toonType?: boolean;
+  /**
+   * Mag deze gebruiker een bestaande activiteit wijzigen en verwijderen? Het
+   * dashboard staat dat alleen admin of het recht planning toe (`ActivityEditModal`);
+   * afronden en heropenen mag iedereen. Standaard: ja.
+   */
+  magBewerken?: boolean;
   onClose: () => void;
   /** Na een geslaagde opslag of verwijdering. */
   onSaved: () => void | Promise<void>;
@@ -83,6 +95,7 @@ export function ActivityFormSheet({
   klanten,
   medewerkers,
   toonType = true,
+  magBewerken = true,
   onClose,
   onSaved,
 }: Props) {
@@ -104,16 +117,44 @@ export function ActivityFormSheet({
   const zetVeld = <K extends keyof ActivityConcept>(sleutel: K, waarde: ActivityConcept[K]) =>
     setVorm((v) => (v ? { ...v, [sleutel]: waarde } : v));
 
+  // Alleen-lezen bij een bestaande activiteit zonder bewerkrecht: dan is
+  // alleen de schakelaar "Afgerond" te bedienen, net als in het dashboard.
+  const alleenLezen = !!vorm?.id && !magBewerken;
+
   const opslaan = () => {
     if (!vorm) return;
+    if (alleenLezen && vorm.id) {
+      const id = vorm.id;
+      save(() => updateActivity(id, { completed: vorm.completed }), {
+        onSuccess: async () => {
+          onClose();
+          await onSaved();
+        },
+      });
+      return;
+    }
     const invoer = {
       title: vorm.title,
       type: vorm.type,
       date: vorm.date || null,
       time: vorm.time || null,
-      notes: vorm.notes,
+      // Ongewijzigd? Dan de notitie niet meesturen, zodat opmaak en @-tags uit
+      // het dashboard intact blijven. Gewijzigd: als veilige HTML terug.
+      notes:
+        vorm.id && vorm.notes === alsTekst(vorm.notesOrigineel)
+          ? undefined
+          : vorm.notes.trim()
+            ? alsHtml(vorm.notes)
+            : '',
       customer_id: vorm.customerId,
-      assigned_to_ids: vorm.assigneeId ? [vorm.assigneeId] : [],
+      // Alleen meesturen als de keuze is veranderd: een activiteit kan in het
+      // dashboard meerdere toegewezenen hebben, en die willen we niet wissen.
+      assigned_to_ids:
+        vorm.id && vorm.assigneeId === concept?.assigneeId
+          ? undefined
+          : vorm.assigneeId
+            ? [vorm.assigneeId]
+            : [],
       completed: vorm.completed,
     };
     save(() => (vorm.id ? updateActivity(vorm.id, invoer) : createActivity(invoer)), {
@@ -140,14 +181,14 @@ export function ActivityFormSheet({
   return (
     <FormSheet
       visible={vorm !== null}
-      title={vorm?.id ? 'Activiteit bewerken' : 'Nieuwe activiteit'}
+      title={vorm?.id ? (alleenLezen ? 'Activiteit' : 'Activiteit bewerken') : 'Nieuwe activiteit'}
       error={error}
       saving={saving}
       submitDisabled={!vorm?.title.trim()}
       onSubmit={opslaan}
       onClose={onClose}
       destructive={
-        vorm?.id && mag('activiteiten', 'verwijderen')
+        vorm?.id && magBewerken && mag('activiteiten', 'verwijderen')
           ? { label: 'Activiteit verwijderen', onPress: verwijderen }
           : undefined
       }
@@ -158,6 +199,7 @@ export function ActivityFormSheet({
         onChangeText={(v) => zetVeld('title', v)}
         placeholder="Bijv. Klant bellen over offerte"
         autoFocus={!vorm?.id}
+        editable={!alleenLezen}
       />
 
       {toonType ? (
@@ -170,8 +212,10 @@ export function ActivityFormSheet({
                 <Pressable
                   key={soort}
                   onPress={() => zetVeld('type', soort)}
+                  disabled={alleenLezen}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: actief }}
+                  accessibilityState={{ selected: actief, disabled: alleenLezen }}
+                  aria-pressed={actief}
                   style={[styles.chip, actief && styles.chipActief]}
                 >
                   <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>
@@ -186,23 +230,21 @@ export function ActivityFormSheet({
 
       <View style={styles.rij}>
         <View style={{ flex: 1.4 }}>
-          <FormField
+          <DateField
             label="Datum"
-            value={vorm?.date ?? ''}
-            onChangeText={(v) => zetVeld('date', v)}
-            placeholder="JJJJ-MM-DD"
-            autoCapitalize="none"
-            keyboardType="numbers-and-punctuation"
+            value={vorm?.date || null}
+            onChange={(v) => zetVeld('date', v)}
+            disabled={alleenLezen}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FormField
+          <TimeField
             label="Tijd"
-            value={vorm?.time ?? ''}
-            onChangeText={(v) => zetVeld('time', v)}
+            value={vorm?.time || null}
+            onChange={(v) => zetVeld('time', v)}
             placeholder="09:00"
-            keyboardType="numbers-and-punctuation"
             hint="Leeg = 09:00"
+            disabled={alleenLezen}
           />
         </View>
       </View>
@@ -212,6 +254,8 @@ export function ActivityFormSheet({
         value={vorm?.customerId ?? null}
         options={klanten}
         onChange={(id) => zetVeld('customerId', id)}
+        disabled={alleenLezen}
+        searchable
         allowEmpty
         emptyLabel="Geen klant"
         placeholder="Geen klant"
@@ -222,6 +266,7 @@ export function ActivityFormSheet({
         value={vorm?.assigneeId ?? null}
         options={medewerkers}
         onChange={(id) => zetVeld('assigneeId', id)}
+        disabled={alleenLezen}
         allowEmpty
         emptyLabel="Aan mij toewijzen"
         placeholder="Aan mij toewijzen"
@@ -234,6 +279,7 @@ export function ActivityFormSheet({
         onChangeText={(v) => zetVeld('notes', v)}
         placeholder="Optioneel"
         multiline
+        editable={!alleenLezen}
       />
 
       {vorm?.id ? (
@@ -241,7 +287,7 @@ export function ActivityFormSheet({
           <View style={{ flex: 1 }}>
             <Text style={styles.schakelTitel}>Afgerond</Text>
             <Text style={styles.schakelUitleg}>
-              Afgeronde activiteiten verdwijnen uit de takenlijst.
+              Afgeronde activiteiten staan onder Afgerond in Activiteiten.
             </Text>
           </View>
           <Switch

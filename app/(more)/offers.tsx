@@ -1,10 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FileText, Lock, Plus, Trash2 } from 'lucide-react-native';
 import {
+  AppFilterChips,
   AppListGroup,
   AppListItem,
+  AppSearchBar,
+  Button,
   AppScreen,
   AppSection,
   AppTopBar,
@@ -28,18 +31,21 @@ import {
   createOfferteMetRegels,
   deleteOfferte,
   deleteOfferteItem,
+  getOfferteDetail,
   getOfferteItems,
+  getOndertekendeOffertePdfUrl,
   herberekenOfferteTotalen,
   inhoudLigtVast,
   listOffertes,
   OFFERTE_STATUS_OPTIES,
   updateOfferte,
+  type OfferteDetail,
   type OfferteInput,
   type OfferteItem,
   type OfferteRow,
 } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
-import { getCompanySettings } from '@/services/settingsService';
+import { getCompany, getCompanySettings, type CompanyRow } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import { listDeals } from '@/services/dealService';
 import {
@@ -56,14 +62,45 @@ import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { alsTekst } from '@/lib/notitieTekst';
+import { Dialog } from '@/lib/dialog';
+import { useSchermklasse } from '@/lib/schermklasse';
+import { drukHtmlAf, kanAfdrukken } from '@/lib/afdrukken';
+import { bouwDocumentHtml } from '@/lib/documentHtml';
+import {
+  bedrijfVoorDocument,
+  documentTotalen,
+  filterOffertes,
+  OFFERTE_FILTERS,
+  offerteKpis,
+  offerteStatusInfo,
+  telOfferteFilters,
+  type OfferteFilter,
+} from '@/lib/documentLogica';
+import { Paneel } from '@/components/Paneel';
+import {
+  DetailRij,
+  DocumentStatusBadge,
+  RegelLijst,
+  TegelRaster,
+  TotalenBlok,
+} from '@/components/DocumentOnderdelen';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
  *
+ * Gelijk aan de offertepagina van het dashboard: vier KPI-tegels, filtertabs
+ * (Alle/Concept/Verzonden/Geaccepteerd/Afgewezen), zoeken op nummer,
+ * omschrijving en klant, statusbadges in de dashboardkleuren, en een
+ * detailweergave met regels, totalen per btw-tarief, notities en de
+ * ondertekening. De PDF maakt het dashboard met jsPDF in de browser; de app
+ * toont dezelfde inhoud als afdrukbare weergave (web/PWA: printvenster, ook
+ * "Bewaar als PDF"). Een getekende offerte-PDF komt via `offerte-pdf-url`.
+ * Versturen per mail gebeurt (nog) in het dashboard.
+ *
  * Twee gates die uit elkaar lopen en die je hier apart terugziet:
- * de offerte zelf hangt op het recht `offertes`, de REGELS hangen op de ROL
- * (admin of planner). Een medewerker met offerterecht kan dus wel een offerte
- * openen en de status bijwerken, en geen regels toevoegen. Verder ligt de
+ * offerte en regels hangen sinds migratie 20261002135952 allebei op het recht
+ * `offertes` (voorheen de regels op de rol admin/planner). Verder ligt de
  * inhoud van een verstuurde of ondertekende offerte vast — status wijzigen mag
  * dan nog wel.
  */
@@ -95,18 +132,44 @@ const LEGE_REGEL: RegelConcept = { omschrijving: '', aantal: '1', prijs: '', een
 function subtitleFor(o: OfferteRow): string {
   const delen: string[] = [];
   if (o.customer?.name) delen.push(o.customer.name);
-  if (o.omschrijving) delen.push(o.omschrijving);
+  if (o.omschrijving) delen.push(alsTekst(o.omschrijving));
   if (o.geldig_tot) delen.push(`Geldig t/m ${formatDateNL(o.geldig_tot)}`);
   return delen.join(' · ') || 'Offerte';
 }
 
+function regelMeta(r: OfferteItem, standaardPct: number): string {
+  const aantal = String(r.aantal).replace('.', ',');
+  const btw =
+    r.btw_regime === 'verlegd'
+      ? 'btw verlegd'
+      : r.btw_regime === 'vrijgesteld'
+        ? 'geen btw'
+        : `${Number(r.btw_pct ?? standaardPct)}% btw`;
+  return `${aantal}${r.eenheid ? ` ${r.eenheid}` : ''} × ${formatEUR(r.prijs_per)} · ${btw}`;
+}
+
 function OffersScreenInhoud() {
   const router = useRouter();
+  const { id: openId } = useLocalSearchParams<{ id?: string }>();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
+  const { klasse } = useSchermklasse();
+  const breed = klasse === 'tablet';
 
   const [items, setItems] = useState<OfferteRow[]>([]);
+  const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
+  const [zoek, setZoek] = useState('');
+  const [filter, setFilter] = useState<OfferteFilter>('alle');
+
+  // Detailweergave
+  const [detail, setDetail] = useState<OfferteRow | null>(null);
+  const [detailData, setDetailData] = useState<OfferteDetail | null>(null);
+  const [detailRegels, setDetailRegels] = useState<OfferteItem[]>([]);
+  const [detailLaden, setDetailLaden] = useState(false);
+  const [detailFout, setDetailFout] = useState<string | null>(null);
+  const [getekendeUrl, setGetekendeUrl] = useState<string | null>(null);
+  const [getekendMelding, setGetekendMelding] = useState<string | null>(null);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
   const [standaardBtw, setStandaardBtw] = useState('21');
   const [instellingen, setInstellingen] = useState({
@@ -137,13 +200,17 @@ function OffersScreenInhoud() {
   const load = useCallback(async () => {
     setError(null);
 
-    const [offRes, klantRes, instRes, eenheidRes, dealRes] = await Promise.all([
+    const [offRes, klantRes, instRes, eenheidRes, dealRes, bedrijfRes] = await Promise.all([
       listOffertes(),
       listCustomers(),
       getCompanySettings(),
       listEigenEenheden(),
       listDeals(),
+      getCompany(),
     ]);
+    // Alleen voor de afdrukweergave (logo, adres, KvK); mislukt het, dan
+    // blijft het scherm gewoon werken.
+    if (!bedrijfRes.error) setBedrijf(bedrijfRes.data);
 
     if (offRes.error) setError(offRes.error);
     else setItems(offRes.data);
@@ -179,6 +246,106 @@ function OffersScreenInhoud() {
 
 
 
+  /**
+   * De detailweergave (`ViewOfferteModal` in het dashboard). Regels, klant- en
+   * bedrijfsgegevens worden bij het openen geladen, zodat "Afdrukken" daarna
+   * synchroon vanuit de klik kan — anders houdt Safari het venster tegen. Om
+   * dezelfde reden halen we de link naar de getekende PDF meteen op.
+   */
+  const openDetail = useCallback(async (o: OfferteRow) => {
+    setDetail(o);
+    setDetailData(null);
+    setDetailRegels([]);
+    setDetailFout(null);
+    setGetekendeUrl(null);
+    setGetekendMelding(null);
+    setDetailLaden(true);
+    const [d, r] = await Promise.all([getOfferteDetail(o.id), getOfferteItems(o.id)]);
+    setDetailData(d.data);
+    setDetailRegels(r.data);
+    setDetailFout(d.error ?? r.error);
+    setDetailLaden(false);
+    if (o.signed_at) {
+      const pdf = await getOndertekendeOffertePdfUrl(o.id);
+      setGetekendeUrl(pdf.url);
+      setGetekendMelding(pdf.melding);
+    }
+  }, []);
+
+  // Openen vanuit een melding of link: /offers?id=<id>
+  useEffect(() => {
+    if (!openId || loading) return;
+    const o = items.find((x) => x.id === openId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (o) void openDetail(o);
+    router.setParams({ id: undefined });
+  }, [openId, loading, items, openDetail, router]);
+
+  const afdrukken = () => {
+    if (!detail) return;
+    if (!kanAfdrukken()) {
+      Dialog.alert(
+        'Afdrukken via de webversie',
+        'In de app staat de volledige offerte hierboven. Afdrukken of als PDF bewaren kan in de ' +
+          'webversie (app.bossbase.nl) of in het dashboard.',
+      );
+      return;
+    }
+    const d = detailData;
+    const standaard = Number(d?.btw_pct ?? detail.btw_pct ?? 21);
+    const regels = detailRegels.map((r) => ({
+      omschrijving: r.omschrijving,
+      aantal: r.aantal,
+      eenheid: r.eenheid,
+      prijs: r.prijs_per,
+      btwPct: r.btw_pct,
+      btwRegime: r.btw_regime,
+      bedrag: r.subtotaal,
+    }));
+    const html = bouwDocumentHtml({
+      soort: 'offerte',
+      nummer: detail.nummer ?? '',
+      datum: (detail.created_at ?? '').slice(0, 10),
+      geldigTot: detail.geldig_tot,
+      ondertekendOp: detail.signed_at,
+      ondertekendDoor: d?.signed_by_name ?? null,
+      bedrijf: bedrijfVoorDocument(d ?? {}, bedrijf),
+      klant: d?.customer
+        ? {
+            naam: d.customer.name,
+            adres: d.customer.address,
+            postcode: d.customer.postcode,
+            plaats: d.customer.city,
+            email: d.customer.email,
+            telefoon: d.customer.phone,
+            kvk: d.customer.kvk_number,
+            btw: d.customer.btw_number,
+          }
+        : null,
+      regels,
+      standaardBtwPct: standaard,
+      totalen: documentTotalen(
+        regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct, btwRegime: r.btwRegime })),
+        standaard,
+      ),
+      notitie: alsTekst(detail.notes),
+    });
+    if (!drukHtmlAf(html)) {
+      Dialog.alert('Niet gelukt', 'De afdrukweergave kon niet worden geopend.');
+    }
+  };
+
+  const openGetekend = () => {
+    if (getekendeUrl) {
+      void Linking.openURL(getekendeUrl);
+      return;
+    }
+    Dialog.alert(
+      'Getekende offerte',
+      getekendMelding ?? 'De link naar de getekende PDF wordt nog opgehaald. Probeer het zo opnieuw.',
+    );
+  };
+
   const openNieuw = () => {
     setSaveError(null);
     // Geldig tot = vandaag + het aantal dagen uit de bedrijfsinstellingen,
@@ -209,7 +376,7 @@ function OffersScreenInhoud() {
       omschrijving: o.omschrijving ?? '',
       geldigTot: o.geldig_tot ?? '',
       btwPct: o.btw_pct != null ? String(o.btw_pct) : standaardBtw,
-      notes: o.notes ?? '',
+      notes: alsTekst(o.notes),
       status: o.status ?? 'concept',
       opSlot: inhoudLigtVast(o),
     });
@@ -347,6 +514,42 @@ function OffersScreenInhoud() {
 
   const regelsOpSlot = regelsVoor ? inhoudLigtVast(regelsVoor) : false;
 
+  const kpis = offerteKpis(items);
+  const tellingen = telOfferteFilters(items);
+  const zichtbaar = filterOffertes(items, { filter, zoek });
+
+  // Totalen van de detailweergave: uit de regels (zoals de PDF), en voor een
+  // oude offerte zonder regels uit de kop.
+  const detailStandaardPct = Number(detail?.btw_pct ?? 21);
+  const detailTotalen = detail
+    ? detailRegels.length > 0
+      ? documentTotalen(
+          detailRegels.map((r) => ({
+            bedrag: r.subtotaal,
+            btwPct: r.btw_pct,
+            btwRegime: r.btw_regime,
+          })),
+          detailStandaardPct,
+        )
+      : {
+          excl: Number(detail.totaal_excl ?? 0),
+          btwPerTarief:
+            Number(detail.totaal_incl ?? 0) - Number(detail.totaal_excl ?? 0) !== 0
+              ? [
+                  {
+                    pct: detailStandaardPct,
+                    bedrag:
+                      Math.round(
+                        (Number(detail.totaal_incl ?? 0) - Number(detail.totaal_excl ?? 0)) * 100,
+                      ) / 100,
+                  },
+                ]
+              : [],
+          incl: Number(detail.totaal_incl ?? 0),
+        }
+    : null;
+  const detailStatus = offerteStatusInfo(detail?.status);
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AppScreen
@@ -366,6 +569,32 @@ function OffersScreenInhoud() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
+        <TegelRaster
+          breed={breed}
+          tegels={[
+            { id: 'totaal', label: 'Totaal offertes', waarde: String(kpis.totaal) },
+            { id: 'concept', label: 'Concept', waarde: String(kpis.concept) },
+            { id: 'verzonden', label: 'Verzonden', waarde: String(kpis.verzonden) },
+            {
+              id: 'geaccepteerd',
+              label: 'Geaccepteerd',
+              waarde: String(kpis.geaccepteerd),
+              uitleg: formatEUR(kpis.geaccepteerdBedrag),
+            },
+          ]}
+        />
+
+        <View style={styles.zoekRij}>
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek offerte..." />
+        </View>
+        <View style={{ paddingTop: 12 }}>
+          <AppFilterChips
+            chips={OFFERTE_FILTERS.map((f) => ({ id: f.id, label: f.label, count: tellingen[f.id] }))}
+            active={filter}
+            onChange={setFilter}
+          />
+        </View>
+
         {items.length === 0 ? (
           <EmptyState
             icon={<FileText size={40} color={ds.green} strokeWidth={1.6} />}
@@ -376,38 +605,156 @@ function OffersScreenInhoud() {
                 : (waaromNiet('offertes', 'maken') ?? 'Er zijn nog geen offertes.')
             }
           />
+        ) : zichtbaar.length === 0 ? (
+          <EmptyState
+            icon={<FileText size={40} color={ds.green} strokeWidth={1.6} />}
+            title="Geen offertes gevonden"
+            message="Geen offertes die passen bij je zoekopdracht of filter."
+          />
         ) : (
           <>
-            <AppSection title="Alle offertes" count={items.length} variant="eyebrow" />
+            <AppSection
+              title={filter === 'alle' ? 'Alle offertes' : (OFFERTE_FILTERS.find((f) => f.id === filter)?.label ?? '')}
+              count={zichtbaar.length}
+              variant="eyebrow"
+            />
             <AppListGroup>
-              {items.map((o, i) => (
-                <AppListItem
-                  key={o.id}
-                  first={i === 0}
-                  icon={inhoudLigtVast(o) ? Lock : FileText}
-                  title={`${o.nummer ?? 'Offerte'}`}
-                  subtitle={subtitleFor(o)}
-                  onPress={magWijzigen ? () => openBewerk(o) : undefined}
-                  trailing={
-                    <View style={styles.trailing}>
-                      <Text style={styles.bedrag}>{formatEUR(Number(o.totaal_incl ?? 0))}</Text>
-                      <Pressable
-                        onPress={() => openRegels(o)}
-                        hitSlop={10}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Regels van ${o.nummer ?? 'offerte'}`}
-                        style={styles.regelKnop}
-                      >
-                        <FileText size={15} color={t.muted} />
-                      </Pressable>
-                    </View>
-                  }
-                />
-              ))}
+              {zichtbaar.map((o, i) => {
+                const st = offerteStatusInfo(o.status);
+                return (
+                  <AppListItem
+                    key={o.id}
+                    first={i === 0}
+                    icon={inhoudLigtVast(o) ? Lock : FileText}
+                    title={`${o.nummer ?? 'Offerte'}`}
+                    subtitle={subtitleFor(o)}
+                    onPress={() => void openDetail(o)}
+                    trailing={
+                      <View style={styles.trailing}>
+                        <Text style={styles.bedrag}>{formatEUR(Number(o.totaal_incl ?? 0))}</Text>
+                        <DocumentStatusBadge toon={st.toon} label={st.label} />
+                      </View>
+                    }
+                  />
+                );
+              })}
             </AppListGroup>
           </>
         )}
       </AppScreen>
+
+      {/* Offerte bekijken */}
+      <Paneel
+        open={detail !== null}
+        titel={detail?.nummer ?? 'Offerte'}
+        subtitel={detail?.customer?.name ?? undefined}
+        onSluit={() => setDetail(null)}
+        voet={
+          detail ? (
+            <View style={styles.knoppen}>
+              <Button label="Bekijken / afdrukken" onPress={afdrukken} disabled={detailLaden} style={styles.knop} />
+              {detail.signed_at ? (
+                <Button
+                  label="Getekende offerte"
+                  variant="secondary"
+                  onPress={openGetekend}
+                  style={styles.knop}
+                />
+              ) : null}
+              {magWijzigen ? (
+                <Button
+                  label="Bewerken"
+                  variant="secondary"
+                  onPress={() => {
+                    const o = detail;
+                    setDetail(null);
+                    openBewerk(o);
+                  }}
+                  style={styles.knop}
+                />
+              ) : null}
+              <Button
+                label="Regels"
+                variant="ghost"
+                onPress={() => {
+                  const o = detail;
+                  setDetail(null);
+                  void openRegels(o);
+                }}
+                style={styles.knop}
+              />
+            </View>
+          ) : null
+        }
+      >
+        {detail ? (
+          <View style={{ gap: spacing.md }}>
+            {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
+            <View>
+              <DetailRij label="Klant" waarde={detail.customer?.name ?? 'Geen klant'} />
+              <DetailRij
+                label="Status"
+                waarde={<DocumentStatusBadge toon={detailStatus.toon} label={detailStatus.label} />}
+              />
+              {detail.omschrijving ? (
+                <DetailRij label="Omschrijving" waarde={alsTekst(detail.omschrijving)} />
+              ) : null}
+              <DetailRij label="Geldig tot" waarde={detail.geldig_tot ? formatDateNL(detail.geldig_tot) : '—'} />
+              <DetailRij label="Aangemaakt" waarde={formatDateNL(detail.created_at)} />
+              {detail.verzonden_op ? (
+                <DetailRij label="Verzonden" waarde={formatDateNL(detail.verzonden_op)} />
+              ) : null}
+              {detail.geaccepteerd_op ? (
+                <DetailRij label="Geaccepteerd" waarde={formatDateNL(detail.geaccepteerd_op)} />
+              ) : null}
+            </View>
+
+            {detailData?.vervangen_op ? (
+              <NoticeBanner
+                toon="info"
+                message={`Deze offerte is vervangen door een nieuwere versie${
+                  detailData.vervangen_door_nummer ? ` (${detailData.vervangen_door_nummer})` : ''
+                }.`}
+              />
+            ) : null}
+
+            <RegelLijst
+              laden={detailLaden}
+              leegTekst="Deze offerte heeft geen regels."
+              regels={detailRegels.map((r) => ({
+                id: r.id,
+                omschrijving: r.omschrijving,
+                meta: regelMeta(r, detailStandaardPct),
+                bedrag: r.subtotaal,
+              }))}
+            />
+            {detailTotalen ? <TotalenBlok {...detailTotalen} /> : null}
+
+            {detail.notes ? (
+              <View style={{ gap: spacing.xs }}>
+                <Text style={styles.label}>Notities</Text>
+                <Text style={styles.uitleg}>{alsTekst(detail.notes)}</Text>
+              </View>
+            ) : null}
+
+            {detail.signed_at ? (
+              <View style={[styles.getekend, { backgroundColor: t.statusApproveBg }]}>
+                <Text style={[styles.getekendTekst, { color: t.statusApproveFg }]}>
+                  Ondertekend{detailData?.signed_by_name ? ` door ${detailData.signed_by_name}` : ''} op{' '}
+                  {formatDateNL(detail.signed_at)}
+                </Text>
+                {getekendMelding ? (
+                  <Text style={[styles.uitleg, { color: t.statusWarnFg }]}>{getekendMelding}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <Text style={styles.uitleg}>
+              Versturen per mail en een nieuwe versie maken doe je in het dashboard.
+            </Text>
+          </View>
+        ) : null}
+      </Paneel>
 
       {/* Offerte aanmaken / bewerken */}
       <FormSheet
@@ -448,6 +795,7 @@ function OffersScreenInhoud() {
                     onPress={() => setConcept((c) => (c ? { ...c, status: s.id } : c))}
                     accessibilityRole="button"
                     accessibilityState={{ selected: actief }}
+                    aria-pressed={actief}
                     style={[styles.chip, actief && styles.chipActief]}
                   >
                     <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>
@@ -528,7 +876,7 @@ function OffersScreenInhoud() {
             toon="waarschuwing"
             message={
               waaromNiet('offerteRegels', 'maken') ??
-              'Je mag wel een offerte aanmaken, maar geen regels toevoegen. Vraag een beheerder of planner om de regels te zetten.'
+              'Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.'
             }
           />
         ) : null}
@@ -571,7 +919,7 @@ function OffersScreenInhoud() {
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               {waaromNiet('offerteRegels', 'maken') ??
-                'Offerteregels wijzigen kan alleen als beheerder of planner.'}
+                'Offerteregels wijzigen vraagt het recht Offertes.'}
             </Text>
           </View>
         ) : (
@@ -647,7 +995,12 @@ function OffersScreenInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
-    trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    trailing: { alignItems: 'flex-end', gap: 4 },
+    zoekRij: { paddingHorizontal: 16, paddingTop: 14 },
+    knoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    knop: { flexGrow: 1, minWidth: 140, minHeight: 44 },
+    getekend: { padding: spacing.md, borderRadius: radius.md, gap: 4 },
+    getekendTekst: { fontSize: 13.5, fontWeight: '700' },
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink2 },
     regelKnop: {
       width: 30,

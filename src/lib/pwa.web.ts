@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { Installatie, InstallatieSoort } from './pwa';
+import type { Apparaat, Installatie, InstallatieSoort } from './pwa';
 
 /**
  * De installeerbare webapp (PWA): service worker, updates en installeren.
@@ -131,6 +131,30 @@ export function isIos(userAgent: string, touchPunten: number): boolean {
   return /Macintosh/.test(userAgent) && touchPunten > 1;
 }
 
+/**
+ * Welk apparaat, voor de juiste uitleg. iPadOS meldt zich in Safari standaard
+ * als Mac ("Macintosh"); het verschil met een echte Mac is het touchscreen.
+ */
+export function bepaalApparaat(userAgent: string, touchPunten: number): Apparaat {
+  if (/iPad/.test(userAgent)) return 'ipad';
+  if (/iPhone|iPod/.test(userAgent)) return 'iphone';
+  if (/Macintosh/.test(userAgent) && touchPunten > 1) return 'ipad';
+  if (/Android/.test(userAgent)) return 'android';
+  return 'computer';
+}
+
+/**
+ * Safari op iPhone/iPad, en niet Chrome, Firefox, Edge, Opera, de Google-app
+ * of de ingebouwde browser van bijvoorbeeld Facebook of Instagram. Die laatste
+ * missen het "Version/… Safari/"-kenmerk of hebben een eigen merkteken.
+ */
+export function isIosSafari(userAgent: string): boolean {
+  if (/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\/|FBAN|FBAV|Instagram|LinkedInApp|Line\/|Snapchat/.test(userAgent)) {
+    return false;
+  }
+  return /Version\/[\d.]+.*Safari\//.test(userAgent);
+}
+
 /** Pure beslisregel (los te testen): welke installatieroute past hier? */
 export function bepaalInstallatieSoort(s: {
   geinstalleerd: boolean;
@@ -167,5 +191,8 @@ async function installeer(): Promise<boolean> {
 
 export function useInstallatie(): Installatie {
   useSyncExternalStore(abonneer, snapshot, snapshot);
-  return { soort: huidigeSoort(), installeer };
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const apparaat = bepaalApparaat(ua, typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints);
+  const ios = apparaat === 'iphone' || apparaat === 'ipad';
+  return { soort: huidigeSoort(), apparaat, safari: !ios || isIosSafari(ua), installeer };
 }

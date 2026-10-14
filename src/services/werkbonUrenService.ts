@@ -1,8 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { isReadonly } from '@/lib/sessionContext';
-import { isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
-import { berekenUren, rondUrenAf } from '@/lib/urenBerekening';
-import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { isGeldigeDatum } from '@/lib/nlTijd';
+import { rondUrenAf } from '@/lib/urenBerekening';
+import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 import type { WerkbonUur } from '@/types/domain';
 
 /**
@@ -14,9 +14,19 @@ import type { WerkbonUur } from '@/types/domain';
  * in `urenregistratie`. The dashboard's work order reads this table, so hours
  * booked from the app must land here or they simply do not exist for the office.
  *
- * Write access follows the *job*, not the person: `bb_mag_werkbon_uren_beheren`
- * allows assignees, responsibles, admins and planners. There is no customer or
- * project column by design — those follow from the work order.
+ * Write access follows the *job*: `bb_mag_werkbon_uren_beheren` allows
+ * assignees, responsibles, admins and the `planning` right. Booking for SOMEONE
+ * ELSE additionally needs `bb_mag_uren_voor_ander` (admin, planning, or
+ * responsible of that job; 20261002135712).
+ *
+ * Reading follows the person (20261004201000, dashboard 2855c0e): you see your
+ * own rows, plus all rows on jobs where `bb_mag_uren_voor_ander` holds. Being
+ * assigned, `alles_inzien` or the shared workspace do NOT reveal a colleague's
+ * hours. There is no customer or project column by design — those follow from
+ * the work order.
+ *
+ * `uren` is recomputed by the database (trigger `bb_uren_berekenen`): end −
+ * start − break, two decimals; without times it is capped at 0–24.
  */
 
 const UREN_COLUMNS = `
@@ -91,7 +101,11 @@ export async function listWerkbonUrenForProfile(
   return { data: (data as never) ?? [], error: null };
 }
 
-/** Company-wide job hours in a range (the SELECT policy is company-scoped). */
+/**
+ * Job hours in a range for the team view. RLS limits this to your own rows plus
+ * jobs where you may book for others (admin / planning / responsible), so for a
+ * plain employee it is just their own hours.
+ */
 export async function listCompanyWerkbonUren(
   fromISO: string,
   toISO: string,
@@ -122,6 +136,8 @@ export type CreateWerkbonUurInput = {
   start_tijd?: string | null; // HH:MM
   eind_tijd?: string | null; // HH:MM
   pauze_minuten?: number;
+  /** Gereden kilometers; leeg = null (niet 0), zoals het dashboard. */
+  reis_km?: number | null;
   notitie?: string | null;
 };
 
@@ -150,6 +166,9 @@ export async function createWerkbonUur(
   if (input.pauze_minuten !== undefined && (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)) {
     return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
   }
+  if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+  }
 
   return schrijf<WerkbonUur>(
     () =>
@@ -164,6 +183,7 @@ export async function createWerkbonUur(
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
+          reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
         })
         .select(UREN_COLUMNS),
@@ -177,91 +197,6 @@ export async function createWerkbonUur(
   );
 }
 
-/**
- * Werkbonuren wijzigen.
- *
- * De policy vraagt `bb_mag_werkbon_uren_beheren(werkbon_id)` — dat is de
- * uitvoerder of verantwoordelijke van de bon, met admin en planner als vangnet.
- * Die vraag kan de app niet zelf beantwoorden, dus we tonen de knop en laten de
- * server beslissen; komt er geen rij terug, dan is dat een weigering en geen
- * geslaagde opslag.
- *
- * Zoals in het dashboard: komen begin- én eindtijd mee, dan worden de uren
- * daaruit herberekend (eind − begin − pauze) en wint die uitkomst van een
- * meegegeven `uren`. Zo kan een regel nooit "08:00–16:00, 30 min pauze, 8 uur"
- * worden.
- */
-export async function updateWerkbonUur(
-  id: string,
-  input: {
-    datum?: string;
-    start_tijd?: string | null;
-    eind_tijd?: string | null;
-    uren?: number;
-    pauze_minuten?: number;
-    notitie?: string | null;
-  },
-): Promise<WriteResult<WerkbonUur>> {
-  const updates: Record<string, unknown> = {};
-  if (input.datum !== undefined) {
-    if (!isGeldigeDatum(input.datum)) return writeFout('validatie', 'Vul een geldige datum in (JJJJ-MM-DD).');
-    updates.datum = input.datum;
-  }
-  for (const veld of ['start_tijd', 'eind_tijd'] as const) {
-    const v = input[veld];
-    if (v !== undefined) {
-      if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
-      updates[veld] = v || null;
-    }
-  }
-  if (input.pauze_minuten !== undefined) {
-    if (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0) {
-      return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
-    }
-    updates.pauze_minuten = input.pauze_minuten;
-  }
-  const herberekend = input.start_tijd && input.eind_tijd
-    ? berekenUren(input.start_tijd, input.eind_tijd, input.pauze_minuten ?? 0)
-    : null;
-  if (input.start_tijd && input.eind_tijd && herberekend === null) {
-    return writeFout('validatie', 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.');
-  }
-  const uren = herberekend ?? (input.uren !== undefined ? rondUrenAf(input.uren) : undefined);
-  if (uren !== undefined) {
-    if (!Number.isFinite(uren) || uren <= 0) {
-      return writeFout('validatie', 'Vul een geldig aantal uren in.');
-    }
-    updates.uren = uren;
-  }
-  if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
-
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
-  updates.updated_at = new Date().toISOString();
-
-  return schrijf<WerkbonUur>(
-    () => supabase.from('werkbon_uren').update(updates).eq('id', id).select(UREN_COLUMNS),
-    {
-      context: 'werkbonUrenService.updateWerkbonUur',
-      bedrijfReadonly: isReadonly(),
-      leegSoort: 'geen-rechten',
-      leegMelding:
-        'De uren zijn niet gewijzigd. Alleen de uitvoerder of verantwoordelijke van de werkbon ' +
-        'mag daarop boeken.',
-    },
-  );
-}
-
-export async function deleteWerkbonUur(id: string): Promise<WriteStatus> {
-  const res = await schrijf<{ id: string }>(
-    () => supabase.from('werkbon_uren').delete().eq('id', id).select('id'),
-    {
-      context: 'werkbonUrenService.deleteWerkbonUur',
-      bedrijfReadonly: isReadonly(),
-      leegSoort: 'geen-rechten',
-      leegMelding:
-        'De uren zijn niet verwijderd. Alleen de uitvoerder of verantwoordelijke van de werkbon ' +
-        'mag daarop boeken.',
-    },
-  );
-  return res.ok ? { ok: true, data: null } : res;
-}
+// Werkbonuren wijzigen of verwijderen zit (net als in het dashboard, dat
+// updateWerkbonUur/deleteWerkbonUur in 9dd7088 als dode code schrapte) niet in
+// de app: een regel corrigeren gebeurt op kantoor.

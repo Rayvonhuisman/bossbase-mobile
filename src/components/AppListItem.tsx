@@ -50,7 +50,7 @@ export function AppListItem({ title, subtitle, icon: Icon, leading, trailing, fi
 
   if (!onPress) return body;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
       {body}
     </Pressable>
   );

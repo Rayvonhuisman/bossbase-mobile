@@ -7,6 +7,7 @@ import type { BottomTabBarProps } from "expo-router/js-tabs";
 import { CalendarDays, ClipboardList, Clock, Home, Menu, Users } from 'lucide-react-native';
 import { Button, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { TABBALK_MAX } from '@/lib/schermklasseRegels';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
 
@@ -67,7 +68,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[ftStyles.wrap, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
-      <View style={[ftStyles.bar, { backgroundColor: t.barBg, borderColor: t.barBorder }]}>
+      <View accessibilityRole="tablist" style={[ftStyles.bar, { backgroundColor: t.barBg, borderColor: t.barBorder }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key]!;
           const label =
@@ -93,8 +94,9 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           return (
             <Pressable
               key={route.key}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              aria-selected={focused}
               accessibilityLabel={label}
               onPress={onPress}
               onLongPress={onLongPress}
@@ -154,6 +156,7 @@ export default function TabsLayout() {
         <View style={styles.errorActions}>
           <Button label="Opnieuw proberen" onPress={refreshProfile} />
           <Pressable
+            accessibilityRole="button"
             onPress={() =>
               Dialog.alert('Uitloggen?', undefined, [
                 { text: 'Annuleren', style: 'cancel' },
@@ -201,7 +204,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="customers"
         options={{
-          title: 'Klanten',
+          title: 'Relaties',
           tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
         }}
       />
@@ -228,9 +231,14 @@ const ftStyles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
+    // Op een breed scherm (iPad, desktop) gecentreerd en begrensd in plaats
+    // van een balk over de volle breedte. Op een telefoon geen verschil.
+    alignItems: 'center',
     // `bottom` is set inline = safe-area inset + 12 so it floats above the home indicator.
   },
   bar: {
+    width: '100%',
+    maxWidth: TABBALK_MAX,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
@@ -239,7 +247,7 @@ const ftStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 7,
     // Zwevende schaduw uit het ontwerp: 0 10px 30px rgba(10,46,31,.18).
-    shadowColor: '#0A2E1F',
+    shadowColor: '#0D0D0D',
     shadowOpacity: 0.18,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 10 },

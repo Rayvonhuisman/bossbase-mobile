@@ -1,6 +1,13 @@
 import { supabase } from '@/lib/supabase';
 import { getCompanyId, getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
-import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import {
+  classificeerFout,
+  schrijf,
+  writeFout,
+  type WriteResult,
+  type WriteStatus,
+} from '@/lib/writeResult';
+import { uitnodigingsMail } from '@/lib/teamRegels';
 
 /**
  * Team — dezelfde twee bronnen als `teamService.js` in het dashboard.
@@ -35,6 +42,7 @@ export type TeamMemberRow = {
   hours_per_week: number;
   created_at: string | null;
   invite_email_failed_at: string | null;
+  invite_email_error: string | null;
   /** Openstaande uitnodiging (nog niet geaccepteerd)? */
   isUitnodiging: boolean;
 };
@@ -42,7 +50,7 @@ export type TeamMemberRow = {
 const PROFILE_COLUMNS = 'id, company_id, full_name, role, actief, avatar_url, created_at';
 const MEMBER_COLUMNS = `
   id, company_id, profile_id, email, full_name, phone, avatar_url,
-  role, status, hours_per_week, created_at, invite_email_failed_at
+  role, status, hours_per_week, created_at, invite_email_failed_at, invite_email_error
 `;
 
 type ProfileDb = {
@@ -68,15 +76,20 @@ type MemberDb = {
   hours_per_week: number | null;
   created_at: string | null;
   invite_email_failed_at: string | null;
+  invite_email_error: string | null;
 };
 
-const profileToMember = (p: ProfileDb): TeamMemberRow => ({
+/**
+ * E-mail staat niet op profiles. Net als het dashboard komt hij uit de
+ * bijbehorende company_members-rij (RLS: admin ziet alle rijen, medewerker
+ * alleen de zijne) of, voor jezelf, uit de eigen sessie. Uren en telefoon
+ * komen voor echte leden niet mee — ook dat is gelijk aan het dashboard.
+ */
+const profileToMember = (p: ProfileDb, email = ''): TeamMemberRow => ({
   id: p.id,
   company_id: p.company_id,
   profile_id: p.id,
-  // E-mail en uren staan niet op profiles en zijn client-side niet uit
-  // auth.users te lezen — het dashboard laat ze om dezelfde reden leeg.
-  email: '',
+  email,
   full_name: p.full_name ?? '',
   phone: '',
   avatar_url: p.avatar_url ?? '',
@@ -85,6 +98,7 @@ const profileToMember = (p: ProfileDb): TeamMemberRow => ({
   hours_per_week: 0,
   created_at: p.created_at,
   invite_email_failed_at: null,
+  invite_email_error: null,
   isUitnodiging: false,
 });
 
@@ -101,6 +115,7 @@ const inviteToMember = (r: MemberDb): TeamMemberRow => ({
   hours_per_week: Number(r.hours_per_week ?? 0),
   created_at: r.created_at,
   invite_email_failed_at: r.invite_email_failed_at,
+  invite_email_error: r.invite_email_error ?? null,
   isUitnodiging: true,
 });
 
@@ -144,7 +159,7 @@ export async function listTeamMembers(): Promise<{
   const companyId = getCompanyId();
   if (!companyId) return { data: [], error: null };
 
-  const [profRes, inviteRes] = await Promise.all([
+  const [profRes, inviteRes, ledenRes, sessieRes] = await Promise.all([
     supabase
       .from('profiles')
       .select(PROFILE_COLUMNS)
@@ -158,6 +173,15 @@ export async function listTeamMembers(): Promise<{
       .eq('company_id', companyId)
       .is('profile_id', null)
       .order('created_at', { ascending: true }),
+    // De adressen van geaccepteerde leden (zie profileToMember).
+    supabase
+      .from('company_members')
+      .select('profile_id, email')
+      .eq('company_id', companyId)
+      .not('profile_id', 'is', null),
+    // De eigenaar heeft meestal geen company_members-rij; zijn eigen adres
+    // komt uit de sessie (lokaal, geen netwerkverzoek).
+    supabase.auth.getSession(),
   ]);
 
   if (profRes.error) {
@@ -165,7 +189,18 @@ export async function listTeamMembers(): Promise<{
     return { data: [], error: 'Teamleden konden niet worden geladen.' };
   }
 
-  const leden = ((profRes.data as ProfileDb[]) ?? []).map(profileToMember);
+  const adressen = new Map<string, string>();
+  for (const r of ((ledenRes.data as { profile_id: string; email: string | null }[]) ?? [])) {
+    if (r.profile_id && r.email) adressen.set(r.profile_id, r.email);
+  }
+  const sessieUser = sessieRes.data?.session?.user;
+  if (sessieUser?.id && sessieUser.email && !adressen.has(sessieUser.id)) {
+    adressen.set(sessieUser.id, sessieUser.email);
+  }
+
+  const leden = ((profRes.data as ProfileDb[]) ?? []).map((p) =>
+    profileToMember(p, adressen.get(p.id) ?? ''),
+  );
 
   // Geen admin? Dan geeft de policy op company_members niets terug. Dat is geen
   // fout maar het verwachte antwoord: uitnodigingen zijn beheerderswerk.
@@ -174,6 +209,19 @@ export async function listTeamMembers(): Promise<{
     : ((inviteRes.data as MemberDb[]) ?? []).map(inviteToMember);
 
   return { data: [...leden, ...uitnodigingen], error: null };
+}
+
+/** Wie is de eigenaar (`companies.eigenaar_id`)? Null als die niet vastligt. */
+export async function getEigenaarId(): Promise<string | null> {
+  const companyId = getCompanyId();
+  if (!companyId) return null;
+  const { data, error } = await supabase
+    .from('companies')
+    .select('eigenaar_id')
+    .eq('id', companyId)
+    .maybeSingle();
+  if (error) return null;
+  return (data as { eigenaar_id?: string | null } | null)?.eigenaar_id ?? null;
 }
 
 // ── Uitnodigen ─────────────────────────────────────────────────────────────
@@ -187,6 +235,11 @@ export type InviteInput = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Fout van de gebruikerslimiet-trigger (HINT 'gebruikerslimiet'). */
+function isGebruikerslimiet(e: { hint?: string | null } | null | undefined): boolean {
+  return (e?.hint ?? '') === 'gebruikerslimiet';
+}
 
 /**
  * Nodigt een teamlid uit. Zelfde rij, zelfde token en dezelfde geldigheidsduur
@@ -237,8 +290,19 @@ export async function inviteTeamMember(
     return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
   }
 
+  const antwoord = await supabase.from('company_members').insert(payload).select(MEMBER_COLUMNS);
+  // De database telt de gebruikerslimiet (trigger, migratie
+  // 20261001122357_gebruikerslimiet_afdwingen) en geeft dan een leesbare
+  // melding met HINT 'gebruikerslimiet' (check_violation). Die melding tonen,
+  // niet het algemene "niet alle gegevens zijn geldig".
+  if (antwoord.error && isGebruikerslimiet(antwoord.error)) {
+    return writeFout(
+      'plan-limiet',
+      antwoord.error.message || 'Je pakket zit vol. Upgrade om meer gebruikers toe te voegen.',
+    );
+  }
   const res = await schrijf<MemberDb>(
-    () => supabase.from('company_members').insert(payload).select(MEMBER_COLUMNS),
+    () => Promise.resolve(antwoord as { data: MemberDb[] | null; error: typeof antwoord.error }),
     {
       context: 'teamService.inviteTeamMember',
       bedrijfReadonly: isReadonly(),
@@ -253,23 +317,44 @@ export async function inviteTeamMember(
 
   // De mail is best-effort: de uitnodiging is al geldig. Mislukt hij, dan
   // vertellen we dat in plaats van "uitgenodigd" te tonen terwijl er niets is
-  // verstuurd.
-  const inviteUrl = `https://www.bossbase.nl/uitnodiging/${token}`;
+  // verstuurd. Zelfde mail als het dashboard (systeemmail van BossBase).
+  const eigenId = getUserId();
+  let uitnodiger = 'BossBase';
+  if (eigenId) {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', eigenId)
+      .maybeSingle();
+    const naam = (prof as { full_name?: string | null } | null)?.full_name;
+    if (naam) uitnodiger = naam;
+  }
+  const mail = uitnodigingsMail({
+    inviteUrl: `https://www.bossbase.nl/uitnodiging/${token}`,
+    bedrijfsnaam,
+    uitnodiger,
+    ontvanger: lid.full_name || email,
+    rol: input.role,
+  });
+
   let mailFout: string | null = null;
   try {
-    const { error } = await supabase.functions.invoke('send-email', {
-      body: {
-        to: email,
-        subject: `Je bent uitgenodigd voor ${bedrijfsnaam} op BossBase`,
-        fromName: 'BossBase',
-        html:
-          `<p>Hallo ${lid.full_name || email},</p>` +
-          `<p>Je bent uitgenodigd om deel uit te maken van <strong>${bedrijfsnaam}</strong> op BossBase.</p>` +
-          `<p><a href="${inviteUrl}">Accepteer de uitnodiging</a></p>` +
-          `<p>Deze uitnodiging is 48 uur geldig.</p>`,
-      },
+    // Zelfde body als `sendEmail` in het dashboard: `from_name`, niet `fromName`.
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: { to: email, subject: mail.onderwerp, html: mail.html, from_name: 'BossBase' },
     });
-    if (error) mailFout = error.message;
+    if (error) {
+      mailFout = error.message;
+      try {
+        const body = await (error as { context?: { json?: () => Promise<{ error?: string }> } })
+          .context?.json?.();
+        if (body?.error) mailFout = body.error;
+      } catch {
+        /* de rauwe melding is dan het beste wat we hebben */
+      }
+    } else if (!(data as { success?: boolean } | null)?.success) {
+      mailFout = (data as { error?: string } | null)?.error || 'Versturen mislukt';
+    }
   } catch (e) {
     mailFout = e instanceof Error ? e.message : 'onbekende fout';
   }
@@ -284,23 +369,68 @@ export async function inviteTeamMember(
   return { ok: true, data: { ...lid, mailVerstuurd: !mailFout, mailFout } };
 }
 
-/** Een openstaande uitnodiging bijwerken (naam, rol, uren, telefoon). */
-export async function updateInvite(
-  id: string,
-  input: Partial<Omit<InviteInput, 'email'>>,
-): Promise<WriteResult<TeamMemberRow>> {
-  const updates: Record<string, unknown> = {};
-  if (input.full_name !== undefined) updates.full_name = input.full_name?.trim() || null;
-  if (input.phone !== undefined) updates.phone = input.phone?.trim() || null;
-  if (input.role !== undefined) updates.role = input.role;
-  if (input.hours_per_week !== undefined) updates.hours_per_week = Number(input.hours_per_week);
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+export type TeamlidWijziging = {
+  full_name?: string | null;
+  phone?: string | null;
+  /** Weglaten als de rol vergrendeld is (eigenaar / laatste beheerder). */
+  role?: string;
+  hours_per_week?: number | null;
+};
 
-  const res = await schrijf<MemberDb>(
-    () => supabase.from('company_members').update(updates).eq('id', id).select(MEMBER_COLUMNS),
-    { context: 'teamService.updateInvite', bedrijfReadonly: isReadonly() },
-  );
-  return res.ok ? { ok: true, data: inviteToMember(res.data) } : res;
+/**
+ * Een teamlid bijwerken, zoals `updateTeamMember` in het dashboard:
+ *
+ * - openstaande uitnodiging → rechtstreeks op `company_members`;
+ * - echt teamlid → RPC `bb_teamlid_bijwerken`. Rol en naam staan op
+ *   `profiles`, en die zijn voor een ander profiel niet direct te schrijven
+ *   (RLS + trigger `protect_profile_privileges`). De RPC bewaakt ook de
+ *   eigenaar en de laatste beheerder.
+ *
+ * Lege velden (telefoon, uren) sturen we als null mee: de RPC laat ze dan
+ * ongemoeid. Het dashboard stuurt daar een lege waarde, omdat het die velden
+ * voor echte leden niet kan lezen — dat zou een bestaande waarde wissen.
+ */
+export async function updateTeamMember(
+  lid: TeamMemberRow,
+  input: TeamlidWijziging,
+): Promise<WriteStatus> {
+  if (input.full_name !== undefined && input.full_name !== null && !input.full_name.trim()) {
+    return writeFout('validatie', 'Vul een naam in.');
+  }
+  if (input.hours_per_week != null) {
+    const u = Number(input.hours_per_week);
+    if (!Number.isFinite(u) || u < 0 || u > 60) {
+      return writeFout('validatie', 'Vul een aantal uren per week tussen 0 en 60 in.');
+    }
+  }
+
+  if (lid.isUitnodiging) {
+    const updates: Record<string, unknown> = {};
+    if (input.full_name !== undefined) updates.full_name = input.full_name?.trim() || null;
+    if (input.phone !== undefined) updates.phone = input.phone?.trim() || null;
+    if (input.role !== undefined) updates.role = input.role;
+    if (input.hours_per_week !== undefined) updates.hours_per_week = Number(input.hours_per_week ?? 0);
+    if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+    const res = await schrijf<MemberDb>(
+      () => supabase.from('company_members').update(updates).eq('id', lid.id).select(MEMBER_COLUMNS),
+      { context: 'teamService.updateTeamMember.uitnodiging', bedrijfReadonly: isReadonly() },
+    );
+    return res.ok ? { ok: true, data: null } : res;
+  }
+
+  const { error } = await supabase.rpc('bb_teamlid_bijwerken', {
+    p_profile_id: lid.id,
+    p_rol: input.role ?? null,
+    p_naam: input.full_name?.trim() || null,
+    p_telefoon: input.phone?.trim() || null,
+    p_uren: input.hours_per_week == null ? null : Number(input.hours_per_week),
+  });
+  if (error) {
+    const fout = classificeerFout(error, 'teamService.updateTeamMember', isReadonly());
+    // De RPC geeft eigen, leesbare meldingen (eigenaar, laatste beheerder).
+    return fout.soort === 'onbekend' && error.message ? { ...fout, melding: error.message } : fout;
+  }
+  return { ok: true, data: null };
 }
 
 /** Een openstaande uitnodiging intrekken. */

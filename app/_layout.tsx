@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DialogHost, MobielKader, NieuweVersieMelding } from '@/components';
 import { registreerServiceWorker } from '@/lib/pwa';
+import { HulpProvider } from '@/providers/HulpProvider';
 import {
   AuthProvider,
   FontProvider,
@@ -40,6 +41,7 @@ export default function RootLayout() {
             <PermissionsProvider>
               <OnboardingProvider>
                 <ToastProvider>
+                <HulpProvider>
                 <ThemedStatusBar />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
@@ -64,6 +66,7 @@ export default function RootLayout() {
                 <DialogHost />
                 {/* Op web: melding met herlaadknop zodra er een nieuwe versie is. */}
                 <NieuweVersieMelding />
+                </HulpProvider>
                 </ToastProvider>
               </OnboardingProvider>
             </PermissionsProvider>

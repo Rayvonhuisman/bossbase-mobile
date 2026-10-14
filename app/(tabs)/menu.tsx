@@ -1,19 +1,29 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
+  BookOpen,
   Briefcase,
-  Camera,
+  Bug,
+  CalendarDays,
+  CalendarRange,
   ChevronRight,
+  ClipboardList,
+  Database,
+  Clock,
   FileText,
   FolderKanban,
   HelpCircle,
+  Home,
   ListChecks,
-  ListTodo,
   type LucideIcon,
-  Mail,
-  MessageSquarePlus,
+  MessageCircleQuestion,
+  Package,
+  Phone,
   Receipt,
-  StickyNote,
+  Settings,
+  Users,
+  UsersRound,
   Wallet,
 } from 'lucide-react-native';
 import {
@@ -26,137 +36,182 @@ import {
   NoticeBanner,
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
+import { useHulp } from '@/providers/HulpProvider';
 import { readonlyTekst } from '@/lib/permissions';
 import { avatarKleuren, initialen } from '@/lib/avatar';
-import { dsShadow, type ThemeColors } from '@/theme';
+import { useSchermklasse } from '@/lib/schermklasse';
+import { sectieGewicht, verdeelOverKolommen } from '@/lib/menuKolommen';
+import { FAQ_URL, HULP_TELEFOON, HULP_TELEFOON_LINK, KENNISBANK_URL } from '@/lib/hulp';
+import { dsShadow, spacing, type ThemeColors } from '@/theme';
 
 type Item = {
   icon: LucideIcon;
   title: string;
   sub?: string;
   onPress: () => void;
-  /** Mobiele route, zodat het menu dezelfde gate leest als de routebewaking. */
+  /** Mobiele route, zodat het menu dezelfde poort leest als de routebewaking. */
   route?: string;
 };
 
+type Groep = { titel: string; items: Item[] };
+
 /**
- * Menu tab — de navigatiehub voor alle dashboardfuncties. Dit is NIET het
- * profiel-/accountscherm (dat zit op /profile, achter de avatar rechtsboven).
+ * Menu — dezelfde indeling en volgorde als de zijbalk van het dashboard
+ * (Hoofdmenu, Uitvoering, Financieel, Bedrijf). Database, Team en Instellingen
+ * (sectie Bedrijf) staan bij je naam, zoals onderaan de zijbalk van het dashboard.
  *
- * Elk item hier wijst naar een bestaand scherm; er staan geen "binnenkort"-
- * knoppen meer in. Wat een gebruiker niet mag zien wordt door `allowsRoute`
- * weggelaten — dezelfde gate die de routebewaking gebruikt, zodat het menu niet
- * iets kan tonen dat de gate daarna alsnog blokkeert.
+ * Wat iemand niet mag zien laat `allowsRoute` weg — dezelfde poort als de
+ * routebewaking, met dezelfde rechten en pakketregels als het dashboard. Een
+ * sectie zonder zichtbare onderdelen verdwijnt, net als in het dashboard.
+ *
+ * Bewust niet (meer) hier: "Vrije notities" (bestaat niet in het dashboard;
+ * klantnotities staan bij de relatie), "Foto's & bestanden" (foto's horen bij
+ * de werkbon; het overzicht staat onder Database) en "Taken" (onderdeel van Activiteiten).
  */
 export default function MenuScreen() {
   const router = useRouter();
   const { company, profile, user, role } = useAuth();
   const { loaded, allowsRoute, readonly, readonlyReden } = usePermissions();
   const { colors: t, colorMode } = useTheme();
+  const { openBoss, openMelden } = useHulp();
+  const { klasse } = useSchermklasse();
+  const tablet = klasse === 'tablet';
 
-  /**
-   * Eén filter voor het hele menu: precies dezelfde gate die de routebewaking
-   * gebruikt (ROUTE_GATES). Zo kan het menu niet iets tonen dat de gate daarna
-   * alsnog blokkeert, en andersom.
-   */
+  const ga = (route: string) => () => router.push(route as never);
   const zichtbaar = (items: Item[]) => items.filter((i) => !i.route || allowsRoute(i.route));
 
-  /**
-   * Vandaag, Agenda, Werkbonnen, Uren en Klanten staan bewust NIET in dit menu:
-   * die vijf zitten in de tabbalk, en twee ingangen naar hetzelfde scherm maken
-   * een menu langer zonder het bruikbaarder te maken. De routes zelf blijven
-   * bestaan — ook voor deeplinks.
-   */
-  const werk: Item[] = [
-    { icon: ListChecks, title: 'Activiteiten', sub: 'Bellen, meetings en notities', onPress: () => router.push('/activities') },
-    { icon: ListTodo, title: 'Taken', sub: 'Je openstaande taken', onPress: () => router.push('/tasks') },
-    { icon: Camera, title: "Foto's & bestanden", sub: 'Beeld bij werkbonnen', onPress: () => router.push('/files') },
-    { icon: StickyNote, title: 'Notities', sub: 'Vrije notities bij klanten', onPress: () => router.push('/notes') },
-  ];
-
-  const sales: Item[] = [
-    { icon: FolderKanban, title: 'Pipeline', route: '/pipeline', sub: 'Deals per fase', onPress: () => router.push('/pipeline') },
-    { icon: Briefcase, title: 'Projecten', sub: 'Status, planning en notities', onPress: () => router.push('/projects') },
-    { icon: FileText, title: 'Offertes', route: '/offers', sub: 'Opstellen en opvolgen', onPress: () => router.push('/offers') },
-    { icon: Wallet, title: 'Kosten', sub: 'Kosten en inkoop', route: '/expenses', onPress: () => router.push('/expenses') },
-    { icon: Receipt, title: 'Facturen', route: '/invoices', sub: 'Aanmaken en betaald zetten', onPress: () => router.push('/invoices') },
-  ];
-
-  // Analyse & rapportage (Dashboard, Omzet, Uren-/Werkbonrapportage) is
-  // desktop-only by product decision — not exposed in the mobile app.
-
-  const support: Item[] = [
-    { icon: HelpCircle, title: 'Help', sub: 'Veelgestelde vragen en contact', onPress: () => router.push('/support') },
-    { icon: MessageSquarePlus, title: 'Feedback', sub: 'Deel een idee of probleem', onPress: () => router.push('/support') },
-    { icon: Mail, title: 'Contact support', sub: 'Mail of bel ons', onPress: () => router.push('/support') },
+  const groepen: Groep[] = [
+    {
+      titel: 'Hoofdmenu',
+      items: [
+        { icon: Home, title: 'Vandaag', sub: 'Je dag in één oogopslag', onPress: ga('/today') },
+        { icon: FolderKanban, title: 'Pipeline', sub: 'Aanvragen en deals per fase', route: '/pipeline', onPress: ga('/pipeline') },
+        { icon: Users, title: 'Relaties', sub: 'Klanten en leveranciers', onPress: ga('/customers') },
+        { icon: ListChecks, title: 'Activiteiten', sub: 'Bellen, mailen, bezoeken en taken', onPress: ga('/activities') },
+      ],
+    },
+    {
+      titel: 'Uitvoering',
+      items: [
+        { icon: CalendarDays, title: 'Agenda', sub: 'Afspraken en werkbonnen', onPress: ga('/planning') },
+        { icon: CalendarRange, title: 'Planning', sub: 'Medewerkers, voertuigen en niet ingepland', route: '/planningbord', onPress: ga('/planningbord') },
+        { icon: Briefcase, title: 'Projecten', sub: 'Status, planning en notities', route: '/projects', onPress: ga('/projects') },
+        { icon: ClipboardList, title: 'Werkbonnen', sub: 'Klussen en uitvoering', onPress: ga('/work-orders') },
+        { icon: Package, title: 'Materialen', sub: 'Standaardmaterialen met prijs en leverancier', onPress: ga('/materialen') },
+        { icon: Clock, title: 'Uren', sub: 'Werkdag- en werkbonuren', onPress: ga('/hours') },
+      ],
+    },
+    {
+      titel: 'Financieel',
+      items: [
+        { icon: FileText, title: 'Offertes', sub: 'Opstellen en opvolgen', route: '/offers', onPress: ga('/offers') },
+        { icon: Receipt, title: 'Facturen', sub: 'Aanmaken en betaald zetten', route: '/invoices', onPress: ga('/invoices') },
+        { icon: Wallet, title: 'Kosten', sub: 'Geboekte kosten en materiaal', route: '/expenses', onPress: ga('/expenses') },
+      ],
+    },
   ];
 
   const naam = profile?.full_name ?? user?.email ?? 'Mijn account';
   const initialenNaam = initialen(profile?.full_name ?? user?.email ?? '?', '?');
   const avatar = avatarKleuren(naam, colorMode === 'dark');
-  const rolLabel =
-    role === 'admin' ? 'Beheerder' : role === 'planner' ? 'Planner' : 'Medewerker';
-
-  const zichtbaarWerk = zichtbaar(werk);
-  const zichtbaarSales = zichtbaar(sales);
+  const rolLabel = role === 'admin' ? 'Beheerder' : 'Medewerker';
   const styles = makeStyles(t);
 
   // Niets van het menu tonen zolang de rechten onderweg zijn. Een item dat
   // eerst verschijnt en daarna verdwijnt heeft zijn bestaan al verraden.
   if (!loaded) return <LoadingScreen label="Menu laden..." />;
 
+  const bijNaam = zichtbaar([
+    { icon: Database, title: 'Database', route: '/database', onPress: ga('/database') },
+    { icon: UsersRound, title: 'Team', route: '/team', onPress: ga('/team') },
+    { icon: Settings, title: 'Instellingen', route: '/settings', onPress: ga('/settings') },
+  ]);
+
+  const ondersteuning: Item[] = [
+    { icon: MessageCircleQuestion, title: 'Help', sub: 'Vraag het Boss, onze helpagent', onPress: openBoss },
+    { icon: Bug, title: 'Bug of idee', sub: 'Meld het en help BossBase beter maken', onPress: openMelden },
+    { icon: BookOpen, title: 'Kennisbank', sub: 'Uitleg en handleidingen op bossbase.nl', onPress: () => void Linking.openURL(KENNISBANK_URL) },
+    { icon: HelpCircle, title: 'Veelgestelde vragen', sub: 'Snel antwoord op bossbase.nl', onPress: () => void Linking.openURL(FAQ_URL) },
+    { icon: Phone, title: 'Bel ons', sub: HULP_TELEFOON, onPress: () => void Linking.openURL(HULP_TELEFOON_LINK) },
+  ];
+
+  const secties = groepen.map((g) => ({ ...g, items: zichtbaar(g.items) })).filter((g) => g.items.length > 0);
+
+  // Alle blokken onder het profiel, in menuvolgorde. Een sectie zonder
+  // zichtbare onderdelen is hierboven al weggevallen en laat dus geen ruimte na.
+  const blokken: { key: string; gewicht: number; inhoud: ReactNode }[] = [
+    ...[...secties, { titel: 'Ondersteuning', items: ondersteuning }].map((g) => ({
+      key: g.titel,
+      gewicht: sectieGewicht(g.items.length),
+      inhoud: <Group title={g.titel} items={g.items} />,
+    })),
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AppScreen
-        header={
-          <AppTopBar
-            eyebrow={company?.name ?? undefined}
-            title="Menu"
-            subtitle="Alle functies van BossBase"
-            showProfileButton
-          />
-        }
+        header={<AppTopBar eyebrow={company?.name ?? undefined} title="Menu" subtitle="Alle functies van BossBase" showProfileButton />}
       >
-        {/* Profielkaart — de eerste rij van het ontwerp: wie ben je, en waar
-            pas je dat aan. */}
-        <Pressable
-          onPress={() => router.push('/profile')}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.profielKaart, pressed && { opacity: 0.95 }]}
-        >
-          <View style={[styles.profielAvatar, { backgroundColor: avatar.bg }]}>
-            <Text style={[styles.profielAvatarText, { color: avatar.fg }]}>{initialenNaam}</Text>
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.profielNaam} numberOfLines={1}>
-              {naam}
-            </Text>
-            <Text style={styles.profielMeta} numberOfLines={1}>
-              {[rolLabel, company?.name].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
-          <ChevronRight size={18} color={t.muted2} strokeWidth={2} />
-        </Pressable>
+        {/* Wie je bent, met Instellingen en Team ernaast — zoals onderaan de
+            zijbalk van het dashboard. */}
+        <View style={styles.profielBlok}>
+          <Pressable
+            onPress={ga('/profile')}
+            accessibilityRole="button"
+            accessibilityLabel={`Profiel van ${naam}`}
+            style={({ pressed }) => [styles.profielKaart, pressed && { opacity: 0.95 }]}
+          >
+            <View style={[styles.profielAvatar, { backgroundColor: avatar.bg }]}>
+              <Text style={[styles.profielAvatarText, { color: avatar.fg }]}>{initialenNaam}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.profielNaam} numberOfLines={1}>
+                {naam}
+              </Text>
+              <Text style={styles.profielMeta} numberOfLines={1}>
+                {[rolLabel, company?.name].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={t.muted2} strokeWidth={2} />
+          </Pressable>
+          {bijNaam.length ? (
+            <View style={styles.bijNaam}>
+              {bijNaam.map((i) => (
+                <Pressable
+                  key={i.title}
+                  onPress={i.onPress}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.bijNaamKnop, pressed && { opacity: 0.85 }]}
+                >
+                  <i.icon size={17} color={t.ink2} strokeWidth={2} />
+                  <Text style={styles.bijNaamTekst} numberOfLines={1}>
+                    {i.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
 
-        {/* Read-only account: dat komt uitsluitend van de server (planStatus),
-            en het raakt elke schrijfactie in de app. Zeg het één keer bovenaan
-            in plaats van bij elke knop opnieuw. */}
         {readonly ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            <NoticeBanner
-              title={readonlyTekst(readonlyReden).titel}
-              message={readonlyTekst(readonlyReden).uitleg}
-            />
+            <NoticeBanner title={readonlyTekst(readonlyReden).titel} message={readonlyTekst(readonlyReden).uitleg} />
           </View>
         ) : null}
 
-        <Group title="Werk & uitvoering" items={zichtbaarWerk} />
-
-        {zichtbaarSales.length > 0 ? (
-          <Group title="Sales & administratie" items={zichtbaarSales} />
-        ) : null}
-
-        <Group title="Support" items={support} />
+        {/* Op een iPad twee onafhankelijke kolommen; op een telefoon (en in
+            Split View) één. Eén lijst met blokken, verdeeld in aaneengesloten
+            delen: elke kolom stapelt zelf, dus een hoge sectie links laat
+            rechts geen gat achter, en de focusvolgorde blijft kolom voor kolom. */}
+        <View style={tablet ? styles.kolommen : undefined}>
+          {(tablet ? verdeelOverKolommen(blokken, (b) => b.gewicht) : [blokken]).map((kolom, i) => (
+            <View key={i} style={tablet ? styles.kolom : undefined}>
+              {kolom.map((b) => (
+                <View key={b.key}>{b.inhoud}</View>
+              ))}
+            </View>
+          ))}
+        </View>
       </AppScreen>
     </View>
   );
@@ -168,14 +223,7 @@ function Group({ title, items }: { title: string; items: Item[] }) {
       <AppSection title={title} variant="eyebrow" />
       <AppListGroup>
         {items.map((it, i) => (
-          <AppListItem
-            key={it.title}
-            first={i === 0}
-            icon={it.icon}
-            title={it.title}
-            subtitle={it.sub}
-            onPress={it.onPress}
-          />
+          <AppListItem key={it.title} first={i === 0} icon={it.icon} title={it.title} subtitle={it.sub} onPress={it.onPress} />
         ))}
       </AppListGroup>
     </>
@@ -184,9 +232,8 @@ function Group({ title, items }: { title: string; items: Item[] }) {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+    profielBlok: { marginHorizontal: 16, marginTop: 4, gap: spacing.sm },
     profielKaart: {
-      marginHorizontal: 16,
-      marginTop: 4,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -197,40 +244,25 @@ const makeStyles = (t: ThemeColors) =>
       borderRadius: t.rLg,
       ...dsShadow,
     },
-    profielAvatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+    profielAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
     profielAvatarText: { fontSize: 16, fontWeight: '700' },
     profielNaam: { fontSize: 15.5, fontWeight: '700', color: t.ink },
     profielMeta: { fontSize: 12.5, color: t.muted, marginTop: 2 },
-
-    darkRij: {
-      marginHorizontal: 16,
-      marginTop: 12,
+    bijNaam: { flexDirection: 'row', gap: spacing.sm },
+    bijNaamKnop: {
+      flex: 1,
+      minHeight: 44,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      backgroundColor: t.card,
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 6,
+      borderRadius: t.rLg,
       borderWidth: 1,
       borderColor: t.line,
-      borderRadius: t.rLg,
-      ...dsShadow,
+      backgroundColor: t.card,
     },
-    darkIcoon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: t.bgAlt,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    darkTitel: { fontSize: 15, fontWeight: '600', color: t.ink },
-    darkMeta: { fontSize: 12.5, color: t.muted, marginTop: 2 },
-
+    bijNaamTekst: { flexShrink: 1, fontSize: 13.5, fontWeight: '600', color: t.ink },
+    kolommen: { flexDirection: 'row', alignItems: 'flex-start' },
+    kolom: { flex: 1, minWidth: 0 },
   });

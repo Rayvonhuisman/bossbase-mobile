@@ -127,6 +127,9 @@ export default function AccountScreen() {
 
           {/* Terms checkbox */}
           <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agree }}
+            aria-checked={agree}
             onPress={() => setAgree((v) => !v)}
             style={styles.termsRow}
             hitSlop={4}

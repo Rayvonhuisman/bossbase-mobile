@@ -13,6 +13,7 @@ import { AnimatedScreen, Button, InstalleerBossBase } from '@/components';
 import { openWachtwoordHerstel } from '@/lib/linking';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -130,6 +131,9 @@ const makeStyles = (t: ThemeColors) =>
       flex: 1,
       padding: spacing.xl,
       justifyContent: 'center',
+      // Op een iPad of desktop een kolom in het midden, geen velden over de
+      // volle schermbreedte.
+      ...leesbreedte,
     },
     header: {
       marginBottom: spacing.xxl,

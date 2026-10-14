@@ -76,7 +76,6 @@ export function isReadonly(): boolean {
 export function sessionCan(permission: string): boolean {
   if (!stand.role) return false;
   if (stand.role === 'admin') return true;
-  if (stand.role === 'planner' && permission === 'planning') return true;
   return stand.granted.includes(permission);
 }
 

@@ -173,7 +173,7 @@ export default function ProfileScreen() {
                       {
                         icon: Plug,
                         title: 'Integraties',
-                        sub: 'Moneybird, SnelStart, AFAS, Google',
+                        sub: 'Moneybird, Stripe, SnelStart en AFAS',
                         onPress: () => router.push('/integrations'),
                       },
                     ]
@@ -224,6 +224,7 @@ export default function ProfileScreen() {
         {/* Logout */}
         <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
           <Pressable
+            accessibilityRole="button"
             onPress={onLogout}
             style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.85 }]}
           >
@@ -377,7 +378,7 @@ function ListRow({ item, first }: { item: RowItem; first: boolean }) {
 
   if (item.onPress) {
     return (
-      <Pressable onPress={item.onPress} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+      <Pressable accessibilityRole="button" onPress={item.onPress} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
         {content}
       </Pressable>
     );

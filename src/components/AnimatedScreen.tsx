@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, type StyleProp, type ViewStyle } from 'react-native';
+import { magEntreeAnimeren } from '@/lib/eersteWeergave';
 import { useIsFocused } from "expo-router/react-navigation";
 
 type Props = {
@@ -27,7 +28,12 @@ export function AnimatedScreen({ children, style, disabled }: Props) {
   const isFocused = useIsFocused();
   // useState (niet useRef(...).current): één Animated.Value per scherm, zonder
   // tijdens het renderen een ref uit te lezen.
-  const [progress] = useState(() => new Animated.Value(disabled ? 1 : 0));
+  const [progress] = useState(() => new Animated.Value(1));
+  // Na afloop (of zonder animatie) geen opacity/transform meer op de pagina:
+  // een blijvende `translateY(0)` houdt een eigen compositielaag in leven, en
+  // in WebKit kan zo'n laag de tegels van de allereerste weergave (tijdens de
+  // opstartanimatie van de geïnstalleerde app) blijven tonen — onscherp.
+  const [inRust, setInRust] = useState(true);
 
   useEffect(() => {
     if (disabled) {
@@ -35,24 +41,37 @@ export function AnimatedScreen({ children, style, disabled }: Props) {
       return;
     }
     if (!isFocused) return; // animate only for the active screen
+    // De eerste weergave van de app staat meteen goed: geen ingang-animatie
+    // terwijl het besturingssysteem de app nog opent.
+    if (!magEntreeAnimeren()) return;
 
     let cancelled = false;
-    // Restart the entrance from the floor each time the screen becomes focused.
-    progress.setValue(0);
-    const animation = Animated.timing(progress, {
-      toValue: 1,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+    let animation: Animated.CompositeAnimation | null = null;
+    // Eén frame later starten: de stand "in beweging" zetten we zo buiten de
+    // synchrone effect-run om (geen cascade van renders).
+    const frame = requestAnimationFrame(() => {
+      if (cancelled) return;
+      setInRust(false);
+      // Restart the entrance from the floor each time the screen becomes focused.
+      progress.setValue(0);
+      animation = Animated.timing(progress, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      });
+      animation.start(({ finished }) => {
+        if (finished && !cancelled) setInRust(true);
+      });
     });
-    animation.start();
 
     // Non-blocking reduce-motion check — jump to the end if enabled.
     AccessibilityInfo.isReduceMotionEnabled()
       .then((reduceMotion) => {
         if (!cancelled && reduceMotion) {
-          animation.stop();
+          animation?.stop();
           progress.setValue(1);
+          setInRust(true);
         }
       })
       .catch(() => {
@@ -61,7 +80,10 @@ export function AnimatedScreen({ children, style, disabled }: Props) {
 
     return () => {
       cancelled = true;
-      animation.stop();
+      cancelAnimationFrame(frame);
+      animation?.stop();
+      progress.setValue(1);
+      setInRust(true);
     };
   }, [disabled, isFocused, progress]);
 
@@ -75,8 +97,10 @@ export function AnimatedScreen({ children, style, disabled }: Props) {
     outputRange: [8, 0],
   });
 
+  // Altijd hetzelfde element (anders zou de inhoud bij elke focus opnieuw
+  // mounten); in rust zonder opacity en transform.
   return (
-    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+    <Animated.View style={inRust ? style : [style, { opacity, transform: [{ translateY }] }]}>
       {children}
     </Animated.View>
   );

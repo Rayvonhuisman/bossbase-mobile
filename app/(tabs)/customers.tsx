@@ -13,8 +13,9 @@ import {
   Phone,
   Search,
   Plus,
+  Truck,
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   AppCard,
   AppFilterChips,
@@ -27,7 +28,23 @@ import {
   type ChipDef,
 } from '@/components';
 import { usePermissions, useTheme } from '@/providers';
-import { listCustomers } from '@/services/customerService';
+import { listCustomers, listFactuurTotaalRijen } from '@/services/customerService';
+import {
+  isActief,
+  leverancierNaam,
+  listLeverancierKostenTotalen,
+  listLeveranciersVolledig,
+  type Leverancier,
+} from '@/services/leverancierService';
+import {
+  isZakelijkeKlant,
+  klantPastBijZoek,
+  leverancierPastBijZoek,
+  totalenPerKlant,
+  type KlantTotalen,
+  type LeverancierKosten,
+} from '@/lib/relaties';
+import { formatEUR } from '@/lib/format';
 import { callPhone, openMaps } from '@/lib/linking';
 import { avatarKleuren, initialen } from '@/lib/avatar';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
@@ -44,6 +61,9 @@ type FilterKey =
   | 'actief'
   | 'zakelijk'
   | 'particulier';
+
+/** Relaties = klanten én leveranciers, net als de groep "Relaties" in het dashboard. */
+type Soort = 'klanten' | 'leveranciers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,16 +94,9 @@ function activityLabel(c: Customer): string {
  * naam bepaalt welke van de vier het wordt, zodat dezelfde klant altijd
  * dezelfde kleur houdt.
  */
+// Opgeslagen klanttype (dashboard 1-10), anders afgeleid van het KvK-nummer.
 function isZakelijk(c: Customer): boolean {
-  return !!(c.kvk_number && c.kvk_number.trim());
-}
-
-function matchesQuery(c: Customer, q: string): boolean {
-  if (!q) return true;
-  const lower = q.toLowerCase();
-  return [c.name, c.email, c.phone, c.address, c.postcode, c.city, c.kvk_number].some(
-    (f) => f?.toLowerCase().includes(lower),
-  );
+  return isZakelijkeKlant(c);
 }
 
 function matchesFilter(c: Customer, key: FilterKey, todayMs: number): boolean {
@@ -116,9 +129,19 @@ function matchesFilter(c: Customer, key: FilterKey, todayMs: number): boolean {
 
 export default function CustomersScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ soort?: string }>();
   const { can, readonly, planStatus, loaded: rechtenGeladen } = usePermissions();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+
+  /**
+   * Klanten en leveranciers op één pagina, met de keuze bovenin. De keuze
+   * staat in de URL (`?soort=leveranciers`), zodat terug van een
+   * leverancierskaart weer op de leverancierslijst uitkomt.
+   */
+  const soort: Soort = params.soort === 'leveranciers' ? 'leveranciers' : 'klanten';
+  const kiesSoort = (s: Soort) => router.setParams({ soort: s === 'klanten' ? undefined : s });
+
   /**
    * Klanten aanmaken volgt het dashboard: het recht `klanten_bewerken`. RLS
    * laat de INSERT zelf al toe voor iedereen in het bedrijf, maar het dashboard
@@ -132,8 +155,25 @@ export default function CustomersScreen() {
   const limietVol =
     !!klantenLimiet && klantenLimiet.max != null && klantenLimiet.gebruikt >= klantenLimiet.max;
   const canCreate = rechtenGeladen && can('klanten_bewerken') && !readonly && !limietVol;
+  /**
+   * Een leverancier toevoegen: `leveranciers_insert` eist het eigen bedrijf
+   * plus het recht `klanten_bewerken` of `kosten`, en `readonly_leveranciers`
+   * een lopend abonnement (live database, 13-10-2026). Zonder dat recht zou de
+   * knop alleen tot een weigering leiden.
+   */
+  const magLeverancierMaken =
+    rechtenGeladen && !readonly && (can('klanten_bewerken') || can('kosten'));
+  /** Kostentotalen per leverancier alleen met het kostenrecht: zonder dat geeft
+   * RLS op job_costs hooguit de werkbonkosten terug, en dan klopt het totaal niet. */
+  const toonKosten = rechtenGeladen && can('kosten');
+  const toonBedragen = rechtenGeladen && can('facturen');
 
-  const [items, setItems] = useState<Customer[]>([]);  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<Customer[]>([]);
+  const [leveranciers, setLeveranciers] = useState<Leverancier[]>([]);
+  const [kosten, setKosten] = useState<Record<string, LeverancierKosten>>({});
+  const [totalen, setTotalen] = useState<Map<string, KlantTotalen>>(new Map());
+  const [error, setError] = useState<string | null>(null);
+  const [levFout, setLevFout] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('alle');
 
@@ -144,15 +184,27 @@ export default function CustomersScreen() {
   const load = useCallback(
     async () => {
       setError(null);
-      const { data, error: fetchError } = await listCustomers();
-      if (fetchError) {
-        setError(fetchError);
+      const [klantRes, levRes, kostRes, totaalRes] = await Promise.all([
+        listCustomers(),
+        listLeveranciersVolledig(),
+        toonKosten
+          ? listLeverancierKostenTotalen()
+          : Promise.resolve({} as Record<string, LeverancierKosten>),
+        toonBedragen ? listFactuurTotaalRijen() : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (klantRes.error) {
+        setError(klantRes.error);
         setItems([]);
       } else {
-        setItems(data);
+        setItems(klantRes.data);
       }
+      // Leveranciers zijn een eigen lijst: mislukt die, dan blijven de klanten staan.
+      setLevFout(levRes.error);
+      if (!levRes.error) setLeveranciers(levRes.data);
+      setKosten(kostRes);
+      if (!totaalRes.error) setTotalen(totalenPerKlant(totaalRes.data));
     },
-    [],
+    [toonBedragen, toonKosten],
   );
 
   /**
@@ -160,17 +212,21 @@ export default function CustomersScreen() {
    * verschillende dingen. Alleen de laatste zet `refreshing`; terugkeren op
    * dit scherm ververst dus stil, zonder dat de lijst omlaag schuift.
    */
-  const { loading, refreshing, onRefresh, opnieuw } = useLaden(load, { onFout: setError });
-
+  const { loading, refreshing, onRefresh, opnieuw } = useLaden(load, {
+    onFout: setError,
+    klaarOmTeLaden: rechtenGeladen,
+  });
 
   const counts = useMemo(() => {
     let actief = 0;
+    let zakelijk = 0;
     items.forEach((c) => {
+      if (isZakelijk(c)) zakelijk++;
       const iso = lastTouchedISO(c);
       if (!iso) return;
       if (todayMs - new Date(iso).getTime() < 30 * 24 * 60 * 60 * 1000) actief++;
     });
-    return { all: items.length, actief };
+    return { all: items.length, actief, zakelijk };
   }, [items, todayMs]);
 
   const chips: ChipDef<FilterKey>[] = useMemo(
@@ -185,8 +241,13 @@ export default function CustomersScreen() {
   );
 
   const filtered = useMemo(
-    () => items.filter((c) => matchesFilter(c, filter, todayMs) && matchesQuery(c, query)),
+    () => items.filter((c) => matchesFilter(c, filter, todayMs) && klantPastBijZoek(c, query)),
     [items, filter, query, todayMs],
+  );
+
+  const gefilterdeLeveranciers = useMemo(
+    () => leveranciers.filter((l) => leverancierPastBijZoek(l, query)),
+    [leveranciers, query],
   );
 
   // Favorites strip: most recently touched 4
@@ -213,29 +274,35 @@ export default function CustomersScreen() {
 
   const letters = useMemo(() => Object.keys(grouped).sort(), [grouped]);
 
-  const onCall = (c: Customer) => {
-    if (!callPhone(c.phone)) {
-      Dialog.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
+  const onCall = (telefoon: string | null | undefined) => {
+    if (!callPhone(telefoon)) {
+      Dialog.alert('Geen telefoonnummer', 'Voor deze relatie is geen nummer bekend.');
     }
   };
-  const onNavigate = (c: Customer) => {
-    const addr = [c.address, c.postcode, c.city].filter(Boolean).join(', ');
+  const onNavigate = (delen: (string | null | undefined)[]) => {
+    const addr = delen.filter(Boolean).join(', ');
     if (!openMaps(addr)) {
-      Dialog.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
+      Dialog.alert('Geen adres', 'Voor deze relatie is geen adres bekend.');
     }
   };
   const onOpenCustomer = (c: Customer) => {
     router.push(`/customers/${c.id}`);
   };
-  const onCreate = () => router.push('/customers/new');
+  const onOpenLeverancier = (l: Leverancier) => {
+    router.push(`/customers/leverancier/${l.id}`);
+  };
+  const onCreate = () =>
+    router.push(soort === 'klanten' ? '/customers/new' : '/customers/leverancier/new');
 
   // Stale-while-refresh: only take over the screen when there is no data yet.
-  if (loading && items.length === 0) return <LoadingScreen label="Klanten laden..." />;
-  if (error && items.length === 0) {
+  if (loading && items.length === 0 && leveranciers.length === 0) {
+    return <LoadingScreen label="Relaties laden..." />;
+  }
+  if (error && items.length === 0 && leveranciers.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <ErrorState
-          title="Klanten niet geladen"
+          title="Relaties niet geladen"
           message="Controleer je verbinding en probeer opnieuw."
           onRetry={opnieuw}
         />
@@ -243,8 +310,13 @@ export default function CustomersScreen() {
     );
   }
 
-  const totalCount = items.length;
-  const openWoCount = items.filter((c) => isZakelijk(c)).length; // placeholder count
+  const aantalInactief = leveranciers.filter((l) => !isActief(l)).length;
+  const subtitle =
+    soort === 'klanten'
+      ? `${items.length} ${items.length === 1 ? 'klant' : 'klanten'} · ${counts.zakelijk} zakelijk · ${counts.actief} actief`
+      : `${leveranciers.length} ${leveranciers.length === 1 ? 'leverancier' : 'leveranciers'}` +
+        (aantalInactief ? ` · ${aantalInactief} inactief` : '');
+  const magMaken = soort === 'klanten' ? canCreate : magLeverancierMaken;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -253,11 +325,16 @@ export default function CustomersScreen() {
           /* Aanmaken staat rechtsboven, zoals in het ontwerp — niet meer als
              zwevende knop over de onderste rijen heen. */
           <AppTopBar
-            title="Klanten"
-            subtitle={`${totalCount} klanten · ${openWoCount} zakelijk · ${counts.actief} actief`}
+            title="Relaties"
+            subtitle={subtitle}
             rightAction={
-              canCreate ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe klant" size={42} onPress={onCreate} />
+              magMaken ? (
+                <HeaderIconButton
+                  icon={Plus}
+                  label={soort === 'klanten' ? 'Nieuwe klant' : 'Nieuwe leverancier'}
+                  size={42}
+                  onPress={onCreate}
+                />
               ) : undefined
             }
             showProfileButton
@@ -266,92 +343,281 @@ export default function CustomersScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
+        {/* Klanten / Leveranciers */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <View style={styles.segment} accessibilityRole="tablist">
+            {(
+              [
+                { id: 'klanten', label: 'Klanten', n: items.length },
+                { id: 'leveranciers', label: 'Leveranciers', n: leveranciers.length },
+              ] as const
+            ).map((s) => {
+              const aan = soort === s.id;
+              return (
+                <Pressable
+                  key={s.id}
+                  onPress={() => kiesSoort(s.id)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: aan }}
+                  aria-selected={aan}
+                  style={({ pressed }) => [
+                    styles.segmentKnop,
+                    aan && styles.segmentKnopAan,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  <Text style={[styles.segmentTekst, aan && styles.segmentTekstAan]}>
+                    {s.label} · {s.n}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Search */}
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <AppSearchBar
             value={query}
             onChange={setQuery}
-            placeholder="Zoek op naam, plaats of nummer…"
+            placeholder={
+              soort === 'klanten'
+                ? 'Zoek op naam, plaats of nummer…'
+                : 'Zoek op naam, plaats of e-mail…'
+            }
           />
         </View>
 
-        {/* Filter chips */}
-        <View style={{ paddingTop: 14 }}>
-          <AppFilterChips chips={chips} active={filter} onChange={setFilter} />
-        </View>
-
-        {/* Favorites strip (only when no query) */}
-        {!query && favorites.length > 0 ? (
-          <>
-            <Text style={styles.recentKop}>Recent</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recentRij}
-            >
-              {favorites.map((c) => (
-                <RecentPil
-                  key={c.id}
-                  styles={styles}
-                  customer={c}
-                  onPress={() => onOpenCustomer(c)}
-                />
-              ))}
-            </ScrollView>
-          </>
-        ) : null}
-
-        {/* A-Z-lijst */}
-        {filtered.length === 0 ? (
-          <View style={{ paddingHorizontal: 16 }}>
-            <AppCard padding={28} style={styles.emptyCard}>
-              <View style={styles.emptyIcon}>
-                <Search size={28} color={ds.green} strokeWidth={1.8} />
-              </View>
-              <Text style={styles.emptyTitle}>Geen klanten gevonden</Text>
-              <Text style={styles.emptyBody}>
-                {items.length === 0
-                  ? 'Er zijn nog geen klanten in dit bedrijf.'
-                  : 'Geen klanten die passen bij je zoekopdracht of filter.'}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setQuery('');
-                  setFilter('alle');
-                }}
-                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
-              >
-                <Text style={styles.emptyBtnText}>Filters wissen</Text>
-              </Pressable>
-            </AppCard>
-          </View>
+        {soort === 'leveranciers' ? (
+          <LeverancierLijst
+            styles={styles}
+            t={t}
+            leveranciers={gefilterdeLeveranciers}
+            totaal={leveranciers.length}
+            fout={levFout}
+            kosten={kosten}
+            query={query}
+            onWis={() => setQuery('')}
+            onOpen={onOpenLeverancier}
+            onCall={(l) => onCall(l.telefoon || l.mobiel)}
+          />
         ) : (
-          <View style={{ paddingHorizontal: 16, paddingTop: 0 }}>
-            {letters.map((L) => {
-              const list = grouped[L] ?? [];
-              return (
-                <View key={L}>
-                  <Text style={styles.letterHeader}>{L}</Text>
-                  <View style={[styles.group, dsShadow]}>
-                    {list.map((c, i) => (
-                      <CustomerRow
-                        key={c.id}
-                        styles={styles}
-                        t={t}
-                        c={c}
-                        first={i === 0}
-                        onPress={() => onOpenCustomer(c)}
-                        onCall={() => onCall(c)}
-                        onNavigate={() => onNavigate(c)}
-                      />
-                    ))}
+          <>
+            {/* Filter chips */}
+            <View style={{ paddingTop: 14 }}>
+              <AppFilterChips chips={chips} active={filter} onChange={setFilter} />
+            </View>
+
+            {/* Favorites strip (only when no query) */}
+            {!query && favorites.length > 0 ? (
+              <>
+                <Text style={styles.recentKop}>Recent</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.recentRij}
+                >
+                  {favorites.map((c) => (
+                    <RecentPil
+                      key={c.id}
+                      styles={styles}
+                      customer={c}
+                      onPress={() => onOpenCustomer(c)}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+
+            {/* A-Z-lijst */}
+            {filtered.length === 0 ? (
+              <View style={{ paddingHorizontal: 16 }}>
+                <AppCard padding={28} style={styles.emptyCard}>
+                  <View style={styles.emptyIcon}>
+                    <Search size={28} color={ds.green} strokeWidth={1.8} />
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                  <Text style={styles.emptyTitle}>Geen klanten gevonden</Text>
+                  <Text style={styles.emptyBody}>
+                    {items.length === 0
+                      ? 'Maak je eerste klant aan of pas je zoekopdracht aan.'
+                      : 'Geen klanten die passen bij je zoekopdracht of filter.'}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setQuery('');
+                      setFilter('alle');
+                    }}
+                    style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
+                  >
+                    <Text style={styles.emptyBtnText}>Filters wissen</Text>
+                  </Pressable>
+                </AppCard>
+              </View>
+            ) : (
+              <View style={{ paddingHorizontal: 16, paddingTop: 0 }}>
+                {letters.map((L) => {
+                  const list = grouped[L] ?? [];
+                  return (
+                    <View key={L}>
+                      <Text style={styles.letterHeader}>{L}</Text>
+                      <View style={[styles.group, dsShadow]}>
+                        {list.map((c, i) => (
+                          <CustomerRow
+                            key={c.id}
+                            styles={styles}
+                            t={t}
+                            c={c}
+                            totalen={toonBedragen ? totalen.get(c.id) : undefined}
+                            first={i === 0}
+                            onPress={() => onOpenCustomer(c)}
+                            onCall={() => onCall(c.phone)}
+                            onNavigate={() => onNavigate([c.address, c.postcode, c.city])}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </>
         )}
       </AppScreen>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Leveranciers
+// ---------------------------------------------------------------------------
+
+function LeverancierLijst({
+  styles,
+  t,
+  leveranciers,
+  totaal,
+  fout,
+  kosten,
+  query,
+  onWis,
+  onOpen,
+  onCall,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  t: ThemeColors;
+  leveranciers: Leverancier[];
+  totaal: number;
+  fout: string | null;
+  kosten: Record<string, LeverancierKosten>;
+  query: string;
+  onWis: () => void;
+  onOpen: (l: Leverancier) => void;
+  onCall: (l: Leverancier) => void;
+}) {
+  const { colorMode } = useTheme();
+  if (fout && totaal === 0) {
+    return (
+      <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+        <AppCard padding={20} style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Leveranciers niet geladen</Text>
+          <Text style={styles.emptyBody}>{fout}</Text>
+        </AppCard>
+      </View>
+    );
+  }
+  if (leveranciers.length === 0) {
+    return (
+      <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+        <AppCard padding={28} style={styles.emptyCard}>
+          <View style={styles.emptyIcon}>
+            <Truck size={28} color={ds.green} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.emptyTitle}>Geen leveranciers gevonden</Text>
+          <Text style={styles.emptyBody}>
+            {totaal === 0
+              ? 'Maak je eerste leverancier aan — dan landen je kosten in de boekhouding onder de juiste relatie.'
+              : 'Pas je zoekopdracht aan.'}
+          </Text>
+          {query ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onWis}
+              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.emptyBtnText}>Zoekopdracht wissen</Text>
+            </Pressable>
+          ) : null}
+        </AppCard>
+      </View>
+    );
+  }
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+      <View style={[styles.group, dsShadow]}>
+        {leveranciers.map((l, i) => {
+          const naam = leverancierNaam(l);
+          const av = avatarKleuren(naam, colorMode === 'dark');
+          const actief = isActief(l);
+          const k = kosten[l.id];
+          const sub = [
+            l.contactpersoon || (actief ? 'Leverancier' : null),
+            l.city,
+            k && k.bedrag ? `Kosten ${formatEUR(k.bedrag)}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          const tel = l.telefoon || l.mobiel;
+          return (
+            <Pressable
+              key={l.id}
+              onPress={() => onOpen(l)}
+              accessibilityRole="button"
+              accessibilityLabel={`${naam}${actief ? '' : ', inactief'}`}
+              style={({ pressed }) => [
+                styles.row,
+                i > 0 && styles.rowBorder,
+                !actief && { opacity: 0.6 },
+                pressed && { opacity: 0.95 },
+              ]}
+            >
+              <View style={[styles.rowAvatar, { backgroundColor: av.bg }]}>
+                <Text style={[styles.rowAvatarText, { color: av.fg }]}>{initialen(naam)}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.rowName, { flexShrink: 1 }]} numberOfLines={1}>
+                    {naam}
+                  </Text>
+                  {!actief ? <Text style={styles.inactiefLabel}>Inactief</Text> : null}
+                </View>
+                {sub ? (
+                  <Text style={styles.rowSub} numberOfLines={1}>
+                    {sub}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.rowActions}>
+                {tel ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onCall(l);
+                    }}
+                    hitSlop={6}
+                    accessibilityLabel={`${naam} bellen`}
+                    style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
+                  >
+                    <Phone size={15} color={t.ink} strokeWidth={2} />
+                  </Pressable>
+                ) : null}
+                <ChevronRight size={16} color={t.muted2} strokeWidth={2} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -396,6 +662,7 @@ function CustomerRow({
   styles,
   t,
   c,
+  totalen,
   first,
   onPress,
   onCall,
@@ -404,6 +671,8 @@ function CustomerRow({
   styles: ReturnType<typeof makeStyles>;
   t: ThemeColors;
   c: Customer;
+  /** Alleen met het recht `facturen`; anders weggelaten. */
+  totalen?: KlantTotalen;
   first: boolean;
   onPress: () => void;
   onCall: () => void;
@@ -417,6 +686,7 @@ function CustomerRow({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, !first && styles.rowBorder, pressed && { opacity: 0.95 }]}
     >
@@ -430,10 +700,21 @@ function CustomerRow({
         <Text style={styles.rowSub} numberOfLines={1}>
           {[cityLine || c.city, activityLabel(c)].filter(Boolean).join(' · ')}
         </Text>
+        {totalen && totalen.gefactureerd ? (
+          <Text style={styles.rowSub} numberOfLines={1}>
+            Gefactureerd {formatEUR(totalen.gefactureerd)}
+            {' · '}
+            <Text style={totalen.betaald > 0 ? styles.betaald : undefined}>
+              Betaald {formatEUR(totalen.betaald)}
+            </Text>
+          </Text>
+        ) : null}
       </View>
       <View style={styles.rowActions}>
         {c.phone ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${c.name ?? 'Klant'} bellen`}
             onPress={(e) => {
               e.stopPropagation();
               onCall();
@@ -446,6 +727,8 @@ function CustomerRow({
         ) : null}
         {c.address || c.city ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Route naar ${c.name ?? 'klant'}`}
             onPress={(e) => {
               e.stopPropagation();
               onNavigate();
@@ -468,6 +751,39 @@ function CustomerRow({
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+  // Klanten / Leveranciers
+  segment: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    backgroundColor: t.card,
+    borderWidth: 1,
+    borderColor: t.line,
+  },
+  segmentKnop: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  segmentKnopAan: { backgroundColor: t.ink },
+  segmentTekst: { fontSize: 14, fontWeight: '700', color: t.muted },
+  segmentTekstAan: { color: t.bg },
+  inactiefLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.muted,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: t.bg,
+    overflow: 'hidden',
+  },
+  betaald: { color: t.green700, fontWeight: '700' },
+
   // Recent geopend
   recentKop: {
     paddingHorizontal: 18,

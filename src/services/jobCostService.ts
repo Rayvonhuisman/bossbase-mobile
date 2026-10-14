@@ -3,6 +3,8 @@ import { isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { negeerBijImport } from './importPrullenbak';
+import { haalInStukken } from '@/lib/inStukken';
+import { calcBtw, type WerkbonInkoopBron } from '@/lib/kostenLogica';
 
 /**
  * Kosten (`job_costs`) — dezelfde tabel en dezelfde categorieën als het
@@ -62,6 +64,8 @@ export type JobCostRow = {
   werkbon_materiaal_id: string | null;
   created_at: string;
   customer: { id: string; name: string | null } | null;
+  /** Klant via de deal: terugval voor oudere rijen zonder eigen customer_id. */
+  deals?: { customer_id: string | null } | null;
 };
 
 /**
@@ -73,21 +77,115 @@ export function isVergrendeld(k: JobCostRow): boolean {
   return Boolean(k.externe_referentie) || Boolean(k.werkbon_materiaal_id);
 }
 
-export async function listJobCosts(
-  limit = 100,
-): Promise<{ data: JobCostRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('job_costs')
-    .select(JOB_COST_COLUMNS)
-    .order('cost_date', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
+export type KostenBereik = { vanDatum?: string; totDatum?: string };
 
-  if (error) {
-    console.warn('[jobCostService.listJobCosts]', error.message);
-    return { data: [], error: 'Kosten konden niet worden geladen.' };
+/**
+ * Kosten ophalen, desgewenst alleen die van één periode (op `cost_date`,
+ * beide grenzen inclusief) — zoals `listJobCosts` in het dashboard.
+ *
+ * - Met een getal: de nieuwste N (oude aanroep, blijft werken).
+ * - Met een bereik of zonder argument: alles in stukken van 1000. Een
+ *   afgekapte lijst gaf in het dashboard stil te lage bedragen.
+ *
+ * De klant van de deal komt mee als terugval (`deals(customer_id)`); kent de
+ * API die relatie niet, dan zonder — liever kosten zonder klantnaam dan een
+ * lege pagina.
+ */
+export async function listJobCosts(
+  bereik?: number | KostenBereik,
+): Promise<{ data: JobCostRow[]; error: string | null }> {
+  if (typeof bereik === 'number') {
+    const { data, error } = await supabase
+      .from('job_costs')
+      .select(JOB_COST_COLUMNS)
+      .order('cost_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(bereik);
+    if (error) {
+      console.warn('[jobCostService.listJobCosts]', error.message);
+      return { data: [], error: 'Kosten konden niet worden geladen.' };
+    }
+    return { data: (data as unknown as JobCostRow[]) ?? [], error: null };
   }
-  return { data: (data as unknown as JobCostRow[]) ?? [], error: null };
+
+  const { vanDatum, totDatum } = bereik ?? {};
+  const haal = (kolommen: string) =>
+    haalInStukken((van, tot) => {
+      let q = supabase.from('job_costs').select(kolommen);
+      if (vanDatum) q = q.gte('cost_date', vanDatum);
+      if (totDatum) q = q.lte('cost_date', totDatum);
+      return q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(van, tot);
+    });
+
+  let res = await haal(`${JOB_COST_COLUMNS}, deals ( customer_id )`);
+  if (res.error && /could not find.*relationship|foreign key/i.test(res.error.message ?? '')) {
+    res = await haal(JOB_COST_COLUMNS);
+  }
+  if (res.error) {
+    console.warn('[jobCostService.listJobCosts]', res.error.message);
+    return { data: [], error: 'Kosten laden is mislukt.' };
+  }
+  return { data: (res.data as unknown as JobCostRow[]) ?? [], error: null };
+}
+
+/**
+ * Inkopen die op een werkbon staan (`project_kosten` met `werkbon_id`), voor
+ * de weergave "Kosten op werkbonnen". Filter op `datum` (NOT NULL). De klant
+ * hangt aan de werkbon, vandaar de embed — met dezelfde terugval.
+ */
+export async function listWerkbonInkopen(
+  bereik: KostenBereik = {},
+): Promise<{ data: WerkbonInkoopBron[]; error: string | null }> {
+  const { vanDatum, totDatum } = bereik;
+  const haal = (kolommen: string) =>
+    haalInStukken((van, tot) => {
+      let q = supabase.from('project_kosten').select(kolommen).not('werkbon_id', 'is', null);
+      if (vanDatum) q = q.gte('datum', vanDatum);
+      if (totDatum) q = q.lte('datum', totDatum);
+      return q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(van, tot);
+    });
+
+  const basis = 'id, naam, aantal, prijs_per, bedrag, datum, leverancier_id';
+  let res = await haal(`${basis}, werkbonnen ( customer_id )`);
+  if (res.error && /could not find.*relationship|foreign key/i.test(res.error.message ?? '')) {
+    res = await haal(basis);
+  }
+  if (res.error) {
+    console.warn('[jobCostService.listWerkbonInkopen]', res.error.message);
+    return { data: [], error: 'Kosten laden is mislukt.' };
+  }
+  return { data: (res.data as unknown as WerkbonInkoopBron[]) ?? [], error: null };
+}
+
+/** Een kostencategorie uit `kosten_categorieen` (eigen lijst per bedrijf). */
+export type KostenCategorie = { naam: string; bonVerplicht: boolean };
+
+/**
+ * De actieve kostencategorieën van het bedrijf, op volgorde — dezelfde bron als
+ * `useKostenCategorieen` in het dashboard. Lukt dat niet, dan de vaste lijst.
+ * Bon verplicht tenzij `bon_verplicht = false` (terugval: niet bij Reiskosten
+ * en Arbeid).
+ */
+export async function listKostenCategorieen(): Promise<KostenCategorie[]> {
+  const terugval = KOSTEN_CATEGORIEEN.map((naam) => ({
+    naam,
+    bonVerplicht: !['Reiskosten', 'Arbeid'].includes(naam),
+  }));
+  const { data, error } = await supabase
+    .from('kosten_categorieen')
+    .select('naam, actief, bon_verplicht, volgorde')
+    .order('volgorde', { ascending: true })
+    .order('naam', { ascending: true });
+  if (error || !data || data.length === 0) return terugval;
+  return (data as { naam: string; actief: boolean | null; bon_verplicht: boolean | null }[])
+    .filter((c) => c.actief !== false && c.naam)
+    .map((c) => ({ naam: c.naam, bonVerplicht: c.bon_verplicht !== false }));
 }
 
 /** Leveranciers voor het verplichte leveranciersveld. */
@@ -203,6 +301,16 @@ function valideerKost(input: Partial<JobCostInput>, nieuw: boolean): string | nu
 }
 
 function mapKost(input: Partial<JobCostInput>): Record<string, unknown> {
+  // Het dashboard slaat `amount` altijd exclusief btw op, met
+  // `btw_inclusief = false` (`calcBtw`). Is het bedrag inclusief ingevoerd, dan
+  // rekenen we het hier terug — anders telt het overzicht de btw mee als kosten.
+  if (input.btw_inclusief === true && input.amount !== undefined) {
+    input = {
+      ...input,
+      amount: calcBtw(Number(input.amount), Number(input.btw_percentage ?? 21), 'incl').excl,
+      btw_inclusief: false,
+    };
+  }
   const p: Record<string, unknown> = {};
   if (input.description !== undefined) p.description = input.description.trim();
   if (input.amount !== undefined) p.amount = Number(input.amount);

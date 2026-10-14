@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Calendar as CalendarIcon, Clock } from 'lucide-react-native';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
@@ -50,11 +50,12 @@ export function DateField({
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const label_ = nlDatum(value);
+  const [focus, setFocus] = useState(false);
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.veld, disabled && styles.veldUit]}>
+      <View style={[styles.veld, focus && styles.veldFocus, disabled && styles.veldUit]}>
         <Text style={label_ ? styles.waarde : styles.leeg}>{label_ ?? placeholder}</Text>
         <CalendarIcon size={18} color={t.muted} strokeWidth={2} />
         <BrowserInvoer
@@ -65,6 +66,7 @@ export function DateField({
           disabled={disabled}
           ariaLabel={`${label}: ${label_ ?? placeholder}`}
           onChange={onChange}
+          onFocusWissel={setFocus}
         />
       </View>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -92,11 +94,12 @@ export function TimeField({
 }: TimeProps) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const [focus, setFocus] = useState(false);
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.veld, disabled && styles.veldUit]}>
+      <View style={[styles.veld, focus && styles.veldFocus, disabled && styles.veldUit]}>
         <Text style={value ? styles.waarde : styles.leeg}>{value ?? placeholder}</Text>
         <Clock size={18} color={t.muted} strokeWidth={2} />
         <BrowserInvoer
@@ -105,6 +108,7 @@ export function TimeField({
           disabled={disabled}
           ariaLabel={`${label}: ${value ?? placeholder}`}
           onChange={onChange}
+          onFocusWissel={setFocus}
         />
       </View>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -121,6 +125,7 @@ function BrowserInvoer({
   disabled,
   ariaLabel,
   onChange,
+  onFocusWissel,
 }: {
   type: 'date' | 'time';
   value: string | null;
@@ -129,8 +134,17 @@ function BrowserInvoer({
   disabled?: boolean;
   ariaLabel: string;
   onChange: (waarde: string) => void;
+  /** Het veld zelf is onzichtbaar; de omlijsting toont waar de focus staat. */
+  onFocusWissel: (focus: boolean) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const openKiezer = () => {
+    try {
+      ref.current?.showPicker?.();
+    } catch {
+      // Oudere browsers of een al open kiezer: de standaardklik volstaat.
+    }
+  };
 
   return (
     <input
@@ -143,13 +157,17 @@ function BrowserInvoer({
       max={max ?? undefined}
       disabled={disabled}
       aria-label={ariaLabel}
-      onClick={() => {
-        try {
-          ref.current?.showPicker?.();
-        } catch {
-          // Oudere browsers of een al open kiezer: de standaardklik volstaat.
+      onClick={openKiezer}
+      // Met een extern toetsenbord (iPad, desktop): Enter of spatie opent de
+      // kiezer, net als een tik.
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openKiezer();
         }
       }}
+      onFocus={() => onFocusWissel(true)}
+      onBlur={() => onFocusWissel(false)}
       onChange={(e) => {
         // Leegmaken kan in de browser wel, met de native kiezer niet. De
         // velden kennen geen "leeg" als keuze, dus dat negeren we.
@@ -174,6 +192,13 @@ const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     container: { gap: spacing.xs },
     label: { ...typography.label, color: t.muted2 },
+    veldFocus: {
+      // Zelfde focuskleur als elders in de webapp (zie public/index.html).
+      outlineColor: t.green,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+      outlineOffset: 2,
+    },
     veld: {
       position: 'relative',
       minHeight: 48,

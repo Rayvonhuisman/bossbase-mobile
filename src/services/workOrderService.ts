@@ -9,6 +9,22 @@ import type {
   WorkOrderTask,
   WorkOrderWithRelations,
 } from '@/types/domain';
+import { haalInStukken } from '@/lib/inStukken';
+import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
+import { hhmm, type DagPayload, type WerkbonDag } from '@/lib/werkbonLogica';
+import { idBatches, MATERIAAL_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
+import { magWerkbonRegelsBeheren } from '@/lib/werkbonRechten';
+
+/**
+ * Een werkbonrij zoals WORK_ORDER_COLUMNS hem levert: de basisvorm uit
+ * `types/domain` plus de dagen (werkbon_dagen) en de ondertekenvelden.
+ */
+export type Werkbon = WorkOrderWithRelations & {
+  werkbon_dagen?: WerkbonDag[] | null;
+  ondertekende_pdf_url?: string | null;
+  verstuurd_naar_email?: string | null;
+  verstuurd_op?: string | null;
+};
 
 /**
  * Columns selected from `werkbonnen`, verified against the live schema.
@@ -45,7 +61,10 @@ const WORK_ORDER_COLUMNS = `
   activity_id, nummer, assigned_to, assigned_to_ids, verantwoordelijke_ids,
   titel, omschrijving, status, gepland_op, starttijd, eindtijd, locatie,
   notes, werkbon_notities, gestart_op, afgerond_op,
-  ondertekend_op, ondertekend_door_naam, created_at, updated_at,
+  ondertekend_op, ondertekend_door_naam, ondertekende_pdf_url,
+  verstuurd_naar_email, verstuurd_op, created_at, updated_at,
+  werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
+    voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
     id, name, email, phone, address, postcode, city
   ),
@@ -98,6 +117,8 @@ export type ListWorkOrdersOptions = {
    * returns an empty list for exactly the people who need the app most.
    */
   assignedToUserId?: string | null;
+  /** Alleen de werkbonnen van één klant; de server filtert, niet de app. */
+  customerId?: string;
 };
 
 /** PostgREST `or` filter that matches either assignment model. */
@@ -107,22 +128,26 @@ function assignedFilter(userId: string): string {
 
 export async function listWorkOrders(
   opts: ListWorkOrdersOptions = {},
-): Promise<{ data: WorkOrderWithRelations[]; error: string | null }> {
-  let query = supabase
-    .from('werkbonnen')
-    .select(WORK_ORDER_COLUMNS)
-    .order('gepland_op', { ascending: true, nullsFirst: false })
-    .order('updated_at', { ascending: false });
-
-  if (opts.assignedToUserId) {
-    query = query.or(assignedFilter(opts.assignedToUserId));
-  }
-
-  const { data, error } = await metTijdslimiet((signal) => query.abortSignal(signal));
+): Promise<{ data: Werkbon[]; error: string | null }> {
+  // In stukken van 1000 (zie lib/inStukken), elk met de tijdslimiet. `id` als
+  // laatste sortering, zodat geen rij tussen twee stukken verschuift.
+  const { data, error } = await haalInStukken((van, tot) => {
+    let query = supabase
+      .from('werkbonnen')
+      .select(WORK_ORDER_COLUMNS)
+      .order('gepland_op', { ascending: true, nullsFirst: false })
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true });
+    if (opts.assignedToUserId) {
+      query = query.or(assignedFilter(opts.assignedToUserId));
+    }
+    if (opts.customerId) query = query.eq('customer_id', opts.customerId);
+    return metTijdslimiet((signal) => query.range(van, tot).abortSignal(signal));
+  });
   if (error) {
     return { data: [], error: describeError('listWorkOrders', error) };
   }
-  const rijen = (data as unknown as WorkOrderWithRelations[]) ?? [];
+  const rijen = (data as unknown as Werkbon[]) ?? [];
   if (__DEV__) console.log('[workOrderService.listWorkOrders] rijen:', rijen.length);
   return { data: rijen, error: null };
 }
@@ -161,7 +186,7 @@ export async function listWorkOrdersForPlanningRange(
 
 export async function getWorkOrder(
   id: string,
-): Promise<{ data: WorkOrderWithRelations | null; error: string | null }> {
+): Promise<{ data: Werkbon | null; error: string | null }> {
   const { data, error } = await metTijdslimiet((signal) =>
     supabase
       .from('werkbonnen')
@@ -175,7 +200,7 @@ export async function getWorkOrder(
     return { data: null, error: describeError('getWorkOrder', error) };
   }
   // No error and no row means RLS filtered it out, or it does not exist.
-  return { data: (data as unknown as WorkOrderWithRelations) ?? null, error: null };
+  return { data: (data as unknown as Werkbon) ?? null, error: null };
 }
 
 /**
@@ -230,26 +255,6 @@ export async function listTeamProfiles(
   return { data: map, error: null };
 }
 
-/**
- * Materials (benodigdheden) linked to a work order — table `werkbon_materialen`.
- * RLS lets the assigned worker read these, so a field worker sees what to bring.
- * Prices are deliberately not selected: they are not a field-worker concern.
- */
-export async function listWorkOrderMaterials(
-  workOrderId: string,
-): Promise<{ data: WorkOrderMaterial[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('werkbon_materialen')
-    .select('id, naam, eenheid, aantal')
-    .eq('werkbon_id', workOrderId)
-    .order('naam', { ascending: true });
-
-  if (error) {
-    return { data: [], error: describeError('listWorkOrderMaterials', error) };
-  }
-  return { data: (data as unknown as WorkOrderMaterial[]) ?? [], error: null };
-}
-
 /** Checklist items and meerwerk — table `werkbon_taken`. */
 export async function listWorkOrderTasks(
   workOrderId: string,
@@ -291,7 +296,8 @@ export async function setTaskDone(
   if (!row) {
     return {
       data: null,
-      error: 'Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een admin of een planner kan dat.',
+      error:
+        'Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan dat.',
     };
   }
   return { data: row, error: null };
@@ -408,18 +414,32 @@ export async function uploadWorkOrderPhoto(input: {
   return { data: { ...row, url: signed?.signedUrl ?? row.url }, error: null };
 }
 
-/** Een foto verwijderen: eerst het bestand, dan de rij. */
+/**
+ * Een foto verwijderen: eerst de rij, dan het bestand.
+ *
+ * Bewust in deze volgorde. De rij kent een slot (trigger
+ * `bb_werkbon_kind_op_slot` op een ondertekende bon) naast RLS; de
+ * storage-policy van `werkbon-fotos` kent dat slot niet. Ging het bestand
+ * eerst, dan bleef bij een geweigerde rij-delete een rij achter die naar een
+ * verdwenen bestand wijst. Nu blijft bij een weigering alles staan; mislukt
+ * alleen het opruimen van het bestand, dan resteert een los bestand zonder rij.
+ */
 export async function deleteWorkOrderPhoto(
   id: string,
   bewaardeUrl: string,
 ): Promise<{ error: string | null }> {
-  const pad = opslagpad(bewaardeUrl);
-  if (pad) await supabase.storage.from(FOTO_BUCKET).remove([pad]);
-
   const { data, error } = await supabase.from('werkbon_fotos').delete().eq('id', id).select('id');
   if (error) return { error: describeError('deleteWorkOrderPhoto', error) };
   if (!((data as { id: string }[]) ?? []).length) {
     return { error: 'De foto is niet verwijderd — je hebt hier geen rechten voor.' };
+  }
+
+  const pad = opslagpad(bewaardeUrl);
+  if (pad) {
+    const { error: opslagFout } = await supabase.storage.from(FOTO_BUCKET).remove([pad]);
+    if (opslagFout && __DEV__) {
+      console.log('[workOrderService.deleteWorkOrderPhoto] bestand bleef staan', opslagFout.message);
+    }
   }
   return { error: null };
 }
@@ -475,10 +495,10 @@ export function canEditWorkOrder(
 /**
  * Mag deze gebruiker uren boeken op deze werkbon?
  *
- * Spiegelt `bb_mag_werkbon_uren_beheren()`: uitvoerder, verantwoordelijke, of
- * rol admin/planner. Let op het verschil met bewerken — hier telt de RÓL, niet
- * het recht `werkbonnen_bewerken`. Boeken mag dus een bredere groep (iedere
- * uitvoerder) én een smallere (geen los recht dat het opent).
+ * Spiegelt `bb_mag_werkbon_uren_beheren()` (migratie 20261002135952):
+ * uitvoerder, verantwoordelijke, admin of het recht `planning` — zoals
+ * `magWerkbonUrenBeheren(werkbon, profile, magBewerken('planning'))` in het
+ * dashboard. `werkbonnen_bewerken` opent het niet.
  */
 export function canBookHours(
   workOrder: Pick<
@@ -489,36 +509,69 @@ export function canBookHours(
 ): boolean {
   if (workOrder.ondertekend_op) return false;
   if (r.readonly) return false;
-  if (r.role === 'admin' || r.role === 'planner') return true;
+  if (r.role === 'admin' || r.can('planning')) return true;
   if (!r.userId) return false;
   return (
     (workOrder.assigned_to_ids ?? []).includes(r.userId) ||
-    (workOrder.verantwoordelijke_ids ?? []).includes(r.userId) ||
-    workOrder.assigned_to === r.userId
+    // Zelfde als bb_mag_werkbon_uren_beheren: alleen de lijsten tellen.
+    (workOrder.verantwoordelijke_ids ?? []).includes(r.userId)
   );
+}
+
+/**
+ * "Beheert werkbonnen" — `canManage` van het dashboard (origin/main):
+ * rol admin, of het recht `werkbonnen_bewerken`. De rol 'planner' bestaat niet
+ * meer (`profiles_role_check`: admin | medewerker).
+ * Dit opent: nieuwe werkbon, het volledige bewerkformulier en de status.
+ */
+export function canManageWerkbonnen(r: WerkbonRechten): boolean {
+  return r.role === 'admin' || r.can('werkbonnen_bewerken');
 }
 
 /**
  * Mag deze gebruiker een werkbon aanmaken?
  *
- * Policy `werkbonnen_insert` eist de RÓL admin of planner — een medewerker met
- * `werkbonnen_bewerken` mag bestaande bonnen wijzigen maar géén nieuwe maken.
- * Daarnaast eist `readonly_werkbonnen` een geldig abonnement.
+ * Policy `werkbonnen_insert` (live geverifieerd 13-10-2026) eist
+ * `bb_has_permission('planning') OR bb_has_permission('werkbonnen_bewerken')`
+ * — admin valt daar via de helper onder. De knop volgt het
+ * dashboard (`canManage`) plus een expliciet planningrecht, dat de database
+ * ook toestaat. `readonly_werkbonnen` eist een geldig abonnement.
  */
 export function canCreateWorkOrder(r: WerkbonRechten): boolean {
   if (r.readonly) return false;
-  return r.role === 'admin' || r.role === 'planner';
+  return canManageWerkbonnen(r) || r.can('planning');
+}
+
+/**
+ * `canEditDetail` van het dashboard: beheerder of verantwoordelijke van deze
+ * bon. Wie alleen gekoppeld is ziet de bon met "Alleen inzage".
+ */
+export function canEditDetail(
+  workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids'>,
+  r: WerkbonRechten,
+): boolean {
+  if (canManageWerkbonnen(r)) return true;
+  return !!r.userId && (workOrder.verantwoordelijke_ids ?? []).includes(r.userId);
+}
+
+/**
+ * Mag deze gebruiker datum/tijd van een werkbon wijzigen? Trigger
+ * `bb_werkbon_tijden_planning_recht` eist `bb_planning_recht_vereist()`:
+ * gedeelde werkruimte of het planningrecht (admin inbegrepen).
+ */
+export function magPlanningWijzigen(r: WerkbonRechten): boolean {
+  return r.gedeeldeWerkruimte || r.role === 'admin' || r.can('planning');
 }
 
 /**
  * The next status a job can move to, in the live vocabulary.
- * gepland → in_uitvoering → afgerond, and admin/planner may also step back.
+ * gepland → in_uitvoering → afgerond, and an admin may also step back.
  */
 export function getAllowedNextStatuses(
   current: WorkOrderStatus,
   role: Role | null,
 ): WorkOrderStatus[] {
-  const canRewind = role === 'admin' || role === 'planner';
+  const canRewind = role === 'admin';
   switch (String(current)) {
     case 'gepland':
       return ['in_uitvoering', 'afgerond'];
@@ -547,9 +600,12 @@ export function getAllowedNextStatuses(
 export async function updateWorkOrderStatus(
   workOrder: Pick<WorkOrderWithRelations, 'id' | 'gestart_op'>,
   status: WorkOrderStatus,
-): Promise<{ data: WorkOrderWithRelations | null; error: string | null }> {
+  /** Afronden zonder startmoment: "Wanneer is de klus gestart?" (ISO). */
+  gestartOp?: string | null,
+): Promise<{ data: Werkbon | null; error: string | null }> {
   const patch: Record<string, unknown> = { status };
 
+  if (gestartOp && !workOrder.gestart_op) patch.gestart_op = gestartOp;
   if (status === 'in_uitvoering' && !workOrder.gestart_op) {
     patch.gestart_op = new Date().toISOString();
   }
@@ -568,7 +624,7 @@ export async function updateWorkOrderStatus(
   if (error) {
     return { data: null, error: describeError('updateWorkOrderStatus', error) };
   }
-  const row = (data as unknown as WorkOrderWithRelations[])?.[0];
+  const row = (data as unknown as Werkbon[])?.[0];
   if (!row) {
     // Update matched no row: RLS refused it. Never report this as success.
     return {
@@ -585,13 +641,43 @@ export async function updateWorkOrderStatus(
 // ---------------------------------------------------------------------------
 
 const NOTE_COLUMNS = `
-  id, note, created_by, created_at, voor_klant,
+  id, note, created_by, created_at, voor_klant, gevolg,
+  waarschuwing_verzonden_op, waarschuwing_verzonden_naar,
   auteur:profiles!werkbon_notities_created_by_fkey ( id, full_name )
 `;
 
+/** Een notitie met de velden van de Wkb-waarschuwing (alleen lezen). */
+export type WerkbonNotitie = WorkOrderNote & {
+  gevolg?: string | null;
+  waarschuwing_verzonden_op?: string | null;
+  waarschuwing_verzonden_naar?: string | null;
+};
+
+/**
+ * Een notitie naar de klant of terug naar intern zetten
+ * (updateWerkbonNotitieZichtbaarheid). RLS: eigen notitie, of admin/`werkbonnen_bewerken`
+ * (migratie 20261002135952).
+ */
+export async function setNoteVoorKlant(
+  id: string,
+  voorKlant: boolean,
+): Promise<{ data: WerkbonNotitie | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .update({ voor_klant: voorKlant })
+    .eq('id', id)
+    .select(NOTE_COLUMNS);
+  if (error) return { data: null, error: describeError('setNoteVoorKlant', error) };
+  const row = (data as unknown as WerkbonNotitie[])?.[0];
+  if (!row) {
+    return { data: null, error: 'Niet gewijzigd — alleen de schrijver, een beheerder of wie werkbonnen mag bewerken kan dat.' };
+  }
+  return { data: row, error: null };
+}
+
 export async function listWorkOrderNotes(
   workOrderId: string,
-): Promise<{ data: WorkOrderNote[]; error: string | null }> {
+): Promise<{ data: WerkbonNotitie[]; error: string | null }> {
   const { data, error } = await supabase
     .from('werkbon_notities')
     .select(NOTE_COLUMNS)
@@ -601,7 +687,7 @@ export async function listWorkOrderNotes(
   if (error) {
     return { data: [], error: describeError('listWorkOrderNotes', error) };
   }
-  return { data: (data as unknown as WorkOrderNote[]) ?? [], error: null };
+  return { data: (data as unknown as WerkbonNotitie[]) ?? [], error: null };
 }
 
 /**
@@ -646,20 +732,22 @@ export async function addWorkOrderNote(input: {
 // Taken en meerwerk aanmaken/verwijderen — tabel `werkbon_taken`
 // ---------------------------------------------------------------------------
 //
-// LET OP het verschil met afvinken. `werkbon_taken_update` staat toe wat de
-// werkbon toestaat (verantwoordelijke, werkbonnen_bewerken, gedeelde
-// werkruimte), maar `werkbon_taken_insert` en `_delete` eisen daarbovenop de
-// RÓL admin of planner. Een uitvoerder mag dus wél afvinken en géén regel
-// toevoegen of weggooien. Zie canAddTask hieronder.
+// Sinds migratie 20261002135952 (dashboard origin/main) volgen
+// `werkbon_taken_insert`/`_delete` en `werkbon_materialen_delete` dezelfde
+// regel als hun update-policy: gedeelde werkruimte, het recht
+// `werkbonnen_bewerken` (admin inbegrepen) of verantwoordelijke van de bon.
+// Voorheen eisten ze de rol admin/planner. Het recht `planning` opent de
+// werkbon zelf wel (werkbonnen_update), maar deze regels niet.
+
+// De regel zelf staat in lib/werkbonRechten (puur, getest).
+export { magWerkbonRegelsBeheren };
 
 /** Mag deze gebruiker taken/meerwerk toevoegen of verwijderen? */
 export function canAddTask(
-  workOrder: Pick<WorkOrderWithRelations, 'ondertekend_op'>,
+  workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids' | 'ondertekend_op'>,
   r: WerkbonRechten,
 ): boolean {
-  if (workOrder.ondertekend_op) return false;
-  if (r.readonly) return false;
-  return r.role === 'admin' || r.role === 'planner';
+  return magWerkbonRegelsBeheren(workOrder, r);
 }
 
 export async function addWorkOrderTask(input: {
@@ -689,7 +777,7 @@ export async function addWorkOrderTask(input: {
   if (!row) {
     return {
       data: null,
-      error: 'De regel is niet opgeslagen — alleen een admin of planner kan taken toevoegen.',
+      error: 'De regel is niet opgeslagen — je hebt hier geen rechten voor.',
     };
   }
   return { data: row, error: null };
@@ -705,16 +793,94 @@ export async function deleteWorkOrderTask(id: string): Promise<{ error: string |
 }
 
 // ---------------------------------------------------------------------------
-// Materialen — tabel `werkbon_materialen`
+// Materialen — tabel `werkbon_materialen` (+ `werkbon_materiaal_inkoop`)
 // ---------------------------------------------------------------------------
 //
-// Lezen mag iedere uitvoerder (dat is de boodschappenlijst). Toevoegen en
-// wijzigen volgt de werkbon (`werkbon_materialen_insert` / `_update`), maar
-// VERWIJDEREN eist net als bij taken de rol admin of planner.
+// Zoals het dashboard (MaterialenSection): een regel kopieert naam, eenheid,
+// verkoopprijs, btw, leverancier en (met recht) inkoopprijs uit de
+// bibliotheek, of is "vrij materiaal". Toevoegen en wijzigen volgt de werkbon
+// (`werkbon_materialen_insert` / `_update`); VERWIJDEREN volgt sinds migratie
+// 20261002135952 dezelfde regel (gedeelde werkruimte, `werkbonnen_bewerken`
+// of verantwoordelijke) in plaats van de rol admin/planner. De inkoopprijs
+// staat in `werkbon_materiaal_inkoop` met eigen RLS: zonder het recht
+// `inkoopprijzen` komt er niets binnen en weigert de update stil. De
+// kostregel in `job_costs` maakt de database zelf (trigger).
 //
-// `prijs_per` en `subtotaal` schrijft de app bewust niet: dat is kantoorwerk,
-// en de inkoopprijs is server-side afgeschermd op het recht `inkoopprijzen`.
-// Een monteur die een materiaal bijzet, zet een aantal — geen bedrag.
+// Verkoopprijs en subtotaal (dashboard 3-10-2026, migraties 20261003093758 en
+// 093845): `prijs_per` en `subtotaal` zijn voor `authenticated` niet meer
+// leesbaar; een select die ze noemt faalt voor iedereen. Ze komen via
+// `bb_werkbonmateriaal_bedragen(p_ids)`, alleen met het recht
+// `projectbedragen`. Het subtotaal rekent de database zelf uit (trigger
+// `a1_wm_subtotaal`); de app stuurt het niet meer mee.
+
+export type WerkbonMateriaalRegel = WorkOrderMaterial & {
+  prijs_per: number;
+  subtotaal: number;
+  materiaal_id: string | null;
+  leverancier_id: string | null;
+  btw_percentage: number;
+  /** null = niet ingevuld óf geen recht om te zien. */
+  inkoopprijs_per: number | null;
+};
+
+const MATERIAAL_KOLOMMEN = `
+  id, naam, eenheid, aantal, materiaal_id, leverancier_id,
+  btw_percentage, created_at, werkbon_materiaal_inkoop ( inkoopprijs_per )
+`;
+
+type MateriaalRij = Omit<WerkbonMateriaalRegel, 'inkoopprijs_per' | 'prijs_per' | 'subtotaal'> & {
+  prijs_per?: number | null;
+  subtotaal?: number | null;
+  werkbon_materiaal_inkoop?: { inkoopprijs_per: number | null } | { inkoopprijs_per: number | null }[] | null;
+};
+
+/** Verkoopprijs en subtotaal erbij via de RPC; zonder recht blijven ze leeg (0). */
+async function metMateriaalBedragen(rijen: MateriaalRij[]): Promise<MateriaalRij[]> {
+  const bedragen: { id: string }[] = [];
+  for (const ids of idBatches(rijen.map((r) => r.id))) {
+    const { data, error } = await supabase.rpc('bb_werkbonmateriaal_bedragen', { p_ids: ids });
+    if (error) {
+      describeError('metMateriaalBedragen', error);
+      break;
+    }
+    bedragen.push(...((data as { id: string }[] | null) ?? []));
+  }
+  return vulBedragen(rijen, bedragen, MATERIAAL_BEDRAG_VELDEN);
+}
+
+function naarRegel(r: MateriaalRij): WerkbonMateriaalRegel {
+  const k = Array.isArray(r.werkbon_materiaal_inkoop) ? r.werkbon_materiaal_inkoop[0] : r.werkbon_materiaal_inkoop;
+  return {
+    id: r.id,
+    naam: r.naam,
+    eenheid: r.eenheid,
+    aantal: Number(r.aantal ?? 0),
+    prijs_per: Number(r.prijs_per ?? 0),
+    subtotaal: Number(r.subtotaal ?? 0),
+    materiaal_id: r.materiaal_id ?? null,
+    leverancier_id: r.leverancier_id ?? null,
+    btw_percentage: r.btw_percentage != null ? Number(r.btw_percentage) : 21,
+    inkoopprijs_per: k?.inkoopprijs_per != null ? Number(k.inkoopprijs_per) : null,
+  };
+}
+
+const rond2 = (n: number) => Math.round(n * 100) / 100;
+
+export async function listWorkOrderMaterials(
+  workOrderId: string,
+): Promise<{ data: WerkbonMateriaalRegel[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbon_materialen')
+    .select(MATERIAAL_KOLOMMEN)
+    .eq('werkbon_id', workOrderId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    return { data: [], error: describeError('listWorkOrderMaterials', error) };
+  }
+  const rijen = await metMateriaalBedragen((data as unknown as MateriaalRij[]) ?? []);
+  return { data: rijen.map(naarRegel), error: null };
+}
 
 export function canEditMaterials(
   workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids' | 'ondertekend_op'>,
@@ -723,13 +889,22 @@ export function canEditMaterials(
   return canEditWorkOrder(workOrder, r);
 }
 
+/**
+ * `werkbon_materialen_delete` (migratie 20261002135952): zelfde regel als
+ * wijzigen — gedeelde werkruimte, `werkbonnen_bewerken` of verantwoordelijke.
+ */
 export function canDeleteMaterial(
-  workOrder: Pick<WorkOrderWithRelations, 'ondertekend_op'>,
+  workOrder: Pick<WorkOrderWithRelations, 'verantwoordelijke_ids' | 'ondertekend_op'>,
   r: WerkbonRechten,
 ): boolean {
-  if (workOrder.ondertekend_op) return false;
-  if (r.readonly) return false;
-  return r.role === 'admin' || r.role === 'planner';
+  return magWerkbonRegelsBeheren(workOrder, r);
+}
+
+async function leesRegel(id: string): Promise<WerkbonMateriaalRegel | null> {
+  const { data } = await supabase.from('werkbon_materialen').select(MATERIAAL_KOLOMMEN).eq('id', id).maybeSingle();
+  if (!data) return null;
+  const [rij] = await metMateriaalBedragen([data as unknown as MateriaalRij]);
+  return rij ? naarRegel(rij) : null;
 }
 
 export async function addWorkOrderMaterial(input: {
@@ -738,12 +913,19 @@ export async function addWorkOrderMaterial(input: {
   naam: string;
   eenheid?: string | null;
   aantal: number;
-}): Promise<{ data: WorkOrderMaterial | null; error: string | null }> {
+  prijs_per?: number | null;
+  btw_percentage?: number | null;
+  materiaal_id?: string | null;
+  leverancier_id?: string | null;
+  /** Alleen meesturen met het recht `inkoopprijzen`. */
+  inkoopprijs_per?: number | null;
+}): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   const naam = input.naam.trim();
   if (!naam) return { data: null, error: 'Vul een naam in.' };
   if (!Number.isFinite(input.aantal) || input.aantal <= 0) {
     return { data: null, error: 'Vul een geldig aantal in.' };
   }
+  const prijs = Number(input.prijs_per ?? 0) || 0;
 
   const { data, error } = await supabase
     .from('werkbon_materialen')
@@ -753,37 +935,58 @@ export async function addWorkOrderMaterial(input: {
       naam,
       eenheid: input.eenheid?.trim() ? input.eenheid.trim() : null,
       aantal: input.aantal,
-      prijs_per: 0,
-      subtotaal: 0,
+      prijs_per: prijs,
+      materiaal_id: input.materiaal_id ?? null,
+      leverancier_id: input.leverancier_id ?? null,
+      btw_percentage: input.btw_percentage ?? 21,
     })
-    .select('id, naam, eenheid, aantal');
+    .select(MATERIAAL_KOLOMMEN);
 
   if (error) return { data: null, error: describeError('addWorkOrderMaterial', error) };
-  const row = (data as unknown as WorkOrderMaterial[])?.[0];
+  const row = (data as unknown as MateriaalRij[])?.[0];
   if (!row) {
     return { data: null, error: 'Het materiaal is niet opgeslagen — je hebt hier geen rechten voor.' };
   }
-  return { data: row, error: null };
+  // De inkooprij maakt een trigger aan (met de bibliotheekprijs). Alleen een
+  // ingevulde waarde overschrijven; zonder recht weigert RLS dat stil.
+  if (input.inkoopprijs_per != null && Number.isFinite(input.inkoopprijs_per)) {
+    await supabase
+      .from('werkbon_materiaal_inkoop')
+      .update({ inkoopprijs_per: input.inkoopprijs_per, updated_at: new Date().toISOString() })
+      .eq('werkbon_materiaal_id', row.id);
+  }
+  // Wat we net zelf opsloegen mogen we tonen (zoals het dashboard); bij het
+  // volgende laden komt de prijs alleen terug voor wie hem mag zien.
+  const opgeslagen = input.inkoopprijs_per != null ? await leesRegel(row.id) : null;
+  return {
+    data: {
+      ...(opgeslagen ?? naarRegel(row)),
+      prijs_per: prijs,
+      subtotaal: rond2(input.aantal * prijs),
+    },
+    error: null,
+  };
 }
 
-/** Alleen het aantal bijstellen — bedragen blijven kantoorwerk. */
+/** Aantal bijstellen; het subtotaal rekent de database mee (trigger a1_wm_subtotaal). */
 export async function updateMaterialAmount(
-  id: string,
+  regel: Pick<WerkbonMateriaalRegel, 'id' | 'prijs_per'>,
   aantal: number,
-): Promise<{ data: WorkOrderMaterial | null; error: string | null }> {
+): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   if (!Number.isFinite(aantal) || aantal <= 0) {
     return { data: null, error: 'Vul een geldig aantal in.' };
   }
   const { data, error } = await supabase
     .from('werkbon_materialen')
     .update({ aantal })
-    .eq('id', id)
-    .select('id, naam, eenheid, aantal');
+    .eq('id', regel.id)
+    .select(MATERIAAL_KOLOMMEN);
 
   if (error) return { data: null, error: describeError('updateMaterialAmount', error) };
-  const row = (data as unknown as WorkOrderMaterial[])?.[0];
+  const row = (data as unknown as MateriaalRij[])?.[0];
   if (!row) return { data: null, error: 'Het aantal is niet opgeslagen — je hebt hier geen rechten voor.' };
-  return { data: row, error: null };
+  const [metPrijs] = await metMateriaalBedragen([row]);
+  return { data: naarRegel(metPrijs ?? row), error: null };
 }
 
 export async function deleteWorkOrderMaterial(id: string): Promise<{ error: string | null }> {
@@ -800,68 +1003,475 @@ export async function deleteWorkOrderMaterial(id: string): Promise<{ error: stri
 }
 
 // ---------------------------------------------------------------------------
-// Werkbon aanmaken
+// Takenvoortgang voor de lijst (getAllWerkbonTakenCounts)
+// ---------------------------------------------------------------------------
+
+/** werkbon_id → { done, total }, meerwerk telt niet mee. */
+export async function listTakenTellingen(): Promise<{
+  data: Record<string, { done: number; total: number }>;
+  error: string | null;
+}> {
+  const { data, error } = await haalInStukken((van, tot) =>
+    metTijdslimiet((signal) =>
+      supabase
+        .from('werkbon_taken')
+        .select('id, werkbon_id, afgerond')
+        .eq('is_meerwerk', false)
+        .order('id', { ascending: true })
+        .range(van, tot)
+        .abortSignal(signal),
+    ),
+  );
+  if (error) return { data: {}, error: describeError('listTakenTellingen', error) };
+  const tel: Record<string, { done: number; total: number }> = {};
+  for (const r of (data as unknown as { werkbon_id: string; afgerond: boolean }[]) ?? []) {
+    const t = (tel[r.werkbon_id] ??= { done: 0, total: 0 });
+    t.total++;
+    if (r.afgerond) t.done++;
+  }
+  return { data: tel, error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Werkbon aanmaken en bewerken
 // ---------------------------------------------------------------------------
 
 export type CreateWorkOrderInput = {
   company_id: string;
   titel: string;
   customer_id?: string | null;
+  project_id?: string | null;
   omschrijving?: string | null;
   gepland_op?: string | null;
+  starttijd?: string | null;
+  eindtijd?: string | null;
   locatie?: string | null;
   assigned_to_ids?: string[];
   verantwoordelijke_ids?: string[];
+  /** Alleen meesturen als het formulier de voertuigen kent. */
+  voertuig_ids?: string[];
 };
 
 /**
- * Een nieuwe werkbon aanmaken.
+ * Verantwoordelijken als deel van de ploeg; leeg terwijl er een ploeg is →
+ * de eerste medewerker (normalizeVerantwoordelijken van het dashboard). De
+ * CHECK `werkbonnen_verantwoordelijke_subset` eist dat elke
+ * verantwoordelijke ook uitvoerder is.
+ */
+function normaliseerPloeg(assigned?: string[], verantw?: string[]) {
+  const uitvoerders = Array.from(new Set((assigned ?? []).filter(Boolean)));
+  let verantwoordelijken = Array.from(new Set((verantw ?? []).filter(Boolean))).filter((id) =>
+    uitvoerders.includes(id),
+  );
+  if (!verantwoordelijken.length && uitvoerders.length) verantwoordelijken = [uitvoerders[0]!];
+  return { uitvoerders, verantwoordelijken };
+}
+
+const leegNaarNull = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+
+/**
+ * Een nieuwe werkbon aanmaken (createWerkbon van het dashboard).
  *
  * `nummer` wordt niet meegestuurd: trigger `bb_werkbon_nummer` bepaalt het
- * eerstvolgende WB-nummer per bedrijf. Zelf nummeren zou twee bronnen geven die
- * bij gelijktijdig aanmaken uit elkaar lopen.
- *
- * De CHECK `werkbonnen_verantwoordelijke_subset` eist dat elke
- * verantwoordelijke óók uitvoerder is; dat dwingen we hier af zodat de
- * gebruiker geen databasefout te zien krijgt.
+ * eerstvolgende WB-nummer per bedrijf.
  */
 export async function createWorkOrder(
   input: CreateWorkOrderInput,
-): Promise<{ data: WorkOrderWithRelations | null; error: string | null }> {
+): Promise<{ data: Werkbon | null; error: string | null }> {
   const titel = input.titel.trim();
-  if (!titel) return { data: null, error: 'Een werkbon heeft een titel nodig.' };
+  if (!titel) return { data: null, error: 'Titel is verplicht.' };
+  const { uitvoerders, verantwoordelijken } = normaliseerPloeg(input.assigned_to_ids, input.verantwoordelijke_ids);
 
-  const uitvoerders = Array.from(new Set(input.assigned_to_ids ?? []));
-  const verantwoordelijken = Array.from(new Set(input.verantwoordelijke_ids ?? [])).filter((id) =>
-    uitvoerders.includes(id),
-  );
+  const payload: Record<string, unknown> = {
+    company_id: input.company_id,
+    titel,
+    customer_id: input.customer_id ?? null,
+    project_id: input.project_id ?? null,
+    omschrijving: leegNaarNull(input.omschrijving),
+    gepland_op: input.gepland_op || null,
+    starttijd: input.starttijd || null,
+    eindtijd: input.eindtijd || null,
+    locatie: leegNaarNull(input.locatie),
+    status: 'gepland',
+    assigned_to_ids: uitvoerders,
+    verantwoordelijke_ids: verantwoordelijken,
+    assigned_to: uitvoerders[0] ?? null,
+  };
+  if (Array.isArray(input.voertuig_ids)) payload.voertuig_ids = input.voertuig_ids;
+  // Null-velden weglaten, zoals het dashboard: dan gelden de kolomstandaarden.
+  Object.keys(payload).forEach((k) => payload[k] === null && delete payload[k]);
 
-  const { data, error } = await supabase
-    .from('werkbonnen')
-    .insert({
-      company_id: input.company_id,
-      titel,
-      customer_id: input.customer_id ?? null,
-      omschrijving: input.omschrijving?.trim() ? input.omschrijving.trim() : null,
-      gepland_op: input.gepland_op ?? null,
-      locatie: input.locatie?.trim() ? input.locatie.trim() : null,
-      status: 'gepland',
-      assigned_to_ids: uitvoerders,
-      verantwoordelijke_ids: verantwoordelijken,
-      // Legacy-kolom meevullen zodat oudere schermen de toewijzing ook zien.
-      assigned_to: uitvoerders[0] ?? null,
-    })
-    .select(WORK_ORDER_COLUMNS);
+  const { data, error } = await supabase.from('werkbonnen').insert(payload).select(WORK_ORDER_COLUMNS);
 
   if (error) return { data: null, error: describeError('createWorkOrder', error) };
-  const row = (data as unknown as WorkOrderWithRelations[])?.[0];
+  const row = (data as unknown as Werkbon[])?.[0];
   if (!row) {
     return {
       data: null,
-      error: 'De werkbon is niet aangemaakt — alleen een admin of planner kan dat.',
+      error: 'De werkbon is niet aangemaakt — daarvoor heb je het recht werkbonnen bewerken of planning nodig.',
     };
   }
   return { data: row, error: null };
+}
+
+export type UpdateWorkOrderInput = Partial<Omit<CreateWorkOrderInput, 'company_id'>> & {
+  status?: string;
+  notes?: string | null;
+};
+
+/**
+ * Een werkbon bijwerken (updateWerkbon van het dashboard): toewijzing blijft
+ * consistent (assigned_to = eerste), en de eerste stap naar in_uitvoering zet
+ * eenmalig `gestart_op`.
+ */
+export async function updateWorkOrder(
+  huidig: Pick<Werkbon, 'id' | 'gestart_op' | 'status'>,
+  input: UpdateWorkOrderInput,
+): Promise<{ data: Werkbon | null; error: string | null }> {
+  const patch: Record<string, unknown> = {};
+  if (input.titel !== undefined) {
+    const titel = input.titel.trim();
+    if (!titel) return { data: null, error: 'Titel is verplicht.' };
+    patch.titel = titel;
+  }
+  if (input.customer_id !== undefined) patch.customer_id = input.customer_id || null;
+  if (input.project_id !== undefined) patch.project_id = input.project_id || null;
+  if (input.omschrijving !== undefined) patch.omschrijving = leegNaarNull(input.omschrijving);
+  if (input.locatie !== undefined) patch.locatie = leegNaarNull(input.locatie);
+  if (input.notes !== undefined) patch.notes = leegNaarNull(input.notes);
+  if (input.gepland_op !== undefined) patch.gepland_op = input.gepland_op || null;
+  if (input.starttijd !== undefined) patch.starttijd = input.starttijd || null;
+  if (input.eindtijd !== undefined) patch.eindtijd = input.eindtijd || null;
+  if (Array.isArray(input.voertuig_ids)) patch.voertuig_ids = input.voertuig_ids;
+  if (input.assigned_to_ids !== undefined) {
+    const { uitvoerders, verantwoordelijken } = normaliseerPloeg(input.assigned_to_ids, input.verantwoordelijke_ids);
+    patch.assigned_to_ids = uitvoerders;
+    patch.verantwoordelijke_ids = verantwoordelijken;
+    patch.assigned_to = uitvoerders[0] ?? null;
+  }
+  if (input.status !== undefined && input.status !== huidig.status) {
+    patch.status = input.status;
+    if (input.status === 'in_uitvoering' && !huidig.gestart_op) patch.gestart_op = new Date().toISOString();
+    if (input.status === 'afgerond') patch.afgerond_op = new Date().toISOString();
+  }
+  if (!Object.keys(patch).length) return getWorkOrder(huidig.id) as Promise<{ data: Werkbon | null; error: string | null }>;
+
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .update(patch)
+    .eq('id', huidig.id)
+    .select(WORK_ORDER_COLUMNS);
+  if (error) return { data: null, error: describeError('updateWorkOrder', error) };
+  const row = (data as unknown as Werkbon[])?.[0];
+  if (!row) {
+    return { data: null, error: 'De werkbon is niet bijgewerkt — je hebt geen rechten op deze werkbon.' };
+  }
+  return { data: row, error: null };
+}
+
+/**
+ * De geplande dagen zetten via RPC `bb_werkbon_dagen_zetten` (SECURITY
+ * INVOKER, RLS geldt). Dagen die niet in de lijst staan verdwijnen; bestaande
+ * dagen houden hun id; ontbrekende voertuigsleutels laten de bestaande
+ * waarde staan. Lege lijst = niet ingepland.
+ */
+export async function zetWerkbonDagen(
+  werkbonId: string,
+  dagen: DagPayload[],
+): Promise<{ data: Werkbon | null; error: string | null }> {
+  const { error } = await supabase.rpc('bb_werkbon_dagen_zetten', {
+    p_werkbon_id: werkbonId,
+    p_dagen: dagen,
+  });
+  if (error) {
+    if (__DEV__) console.log('[workOrderService.zetWerkbonDagen]', error.code, error.message);
+    const msg = error.message ?? '';
+    // Triggermeldingen (planningrecht, slot, voertuigen, max. 60 dagen) zijn
+    // zelf al leesbaar Nederlands.
+    if (error.code === 'P0001' || error.code === '42501' || /werkbon|dag|voertuig|planning/i.test(msg)) {
+      return { data: null, error: msg || describeError('zetWerkbonDagen', error) };
+    }
+    return { data: null, error: describeError('zetWerkbonDagen', error) };
+  }
+  return getWorkOrder(werkbonId) as Promise<{ data: Werkbon | null; error: string | null }>;
+}
+
+// ---------------------------------------------------------------------------
+// Agenda-items van een werkbon (syncWerkbonEvents van het dashboard)
+// ---------------------------------------------------------------------------
+
+function eventTijden(datum: string, start: string, eind: string) {
+  const s = lokaalNaarUtc(datum, start || '09:00');
+  if (!s) return { start_at: null, end_at: null };
+  const e = eind ? lokaalNaarUtc(datum, eind) : null;
+  return {
+    start_at: s.toISOString(),
+    end_at: (e ?? new Date(s.getTime() + 60 * 60 * 1000)).toISOString(),
+  };
+}
+
+/**
+ * Brengt `calendar_events` in lijn met de werkbon: één item per dag per
+ * persoon in de dagploeg (met diens tijd), vervallen planning-items weg,
+ * handmatige items blijven staan. Fire-and-forget na opslaan, net als het
+ * dashboard; een fout blokkeert de werkbon niet.
+ */
+export async function syncWerkbonEvents(werkbonId: string, companyId: string): Promise<{ error: string | null }> {
+  const { data: wb, error } = await supabase
+    .from('werkbonnen')
+    .select(
+      'id, titel, customer_id, omschrijving, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden )',
+    )
+    .eq('id', werkbonId)
+    .maybeSingle();
+  if (error) return { error: describeError('syncWerkbonEvents', error) };
+  if (!wb) return { error: null };
+  const w = wb as unknown as {
+    titel: string | null;
+    customer_id: string | null;
+    omschrijving: string | null;
+    assigned_to: string | null;
+    assigned_to_ids: string[] | null;
+    starttijd: string | null;
+    eindtijd: string | null;
+    werkbon_dagen: WerkbonDag[] | null;
+  };
+  const team = w.assigned_to_ids?.length ? w.assigned_to_ids : w.assigned_to ? [w.assigned_to] : [];
+
+  type Gewenst = { dag: WerkbonDag; persoon: string | null; start: string; eind: string; item?: Bestaand | null };
+  type Bestaand = { id: string; werkbon_dag_id: string | null; assigned_to: string | null; herkomst: string | null; start_at: string | null };
+
+  const gewenst: Gewenst[] = [];
+  for (const dag of w.werkbon_dagen ?? []) {
+    const dagStart = hhmm(dag.starttijd) || hhmm(w.starttijd);
+    const dagEind = hhmm(dag.eindtijd) || hhmm(w.eindtijd);
+    const ploeg = Array.isArray(dag.medewerker_ids) ? dag.medewerker_ids : team;
+    for (const persoon of ploeg.length ? ploeg : [null]) {
+      const eigen = persoon ? dag.medewerker_tijden?.[persoon] : null;
+      const start = hhmm(eigen?.starttijd) || dagStart;
+      const eind = hhmm(eigen?.eindtijd) || dagEind;
+      if (start) gewenst.push({ dag, persoon, start, eind });
+    }
+  }
+
+  const { data: bestaandData, error: leesFout } = await supabase
+    .from('calendar_events')
+    .select('id, werkbon_dag_id, assigned_to, herkomst, start_at')
+    .eq('werkbon_id', werkbonId);
+  if (leesFout) return { error: describeError('syncWerkbonEvents.lees', leesFout) };
+  const over = [...((bestaandData as Bestaand[]) ?? [])];
+  const pak = (pred: (e: Bestaand) => boolean) => {
+    const i = over.findIndex(pred);
+    return i < 0 ? null : (over.splice(i, 1)[0] ?? null);
+  };
+  for (const g of gewenst) {
+    g.item = pak((e) => e.werkbon_dag_id === g.dag.id && e.assigned_to === g.persoon);
+  }
+  for (const g of gewenst) {
+    if (g.item) continue;
+    g.item =
+      pak((e) => e.werkbon_dag_id === g.dag.id && !gewenst.some((x) => x.item?.id === e.id)) ??
+      pak((e) => !e.werkbon_dag_id && splitsLokaal(e.start_at).date === g.dag.datum);
+  }
+
+  const weg = over.filter((e) => e.werkbon_dag_id || e.herkomst === 'planning').map((e) => e.id);
+  if (weg.length) {
+    const { error: e } = await supabase.from('calendar_events').delete().in('id', weg);
+    if (e) return { error: describeError('syncWerkbonEvents.weg', e) };
+  }
+
+  const base = { title: w.titel || 'Werkbon', customer_id: w.customer_id || null, notes: w.omschrijving || null };
+  for (const g of gewenst) {
+    const velden = {
+      ...base,
+      assigned_to: g.persoon,
+      ...eventTijden(g.dag.datum, g.start, g.eind),
+      werkbon_dag_id: g.dag.id ?? null,
+    };
+    const { error: e } = g.item
+      ? await supabase.from('calendar_events').update(velden).eq('id', g.item.id)
+      : await supabase
+          .from('calendar_events')
+          .insert({ ...velden, company_id: companyId, werkbon_id: werkbonId, herkomst: 'planning' });
+    if (e) return { error: describeError('syncWerkbonEvents.schrijf', e) };
+  }
+  return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Meldingen aan collega's (notificatieService van het dashboard)
+// ---------------------------------------------------------------------------
+//
+// Collega-meldingen lopen via de bestaande Edge Function `create-notification`
+// (de RLS op `notifications` staat alleen self-insert toe). Alleen in-app: de
+// HTML-mail die het dashboard optioneel meestuurt bouwt de app (nog) niet.
+
+type NotificatieRij = {
+  user_id: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  link?: string | null;
+  related_type?: string | null;
+  related_id?: string | null;
+};
+
+async function pushNotificaties(rijen: NotificatieRij[]): Promise<void> {
+  if (!rijen.length) return;
+  try {
+    const { error } = await supabase.functions.invoke('create-notification', {
+      body: { notifications: rijen },
+    });
+    if (error && __DEV__) console.log('[werkbon] create-notification mislukt', error.message);
+  } catch (e) {
+    if (__DEV__) console.log('[werkbon] create-notification mislukt', e);
+  }
+}
+
+/**
+ * Na opslaan: wie nieuw gekoppeld is krijgt "Je bent toegewezen aan …", wie
+ * nieuw verantwoordelijk is "Je bent verantwoordelijk voor …" (en dan niet
+ * óók de toewijzing). Jezelf wordt overgeslagen.
+ */
+export async function meldToewijzingen(opts: {
+  werkbonId: string;
+  titel: string;
+  uitvoerders: string[];
+  verantwoordelijken: string[];
+  vorigeUitvoerders?: string[];
+  vorigeVerantwoordelijken?: string[];
+  maker: string | null;
+}): Promise<void> {
+  const link = `werkbonnen/${opts.werkbonId}`;
+  const prevV = new Set(opts.vorigeVerantwoordelijken ?? []);
+  const nieuweV = [...new Set(opts.verantwoordelijken)].filter((id) => !prevV.has(id) && id !== opts.maker);
+  const prevU = new Set(opts.vorigeUitvoerders ?? []);
+  const nieuweU = [...new Set(opts.uitvoerders)].filter(
+    (id) => !prevU.has(id) && id !== opts.maker && !nieuweV.includes(id),
+  );
+  await pushNotificaties([
+    ...nieuweU.map((uid) => ({
+      user_id: uid,
+      type: 'toewijzing_werkbon',
+      title: `Je bent toegewezen aan ${opts.titel}`,
+      body: null,
+      link,
+      related_type: 'werkbon',
+      related_id: opts.werkbonId,
+    })),
+    ...nieuweV.map((uid) => ({
+      user_id: uid,
+      type: 'verantwoordelijke_werkbon',
+      title: `Je bent verantwoordelijk voor ${opts.titel}`,
+      body: 'Jij bent het aanspreekpunt voor deze werkbon.',
+      link,
+      related_type: 'werkbon',
+      related_id: opts.werkbonId,
+    })),
+  ]);
+}
+
+/**
+ * Verzet/ingepland/afgehaald (meldPlanningWijziging): een in-app melding plus
+ * een rij in `planning_wijzigingen` voor de dagelijkse samenvatting.
+ */
+export async function meldPlanningWijziging(opts: {
+  companyId: string;
+  userIds: string[];
+  soort: 'verzet' | 'ingepland' | 'afgehaald';
+  werkbon: { id: string; nummer: string | null; titel: string; klant: string | null };
+  oud: { datum: string | null; start: string; eind: string };
+  nieuw?: { datum: string | null; start: string; eind: string };
+  maker: string | null;
+}): Promise<void> {
+  const ontvangers = [...new Set(opts.userIds.filter(Boolean))].filter((id) => id !== opts.maker);
+  if (!ontvangers.length) return;
+  const nieuw = opts.nieuw ?? { datum: null, start: '', eind: '' };
+  const omschrijf = (d: string | null, s: string) => (d ? `${d}${s ? ` om ${s}` : ''}` : 'niet ingepland');
+  const titel =
+    opts.soort === 'afgehaald'
+      ? `Je staat niet meer op ${opts.werkbon.titel || 'een klus'}`
+      : opts.soort === 'ingepland'
+        ? `Ingepland: ${opts.werkbon.titel || 'een klus'}`
+        : `Planning gewijzigd: ${opts.werkbon.titel || 'een klus'}`;
+  const body =
+    opts.soort === 'afgehaald'
+      ? `Was: ${omschrijf(opts.oud.datum, opts.oud.start)}`
+      : `Was ${omschrijf(opts.oud.datum, opts.oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
+  await pushNotificaties(
+    ontvangers.map((uid) => ({
+      user_id: uid,
+      type: 'planning_wijziging',
+      title: titel,
+      body,
+      link: 'planning',
+      related_type: 'werkbon',
+      related_id: opts.werkbon.id,
+    })),
+  );
+  const { error } = await supabase.from('planning_wijzigingen').insert(
+    ontvangers.map((uid) => ({
+      company_id: opts.companyId,
+      user_id: uid,
+      werkbon_id: opts.werkbon.id,
+      werkbon_nummer: opts.werkbon.nummer,
+      titel: opts.werkbon.titel,
+      klant: opts.werkbon.klant,
+      soort: opts.soort,
+      oude_datum: opts.oud.datum || null,
+      oude_start: opts.oud.start || null,
+      oude_eind: opts.oud.eind || null,
+      nieuwe_datum: nieuw.datum || null,
+      nieuwe_start: nieuw.start || null,
+      nieuwe_eind: nieuw.eind || null,
+    })),
+  );
+  if (error && __DEV__) console.log('[werkbon] planning_wijzigingen niet vastgelegd', error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Keuzelijsten voor het formulier
+// ---------------------------------------------------------------------------
+
+export type VoertuigKeuze = {
+  id: string;
+  naam: string;
+  kenteken: string | null;
+  kleur: string | null;
+  actief: boolean;
+  zitplaatsen: number | null;
+};
+
+/** Alle voertuigen (ook inactief: al gekozen blijft zichtbaar). */
+export async function listAlleVoertuigen(): Promise<{ data: VoertuigKeuze[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('voertuigen')
+    .select('id, naam, kenteken, kleur, actief, zitplaatsen')
+    .order('naam', { ascending: true });
+  if (error) return { data: [], error: describeError('listAlleVoertuigen', error) };
+  return { data: (data as VoertuigKeuze[]) ?? [], error: null };
+}
+
+/** Projecten voor de keuzelijst (gefilterd op klant in het formulier). */
+export async function listProjectKeuzes(): Promise<{
+  data: { id: string; name: string | null; customer_id: string | null }[];
+  error: string | null;
+}> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name, customer_id')
+    .order('name', { ascending: true })
+    .limit(1000);
+  if (error) return { data: [], error: describeError('listProjectKeuzes', error) };
+  return { data: (data as never) ?? [], error: null };
+}
+
+/** Leveranciers (ook inactief, voor de naam achter een regel). */
+export async function listLeveranciersNamen(): Promise<Record<string, string>> {
+  const { data } = await supabase.from('leveranciers').select('id, naam');
+  const map: Record<string, string> = {};
+  for (const r of (data as { id: string; naam: string | null }[]) ?? []) map[r.id] = r.naam ?? '';
+  return map;
 }
 
 /** Collega's van het eigen bedrijf, om een werkbon aan toe te wijzen. */

@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import type { ThemeColors } from '@/theme';
 import { HeaderActions } from './HeaderActions';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 export type AppTopBarVariant = 'default' | 'detail' | 'compact';
 
@@ -116,12 +117,13 @@ export function AppTopBar({
           ) : null}
         </View>
 
-        {rightAction || showProfileButton ? (
-          <View style={styles.right}>
-            {rightAction}
-            {showProfileButton ? <HeaderActions /> : null}
-          </View>
-        ) : null}
+        {/* Rechts: eventuele schermactie, dan altijd de themaknop (zelfde plek
+            op elke ingelogde pagina), en op hoofdpagina's meldingen, Boss en
+            profiel. */}
+        <View style={styles.right}>
+          {rightAction}
+          {showProfileButton ? <HeaderActions /> : <ThemeToggleButton />}
+        </View>
       </View>
     </View>
   );

@@ -20,13 +20,13 @@ import type { TimeEntry, UrenRegel, WerkbonUur } from '@/types/domain';
 // daarom precies de kolommen die in productie bestaan.
 const TIME_ENTRY_COLUMNS = `
   id, company_id, profile_id,
-  datum, start_tijd, eind_tijd, pauze_minuten, uren, type, notitie,
+  datum, start_tijd, eind_tijd, pauze_minuten, uren, reis_km, type, notitie,
   created_at, updated_at
 `;
 
 /**
  * Time entries for one profile in an inclusive date-range (YYYY-MM-DD).
- * RLS guarantees medewerkers only see their own rows; admin/planner can see all,
+ * RLS guarantees medewerkers only see their own rows; admin and the `planning` right see all,
  * but we still pin the filter to the caller's profile-id to keep the query intent
  * obvious.
  */
@@ -52,7 +52,7 @@ export async function listTimeEntriesForProfile(
 }
 
 /**
- * Company-wide entries in a range (admin/planner only — RLS enforces).
+ * Company-wide entries in a range (admin or `planning` right — RLS enforces).
  * Used for the team-section on Uren.
  */
 export async function listCompanyTimeEntries(
@@ -168,7 +168,7 @@ export async function listUrenForProfile(
   return { data, error: error ? 'Niet alle uren konden worden geladen.' : null };
 }
 
-/** Bedrijfsbreed overzicht in een periode (admin/planner). */
+/** Bedrijfsbreed overzicht in een periode (admin of recht planning; RLS). */
 export async function listCompanyUren(
   fromISO: string,
   toISO: string,
@@ -188,13 +188,15 @@ export async function listCompanyUren(
 
 export type CreateWerkdagUurInput = {
   company_id: string;
-  /** Van wie de uren zijn — de policy staat alleen je eigen rij toe (admin/planner breder). */
+  /** Van wie de uren zijn — de policy staat alleen je eigen rij toe (admin/recht planning breder). */
   profile_id: string;
   datum: string; // YYYY-MM-DD
   uren: number;
   start_tijd?: string | null; // HH:MM
   eind_tijd?: string | null; // HH:MM
   pauze_minuten?: number;
+  /** Gereden kilometers; null = niet ingevuld (≠ 0), zoals het dashboard. */
+  reis_km?: number | null;
   notitie?: string | null;
 };
 
@@ -231,6 +233,9 @@ export async function createWerkdagUur(
   for (const v of [input.start_tijd, input.eind_tijd]) {
     if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
   }
+  if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+  }
   if (
     input.pauze_minuten !== undefined &&
     (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)
@@ -250,6 +255,7 @@ export async function createWerkdagUur(
           start_tijd: input.start_tijd || null,
           eind_tijd: input.eind_tijd || null,
           pauze_minuten: input.pauze_minuten ?? 0,
+          reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
         })
         .select(TIME_ENTRY_COLUMNS),
@@ -265,7 +271,7 @@ export async function createWerkdagUur(
 /**
  * Werkdaguren (`urenregistratie`) wijzigen en verwijderen.
  *
- * De policy laat dit toe aan admin en planner, én aan de medewerker voor zijn
+ * De policy laat dit toe aan admin en het recht planning, én aan de medewerker voor zijn
  * eigen rijen. De 'eigen rij'-helft toetst de server; de app toont de knop en
  * meldt eerlijk als er niets is geraakt.
  *
@@ -281,6 +287,7 @@ export async function updateTimeEntry(
     eind_tijd?: string | null;
     pauze_minuten?: number;
     uren?: number;
+    reis_km?: number | null;
     notitie?: string | null;
   },
 ): Promise<WriteResult<TimeEntry>> {
@@ -318,6 +325,12 @@ export async function updateTimeEntry(
     updates.uren = uren;
   }
   if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
+  if (input.reis_km !== undefined) {
+    if (input.reis_km !== null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+      return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+    }
+    updates.reis_km = input.reis_km;
+  }
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
   updates.updated_at = new Date().toISOString();

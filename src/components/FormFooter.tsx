@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/providers';
 import type { ThemeColors } from '@/theme';
 import { Button } from './Button';
+import { leesbreedte } from '@/lib/schermklasseRegels';
 
 type Props = {
   label: string;
@@ -35,9 +36,11 @@ export function FormFooter({ label, onPress, loading, disabled, error, hint }: P
   const styles = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={[styles.balk, { paddingBottom: Math.max(insets.bottom, 16) + 6 }]}>
-      {error ? <Text style={styles.fout}>{error}</Text> : null}
-      <Button label={label} onPress={onPress} loading={loading} disabled={disabled} />
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      <View style={styles.inhoud}>
+        {error ? <Text style={styles.fout}>{error}</Text> : null}
+        <Button label={label} onPress={onPress} loading={loading} disabled={disabled} />
+        {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -50,8 +53,8 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.bg,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: t.line,
-      gap: 10,
     },
+    inhoud: { ...leesbreedte, gap: 10 },
     fout: {
       fontSize: 13,
       lineHeight: 18,

@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
-import { Image, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Monitor, Smartphone, TabletSmartphone } from 'lucide-react-native';
@@ -19,8 +19,56 @@ export default function InstallerenScreen() {
   const insets = useSafeAreaInsets();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { soort, installeer } = useInstallatie();
+  const { soort, apparaat, safari, installeer } = useInstallatie();
   const naarInloggen = () => router.replace('/(auth)/login');
+  const ios = apparaat === 'iphone' || apparaat === 'ipad';
+  // Eerst (en standaard alleen) de uitleg voor dit apparaat: op een iPad geen
+  // Android-stappen. De rest staat achter "andere apparaten".
+  const eigen: BlokSoort = ios ? 'ios' : apparaat === 'android' ? 'android' : 'computer';
+  const [alles, setAlles] = useState(false);
+
+  const blok: Record<BlokSoort, ReactNode> = {
+    ios: (
+      <Blok styles={styles} icoon={<Smartphone size={20} color={t.green700} />} titel="iPhone en iPad">
+        <Stap styles={styles} n={1}>Open deze pagina in Safari.</Stap>
+        <Stap styles={styles} n={2}>
+          Tik op <Text style={styles.vet}>Delen</Text> (het vierkantje met de pijl omhoog). Op een
+          iPad staat die rechtsboven, naast het adres.
+        </Stap>
+        <Stap styles={styles} n={3}>
+          Kies <Text style={styles.vet}>Zet op beginscherm</Text>. Staat het er niet bij, scrol dan
+          in het menu omlaag.
+        </Stap>
+        <Stap styles={styles} n={4}>
+          Tik op <Text style={styles.vet}>Voeg toe</Text>.
+        </Stap>
+      </Blok>
+    ),
+    android: (
+      <Blok styles={styles} icoon={<TabletSmartphone size={20} color={t.green700} />} titel="Android">
+        <Stap styles={styles} n={1}>Open deze pagina in Chrome.</Stap>
+        <Stap styles={styles} n={2}>
+          Open het menu (⋮) en kies <Text style={styles.vet}>App installeren</Text> of{' '}
+          <Text style={styles.vet}>Toevoegen aan startscherm</Text>. Staat hierboven een knop{' '}
+          <Text style={styles.vet}>Installeer BossBase</Text>, dan kan het ook daarmee.
+        </Stap>
+        <Stap styles={styles} n={3}>Bevestig met Installeren.</Stap>
+      </Blok>
+    ),
+    computer: (
+      <Blok styles={styles} icoon={<Monitor size={20} color={t.green700} />} titel="Computer">
+        <Stap styles={styles} n={1}>
+          <Text style={styles.vet}>Chrome of Edge:</Text> klik op het installatie-icoon rechts in de
+          adresbalk, of kies in het menu <Text style={styles.vet}>BossBase installeren</Text>.
+        </Stap>
+        <Stap styles={styles} n={2}>
+          <Text style={styles.vet}>Safari op een Mac:</Text> kies in de menubalk{' '}
+          <Text style={styles.vet}>Archief → Voeg toe aan Dock</Text>.
+        </Stap>
+      </Blok>
+    ),
+  };
+  const blokken: BlokSoort[] = [eigen, ...(['ios', 'android', 'computer'] as const).filter((b) => b !== eigen)];
 
   return (
     <ScrollView
@@ -64,40 +112,26 @@ export default function InstallerenScreen() {
             <Button label="Installeer BossBase" onPress={() => void installeer()} />
           ) : null}
 
-          <Blok styles={styles} icoon={<Smartphone size={20} color={t.green700} />} titel="iPhone en iPad">
-            <Stap styles={styles} n={1}>Open deze pagina in Safari.</Stap>
-            <Stap styles={styles} n={2}>
-              Tik op <Text style={styles.vet}>Delen</Text> (het vierkantje met de pijl omhoog).
-            </Stap>
-            <Stap styles={styles} n={3}>
-              Kies <Text style={styles.vet}>Zet op beginscherm</Text>. Staat het er niet bij, scrol
-              dan in het menu omlaag.
-            </Stap>
-            <Stap styles={styles} n={4}>
-              Tik op <Text style={styles.vet}>Voeg toe</Text>.
-            </Stap>
-          </Blok>
+          {ios && !safari ? (
+            <View style={styles.let}>
+              <Text style={styles.letTekst}>
+                Je opent deze pagina niet in Safari. Installeren op{' '}
+                {apparaat === 'ipad' ? 'een iPad' : 'een iPhone'} gaat het betrouwbaarst vanuit
+                Safari: kopieer het adres <Text style={styles.vet}>app.bossbase.nl/installeren</Text>{' '}
+                en open het in Safari.
+              </Text>
+            </View>
+          ) : null}
 
-          <Blok styles={styles} icoon={<TabletSmartphone size={20} color={t.green700} />} titel="Android">
-            <Stap styles={styles} n={1}>Open deze pagina in Chrome.</Stap>
-            <Stap styles={styles} n={2}>
-              Open het menu (⋮) en kies <Text style={styles.vet}>App installeren</Text> of{' '}
-              <Text style={styles.vet}>Toevoegen aan startscherm</Text>. Staat hierboven een knop{' '}
-              <Text style={styles.vet}>Installeer BossBase</Text>, dan kan het ook daarmee.
-            </Stap>
-            <Stap styles={styles} n={3}>Bevestig met Installeren.</Stap>
-          </Blok>
+          {blokken.filter((b) => b === eigen || alles).map((b) => (
+            <View key={b}>{blok[b]}</View>
+          ))}
 
-          <Blok styles={styles} icoon={<Monitor size={20} color={t.green700} />} titel="Computer">
-            <Stap styles={styles} n={1}>
-              <Text style={styles.vet}>Chrome of Edge:</Text> klik op het installatie-icoon rechts in
-              de adresbalk, of kies in het menu <Text style={styles.vet}>BossBase installeren</Text>.
-            </Stap>
-            <Stap styles={styles} n={2}>
-              <Text style={styles.vet}>Safari op een Mac:</Text> kies in de menubalk{' '}
-              <Text style={styles.vet}>Archief → Voeg toe aan Dock</Text>.
-            </Stap>
-          </Blok>
+          {!alles ? (
+            <Pressable onPress={() => setAlles(true)} accessibilityRole="button" hitSlop={8}>
+              <Text style={styles.meer}>Instructies voor andere apparaten</Text>
+            </Pressable>
+          ) : null}
 
           <Button label="Naar inloggen" variant="secondary" onPress={naarInloggen} />
         </>
@@ -107,6 +141,7 @@ export default function InstallerenScreen() {
 }
 
 type Styles = ReturnType<typeof makeStyles>;
+type BlokSoort = 'ios' | 'android' | 'computer';
 
 function Blok({ styles, icoon, titel, children }: { styles: Styles; icoon: ReactNode; titel: string; children: ReactNode }) {
   return (
@@ -132,7 +167,17 @@ function Stap({ styles, n, children }: { styles: Styles; n: number; children: Re
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    inhoud: { paddingHorizontal: spacing.xl, gap: spacing.lg },
+    // Op een iPad of desktop een leesbare kolom in het midden.
+    inhoud: {
+      paddingHorizontal: spacing.xl,
+      gap: spacing.lg,
+      width: '100%',
+      maxWidth: 640,
+      alignSelf: 'center',
+    },
+    let: { padding: spacing.md, borderRadius: radius.lg, backgroundColor: t.statusWarnBg },
+    letTekst: { ...typography.body, color: t.statusWarnFg },
+    meer: { ...typography.small, color: t.muted, textDecorationLine: 'underline', textAlign: 'center' },
     merk: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     merkTekst: { fontSize: 22, fontWeight: '800', fontFamily: fonts.bold, letterSpacing: -0.4 },
     icoon: { width: 72, height: 72, borderRadius: 16, marginTop: spacing.sm },

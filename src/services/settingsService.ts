@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
-import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
+import { normaliseerIban, valideerIban } from '@/lib/relatieValidatie';
+import { getCompanyId, getSessionStand, isReadonly, withCompanyId } from '@/lib/sessionContext';
+import { classificeerFout, schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 
 /**
  * Bedrijfsinstellingen (`bedrijfsinstellingen`) en bedrijfsgegevens
@@ -20,8 +21,13 @@ import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 const SETTINGS_COLUMNS = `
   id, company_id, uurtarief, reiskosten_per_km, standaard_marge,
   btw_pct, offerte_geldig_dagen, btw_stelsel, auto_sync_google_calendar,
-  uren_herinnering_interval_min, agenda_start_uur, agenda_eind_uur
+  uren_herinnering_interval_min, uren_herinnering_moment, uren_herinnering_dagen,
+  uren_herinnering_mail, uren_herinnering_uitgesloten, agenda_start_uur, agenda_eind_uur
 `;
+
+/** Wanneer de urenherinnering komt (`uren_herinnering_moment`). */
+export type HerinneringMoment = 'na_werkdag' | 'einde_dag' | 'volgende_ochtend';
+const MOMENTEN: readonly HerinneringMoment[] = ['na_werkdag', 'einde_dag', 'volgende_ochtend'];
 
 export type CompanySettings = {
   id: string | null;
@@ -34,6 +40,13 @@ export type CompanySettings = {
   btw_stelsel: string;
   auto_sync_google_calendar: boolean;
   uren_herinnering_interval_min: number;
+  uren_herinnering_moment: HerinneringMoment;
+  /** ISO-weekdagen (1 = maandag … 7 = zondag). */
+  uren_herinnering_dagen: number[];
+  /** true = melding in de app én per mail. */
+  uren_herinnering_mail: boolean;
+  /** Profiel-id's die GEEN herinnering krijgen; leeg = iedereen. */
+  uren_herinnering_uitgesloten: string[];
   agenda_start_uur: number;
   agenda_eind_uur: number;
 };
@@ -49,9 +62,15 @@ const STANDAARD: CompanySettings = {
   offerte_geldig_dagen: 14,
   btw_stelsel: 'factuur',
   auto_sync_google_calendar: false,
-  uren_herinnering_interval_min: 0,
+  // Zelfde terugval als `toBedrijfsinstellingen` in het dashboard: zonder rij
+  // staat de herinnering elk uur aan, de volgende ochtend, alle dagen.
+  uren_herinnering_interval_min: 60,
+  uren_herinnering_moment: 'volgende_ochtend',
+  uren_herinnering_dagen: [1, 2, 3, 4, 5, 6, 7],
+  uren_herinnering_mail: false,
+  uren_herinnering_uitgesloten: [],
   agenda_start_uur: 7,
-  agenda_eind_uur: 19,
+  agenda_eind_uur: 20,
 };
 
 type SettingsDb = Partial<Record<keyof CompanySettings, unknown>>;
@@ -73,6 +92,16 @@ function toSettings(row: SettingsDb | null): CompanySettings {
       row.uren_herinnering_interval_min,
       STANDAARD.uren_herinnering_interval_min,
     ),
+    uren_herinnering_moment: MOMENTEN.includes(row.uren_herinnering_moment as HerinneringMoment)
+      ? (row.uren_herinnering_moment as HerinneringMoment)
+      : STANDAARD.uren_herinnering_moment,
+    uren_herinnering_dagen: Array.isArray(row.uren_herinnering_dagen)
+      ? (row.uren_herinnering_dagen as unknown[]).map(Number)
+      : [...STANDAARD.uren_herinnering_dagen],
+    uren_herinnering_mail: row.uren_herinnering_mail === true,
+    uren_herinnering_uitgesloten: Array.isArray(row.uren_herinnering_uitgesloten)
+      ? (row.uren_herinnering_uitgesloten as unknown[]).map(String)
+      : [],
     agenda_start_uur: num(row.agenda_start_uur, STANDAARD.agenda_start_uur),
     agenda_eind_uur: num(row.agenda_eind_uur, STANDAARD.agenda_eind_uur),
   };
@@ -107,6 +136,11 @@ export type SettingsInput = Partial<
     | 'offerte_geldig_dagen'
     | 'btw_stelsel'
     | 'auto_sync_google_calendar'
+    | 'uren_herinnering_interval_min'
+    | 'uren_herinnering_moment'
+    | 'uren_herinnering_dagen'
+    | 'uren_herinnering_mail'
+    | 'uren_herinnering_uitgesloten'
     | 'agenda_start_uur'
     | 'agenda_eind_uur'
   >
@@ -126,6 +160,10 @@ function valideerSettings(input: SettingsInput): string | null {
     bereik(input.offerte_geldig_dagen, 1, 365, 'geldigheidsduur in dagen') ??
     bereik(input.agenda_start_uur, 0, 23, 'startuur') ??
     bereik(input.agenda_eind_uur, 1, 24, 'einduur') ??
+    bereik(input.uren_herinnering_interval_min, 0, 1440, 'herhaalinterval') ??
+    (input.uren_herinnering_moment && !MOMENTEN.includes(input.uren_herinnering_moment)
+      ? 'Kies wanneer de herinnering komt.'
+      : null) ??
     (input.btw_stelsel && !['kas', 'factuur'].includes(input.btw_stelsel)
       ? 'Kies kas- of factuurstelsel.'
       : null) ??
@@ -162,12 +200,28 @@ export async function upsertCompanySettings(
   zetGetal('offerte_geldig_dagen');
   zetGetal('agenda_start_uur');
   zetGetal('agenda_eind_uur');
+  zetGetal('uren_herinnering_interval_min');
+  if (input.uren_herinnering_moment != null) {
+    updates.uren_herinnering_moment = input.uren_herinnering_moment;
+  }
+  if (Array.isArray(input.uren_herinnering_dagen)) {
+    updates.uren_herinnering_dagen = [...new Set(input.uren_herinnering_dagen.map(Number))].sort(
+      (a, b) => a - b,
+    );
+  }
+  if (typeof input.uren_herinnering_mail === 'boolean') {
+    updates.uren_herinnering_mail = input.uren_herinnering_mail;
+  }
+  if (Array.isArray(input.uren_herinnering_uitgesloten)) {
+    updates.uren_herinnering_uitgesloten = input.uren_herinnering_uitgesloten;
+  }
   if (input.btw_stelsel != null) updates.btw_stelsel = input.btw_stelsel;
   if (input.auto_sync_google_calendar != null) {
     updates.auto_sync_google_calendar = input.auto_sync_google_calendar;
   }
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  updates.updated_at = new Date().toISOString();
 
   const { data: bestaand } = await supabase
     .from('bedrijfsinstellingen')
@@ -217,7 +271,7 @@ export async function upsertCompanySettings(
 
 const COMPANY_COLUMNS = `
   id, name, kvk, btw_number, email, phone, address, city, postal_code,
-  website, logo_url, branding_color, reply_to_email
+  website, logo_url, branding_color, reply_to_email, iban, iban_tnv
 `;
 
 export type CompanyRow = {
@@ -234,6 +288,9 @@ export type CompanyRow = {
   logo_url: string | null;
   branding_color: string | null;
   reply_to_email: string | null;
+  /** Komt op de facturen (migratie 20261002132507_iban_op_factuur). */
+  iban: string | null;
+  iban_tnv: string | null;
 };
 
 export async function getCompany(): Promise<{ data: CompanyRow | null; error: string | null }> {
@@ -264,10 +321,13 @@ export type CompanyInput = Partial<
     | 'postal_code'
     | 'website'
     | 'reply_to_email'
+    | 'branding_color'
+    | 'iban'
+    | 'iban_tnv'
   >
 >;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function updateCompany(input: CompanyInput): Promise<WriteResult<CompanyRow>> {
   const companyId = getCompanyId();
@@ -276,13 +336,30 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
   if (input.name !== undefined && !input.name.trim()) {
     return writeFout('validatie', 'De bedrijfsnaam mag niet leeg zijn.');
   }
-  for (const veld of ['email', 'reply_to_email'] as const) {
-    const v = input[veld];
-    if (v && !EMAIL_RE.test(v.trim())) return writeFout('validatie', 'Dit e-mailadres klopt niet.');
+  if (input.email && !EMAIL_RE.test(input.email.trim())) {
+    return writeFout('validatie', 'E-mailadres heeft geen geldig formaat');
+  }
+  if (input.reply_to_email && !EMAIL_RE.test(input.reply_to_email.trim())) {
+    return writeFout('validatie', 'Antwoord e-mailadres heeft geen geldig formaat');
+  }
+  if (input.kvk && !/^\d{8}$/.test(input.kvk.trim())) {
+    return writeFout('validatie', 'KvK-nummer moet 8 cijfers bevatten');
+  }
+  if (input.branding_color && !/^#[0-9a-fA-F]{6}$/.test(input.branding_color.trim())) {
+    return writeFout('validatie', 'Kies een merkkleur als hexcode, bijvoorbeeld #1DDB62.');
+  }
+
+  // IBAN: dezelfde mod-97-controle als de database (bb_iban_geldig); opslaan
+  // zonder spaties in hoofdletters, zoals het dashboard.
+  if (input.iban) {
+    const fout = valideerIban(input.iban);
+    if (fout) return writeFout('validatie', fout);
   }
 
   const updates: Record<string, unknown> = {};
+  if (input.iban !== undefined) updates.iban = normaliseerIban(input.iban);
   for (const veld of [
+    'iban_tnv',
     'name',
     'kvk',
     'btw_number',
@@ -293,12 +370,12 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
     'postal_code',
     'website',
     'reply_to_email',
+    'branding_color',
   ] as const) {
     const v = input[veld];
     if (v !== undefined) updates[veld] = v?.trim() || null;
   }
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
-  updates.updated_at = new Date().toISOString();
 
   return schrijf<CompanyRow>(
     () => supabase.from('companies').update(updates).eq('id', companyId).select(COMPANY_COLUMNS),
@@ -308,6 +385,72 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
       leegSoort: 'geen-rechten',
       leegMelding:
         'De bedrijfsgegevens zijn niet opgeslagen. Alleen een beheerder kan ze wijzigen.',
+    },
+  );
+}
+
+// ── Logo ───────────────────────────────────────────────────────────────────
+
+/**
+ * Logo uploaden zoals het dashboard: bucket `bedrijf-logos`, pad
+ * `{companyId}/logo.{ext}` (upsert), oude `logo.*` met een andere extensie
+ * opruimen, daarna `companies.logo_url` zetten. Alleen JPG en PNG: het logo
+ * komt in e-mails en PDF's terecht, en die tonen WebP niet betrouwbaar.
+ */
+export async function uploadBedrijfslogo(input: {
+  bytes: ArrayBuffer;
+  contentType: string;
+  extensie: string;
+}): Promise<WriteResult<CompanyRow>> {
+  const companyId = getCompanyId();
+  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (input.contentType !== 'image/jpeg' && input.contentType !== 'image/png') {
+    return writeFout(
+      'validatie',
+      "Dit bestandstype wordt niet ondersteund. Het logo komt ook in e-mails en PDF's terecht — gebruik JPG of PNG.",
+    );
+  }
+  // Bucket `bedrijf-logos` heeft file_size_limit 5 MB; groter weigert de server.
+  if (input.bytes.byteLength > 5 * 1024 * 1024) {
+    return writeFout('validatie', 'Het logo is groter dan 5 MB.');
+  }
+  // De storage-policy op `bedrijf-logos` toetst alleen de bedrijfsmap, niet de
+  // rol. Zonder deze check zou een niet-beheerder `logo.*` kunnen overschrijven
+  // (zelfde URL, dus direct zichtbaar in mails/PDF's) terwijl de update van
+  // `companies.logo_url` daarna door RLS wordt geweigerd.
+  if (getSessionStand().role !== 'admin') {
+    return writeFout('geen-rechten', 'Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.');
+  }
+  const ext = input.extensie === 'png' ? 'png' : 'jpg';
+  const pad = `${companyId}/logo.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('bedrijf-logos')
+    .upload(pad, input.bytes, { upsert: true, contentType: input.contentType });
+  if (upErr) {
+    return classificeerFout({ message: upErr.message }, 'settingsService.uploadBedrijfslogo', isReadonly());
+  }
+  const { data: pub } = supabase.storage.from('bedrijf-logos').getPublicUrl(pad);
+
+  try {
+    const { data: bestaand } = await supabase.storage.from('bedrijf-logos').list(companyId);
+    const wezen = (bestaand ?? [])
+      .filter((f) => /^logo\./i.test(f.name) && `${companyId}/${f.name}` !== pad)
+      .map((f) => `${companyId}/${f.name}`);
+    if (wezen.length) await supabase.storage.from('bedrijf-logos').remove(wezen);
+  } catch {
+    /* opruimen mag het uploaden niet laten falen */
+  }
+
+  // Zelfde publieke URL als het dashboard opslaat (zonder query), zodat PDF's
+  // en mails hem op dezelfde manier ophalen.
+  const url = pub.publicUrl;
+  return schrijf<CompanyRow>(
+    () => supabase.from('companies').update({ logo_url: url }).eq('id', companyId).select(COMPANY_COLUMNS),
+    {
+      context: 'settingsService.uploadBedrijfslogo',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.',
     },
   );
 }

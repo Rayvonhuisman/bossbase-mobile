@@ -128,6 +128,8 @@ export type Customer = {
   moneybird_id: string | null;
   created_at: string;
   updated_at?: string | null;
+  /** Particulier | Zakelijk | VvE | Aannemer, of null (customers_type_check). */
+  type?: string | null;
 };
 
 export type CustomerType = 'Zakelijk' | 'Particulier' | 'Lead';

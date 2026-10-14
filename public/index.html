@@ -29,6 +29,12 @@
       in lichte modus; MobielKader zet hem bij wisselen van thema bij.
     -->
     <meta name="theme-color" content="#F3F4F6" />
+    <!--
+      Zet het gekozen thema (licht/donker) vóór de eerste weergave, zodat er bij
+      openen geen lichte of donkere flits is. Extern bestand: de CSP staat geen
+      inline scripts toe. Zelfde sleutel en regels als src/lib/themaKeuze.ts.
+    -->
+    <script src="/thema-start.js"></script>
 
     <!-- iOS: beginschermicoon en weergave zonder Safari-balken. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -74,6 +80,9 @@
       [role='button']:focus-visible,
       [role='link']:focus-visible,
       [role='tab']:focus-visible,
+      [role='checkbox']:focus-visible,
+      [role='switch']:focus-visible,
+      [tabindex='0']:focus-visible,
       a:focus-visible {
         outline: 2px solid #22c55e;
         outline-offset: 2px;

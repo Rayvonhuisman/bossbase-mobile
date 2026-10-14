@@ -16,6 +16,7 @@ import { MobielKader } from './MobielKader';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
+import { useFocusTerug } from '@/lib/focusTerug';
 
 type Props = {
   visible: boolean;
@@ -66,6 +67,8 @@ export function FormSheet({
   // Web: ligt het toetsenbord over de homebalk, dan is die ruimte niet nodig.
   // Native: altijd false.
   const toetsenbordOpen = useToetsenbordOpen();
+  // Web: na sluiten (ook met Escape) de focus terug naar de knop die het opende.
+  useFocusTerug(visible);
 
   // Tijdens het opslaan mag het formulier niet dicht: anders verdwijnt de
   // uitkomst voordat iemand hem gezien heeft.
@@ -82,7 +85,7 @@ export function FormSheet({
       onRequestClose={sluit}
     >
       {/* Op web staat het vel op telefoonbreedte, net als de app eronder. */}
-      <MobielKader>
+      <MobielKader soort="formulier">
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: t.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -195,7 +198,7 @@ const makeStyles = (t: ThemeColors) =>
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       backgroundColor: t.card,
-      shadowColor: '#0A2E1F',
+      shadowColor: '#0D0D0D',
       shadowOpacity: 0.12,
       shadowRadius: 40,
       shadowOffset: { width: 0, height: -10 },

@@ -28,6 +28,7 @@ export function AppCard({ children, style, onPress, padding = 14, variant = 'car
   if (onPress) {
     return (
       <Pressable
+        accessibilityRole="button"
         onPress={onPress}
         style={({ pressed }) => [...base, pressed && { opacity: 0.92 }]}
       >

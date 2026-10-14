@@ -56,6 +56,8 @@ export function TopBar({
   return (
     <View style={styles.topBar}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Terug"
         onPress={() => terugOfNaar(router, '/')}
         hitSlop={8}
         style={[styles.backBtn, { opacity: showBack ? 1 : 0 }]}
@@ -89,6 +91,9 @@ export function PrimaryButton({
   const isDisabled = disabled || loading;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      aria-busy={!!loading}
       onPress={onPress}
       disabled={isDisabled}
       style={({ pressed }) => [
@@ -123,6 +128,9 @@ export function GreenButton({
   const isDisabled = disabled || loading;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      aria-busy={!!loading}
       onPress={onPress}
       disabled={isDisabled}
       style={({ pressed }) => [
@@ -144,6 +152,7 @@ export function GreenButton({
 export function GhostLink({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
+      accessibilityRole="link"
       onPress={onPress}
       style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.6 }]}
     >
@@ -191,7 +200,7 @@ export function Field({ label, hint, isPassword, error, ...props }: FieldProps) 
           style={styles.fieldInput}
         />
         {isPassword ? (
-          <Pressable onPress={() => setShow((v) => !v)} hitSlop={6}>
+          <Pressable accessibilityRole="button" accessibilityLabel={show ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'} onPress={() => setShow((v) => !v)} hitSlop={6}>
             {show ? (
               <EyeOff size={18} color={onb.muted} strokeWidth={2} />
             ) : (

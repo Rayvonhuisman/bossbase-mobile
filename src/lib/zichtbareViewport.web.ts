@@ -58,8 +58,12 @@ export function berekenViewport(
   const hoogte = Math.round(vv.height);
   const boven = Math.max(0, Math.round(vv.offsetTop));
   const toetsenbordOpen = layout - hoogte > TOETSENBORD_DREMPEL;
-  // Zonder toetsenbord en zonder verschuiving: gewoon de volle ruimte.
-  if (!toetsenbordOpen && boven === 0) return VOL;
+  // Zonder toetsenbord: gewoon de volle ruimte. Ook als de visual viewport
+  // kort verschoven lijkt (bij het opstarten van de geïnstalleerde app meldt
+  // iOS soms even een offset): dan géén hoogte en géén transform op het kader,
+  // zodat de eerste weergave geen eigen compositielaag krijgt. Het document
+  // zelf zetten we al terug naar 0 (zie `installeer`).
+  if (!toetsenbordOpen) return VOL;
   return { hoogte, boven, toetsenbordOpen };
 }
 
@@ -68,6 +72,11 @@ function meet(): ZichtbareViewport {
     window.visualViewport,
     document.documentElement.clientHeight || window.innerHeight,
   );
+}
+
+function nietIngezoomd(): boolean {
+  const vv = window.visualViewport;
+  return !vv || Math.abs(vv.scale - 1) <= 0.01;
 }
 
 function isTekstveld(el: Element | null): el is HTMLElement {
@@ -145,7 +154,10 @@ function installeer() {
   vv?.addEventListener('scroll', bijwerken);
   window.addEventListener('resize', bijwerken);
   // De app scrolt nooit het document; schuift iOS het toch, zet het terug.
+  // Niet bij inzoomen: wie met twee vingers inzoomt (vergrootglas,
+  // toegankelijkheid) moet het beeld vrij kunnen verschuiven.
   window.addEventListener('scroll', () => {
+    if (!nietIngezoomd()) return;
     if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
   });
   // Een element met `overflow: hidden` (zoals het kader van de app) is niet
@@ -176,7 +188,7 @@ function installeer() {
   huidig = meet();
 }
 
-function abonneer(luisteraar: () => void): () => void {
+export function abonneer(luisteraar: () => void): () => void {
   installeer();
   luisteraars.add(luisteraar);
   return () => {
@@ -185,6 +197,11 @@ function abonneer(luisteraar: () => void): () => void {
 }
 
 const snapshot = () => huidig;
+
+/** Voor tests: hoeveel schermen luisteren nu mee. */
+export function aantalLuisteraars(): number {
+  return luisteraars.size;
+}
 const serverSnapshot = () => VOL;
 
 export function useZichtbareViewport(): ZichtbareViewport {

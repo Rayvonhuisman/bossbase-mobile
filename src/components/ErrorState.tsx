@@ -81,5 +81,10 @@ const makeStyles = (t: ThemeColors) =>
     action: {
       marginTop: 8,
       alignSelf: 'stretch',
+      // Op een telefoon over de volle breedte; op een iPad of desktop niet
+      // breder dan een normale knop.
+      width: '100%',
+      maxWidth: 360,
+      marginHorizontal: 'auto',
     },
   });
