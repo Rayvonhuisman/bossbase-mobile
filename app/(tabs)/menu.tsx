@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -40,6 +41,7 @@ import { useHulp } from '@/providers/HulpProvider';
 import { readonlyTekst } from '@/lib/permissions';
 import { avatarKleuren, initialen } from '@/lib/avatar';
 import { useSchermklasse } from '@/lib/schermklasse';
+import { sectieGewicht, verdeelOverKolommen } from '@/lib/menuKolommen';
 import { FAQ_URL, HULP_TELEFOON, HULP_TELEFOON_LINK, KENNISBANK_URL } from '@/lib/hulp';
 import { dsShadow, spacing, type ThemeColors } from '@/theme';
 
@@ -136,6 +138,37 @@ export default function MenuScreen() {
 
   const secties = groepen.map((g) => ({ ...g, items: zichtbaar(g.items) })).filter((g) => g.items.length > 0);
 
+  // Alle blokken onder het profiel, in menuvolgorde. Een sectie zonder
+  // zichtbare onderdelen is hierboven al weggevallen en laat dus geen ruimte na.
+  const blokken: { key: string; gewicht: number; inhoud: ReactNode }[] = [
+    ...[...secties, { titel: 'Ondersteuning', items: ondersteuning }].map((g) => ({
+      key: g.titel,
+      gewicht: sectieGewicht(g.items.length),
+      inhoud: <Group title={g.titel} items={g.items} />,
+    })),
+    {
+      key: 'Weergave',
+      gewicht: sectieGewicht(1),
+      inhoud: (
+        <>
+          <AppSection title="Weergave" variant="eyebrow" />
+          <View style={styles.donkerRij}>
+            <View style={styles.donkerIcoon}>
+              <Moon size={18} color={t.ink2} />
+            </View>
+            <Text style={styles.donkerTitel}>Donkere modus</Text>
+            <Switch
+              value={colorMode === 'dark'}
+              onValueChange={toggleColorMode}
+              accessibilityLabel="Donkere modus"
+              trackColor={{ true: t.green, false: t.lineStrong }}
+            />
+          </View>
+        </>
+      ),
+    },
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AppScreen
@@ -188,28 +221,18 @@ export default function MenuScreen() {
           </View>
         ) : null}
 
-        {/* Op een iPad twee kolommen; op een telefoon (en in Split View) één. */}
-        <View style={tablet ? styles.raster : undefined}>
-          {[...secties, { titel: 'Ondersteuning', items: ondersteuning }].map((g) => (
-            <View key={g.titel} style={tablet ? styles.kolom : undefined}>
-              <Group title={g.titel} items={g.items} />
+        {/* Op een iPad twee onafhankelijke kolommen; op een telefoon (en in
+            Split View) één. Eén lijst met blokken, verdeeld in aaneengesloten
+            delen: elke kolom stapelt zelf, dus een hoge sectie links laat
+            rechts geen gat achter, en de focusvolgorde blijft kolom voor kolom. */}
+        <View style={tablet ? styles.kolommen : undefined}>
+          {(tablet ? verdeelOverKolommen(blokken, (b) => b.gewicht) : [blokken]).map((kolom, i) => (
+            <View key={i} style={tablet ? styles.kolom : undefined}>
+              {kolom.map((b) => (
+                <View key={b.key}>{b.inhoud}</View>
+              ))}
             </View>
           ))}
-          <View style={tablet ? styles.kolom : undefined}>
-            <AppSection title="Weergave" variant="eyebrow" />
-            <View style={styles.donkerRij}>
-              <View style={styles.donkerIcoon}>
-                <Moon size={18} color={t.ink2} />
-              </View>
-              <Text style={styles.donkerTitel}>Donkere modus</Text>
-              <Switch
-                value={colorMode === 'dark'}
-                onValueChange={toggleColorMode}
-                accessibilityLabel="Donkere modus"
-                trackColor={{ true: t.green, false: t.lineStrong }}
-              />
-            </View>
-          </View>
         </View>
       </AppScreen>
     </View>
@@ -262,8 +285,8 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.card,
     },
     bijNaamTekst: { flexShrink: 1, fontSize: 13.5, fontWeight: '600', color: t.ink },
-    raster: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
-    kolom: { width: '50%' },
+    kolommen: { flexDirection: 'row', alignItems: 'flex-start' },
+    kolom: { flex: 1, minWidth: 0 },
     donkerRij: {
       marginHorizontal: 16,
       flexDirection: 'row',
