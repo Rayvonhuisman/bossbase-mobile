@@ -125,3 +125,32 @@ instellingen schreven ongewijzigde velden; logo-hint 10 MB i.p.v. 5 MB; urenlabe
 
 **Rollen/pakketten:** alleen beheerder + Team getest; er bestaan geen andere testaccounts of testbedrijven
 (medewerker, Groei, alleen-lezen). Geblokkeerd tot er veilige fixtures zijn.
+
+## 6. iPad-hertest: twee visuele problemen (2026-10-14)
+
+### Menu met witte ruimtes
+**Oorzaak (vastgesteld in code en gemeten):** `app/(tabs)/menu.tsx` zette op tablet elke sectie in een eigen
+cel van 50% breed binnen één container met `flexDirection: 'row'`, `flexWrap: 'wrap'`. Daardoor vormden
+Hoofdmenu+Uitvoering, Financieel+Ondersteuning en Weergave elk een *rij*; een rij is zo hoog als de hoogste
+sectie, dus onder Hoofdmenu (4 items naast 6) en Financieel (3 naast 5) bleef een lege vlakte, en Weergave
+kwam los op een derde rij. Gemeten op 820×1180 (oud): koppen links op y=238, 686, 1067 met ±130 px leegte.
+**Oplossing:** één lijst met blokken (secties zonder zichtbare onderdelen vallen er vóór het verdelen uit),
+verdeeld in twee aaneengesloten delen (`src/lib/menuKolommen.ts`, knip op de laagste hoogste kolom), elk een
+eigen verticale stapel. DOM- en focusvolgorde: eerst de linkerkolom, dan de rechter. Telefoon en Split View
+(< 700 px) blijven één kolom met dezelfde volgorde.
+
+### Onscherpe bovenkant bij koude start
+**Bevinding (code en meting in Chromium; WebKit op echte hardware niet te automatiseren):** er zit geen
+`filter`, `backdrop-filter` of blur in de app. Bij de eerste weergave staan er wél extra compositielagen:
+1. elke ScrollView krijgt van react-native-web `transform: translateZ(0)` — daarin staat de kop van elk scherm;
+2. `AnimatedScreen` start bij de eerste focus met opacity 0,9 en translateY 8 en laat na afloop
+   `transform: translateY(0px)` staan, een blijvende eigen laag;
+3. `MobielKader` kreeg een hoogte en transform zodra `visualViewport.offsetTop` ≠ 0, ook zonder toetsenbord.
+In een geïnstalleerde iPad-app tekent iOS de eerste weergave tijdens de opstartanimatie. Een gecomposite laag
+waarvan de inhoud daarna niet meer verandert (de statische kop) houdt die eerste tegels; de inhoud eronder
+wordt door het laden van gegevens opnieuw getekend en is dus wél scherp. Weg- en terugnavigeren tekent de kop
+opnieuw — precies het waargenomen gedrag. Dat dit het mechanisme op het toestel is, is een afleiding: de
+simulator kon niet als geïnstalleerde app worden gestart. **Oplossing (geen timeouts of hermounts):** geen
+geforceerde laag op de ScrollView van `AppScreen` (web), geen ingang-animatie op de allereerste weergave en
+geen opacity/transform meer na afloop van een animatie, en het kader alleen verschuiven als het toetsenbord
+echt open is. Bevestiging op een echte iPad volgt in de hertest.

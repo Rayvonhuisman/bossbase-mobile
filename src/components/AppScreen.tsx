@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -134,7 +135,7 @@ export function AppScreen({
       <StatusBar style={barStyle} />
       <ScrollView
         ref={scrollRef}
-        style={{ flex: 1 }}
+        style={styles.scroll}
         contentContainerStyle={[
           { paddingTop: contentPaddingTop, paddingBottom: scrollPaddingBottom },
           contentContainerStyle,
@@ -192,6 +193,12 @@ export function AppScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  // react-native-web geeft elke ScrollView `transform: translateZ(0)` om een
+  // eigen compositielaag af te dwingen. Moderne browsers scrollen zonder die
+  // truc soepel, en in een geïnstalleerde iPad-app hield die laag de tegels
+  // van de eerste weergave vast: de vaste kop bovenaan bleef onscherp tot je
+  // weg- en terugnavigeerde. Zonder geforceerde laag tekent de kop gewoon mee.
+  scroll: Platform.OS === 'web' ? ({ flex: 1, transform: 'none' } as unknown as ViewStyle) : { flex: 1 },
   trek: {
     position: 'absolute',
     alignSelf: 'center',

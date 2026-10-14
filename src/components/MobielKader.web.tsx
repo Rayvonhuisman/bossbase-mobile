@@ -63,8 +63,9 @@ export function MobielKader({
           flexShrink: 0,
           flexBasis: 'auto',
           height: viewport.hoogte,
-          transform: [{ translateY: viewport.boven }],
         },
+        // Alleen een transform als er echt iets te verschuiven is.
+        viewport.hoogte !== null && viewport.boven !== 0 && { transform: [{ translateY: viewport.boven }] },
       ]}
     >
       <View
