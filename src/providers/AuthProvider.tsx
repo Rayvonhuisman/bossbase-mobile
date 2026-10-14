@@ -52,10 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // every TOKEN_REFRESHED event.
   const lastFetchedUserId = useRef<string | null>(null);
 
-  const loadProfile = useCallback(async (userId: string) => {
-    setStatus('loading-profile');
+  // `stil`: verversen terwijl er al een profiel staat (na opslaan in
+  // Instellingen of Profiel). Dan géén 'loading-profile': de schermlayouts
+  // tonen bij die status een laadscherm, waardoor de navigatiestapel opnieuw
+  // opbouwt en de gebruiker op een ander scherm uitkomt. Een mislukte stille
+  // verversing laat het bestaande profiel staan.
+  const loadProfile = useCallback(async (userId: string, stil = false) => {
+    if (!stil) setStatus('loading-profile');
     setProfileError(null);
     const result = await fetchProfileWithCompany(userId);
+    if (!result.ok && stil) return;
     if (!result.ok) {
       if (__DEV__) {
         console.log('[AuthProvider] profile load failed', {
@@ -186,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const userId = session?.user.id;
     if (!userId) return;
-    await loadProfile(userId);
+    await loadProfile(userId, true);
   }, [session, loadProfile]);
 
   const value: AuthContextValue = {
