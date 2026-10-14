@@ -94,3 +94,34 @@ eigen bedrijf). Een gebruiker kan dus geen ander bedrijf, profiel of eigenaar me
 | teamlid (de)activeren / verwijderen | Team | Edge `delete-team-member` | Edge | admin | **nee** | — |
 | account deactiveren | Profiel | RPC `delete_own_account` | RPC | eigen | **nee** | — |
 | meldpunt / Boss | Hulp | Edge `meldpunt` / `boss-chat` | Edge | ingelogd | **nee** (mail / extern AI) | — |
+
+## 5. Praktijktest op de afgeschermde Preview (2026-10-14)
+
+Preview `dpl_2kzPANqiVWPvLUYmCapFmgRKNpAk` (commit `237b54f`), testbedrijf **test audit** (pakket Team, proef),
+gebruiker Niels Test Audit (beheerder), Supabase `mawzqpnsluljxpbarhng`. Chromium (Playwright), 1180×820.
+
+**Alleen lezen (27 routes):** allemaal geladen, 0× 4xx/5xx, 0 consolefouten, 0 paginafouten, 6–20 verzoeken per
+pagina (geen lussen). Aantallen gelijk aan de database (3 klanten, 2 leveranciers, 2 facturen, € 150 kosten).
+Factuurdetail met PDF (lijst + signed URL), Boss, meldingen en Bug of idee openen correct; niets verstuurd.
+
+**Mutaties (allemaal via de app-UI, prefix `APP-TEST –`):** klant aanmaken/wijzigen/verwijderen, klantnotitie,
+leverancier (IBAN-controle blokkeert ongeldig zonder verzoek) aanmaken/wijzigen/notitie/verwijderen, kostenregel
+(€ 121 incl. → € 100 excl.) aanmaken/wijzigen/verwijderen, project aanmaken/verwijderen (bedragen via
+`bb_projectbedragen`), activiteit aanmaken/wijzigen/afronden/verwijderen (tijdzone correct), werkbon meerdaags
+aanmaken (RPC + 2 agenda-items), planning aanpassen (dag verzet, eigen tijd), taak, meerwerk, interne notitie,
+materiaal (subtotaal door trigger, inkoop, spiegel-`job_costs`), werkbonuren (afronding 5 min), werkdaguren
+aanmaken/wijzigen/verwijderen, werkbonfoto uploaden/verwijderen (rij + storage). Elke actie: precies één verzoek,
+juiste `company_id`, juiste gebruiker, geen duplicaten. 0 notifications, 0 planning_wijzigingen, 0 mails.
+
+**Niet uitgevoerd (blokkade):** conceptofferte/-factuur (trigger schrijft `plan_usage_events`, niet op te ruimen
+zonder service-role); instellingen (formulier zette `''` → NULL — hersteld in `ff4b6ba`, nog niet live getest).
+
+**Restant in testbedrijf:** werkbon `WB-001` (`940cfeea…`) met 1 werkbonuur en 2 notities. Werkbonnen en
+werkbonuren zijn in app én dashboard niet via de UI te verwijderen. Inert gemaakt (geen klant, dagen, medewerkers,
+agenda-items). Opruimen vraagt een handmatige delete met toestemming (cascade ruimt uren en notities op).
+
+**Gevonden en hersteld:** knoppen/keuzes zonder rol of `aria-checked` op web; foto verscheen pas na herladen;
+instellingen schreven ongewijzigde velden; logo-hint 10 MB i.p.v. 5 MB; urenlabels (`ff4b6ba`, `7c6546d`).
+
+**Rollen/pakketten:** alleen beheerder + Team getest; er bestaan geen andere testaccounts of testbedrijven
+(medewerker, Groei, alleen-lezen). Geblokkeerd tot er veilige fixtures zijn.
