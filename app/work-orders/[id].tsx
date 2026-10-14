@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -164,10 +164,22 @@ export default function WorkOrderDetailScreen() {
   const [materialModal, setMaterialModal] = useState(false);
   const [startModal, setStartModal] = useState(false);
   const [fotoBezig, setFotoBezig] = useState<FotoCategorie | null>(null);
+  // Bestandskiezer open (nog geen bestand gekozen): knoppen uit, zodat een
+  // dubbele klik geen tweede kiezer en dus geen dubbele upload geeft. De ref
+  // is het echte slot — state is pas na de volgende render bijgewerkt.
+  const [fotoKiezen, setFotoKiezen] = useState(false);
+  const fotoSlot = useRef(false);
+  // Telt lokale foto-wijzigingen (upload/verwijderen). Een herlaadactie die
+  // al liep vóór zo'n wijziging heeft een verouderde lijst en mag de lokale
+  // lijst niet overschrijven. Op web start het terugkeren uit de
+  // bestandskiezer (camera, fotobibliotheek) zo'n herlaadactie; die kwam dan
+  // ná de upload binnen en wiste de nieuwe foto tot de pagina herladen werd.
+  const fotoMutatie = useRef(0);
 
   const load = useCallback(async () => {
     if (!id) return;
     setError(null);
+    const fotoStand = fotoMutatie.current;
 
     const [woResult, urenResult, matResult, taskResult, noteResult, photoResult, levs] = await Promise.all([
       getWorkOrder(id),
@@ -207,7 +219,8 @@ export default function WorkOrderDetailScreen() {
     setMaterials(matResult.data);
     setTasks(taskResult.data);
     setNotes(noteResult.data);
-    setPhotos(photoResult.data);
+    // Alleen overnemen als er intussen lokaal niets aan de foto's veranderde.
+    if (fotoMutatie.current === fotoStand) setPhotos(photoResult.data);
     setLeveranciers(levs);
     setPartialErrors({
       uren: urenResult.error,
@@ -399,7 +412,7 @@ export default function WorkOrderDetailScreen() {
 
   // ── Foto's ──────────────────────────────────────────────────────────────
   const kiesFoto = (categorie: FotoCategorie) => {
-    if (!workOrder) return;
+    if (!workOrder || fotoSlot.current || fotoBezig) return;
     Dialog.alert(`Foto toevoegen · ${FOTO_CATEGORIE_STIJL[categorie].label}`, 'Waar komt de foto vandaan?', [
       { text: 'Camera', onPress: () => pakEnUpload('camera', categorie) },
       { text: 'Fotobibliotheek', onPress: () => pakEnUpload('bibliotheek', categorie) },
@@ -408,7 +421,9 @@ export default function WorkOrderDetailScreen() {
   };
 
   const pakEnUpload = async (bron: 'camera' | 'bibliotheek', categorie: FotoCategorie) => {
-    if (!workOrder) return;
+    if (!workOrder || fotoSlot.current) return;
+    fotoSlot.current = true;
+    setFotoKiezen(true);
     try {
       // Op web geen toestemming vragen: elke await vóór de kiezer kan in
       // Safari de gebruikersactie laten verlopen.
@@ -456,18 +471,26 @@ export default function WorkOrderDetailScreen() {
         Dialog.alert('Foto niet opgeslagen', fotoError ?? 'Probeer het opnieuw.');
         return;
       }
-      setPhotos((prev) => [...prev, data]);
+      // Meteen tonen; een lopende herlaadactie mag dit niet meer wissen.
+      fotoMutatie.current += 1;
+      setPhotos((prev) => (prev.some((f) => f.id === data.id) ? prev : [...prev, data]));
     } catch (e) {
       setFotoBezig(null);
       if (__DEV__) console.log('[werkbon] foto toevoegen mislukt', e);
       Dialog.alert('Foto niet opgeslagen', 'Er ging iets mis bij het toevoegen van de foto.');
+    } finally {
+      fotoSlot.current = false;
+      setFotoKiezen(false);
     }
   };
 
   const handleDeletePhoto = (foto: WorkOrderPhoto) =>
     bevestigVerwijderen('Foto verwijderen?', 'De foto wordt definitief verwijderd.', async () => {
       const { error: e } = await deleteWorkOrderPhoto(foto.id, foto.url);
-      if (!e) setPhotos((prev) => prev.filter((f) => f.id !== foto.id));
+      if (!e) {
+        fotoMutatie.current += 1;
+        setPhotos((prev) => prev.filter((f) => f.id !== foto.id));
+      }
       return e;
     });
 
@@ -930,6 +953,7 @@ export default function WorkOrderDetailScreen() {
                         {lijst.map((ph) => (
                           <View key={ph.id}>
                             <Pressable
+                              accessibilityRole="button"
                               onPress={() => openUrl(ph.url)}
                               accessibilityLabel={`Foto ${stijl.label} openen`}
                               style={({ pressed }) => [pressed && { opacity: 0.85 }]}
@@ -938,6 +962,7 @@ export default function WorkOrderDetailScreen() {
                             </Pressable>
                             {canEdit ? (
                               <Pressable
+                                accessibilityRole="button"
                                 onPress={() => handleDeletePhoto(ph)}
                                 accessibilityLabel="Foto verwijderen"
                                 hitSlop={8}
@@ -951,9 +976,11 @@ export default function WorkOrderDetailScreen() {
                         {canEdit ? (
                           <Pressable
                             onPress={() => kiesFoto(cat)}
-                            disabled={!!fotoBezig}
+                            disabled={!!fotoBezig || fotoKiezen}
                             accessibilityRole="button"
                             accessibilityLabel={`Foto toevoegen bij ${stijl.label}`}
+                            accessibilityState={{ disabled: !!fotoBezig || fotoKiezen, busy: fotoBezig === cat }}
+                            aria-busy={fotoBezig === cat}
                             style={({ pressed }) => [styles.fotoToevoegen, pressed && { opacity: 0.8 }]}
                           >
                             {fotoBezig === cat ? (
@@ -998,6 +1025,7 @@ export default function WorkOrderDetailScreen() {
                         {canEdit ? (
                           <View style={styles.stepper}>
                             <Pressable
+                              accessibilityRole="button"
                               onPress={() => handleMaterialAmount(m, m.aantal - 1)}
                               disabled={m.aantal <= 1}
                               accessibilityLabel={`Eén ${m.naam} minder`}
@@ -1006,6 +1034,7 @@ export default function WorkOrderDetailScreen() {
                               <Text style={styles.stepText}>−</Text>
                             </Pressable>
                             <Pressable
+                              accessibilityRole="button"
                               onPress={() => handleMaterialAmount(m, m.aantal + 1)}
                               accessibilityLabel={`Eén ${m.naam} meer`}
                               style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }]}
@@ -1016,6 +1045,7 @@ export default function WorkOrderDetailScreen() {
                         ) : null}
                         {canDelMaterial ? (
                           <Pressable
+                            accessibilityRole="button"
                             onPress={() => handleDeleteMaterial(m)}
                             accessibilityLabel={`${m.naam} verwijderen`}
                             style={({ pressed }) => [styles.iconKnop, pressed && { opacity: 0.6 }]}
@@ -1080,7 +1110,7 @@ export default function WorkOrderDetailScreen() {
               title="Notities"
               action={canNote ? <KopKnop styles={styles} label="+ Notitie" onPress={() => setNoteModal(true)} /> : null}
             >
-              <View style={styles.tabRij}>
+              <View style={styles.tabRij} accessibilityRole="tablist">
                 {(['intern', 'klant'] as const).map((tab) => {
                   const aan = notitieTab === tab;
                   return (
@@ -1089,6 +1119,7 @@ export default function WorkOrderDetailScreen() {
                       onPress={() => setNotitieTab(tab)}
                       accessibilityRole="tab"
                       accessibilityState={{ selected: aan }}
+                      aria-selected={aan}
                       style={[styles.tab, aan && styles.tabAan]}
                     >
                       <Text style={[styles.tabTekst, aan && styles.tabTekstAan]}>
@@ -1356,6 +1387,7 @@ function TaskRow({
         disabled={busy}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: task.afgerond, disabled }}
+        aria-checked={task.afgerond}
         accessibilityLabel={task.omschrijving}
         style={({ pressed }) => [styles.taskPress, pressed && !busy && { opacity: 0.7 }]}
       >
@@ -1371,6 +1403,7 @@ function TaskRow({
       {busy ? <ActivityIndicator size="small" color={ds.green700} /> : null}
       {onDelete ? (
         <Pressable
+          accessibilityRole="button"
           onPress={onDelete}
           accessibilityLabel={`${task.omschrijving} verwijderen`}
           style={({ pressed }) => [styles.iconKnop, pressed && { opacity: 0.6 }]}
@@ -1677,6 +1710,7 @@ function AddMaterialModal({
                         onPress={() => setEenheid(e)}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: eenheid === e }}
+                        aria-checked={eenheid === e}
                         style={[styles.keuzeChip, eenheid === e && styles.keuzeChipAan]}
                       >
                         <Text style={[styles.keuzeChipTekst, eenheid === e && { color: th.green700 }]}>{e}</Text>
@@ -1840,6 +1874,7 @@ function AddTimeEntryModal({
                     onPress={() => setPauzeStr(String(m))}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: pauze === m }}
+                    aria-checked={pauze === m}
                     style={[styles.keuzeChip, pauze === m && styles.keuzeChipAan]}
                   >
                     <Text style={[styles.keuzeChipTekst, pauze === m && { color: th.green700 }]}>{m}</Text>

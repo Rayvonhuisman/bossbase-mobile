@@ -129,7 +129,7 @@ export function NieuweAanvraagSheet({
 
       <View style={{ gap: spacing.xs }}>
         <Text style={styles.label}>Klant</Text>
-        <View style={styles.rij}>
+        <View style={styles.rij} accessibilityRole="tablist">
           {(
             [
               ['bestaand', 'Bestaande klant'],
@@ -141,6 +141,7 @@ export function NieuweAanvraagSheet({
               onPress={() => setKlantModus(id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: klantModus === id }}
+              aria-selected={klantModus === id}
               style={[styles.chip, klantModus === id && styles.chipAan]}
             >
               <Text style={[styles.chipTekst, klantModus === id && styles.chipTekstAan]}>{label}</Text>
@@ -186,6 +187,7 @@ export function NieuweAanvraagSheet({
                 onPress={() => setPrio(String(p.id))}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: aan }}
+                aria-checked={aan}
                 style={[styles.chip, aan && styles.chipAan]}
               >
                 <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>

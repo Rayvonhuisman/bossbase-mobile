@@ -658,6 +658,7 @@ function ExpensesScreenInhoud() {
                   disabled={concept?.opSlot}
                   accessibilityRole="button"
                   accessibilityState={{ selected: actief }}
+                  aria-pressed={actief}
                   style={[styles.chip, actief && styles.chipActief]}
                 >
                   <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{o.label}</Text>
@@ -699,6 +700,7 @@ function ExpensesScreenInhoud() {
                   onPress={() => setConcept((c) => (c ? { ...c, category: cat } : c))}
                   accessibilityRole="button"
                   accessibilityState={{ selected: actief }}
+                  aria-pressed={actief}
                   style={[styles.chip, actief && styles.chipActief]}
                 >
                   <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{cat}</Text>

@@ -290,6 +290,7 @@ export default function HoursScreen() {
                     }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
+                    aria-pressed={on}
                     style={[styles.scopeKnop, on && [styles.scopeKnopAan, dsShadow]]}
                   >
                     <Text style={[styles.scopeTekst, on && styles.scopeTekstAan]}>

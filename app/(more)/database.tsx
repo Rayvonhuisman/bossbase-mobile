@@ -376,6 +376,7 @@ function DatabaseInhoud() {
                   onPress={wisselPagina}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: allesOpPagina }}
+                  aria-checked={allesOpPagina}
                   style={styles.vinkKnop}
                 >
                   <View style={[styles.vak, allesOpPagina && styles.vakAan]}>
@@ -421,6 +422,7 @@ function DatabaseInhoud() {
                           onPress={() => wisselEen(c.id)}
                           accessibilityRole="checkbox"
                           accessibilityState={{ checked: aan }}
+                          aria-checked={aan}
                           accessibilityLabel={`${c.name} selecteren`}
                           style={styles.rijVink}
                         >

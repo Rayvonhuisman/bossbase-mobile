@@ -94,6 +94,7 @@ export function AppHeader({
           {rightSlot}
           {actions?.map((a, idx) => (
             <Pressable
+              accessibilityRole="button"
               key={idx}
               onPress={a.onPress}
               accessibilityLabel={a.label}

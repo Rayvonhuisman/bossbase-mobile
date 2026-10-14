@@ -730,6 +730,7 @@ function Keuze({
               disabled={uitgeschakeld}
               accessibilityRole="button"
               accessibilityState={{ selected: actief, disabled: uitgeschakeld }}
+              aria-pressed={actief}
               style={[styles.chip, actief && styles.chipActief, uitgeschakeld && styles.halfZichtbaar]}
             >
               <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{o.label}</Text>

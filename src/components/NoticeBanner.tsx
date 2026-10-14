@@ -42,7 +42,7 @@ export function NoticeBanner({ title, message, toon = 'waarschuwing', onPress }:
 
   if (!onPress) return inhoud;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.9 }]}>
       {inhoud}
     </Pressable>
   );

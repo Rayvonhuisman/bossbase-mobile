@@ -81,6 +81,7 @@ export function VerlorenSheet({
                 onPress={() => setReden(r)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: aan }}
+                aria-checked={aan}
                 style={[styles.chip, aan && styles.chipAan]}
               >
                 <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{r}</Text>

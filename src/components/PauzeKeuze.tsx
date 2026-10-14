@@ -30,6 +30,7 @@ export function PauzeKeuze({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: aan }}
+      aria-pressed={aan}
       style={({ pressed }) => [styles.knop, aan && styles.knopAan, pressed && { opacity: 0.85 }]}
     >
       <Text style={[styles.knopTekst, aan && styles.knopTekstAan]}>{tekst}</Text>

@@ -68,7 +68,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[ftStyles.wrap, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
-      <View style={[ftStyles.bar, { backgroundColor: t.barBg, borderColor: t.barBorder }]}>
+      <View accessibilityRole="tablist" style={[ftStyles.bar, { backgroundColor: t.barBg, borderColor: t.barBorder }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key]!;
           const label =
@@ -94,8 +94,9 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           return (
             <Pressable
               key={route.key}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              aria-selected={focused}
               accessibilityLabel={label}
               onPress={onPress}
               onLongPress={onLongPress}
@@ -155,6 +156,7 @@ export default function TabsLayout() {
         <View style={styles.errorActions}>
           <Button label="Opnieuw proberen" onPress={refreshProfile} />
           <Pressable
+            accessibilityRole="button"
             onPress={() =>
               Dialog.alert('Uitloggen?', undefined, [
                 { text: 'Annuleren', style: 'cancel' },

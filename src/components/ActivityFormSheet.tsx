@@ -215,6 +215,7 @@ export function ActivityFormSheet({
                   disabled={alleenLezen}
                   accessibilityRole="button"
                   accessibilityState={{ selected: actief, disabled: alleenLezen }}
+                  aria-pressed={actief}
                   style={[styles.chip, actief && styles.chipActief]}
                 >
                   <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>

@@ -37,6 +37,7 @@ export function InstalleerBossBase() {
         onPress={onPress}
         accessibilityRole="button"
         accessibilityState={soort === 'ios' ? { expanded: iosUitleg } : undefined}
+        aria-expanded={soort === 'ios' ? iosUitleg : undefined}
         style={({ pressed }) => [styles.knop, pressed && { opacity: 0.7 }]}
       >
         <Download size={17} color={t.green700} strokeWidth={2.2} />

@@ -67,6 +67,9 @@ export default function RoleScreen() {
           const on = selected === r.id;
           return (
             <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              aria-checked={on}
               key={r.id}
               onPress={() => setSelected(r.id)}
               style={({ pressed }) => [

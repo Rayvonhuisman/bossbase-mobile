@@ -376,6 +376,7 @@ export function WerkbonFormulier({
                     onPress={() => setStatus(s)}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: aan }}
+                    aria-checked={aan}
                     style={[styles.chip, aan && { backgroundColor: st.bg, borderColor: st.kleur }]}
                   >
                     <View style={[styles.dot, { backgroundColor: st.dot }]} />
@@ -495,6 +496,7 @@ export function WerkbonFormulier({
                                 onPress={() => setPlanning((p) => wisselPersoonOpDag(p, iso, pid, uitvoerders))}
                                 accessibilityRole="checkbox"
                                 accessibilityState={{ checked: aan }}
+                                aria-checked={aan}
                                 accessibilityLabel={`${naam(pid)} op ${korteDatum(iso)}`}
                                 style={[styles.chip, aan ? styles.chipAan : styles.chipUit]}
                               >
@@ -544,6 +546,7 @@ export function WerkbonFormulier({
                       onPress={() => wisselUitvoerder(c.id)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: aan }}
+                      aria-checked={aan}
                       accessibilityLabel={c.full_name ?? 'Medewerker'}
                       style={styles.rijHoofd}
                     >
@@ -564,6 +567,7 @@ export function WerkbonFormulier({
                       onPress={() => wisselVerantwoordelijke(c.id)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: verantw }}
+                      aria-checked={verantw}
                       accessibilityLabel={`${c.full_name ?? 'Medewerker'} verantwoordelijk`}
                       hitSlop={6}
                       style={styles.sterKnop}
@@ -599,6 +603,7 @@ export function WerkbonFormulier({
                         }
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: aan }}
+                        aria-checked={aan}
                         style={[styles.chip, aan ? styles.chipAan : null]}
                       >
                         <View style={[styles.dot, { backgroundColor: v.kleur ?? ds.green }]} />
@@ -676,11 +681,11 @@ function Kalender({
   return (
     <View style={styles.kalender}>
       <View style={styles.kalKop}>
-        <Pressable onPress={() => schuif(-1)} accessibilityLabel="Vorige maand" style={styles.kalNav}>
+        <Pressable accessibilityRole="button" onPress={() => schuif(-1)} accessibilityLabel="Vorige maand" style={styles.kalNav}>
           <ChevronLeft size={20} color={t.ink2} />
         </Pressable>
         <Text style={styles.kalTitel}>{maandNaam(maand.jaar, maand.maand)}</Text>
-        <Pressable onPress={() => schuif(1)} accessibilityLabel="Volgende maand" style={styles.kalNav}>
+        <Pressable accessibilityRole="button" onPress={() => schuif(1)} accessibilityLabel="Volgende maand" style={styles.kalNav}>
           <ChevronRight size={20} color={t.ink2} />
         </Pressable>
       </View>
@@ -698,6 +703,7 @@ function Kalender({
               disabled={uit}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: gekozen.includes(iso), disabled: uit }}
+              aria-checked={gekozen.includes(iso)}
               accessibilityLabel={korteDatum(iso)}
               style={styles.kalVak}
             >

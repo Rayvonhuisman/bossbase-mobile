@@ -492,7 +492,7 @@ export default function TodayScreen() {
                   {huidigeTijd ? <Text style={styles.blockMeta}>{huidigeTijd}</Text> : null}
                 </View>
                 <View style={styles.currentCard}>
-                  <Pressable onPress={() => openPlanningItem(huidige)} style={{ gap: 10 }}>
+                  <Pressable accessibilityRole="button" onPress={() => openPlanningItem(huidige)} style={{ gap: 10 }}>
                     <View style={styles.currentTopRow}>
                       <Text style={styles.currentId}>
                         {huidige.number ?? huidige.typeLabel.toUpperCase()}
@@ -536,7 +536,7 @@ export default function TodayScreen() {
             <View style={styles.block}>
               <View style={styles.blockHead}>
                 <Text style={styles.blockTitle}>Planning vandaag</Text>
-                <Pressable onPress={() => router.push('/(tabs)/planning')} hitSlop={8}>
+                <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/planning')} hitSlop={8}>
                   <Text style={styles.blockLink}>Agenda ›</Text>
                 </Pressable>
               </View>
@@ -644,7 +644,7 @@ export default function TodayScreen() {
             <View style={styles.block}>
               <View style={styles.blockHead}>
                 <Text style={styles.blockTitle}>Deze week</Text>
-                <Pressable onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
+                <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
                   <Text style={styles.blockLink}>Uren ›</Text>
                 </Pressable>
               </View>
@@ -947,6 +947,7 @@ function TimelineRow({
         {laatste ? null : <View style={styles.tlLine} />}
       </View>
       <Pressable
+        accessibilityRole={tappable ? 'button' : undefined}
         onPress={tappable ? onPress : undefined}
         style={({ pressed }) => [styles.tlCard, pressed && tappable && { opacity: 0.95 }]}
       >

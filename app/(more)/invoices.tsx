@@ -924,6 +924,7 @@ function InvoicesScreenInhoud() {
                     onPress={() => setConcept((c) => (c ? { ...c, status: s.id } : c))}
                     accessibilityRole="button"
                     accessibilityState={{ selected: actief }}
+                    aria-pressed={actief}
                     style={[styles.chip, actief && styles.chipActief]}
                   >
                     <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>

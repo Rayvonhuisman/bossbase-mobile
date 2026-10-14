@@ -262,6 +262,7 @@ export default function ActivitiesScreen() {
                 onPress={() => setFilter(aan ? 'all' : s.id)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: aan }}
+                aria-pressed={aan}
                 accessibilityLabel={`${s.label}: ${s.aantal}`}
                 style={({ pressed }) => [
                   styles.tegel,

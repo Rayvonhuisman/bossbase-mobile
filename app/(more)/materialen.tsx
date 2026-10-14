@@ -337,6 +337,7 @@ function MateriaalSheet({
               onPress={() => setEenheid(e)}
               accessibilityRole="radio"
               accessibilityState={{ selected: eenheid === e }}
+              aria-checked={eenheid === e}
               style={[styles.chip, eenheid === e && styles.chipAan]}
             >
               <Text style={[styles.chipTekst, eenheid === e && { color: t.green700 }]}>{e}</Text>
@@ -378,6 +379,7 @@ function MateriaalSheet({
               onPress={() => setBtw(p)}
               accessibilityRole="radio"
               accessibilityState={{ selected: btw === p }}
+              aria-checked={btw === p}
               style={[styles.chip, btw === p && styles.chipAan]}
             >
               <Text style={[styles.chipTekst, btw === p && { color: t.green700 }]}>{p}%</Text>

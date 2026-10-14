@@ -523,6 +523,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                         onPress={() => wijzigPrio(String(p.id))}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: aan }}
+                        aria-checked={aan}
                         style={[styles.chip, aan && styles.chipAan]}
                       >
                         <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
@@ -1129,6 +1130,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                     onPress={() => setBewerk({ ...bewerk, type: ty })}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: aan }}
+                    aria-checked={aan}
                     style={[styles.chip, aan && styles.chipAan]}
                   >
                     <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{activiteitTypeLabel(ty)}</Text>

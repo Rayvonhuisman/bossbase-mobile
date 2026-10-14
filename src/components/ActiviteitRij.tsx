@@ -157,6 +157,7 @@ export function ActiviteitRij({
           disabled={vinkBezig}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: klaar, disabled: !!vinkBezig }}
+          aria-checked={klaar}
           accessibilityLabel={klaar ? `${a.title ?? 'Activiteit'} heropenen` : `${a.title ?? 'Activiteit'} markeren als gereed`}
           style={({ pressed }) => [styles.vinkVlak, (pressed || vinkBezig) && { opacity: 0.6 }]}
         >

@@ -325,6 +325,7 @@ export default function NewTimeEntryScreen() {
                     onPress={() => setSoort(k)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
+                    aria-pressed={on}
                     style={({ pressed }) => [
                       styles.keuzeKnop,
                       on && styles.keuzeKnopOn,
@@ -387,7 +388,7 @@ export default function NewTimeEntryScreen() {
             <View style={styles.rij}>
               <View style={{ flex: 1 }}>
                 <TimeField
-                  label="Van"
+                  label="Starttijd"
                   value={van}
                   onChange={(v) => {
                     const r = rondAfOpVijf(v);
@@ -398,7 +399,7 @@ export default function NewTimeEntryScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <TimeField label="Tot" value={tot} onChange={(v) => setTot(rondAfOpVijf(v))} placeholder="Kies" />
+                <TimeField label="Eindtijd" value={tot} onChange={(v) => setTot(rondAfOpVijf(v))} placeholder="Kies" />
               </View>
             </View>
 

@@ -355,6 +355,7 @@ function PlanningbordScreen() {
                   onPress={() => setAnker(d)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: aan }}
+                  aria-pressed={aan}
                   style={[styles.dagKnop, aan && styles.dagKnopAan, d === vandaag && !aan && styles.dagKnopVandaag]}
                 >
                   <Text style={[styles.dagKnopTekst, aan && styles.dagKnopTekstAan]}>{dagKort(d)}</Text>
@@ -460,6 +461,7 @@ function PlanningbordScreen() {
                     onPress={() => setGekozen(r.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: aan }}
+                    aria-pressed={aan}
                     style={[styles.chip, aan && styles.chipAan]}
                   >
                     <View style={[styles.dot, { backgroundColor: r.kleur }]} />
@@ -498,6 +500,7 @@ function PlanningbordScreen() {
             onPress={() => setLosOpen((o) => !o)}
             accessibilityRole="button"
             accessibilityState={{ expanded: losOpen }}
+            aria-expanded={losOpen}
             style={styles.losKop}
           >
             <Text style={styles.losTitel}>Niet ingepland ({los.length})</Text>
@@ -565,6 +568,7 @@ function Schakel({
             onPress={() => onChange(id)}
             accessibilityRole="button"
             accessibilityState={{ selected: aan }}
+            aria-pressed={aan}
             style={[styles.schakelKnop, aan && [styles.schakelKnopAan, dsShadow]]}
           >
             <Text style={[styles.schakelTekst, aan && styles.schakelTekstAan]}>{label}</Text>

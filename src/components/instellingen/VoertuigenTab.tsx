@@ -184,6 +184,7 @@ export function VoertuigenTab() {
                 accessibilityRole="button"
                 accessibilityLabel={`Kleur ${k.label}`}
                 accessibilityState={{ selected: gekozen }}
+                aria-pressed={gekozen}
                 style={{
                   width: 44,
                   height: 44,

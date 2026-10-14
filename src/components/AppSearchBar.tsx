@@ -22,6 +22,8 @@ export function AppSearchBar({ value = '', onChange, placeholder, asButton, onPr
   if (asButton) {
     return (
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={placeholder ?? 'Zoeken'}
         onPress={onPress}
         style={({ pressed }) => [styles.bar, pressed && { opacity: 0.85 }]}
       >
@@ -45,7 +47,7 @@ export function AppSearchBar({ value = '', onChange, placeholder, asButton, onPr
         clearButtonMode="never"
       />
       {value.length > 0 && onChange ? (
-        <Pressable hitSlop={6} onPress={() => onChange('')}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Zoekopdracht wissen" hitSlop={6} onPress={() => onChange('')}>
           <X size={16} color={t.muted2} strokeWidth={2} />
         </Pressable>
       ) : null}

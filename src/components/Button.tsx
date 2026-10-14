@@ -11,13 +11,30 @@ type Props = Omit<PressableProps, 'children'> & {
   loading?: boolean;
 };
 
-export function Button({ label, variant = 'primary', loading, disabled, style, ...rest }: Props) {
+export function Button({
+  label,
+  variant = 'primary',
+  loading,
+  disabled,
+  style,
+  accessibilityLabel,
+  accessibilityRole,
+  ...rest
+}: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const isDisabled = disabled || loading;
   return (
     <Pressable
       {...rest}
+      // Zonder rol is dit op het web een kale <div>: schermlezers en
+      // toetsenbordgebruikers zien dan geen knop. Het label blijft leesbaar
+      // terwijl de knop een spinner toont.
+      accessibilityRole={accessibilityRole ?? 'button'}
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      aria-disabled={!!isDisabled}
+      aria-busy={!!loading}
       disabled={isDisabled}
       style={(state) => [
         styles.base,

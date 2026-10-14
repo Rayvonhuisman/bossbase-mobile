@@ -437,11 +437,14 @@ export default function PlanningScreen() {
       >
         {/* View toggle */}
         <View style={styles.toggleWrap}>
-          <View style={styles.toggleGroup}>
+          <View style={styles.toggleGroup} accessibilityRole="tablist">
             {(['dag', 'week', 'maand'] as const).map((v) => {
               const on = view === v;
               return (
                 <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                  aria-selected={on}
                   key={v}
                   onPress={() => setView(v)}
                   style={[styles.toggleBtn, on && [styles.toggleBtnOn, dsShadow]]}
@@ -456,6 +459,7 @@ export default function PlanningScreen() {
         {/* Period navigation */}
         <View style={styles.navRow}>
           <Pressable
+            accessibilityRole="button"
             onPress={() => step(-1)}
             hitSlop={6}
             accessibilityLabel="Vorige periode"
@@ -467,6 +471,7 @@ export default function PlanningScreen() {
             {periodLabel}
           </Text>
           <Pressable
+            accessibilityRole="button"
             onPress={goToday}
             hitSlop={6}
             accessibilityLabel="Naar vandaag"
@@ -475,6 +480,7 @@ export default function PlanningScreen() {
             <Text style={styles.todayBtnText}>Vandaag</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
             onPress={() => step(1)}
             hitSlop={6}
             accessibilityLabel="Volgende periode"
@@ -695,6 +701,7 @@ function DagView({
               onPress={() => onSelectDay(d)}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
+              aria-pressed={on}
               accessibilityLabel={`${NL_DAYS_SHORT[(d.getDay() + 6) % 7]} ${d.getDate()}${heeftWerk ? ', heeft werk' : ''}`}
               style={({ pressed }) => [
                 styles.weekDay,
@@ -1109,6 +1116,7 @@ function MaandView({
                 onPress={() => onSelectDay(d)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
+                aria-pressed={on}
                 style={({ pressed }) => [
                   styles.monthCell,
                   on && styles.monthCellOn,
@@ -1256,7 +1264,7 @@ function PlanningCard({
 
   if (!tappable) return inner;
   return (
-    <Pressable onPress={() => onOpen(item)} style={({ pressed }) => [pressed && { opacity: 0.95 }]}>
+    <Pressable accessibilityRole="button" onPress={() => onOpen(item)} style={({ pressed }) => [pressed && { opacity: 0.95 }]}>
       {inner}
     </Pressable>
   );
@@ -1266,6 +1274,7 @@ function MiniBtn({ icon, label, onPress }: { icon: React.ReactNode; label: strin
   const styles = useStyles(themaStijlen);
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={(e) => {
         e.stopPropagation?.();
         onPress();
@@ -1304,6 +1313,7 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
           {message} Controleer je verbinding en probeer opnieuw.
         </Text>
         <Pressable
+          accessibilityRole="button"
           onPress={onRetry}
           style={({ pressed }) => [
             { backgroundColor: ds.green, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12 },

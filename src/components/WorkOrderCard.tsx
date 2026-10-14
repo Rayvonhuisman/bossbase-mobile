@@ -69,6 +69,7 @@ export function WorkOrderCard({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
@@ -139,6 +140,8 @@ export function WorkOrderCard({
           )}
           {onCall ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Bellen"
               onPress={(e) => {
                 e.stopPropagation();
                 onCall();
@@ -151,6 +154,8 @@ export function WorkOrderCard({
           ) : null}
           {onNavigate ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Route"
               onPress={(e) => {
                 e.stopPropagation();
                 onNavigate();
@@ -162,6 +167,7 @@ export function WorkOrderCard({
             </Pressable>
           ) : null}
           <Pressable
+            accessibilityRole="button"
             onPress={(e) => {
               e.stopPropagation();
               onMore?.();

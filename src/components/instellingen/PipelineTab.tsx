@@ -295,6 +295,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
                 onPress={() => setFase((c) => (c ? { ...c, kleur: k.value } : c))}
                 accessibilityRole="button"
                 accessibilityState={{ selected: gekozen }}
+                aria-pressed={gekozen}
                 style={[
                   s.chip,
                   { flexDirection: 'row', alignItems: 'center', gap: 6 },

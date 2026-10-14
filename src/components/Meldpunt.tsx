@@ -139,6 +139,7 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
                     onPress={() => setSoort(waarde)}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: actief }}
+                    aria-checked={actief}
                     style={[styles.soort, actief && styles.soortActief]}
                   >
                     <Icoon size={18} color={actief ? t.green700 : t.muted} />
@@ -193,7 +194,7 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
                     • {p}
                   </Text>
                 ))}
-                <Pressable onPress={() => setVoorwaarden((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: voorwaarden }}>
+                <Pressable onPress={() => setVoorwaarden((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: voorwaarden }} aria-expanded={voorwaarden}>
                   <Text style={styles.link}>{voorwaarden ? 'Voorwaarden verbergen' : 'Voorwaarden'}</Text>
                 </Pressable>
                 {voorwaarden ? <Text style={styles.klein}>{VOORWAARDEN}</Text> : null}

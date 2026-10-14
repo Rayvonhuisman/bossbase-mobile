@@ -31,6 +31,9 @@ export function AppFilterChips<T extends string>({ chips, active, onChange }: Pr
         const on = c.id === active;
         return (
           <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on }}
+            aria-checked={on}
             key={c.id}
             onPress={() => onChange(c.id)}
             style={({ pressed }) => [

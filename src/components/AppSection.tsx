@@ -46,6 +46,7 @@ export function AppSection({
       </View>
       {action ? (
         <Pressable
+          accessibilityRole="button"
           onPress={onActionPress}
           hitSlop={6}
           style={({ pressed }) => [styles.action, pressed && { opacity: 0.7 }]}

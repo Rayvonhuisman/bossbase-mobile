@@ -359,6 +359,7 @@ export default function CustomersScreen() {
                   onPress={() => kiesSoort(s.id)}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: aan }}
+                  aria-selected={aan}
                   style={({ pressed }) => [
                     styles.segmentKnop,
                     aan && styles.segmentKnopAan,
@@ -442,6 +443,7 @@ export default function CustomersScreen() {
                       : 'Geen klanten die passen bij je zoekopdracht of filter.'}
                   </Text>
                   <Pressable
+                    accessibilityRole="button"
                     onPress={() => {
                       setQuery('');
                       setFilter('alle');
@@ -539,6 +541,7 @@ function LeverancierLijst({
           </Text>
           {query ? (
             <Pressable
+              accessibilityRole="button"
               onPress={onWis}
               style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
             >
@@ -597,6 +600,7 @@ function LeverancierLijst({
               <View style={styles.rowActions}>
                 {tel ? (
                   <Pressable
+                    accessibilityRole="button"
                     onPress={(e) => {
                       e.stopPropagation();
                       onCall(l);
@@ -682,6 +686,7 @@ function CustomerRow({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, !first && styles.rowBorder, pressed && { opacity: 0.95 }]}
     >
@@ -708,6 +713,8 @@ function CustomerRow({
       <View style={styles.rowActions}>
         {c.phone ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${c.name ?? 'Klant'} bellen`}
             onPress={(e) => {
               e.stopPropagation();
               onCall();
@@ -720,6 +727,8 @@ function CustomerRow({
         ) : null}
         {c.address || c.city ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Route naar ${c.name ?? 'klant'}`}
             onPress={(e) => {
               e.stopPropagation();
               onNavigate();

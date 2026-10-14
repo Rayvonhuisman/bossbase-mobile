@@ -275,6 +275,7 @@ function PipelineScreenInhoud() {
             onPress={() => setToonFilters((v) => !v)}
             accessibilityRole="button"
             accessibilityState={{ expanded: toonFilters }}
+            aria-expanded={toonFilters}
             accessibilityLabel={actief ? 'Filter (actief)' : 'Filter'}
             style={({ pressed }) => [styles.filterKnop, actief && styles.filterKnopAan, pressed && { opacity: 0.8 }]}
           >

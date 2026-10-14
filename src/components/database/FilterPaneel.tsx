@@ -56,6 +56,7 @@ export function FilterPaneel({
             onPress={() => kies(o.id)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: aan }}
+            aria-checked={aan}
             style={[s.chip, aan && s.chipAan]}
           >
             <Text style={[s.chipTekst, aan && s.chipTekstAan]}>{o.label}</Text>
@@ -85,6 +86,7 @@ export function FilterPaneel({
       onPress={() => onWissel(!aan)}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: aan }}
+      aria-checked={aan}
       style={s.vinkRij}
     >
       <View style={[s.vak, aan && s.vakAan]}>{aan ? <Text style={s.vink}>✓</Text> : null}</View>
@@ -261,6 +263,7 @@ function Sectie({
         onPress={() => setOpen((o) => !o)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         style={s.sectieKop}
       >
         <Text style={s.sectieTitel}>{titel}</Text>

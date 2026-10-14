@@ -44,6 +44,7 @@ export function LedenKeuze({
                 onPress={() => wissel(l.id)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: aan, disabled }}
+                aria-checked={aan}
                 style={({ pressed }) => [
                   styles.chip,
                   aan && styles.chipAan,
