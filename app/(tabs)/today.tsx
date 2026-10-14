@@ -372,6 +372,64 @@ export default function TodayScreen() {
         .join(' – ')
     : '';
 
+  // ── Deze week ── (op telefoon in de kolom, op iPad over de volle breedte)
+  const dezeWeek = (
+            <View style={styles.block}>
+              <View style={styles.blockHead}>
+                <Text style={styles.blockTitle}>Deze week</Text>
+                <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
+                  <Text style={styles.blockLink}>Uren ›</Text>
+                </Pressable>
+              </View>
+              <AppCard padding={16}>
+                <View style={styles.weekHeader}>
+                  <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
+                  <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
+                </View>
+                <View style={styles.weekRow}>
+                  {NL_DAYS_SHORT.map((label, idx) => {
+                    const dag = weekDagen[idx];
+                    const hours = dag?.werkdag ?? 0;
+                    const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
+                    const on = idx === todayWeekIdx;
+                    const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
+                    return (
+                      <View key={label + idx} style={styles.weekItem}>
+                        <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
+                          {hours ? formatUren(hours) : signaal ? '!' : ''}
+                        </Text>
+                        <View style={[styles.weekBarFrame, tablet && styles.weekBarFrameBreed]}>
+                          <View
+                            style={[
+                              styles.weekBar,
+                              { height },
+                              signaal
+                                ? styles.weekBarLet
+                                : on
+                                  ? styles.weekBarOn
+                                  : hours >= NORM_UREN
+                                    ? styles.weekBarVol
+                                    : hours > 0
+                                      ? styles.weekBarDeels
+                                      : styles.weekBarIdle,
+                            ]}
+                          />
+                        </View>
+                        <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={styles.weekKlus}>
+                  Op werkbonnen {formatUrenLang(week.werkbon)}
+                  {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
+                </Text>
+              </AppCard>
+            </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <AppScreen
@@ -640,63 +698,13 @@ export default function TodayScreen() {
               </Pressable>
             </View>
 
-            {/* ── Deze week ───────────────────────────────────────────────── */}
-            <View style={styles.block}>
-              <View style={styles.blockHead}>
-                <Text style={styles.blockTitle}>Deze week</Text>
-                <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
-                  <Text style={styles.blockLink}>Uren ›</Text>
-                </Pressable>
-              </View>
-              <AppCard padding={16}>
-                <View style={styles.weekHeader}>
-                  <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
-                  <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
-                </View>
-                <View style={styles.weekRow}>
-                  {NL_DAYS_SHORT.map((label, idx) => {
-                    const dag = weekDagen[idx];
-                    const hours = dag?.werkdag ?? 0;
-                    const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
-                    const on = idx === todayWeekIdx;
-                    const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
-                    return (
-                      <View key={label + idx} style={styles.weekItem}>
-                        <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
-                          {hours ? formatUren(hours) : signaal ? '!' : ''}
-                        </Text>
-                        <View style={styles.weekBarFrame}>
-                          <View
-                            style={[
-                              styles.weekBar,
-                              { height },
-                              signaal
-                                ? styles.weekBarLet
-                                : on
-                                  ? styles.weekBarOn
-                                  : hours >= NORM_UREN
-                                    ? styles.weekBarVol
-                                    : hours > 0
-                                      ? styles.weekBarDeels
-                                      : styles.weekBarIdle,
-                            ]}
-                          />
-                        </View>
-                        <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
-                          {label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-                <Text style={styles.weekKlus}>
-                  Op werkbonnen {formatUrenLang(week.werkbon)}
-                  {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
-                </Text>
-              </AppCard>
-            </View>
+            {tablet ? null : dezeWeek}
           </View>
         </View>
+
+        {/* Op een iPad over de volle breedte, onder de twee kolommen: een week
+            heeft zeven dagen en verdient de ruimte; geen lege halve kolom. */}
+        {tablet ? dezeWeek : null}
 
         {/* ── Overzicht: de cijfertegels van het dashboard, per recht ─── */}
         {toonOverzicht ? (
@@ -1153,6 +1161,7 @@ const makeStyles = (c: ThemeColors) =>
     weekItem: { alignItems: 'center', gap: 6, width: 36 },
     weekHours: { fontSize: 11, fontWeight: '700', color: c.muted },
     weekBarFrame: { height: 52, width: 18, justifyContent: 'flex-end' },
+    weekBarFrameBreed: { width: 32 },
     weekBar: { width: '100%', borderRadius: 6 },
     weekBarOn: { backgroundColor: c.green },
     weekBarVol: { backgroundColor: c.ink },
