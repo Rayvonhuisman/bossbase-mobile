@@ -42,6 +42,10 @@ test('geen themaflits: startscript leest dezelfde sleutel vóór de bundel en zi
   const html = lees('public/index.html');
   assert.ok(html.indexOf('/thema-start.js') > 0 && html.indexOf('/thema-start.js') < html.indexOf('</head>'));
   assert.match(lees('scripts/pwa-na-export.mjs'), /'\/thema-start\.js'/);
+  // Offline: de service worker moet het startscript ook uit de cache leveren.
+  const sw = lees('public/sw.js');
+  const statisch = new RegExp(sw.match(/const STATISCH = \/(.+)\/;/)[1]);
+  assert.ok(statisch.test('/thema-start.js'));
   assert.match(lees('src/providers/ThemeProvider.tsx'), /useState<ColorMode>\(\(\) =>\s*bepaalThema\(leesOpgeslagenThemaDirect\(\)/);
 });
 

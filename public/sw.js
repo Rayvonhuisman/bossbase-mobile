@@ -36,7 +36,7 @@ const APP_SHELL = '/index.html';
 /** Bestanden met een hash in de naam: veranderen nooit, dus cache-eerst. */
 const ONVERANDERLIJK = /^\/(_expo\/static\/|assets\/)/;
 /** Overige statische bestanden: uit de cache, op de achtergrond ververst. */
-const STATISCH = /^\/(icons\/[^/]+\.png|apple-touch-icon\.png|favicon\.ico|manifest\.webmanifest)$/;
+const STATISCH = /^\/(icons\/[^/]+\.png|apple-touch-icon\.png|favicon\.ico|manifest\.webmanifest|thema-start\.js)$/;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
