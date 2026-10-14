@@ -5,9 +5,10 @@ import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { FormSheet } from '@/components/FormSheet';
 import { SelectField } from '@/components/SelectField';
-import { useTheme } from '@/providers';
+import { useTheme, useToast } from '@/providers';
 import { Dialog } from '@/lib/dialog';
 import { useSave } from '@/lib/useSave';
+import { gewijzigdeVelden, isLeeg } from '@/lib/gewijzigdeVelden';
 import { formatEUR } from '@/lib/format';
 import {
   AGENDA_START_UREN,
@@ -22,6 +23,7 @@ import {
   upsertCompanySettings,
   type CompanySettings,
   type HerinneringMoment,
+  type SettingsInput,
 } from '@/services/settingsService';
 import {
   deleteEenheid,
@@ -64,6 +66,22 @@ const naarForm = (c: CompanySettings): Form => ({
 
 const getal = (v: string) => Number(v.replace(',', '.'));
 
+/** Het formulier zoals de service het verwacht (alle velden). */
+const naarInvoer = (f: Form, perMedewerker: boolean): SettingsInput => ({
+  uurtarief: getal(f.uurtarief),
+  reiskosten_per_km: getal(f.reiskosten),
+  btw_pct: getal(f.btw),
+  btw_stelsel: f.btwStelsel,
+  offerte_geldig_dagen: Number(f.geldig),
+  uren_herinnering_interval_min: f.interval,
+  uren_herinnering_moment: f.moment,
+  uren_herinnering_dagen: f.dagen,
+  uren_herinnering_mail: f.mail,
+  uren_herinnering_uitgesloten: perMedewerker ? f.uitgesloten : [],
+  agenda_start_uur: f.agendaStart,
+  agenda_eind_uur: f.agendaEind,
+});
+
 /**
  * Standaardwaarden — tabel `bedrijfsinstellingen` (vier kaarten, één
  * formulier, zoals het dashboard) en tabel `eigen_eenheden`. Het veld
@@ -82,6 +100,11 @@ export function StandaardTab({
   const s = useMemo(() => stijlVoorInstellingen(t), [t]);
   const [form, setForm] = useState<Form>(() => naarForm(instellingen));
   const [perMedewerker, setPerMedewerker] = useState(instellingen.uren_herinnering_uitgesloten.length > 0);
+  // De stand zoals geladen; het scherm geeft na opslaan een nieuwe `key`.
+  const [geladen] = useState<SettingsInput>(() =>
+    naarInvoer(naarForm(instellingen), instellingen.uren_herinnering_uitgesloten.length > 0),
+  );
+  const { toon } = useToast();
   const [team, setTeam] = useState<{ id: string; naam: string }[]>([]);
   const [eenheden, setEenheden] = useState<EigenEenheid[]>([]);
   const [eenheid, setEenheid] = useState<
@@ -102,25 +125,21 @@ export function StandaardTab({
     };
   }, []);
 
-  const opslaan = () =>
-    save(
-      () =>
-        upsertCompanySettings({
-          uurtarief: getal(form.uurtarief),
-          reiskosten_per_km: getal(form.reiskosten),
-          btw_pct: getal(form.btw),
-          btw_stelsel: form.btwStelsel,
-          offerte_geldig_dagen: Number(form.geldig),
-          uren_herinnering_interval_min: form.interval,
-          uren_herinnering_moment: form.moment,
-          uren_herinnering_dagen: form.dagen,
-          uren_herinnering_mail: form.mail,
-          uren_herinnering_uitgesloten: perMedewerker ? form.uitgesloten : [],
-          agenda_start_uur: form.agendaStart,
-          agenda_eind_uur: form.agendaEind,
-        }),
-      { onSuccess: () => onGewijzigd(), succesMelding: 'Standaardwaarden opgeslagen' },
-    );
+  const opslaan = () => {
+    // Alleen wat echt veranderd is; niets veranderd = niets wegschrijven.
+    // Start- en einduur gaan samen mee, zodat de service ze samen toetst.
+    const wijzigingen = gewijzigdeVelden(geladen, naarInvoer(form, perMedewerker), {
+      samen: [['agenda_start_uur', 'agenda_eind_uur']],
+    });
+    if (isLeeg(wijzigingen)) {
+      toon('Er is niets gewijzigd.', 'info');
+      return;
+    }
+    return save(() => upsertCompanySettings(wijzigingen), {
+      onSuccess: () => onGewijzigd(),
+      succesMelding: 'Standaardwaarden opgeslagen',
+    });
+  };
 
   const opslaanKnop = magWijzigen ? (
     <>
@@ -301,6 +320,7 @@ export function StandaardTab({
                       disabled={!magWijzigen}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: aan, disabled: !magWijzigen }}
+                      aria-checked={aan}
                       accessibilityLabel={naam}
                       style={[s.chip, aan && s.chipActief, !magWijzigen && s.uit]}
                     >

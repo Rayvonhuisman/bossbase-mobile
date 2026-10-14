@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
-import { useAuth, useTheme } from '@/providers';
+import { useAuth, useTheme, useToast } from '@/providers';
 import { useSave } from '@/lib/useSave';
+import { gewijzigdeVelden, isLeeg } from '@/lib/gewijzigdeVelden';
+import { normaliseerIban } from '@/lib/relatieValidatie';
 import { spacing } from '@/theme';
 import {
   updateCompany,
@@ -65,20 +67,35 @@ export function BedrijfTab({
   const { colors: t } = useTheme();
   const s = useMemo(() => stijlVoorInstellingen(t), [t]);
   const { refreshProfile } = useAuth();
-  const [form, setForm] = useState<Form>(() => naarForm(bedrijf));
+  // De waarden zoals geladen. Het scherm geeft na opslaan een nieuwe `key`,
+  // dus dit is altijd de stand van de server bij het openen van de tab.
+  const [geladen] = useState<Form>(() => naarForm(bedrijf));
+  const [form, setForm] = useState<Form>(geladen);
   const { save, saving, error } = useSave<unknown>();
+  const { toon } = useToast();
   const { save: saveLogo, saving: logoBezig } = useSave<unknown>();
 
   const zet = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const opslaan = () =>
-    save(() => updateCompany(form), {
+  const opslaan = () => {
+    // Alleen wat de gebruiker echt veranderd heeft: een ongewijzigd leeg veld
+    // mag niet van '' naar NULL, en een wijziging van een ander apparaat mag
+    // niet overschreven worden met de oude waarde van dit scherm.
+    const wijzigingen = gewijzigdeVelden(geladen, form, {
+      normaliseer: (k, v) => (k === 'iban' ? normaliseerIban(v as string) : typeof v === 'string' ? v.trim() : v),
+    });
+    if (isLeeg(wijzigingen)) {
+      toon('Er is niets gewijzigd.', 'info');
+      return;
+    }
+    return save(() => updateCompany(wijzigingen), {
       onSuccess: async () => {
         await onGewijzigd();
         await refreshProfile();
       },
       succesMelding: 'Bedrijfsprofiel opgeslagen',
     });
+  };
 
   const logoKiezen = async () => {
     const foto = await kiesAfbeelding();
@@ -143,7 +160,7 @@ export function BedrijfTab({
             </View>
           ) : null}
         </View>
-        <Text style={s.hint}>JPG of PNG, maximaal 10 MB.</Text>
+        <Text style={s.hint}>JPG of PNG, maximaal 5 MB.</Text>
 
         <Text style={s.label}>Merkkleur</Text>
         <View style={s.chipRij}>
@@ -157,6 +174,7 @@ export function BedrijfTab({
                 accessibilityRole="button"
                 accessibilityLabel={`Merkkleur ${k}`}
                 accessibilityState={{ selected: gekozen }}
+                aria-pressed={gekozen}
                 style={{
                   width: 44,
                   height: 44,
