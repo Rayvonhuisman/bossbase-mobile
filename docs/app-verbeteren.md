@@ -101,12 +101,14 @@ Uit de rondgang (15-10), op volgorde van impact:
 - [x] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard) (8354544)
 - [x] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`) aan een bestaande klant, zoals het dashboard. Getest met Bram van Dijk (eigen alias); de testaanvraag kon niet weg (aanvragen verwijderen kan nergens) en staat op Verloren met toelichting (014efed)
 - [x] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld, met dezelfde rechten (0852a7b)
-- [ ] Klantkaart: tabbladen E-mails en Tijdlijn
-- [ ] @-vermeldingen met melding in notities (klant, activiteit, afspraak) — werkbon en project hebben ze (één gedeelde implementatie, `lib/mentions`)
-- [ ] Instellingen: standaard betaaltermijn, branche, websiteformulier; integraties alleen inzien
-- [ ] Menu: Financiën ontbreekt — in bewerking (branch wt/financien)
+- [ ] Klantkaart: tabbladen E-mails en Tijdlijn — in bewerking (branch wt/klantkaart)
+- [x] @-vermeldingen met melding in notities: werkbon, project, afspraak (notitielog), activiteit (nieuw: in het veld; bestaand: notitielog `activiteit_notities`, zoals het dashboard) (67a50cd). Klant: zie klantkaart-branch
+- [ ] Klantnotities met @-vermeldingen — in bewerking (branch wt/klantkaart)
+- [x] Instellingen: standaard betaaltermijn facturen en branche toegevoegd (getest: 14 → 30 → 14) (f3927ef); integraties: alleen de status, koppelen op het dashboard (stond er al)
+- [ ] Instellingen › Websiteformulier — **bewust open**: een wizard van vijf stappen om insluitcode op je website te plakken (WordPress, Wix, …); dat is werk achter een computer, niet op een telefoon. Aanvragen die binnenkomen staan wél in de app (pipeline, projectkaart)
+- [x] Menu: Financiën — nieuwe pagina, gelijk aan het dashboard (periodes, zes tegels uit `bb_financien_kpi`, omzetgrafiek, per klant), recht `bedrijfsfinancien`; getallen gecontroleerd tegen de database (473205b). Bewust weg: Excel-export en het btw-blok (blijven in het dashboard)
 - [x] Wachtwoord vergeten in de app: resetlink aanvragen via `request-password-reset`, zoals het dashboard; de link in de mail opent de website om het nieuwe wachtwoord in te stellen (197124f)
-- [ ] Database: bulkmail, Excel, ZIP met PDF's (bewust naar het dashboard verwezen)
+- [ ] Database: bulkmail, Excel, ZIP met PDF's — **bewust open**: exports en bulkacties zijn werk achter een computer; de app verwijst daarvoor naar het dashboard
 - [x] Relaties: type (Particulier/Zakelijk/VvE/Aannemer), bron en betaaltermijn per klant ontbraken. Nieuwe klant: type + bron (standaard Zakelijk/Handmatig, zoals het dashboard); bewerken: alle drie, ook zichtbaar op de klantkaart. Getest op een testklant en teruggezet
 
 ## Zelf gevonden (naast de punten hierboven)
