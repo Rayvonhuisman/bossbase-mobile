@@ -34,7 +34,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Inhoud (afspraken, werkbonnen per geplande dag met jouw tijd, ingeplande activiteiten via hun agenda-item) gelijk aan dashboard; persoonlijk, met gedeelde werkruimte alles. Een ingeplande activiteit opent nu de activiteit (was het afspraakformulier, alleen-lezen)
 - [x] Weergaven: dag/week/maand zoals het dashboard; uurvenster nu uit Instellingen (`agenda_start_uur`/`agenda_eind_uur`, standaard 07–20) i.p.v. vast 08–17. Bewust anders gelaten (ontwerp app): maandweergave met stippen i.p.v. titels, weekblokjes niet los aantikbaar (tik op de dag toont de lijst)
 - [x] Afspraak aanmaken/wijzigen met de velden van het dashboard: titel, type (Afspraak/Klus/Opname/Activiteit — werd niet opgeslagen), datum, van/tot (nieuw 09:00–10:00, eind schuift mee, leeg = een uur; bewerken wiste de eindtijd), klant, project (nieuw), locatie (adres zoeken), notities; "Klant openen" / "Project openen"; klanttijdlijn "Afspraak ingepland: … op 15 okt" zoals het dashboard. Getest: aangemaakt, gecontroleerd in de database, verwijderd. Het dashboard kent geen deelnemers, herinnering of herhaling bij een afspraak
-- [ ] Notitielog met @vermeldingen bij een afspraak (dashboard: `comments` + meldingen)
+- [ ] Notitielog met @vermeldingen bij een afspraak (dashboard: `comments` + meldingen) — de @-vermeldingen bestaan nu (werkbon, project); nog niet bij afspraken
 - [ ] Werkbon maken vanuit een afspraak, en "Werkbon inplannen" zonder planningsmodule
 
 ### 7. Planning
@@ -78,12 +78,14 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Widget "Geaccepteerd" groen (aantal en bedrag)
 - [x] Openen: zijmarges in het detailpaneel (inhoud scrolt nu ook), geen printscherm meer, dezelfde PDF als het dashboard (A4; byte-gelijk getest op BB-149 en BB-F140, pdfOpbouw.js uit het dashboard overgenomen met een test die afwijkingen meldt), terug met het kruisje
 - [x] PDF-weergave schermvullend met tik-laag (`PdfWeergave`): kruisje, Delen (iPhone/iPad: deelmenu met Druk af), Printen als aparte knop waar delen niet kan printen (Android, computer). Pagina's als A4 onder elkaar, knijpen om te zoomen. Op web via iframe, in de app via WebView, zelfde pagina (pdf.js)
-- [ ] Alle functies gecontroleerd
+- [x] Alle functies gecontroleerd en toegevoegd: versturen per mail (sjabloon, PDF als bijlage, ondertekenlink alleen met `digitale_handtekening`, archief + tijdlijn, concept → verzonden met bevroren bedrijfsgegevens), bewerken/herzien (-v2, oude vervalt)/status, kopiëren (nieuwe versie of andere klant, met limiet), "Maak factuur" met de regels van de offerte, verwijderen alleen vóór akkoord, vangnet getekende PDF. Mail-HTML byte-gelijk aan het dashboard (`docs/screenshots/documenten/`)
+  - Bewust anders: mailtekst als platte tekst (een sjabloon met opmaak wordt leesbare tekst); geen Stripe-upsell-venster na versturen (nieuw ontwerp); losse "Regels"-sheet opgegaan in Bewerken
 
 ### 15. Facturen
 - [x] Zelfde PDF-weergave en fixes als offertes; "PDF bekijken" toont het bewaarde bestand (wat de klant kreeg, of het origineel uit de boekhouding) en anders de PDF zoals het dashboard hem maakt — gelijk aan de paperclip in het dashboard
 - [x] Groen voor betaald (tegel "Betaald deze maand")
-- [ ] Alle functies gecontroleerd
+- [x] Alle functies gecontroleerd en toegevoegd: versturen per mail met PDF (eerst bewaard in `factuur-pdfs`) en Stripe-betaallink als het pakket dat heeft, PDF bewaren bij verzonden/betaald (opnieuw naar de boekhouding), herinnering 1 en 2 (zelfde voorwaarden), gedeeltelijk crediteren per regel, kopiëren, verwijderen alleen concept/geïmporteerd. Betaaltermijn nu klant → Instellingen → 14 dagen (gebruikte ten onrechte de geldigheid van offertes); onvolledige klant blokkeert; betalingskenmerk bewerkbaar
+  - Bewust anders: gedeeltelijk crediteren met aantal 0 geeft een melding (dashboard crediteert stil 1); statuswissel van een verzonden factuur zit onder Bewerken
 
 ### 16. Kosten
 - [x] Werking, totalen en filters gecontroleerd: weergave kosten/materiaal, periode, klant- en categoriefilter en tegels rekenen gelijk aan het dashboard; weergave en periode worden nu onthouden (zie 1)
@@ -94,16 +96,16 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
 Uit de rondgang (15-10), op volgorde van impact:
 - [x] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken. Getest: alleen de nieuw toegewezene kreeg de melding, testactiviteit en agenda-item verwijderd (357789c)
-- [ ] Activiteiten: afspraakbevestiging per mail bij een bezoek — wacht op de documenten-branch (mailservice)
-- [ ] Registratie in de app: bedrijfsnaam, branche, telefoon, KvK en pakket gaan niet mee, en het akkoord met de voorwaarden wordt niet vastgelegd
+- [x] Activiteiten: afspraakbevestiging per mail bij een nieuw bezoek (`triggerAutoEmail`: sjabloon van het bedrijf of de standaard, uitgezet = niets, archief, mailfout vastgelegd). Getest met testklant Bram van Dijk (eigen alias), testbezoeken verwijderd (69a4c64)
+- [ ] Registratie in de app: bedrijfsnaam, branche, telefoon, KvK en pakket gaan niet mee, en het akkoord met de voorwaarden wordt niet vastgelegd. Erger: er komt geen verificatiecode en dus geen bedrijf (verify-code), en het voorwaardenvinkje staat standaard aan — in bewerking (branch wt/registratie)
 - [ ] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard)
 - [ ] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`)
-- [ ] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld
+- [x] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld, met dezelfde rechten (0852a7b)
 - [ ] Klantkaart: tabbladen E-mails en Tijdlijn
-- [ ] @-vermeldingen met melding in notities (klant, activiteit, afspraak)
+- [ ] @-vermeldingen met melding in notities (klant, activiteit, afspraak) — werkbon en project hebben ze (één gedeelde implementatie, `lib/mentions`)
 - [ ] Instellingen: standaard betaaltermijn, branche, websiteformulier; integraties alleen inzien
-- [ ] Menu: Financiën ontbreekt
-- [ ] Wachtwoord vergeten in de app (nu via de website)
+- [ ] Menu: Financiën ontbreekt — in bewerking (branch wt/financien)
+- [x] Wachtwoord vergeten in de app: resetlink aanvragen via `request-password-reset`, zoals het dashboard; de link in de mail opent de website om het nieuwe wachtwoord in te stellen (197124f)
 - [ ] Database: bulkmail, Excel, ZIP met PDF's (bewust naar het dashboard verwezen)
 - [x] Relaties: type (Particulier/Zakelijk/VvE/Aannemer), bron en betaaltermijn per klant ontbraken. Nieuwe klant: type + bron (standaard Zakelijk/Handmatig, zoals het dashboard); bewerken: alle drie, ook zichtbaar op de klantkaart. Getest op een testklant en teruggezet
 
@@ -157,6 +159,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 15-10 — Documenten- en werkbon-branches samengevoegd; klantkaart "+", wachtwoord vergeten, afspraakbevestiging. Financiën en registratie uitbesteed aan agents.
 - 15-10 — Activiteiten af (meerdere toegewezenen, melding). Projectkaart-branch samengevoegd. Bug horizontaal scrollen op web gevonden en opgelost.
 - 15-10 — Planning: bewerken (tijd, inplannen), agenda-look, meldingen per dag, mail bij toewijzen.
 - 15-10 — Branch aangemaakt. Homepage: thema naar Instellingen, Boss-hoofd,
