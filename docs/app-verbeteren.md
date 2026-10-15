@@ -12,8 +12,8 @@ Minimaal: iPhone SE (375×667), iPhone 12/13/14 (390×844), iPhone 17 Pro Max
 (440×956), iPad mini (744×1133), iPad Air (820×1180), iPad Pro 12,9" (1024×1366),
 iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
-- [ ] Screenshots van de belangrijkste schermen per formaat
-- [ ] Spacing zijkanten, uitlijning, niets afgesneden — per pagina nagelopen
+- [x] Screenshots van de belangrijkste schermen per formaat: 16 schermen × 9 formaten (iPhone SE, 13, 17 Pro Max; iPad mini/Air/Pro 12.9 staand en liggend) in `docs/screenshots/formaten/`, gemaakt met `scripts/screenshots-formaten.mjs`. Plus per onderdeel in `docs/screenshots/{projectkaart,werkbon,documenten,financien,registratie,klantkaart}/`
+- [x] Spacing zijkanten, uitlijning, niets afgesneden — per pagina nagelopen op alle formaten: geen horizontale scroll, juiste schermen. Gevonden en opgelost: KPI-tegels Projecten vielen op een tablet buiten beeld (ee05310), ⋮-menu pipeline zonder zijmarge (02459dc)
 
 ## Algemeen
 
@@ -93,7 +93,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Bedragen met centen zoals het dashboard (`fmt`); de app rondde af op hele euro's (€ 12,50 → € 13)
 
 ### 17. Wat ik vergeten ben
-- [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
+- [x] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard (de punten hieronder kwamen daaruit)
 Uit de rondgang (15-10), op volgorde van impact:
 - [x] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken. Getest: alleen de nieuw toegewezene kreeg de melding, testactiviteit en agenda-item verwijderd (357789c)
 - [x] Activiteiten: afspraakbevestiging per mail bij een nieuw bezoek (`triggerAutoEmail`: sjabloon van het bedrijf of de standaard, uitgezet = niets, archief, mailfout vastgelegd). Getest met testklant Bram van Dijk (eigen alias), testbezoeken verwijderd (69a4c64)
@@ -101,9 +101,9 @@ Uit de rondgang (15-10), op volgorde van impact:
 - [x] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard) (8354544)
 - [x] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`) aan een bestaande klant, zoals het dashboard. Getest met Bram van Dijk (eigen alias); de testaanvraag kon niet weg (aanvragen verwijderen kan nergens) en staat op Verloren met toelichting (014efed)
 - [x] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld, met dezelfde rechten (0852a7b)
-- [ ] Klantkaart: tabbladen E-mails en Tijdlijn — in bewerking (branch wt/klantkaart)
+- [x] Klantkaart: E-mails (schrijven met sjabloon, versturen, bekijken, archief + tijdlijn) en Tijdlijn (iconen/kleuren per type) als blokken op de klantkaart (b028fd0). Bewust anders: platte tekst i.p.v. opmaak-editor
 - [x] @-vermeldingen met melding in notities: werkbon, project, afspraak (notitielog), activiteit (nieuw: in het veld; bestaand: notitielog `activiteit_notities`, zoals het dashboard) (67a50cd). Klant: zie klantkaart-branch
-- [ ] Klantnotities met @-vermeldingen — in bewerking (branch wt/klantkaart)
+- [x] Klantnotities met @-vermeldingen; alle notitievelden gebruiken nu één `MentionInvoer` (1d721b3)
 - [x] Instellingen: standaard betaaltermijn facturen en branche toegevoegd (getest: 14 → 30 → 14) (f3927ef); integraties: alleen de status, koppelen op het dashboard (stond er al)
 - [ ] Instellingen › Websiteformulier — **bewust open**: een wizard van vijf stappen om insluitcode op je website te plakken (WordPress, Wix, …); dat is werk achter een computer, niet op een telefoon. Aanvragen die binnenkomen staan wél in de app (pipeline, projectkaart)
 - [x] Menu: Financiën — nieuwe pagina, gelijk aan het dashboard (periodes, zes tegels uit `bb_financien_kpi`, omzetgrafiek, per klant), recht `bedrijfsfinancien`; getallen gecontroleerd tegen de database (473205b). Bewust weg: Excel-export en het btw-blok (blijven in het dashboard)
@@ -124,7 +124,7 @@ Uit de rondgang (15-10), op volgorde van impact:
 
 ## Testomgeving (tijdelijk)
 
-- [ ] TEST Stamvol Bouw BV staat sinds 15-10 tijdelijk op **Team** (was Groei) om planning, meerdaagse klussen en voertuigen te testen — akkoord gebruiker 15-10. **Terugzetten naar Groei** als het testen klaar is (`subscriptions.plan`, notitie op de rij).
+- [x] TEST Stamvol Bouw BV stond 15-10 tijdelijk op Team om planning, meerdaagse klussen en voertuigen te testen (akkoord gebruiker). Teruggezet naar **Groei** en de notitie opgeschoond (15-10, na een droogloop)
 
 ## Database en edge functions
 
@@ -162,6 +162,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 15-10 — Klantkaart en Financiën samengevoegd, screenshots op alle formaten nagelopen (KPI-tegels Projecten op tablet opgelost), testbedrijf terug op Groei. Klaar: alles afgevinkt behalve twee punten die bewust open staan (websiteformulier, database-exports).
 - 15-10 — Registratie samengevoegd; agenda (werkbon uit afspraak, notitielog), nieuwe werkbon en nieuwe aanvraag gelijk aan het dashboard.
 - 15-10 — Documenten- en werkbon-branches samengevoegd; klantkaart "+", wachtwoord vergeten, afspraakbevestiging. Financiën en registratie uitbesteed aan agents.
 - 15-10 — Activiteiten af (meerdere toegewezenen, melding). Projectkaart-branch samengevoegd. Bug horizontaal scrollen op web gevonden en opgelost.
