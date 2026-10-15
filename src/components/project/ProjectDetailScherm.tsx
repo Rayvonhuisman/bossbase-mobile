@@ -606,9 +606,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           {aanvraagBewerken ? <KleineKnop label="Bewerken" onPress={aanvraagBewerken} /> : null}
         </View>
 
-        <Text style={[styles.aanvraagTekst, !aanvraagTekst && { color: t.muted, fontWeight: '400' }]}>
-          {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
-        </Text>
+        <View style={styles.aanvraagVak}>
+          <Text style={[styles.veldLabel, { color: t.green700 }]}>Wat de klant vraagt</Text>
+          <Text style={[styles.aanvraagTekst, !aanvraagTekst && { color: t.muted, fontWeight: '400', fontSize: 15 }]}>
+            {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
+          </Text>
+        </View>
 
         {websiteVelden.length || data.bron?.fotos ? (
           <View style={styles.websiteVak}>
@@ -1387,7 +1390,8 @@ const makeStyles = (t: ThemeColors) =>
     // Groene rand links; de opvulling ernaast 4 minder, zodat de tekst gelijk loopt met de andere kaarten.
     aanvraagBlok: { borderLeftWidth: 4, borderLeftColor: t.green, paddingLeft: spacing.lg - 4 + StyleSheet.hairlineWidth },
     aanvraagEyebrow: { fontSize: 18, fontWeight: '800', color: t.ink, letterSpacing: -0.2 },
-    aanvraagTekst: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: t.ink },
+    aanvraagVak: { gap: 6, padding: spacing.md, borderRadius: radius.md, backgroundColor: t.green50 },
+    aanvraagTekst: { fontSize: 17, lineHeight: 25, fontWeight: '600', color: t.ink },
     websiteVak: {
       gap: 6,
       padding: spacing.md,

@@ -50,8 +50,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Rest van de werkbon gecontroleerd
 
 ### 9. Pipeline en projectkaart
-- [ ] Aanvraag prominent
-- [ ] Redesign eerste blok (fase, toegewezen aan, …) — **eerst laten zien**
+- [x] Aanvraag prominent: eigen kaart met groene rand, tekst in een groen vak "Wat de klant vraagt" (na feedback 15-10), websitevelden zoals het dashboard, Bel/Mail/Route
+- [x] Redesign eerste blok (fase, toegewezen aan, …) — getoond en akkoord 15-10 (`docs/screenshots/projectkaart-voorstel/`). Oorzaak leeg vlak: `flexBasis: 140` van een veld in een kolom
 - [ ] Alle functies van de projectkaart in het dashboard
 
 ### 10. Projecten
