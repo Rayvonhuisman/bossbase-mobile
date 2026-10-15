@@ -88,6 +88,14 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 ### 17. Wat ik vergeten ben
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
 
+## Zelf gevonden (naast de punten hierboven)
+
+- [x] Facturen: tegel "Openstaand" en "Verlopen"/te-laat rekenden anders dan het dashboard (concepten en creditnota's telden mee). Nu `isVerlopen` en `openstaandPerFactuur` van het dashboard (audit H9/M18); getest: 164 · € 0 · 19 verlopen, gelijk aan het dashboard
+- [x] Offerte-/factuurdetail: inhoud scrolde niet (lange offertes vielen weg) en had geen zijmarges
+- [x] Projectkaart: geen route-knop → Bel/Mail/Route in het aanvraagblok
+- [x] Werkbon: route-knop bouwde een eigen Google-link (iOS opende een webpagina)
+- [ ] iPad in de app: `supportsTablet: false` en alleen staand in `app.config.ts`, en de tabletindeling werkt alleen op web (`bepaalSchermklasse`). Nodig voor "perfect op elke iPad, staand en liggend"
+
 ## Database en edge functions
 
 Niets veranderd. Wat een wijziging zou vragen staat hier, met reden, en wacht op

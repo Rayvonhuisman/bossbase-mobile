@@ -80,26 +80,36 @@ const facturen = [
   f({ nummer: 'BB-F007', status: 'aangemaakt', totaal_incl: 5, vervaldatum: '2026-01-01' }),
 ];
 
-test('facturen: te laat = niet betaald en vervaldatum vóór vandaag (ook concept)', () => {
+test('facturen: te laat = verstuurd, niet gecrediteerd, geen creditnota, vervaldatum vóór vandaag (dashboard H9)', () => {
   assert.equal(D.isFactuurVerlopen(facturen[2], VANDAAG), true);
   assert.equal(D.isFactuurVerlopen(facturen[4], VANDAAG), false, 'vandaag zelf is nog niet te laat');
   assert.equal(D.isFactuurVerlopen(facturen[0], VANDAAG), false, 'betaald is nooit te laat');
-  assert.equal(D.factuurWeergaveStatus(facturen[7], VANDAAG), 'verlopen');
+  assert.equal(D.isFactuurVerlopen(facturen[7], VANDAAG), false, 'een concept is nooit verstuurd, dus nooit te laat');
+  assert.equal(D.isFactuurVerlopen({ ...facturen[2], gecrediteerd: true }, VANDAAG), false, 'gecrediteerd is niet meer verschuldigd');
+  assert.equal(D.factuurWeergaveStatus(facturen[2], VANDAAG), 'verlopen');
   assert.equal(D.factuurWeergaveStatus(facturen[1], VANDAAG), 'verzonden');
 });
 
-test('facturen: KPI-tegels zoals FacturenPage (credits negatief, geboekt telt als open)', () => {
+test('facturen: KPI-tegels zoals FacturenPage (openstaand na eigen creditnota, nooit onder 0)', () => {
   assert.deepEqual(D.factuurKpis(facturen, VANDAAG), {
     totaal: 8,
-    openstaand: 242 + 100 - 121,
+    // BB-F002 (242) en BB-F005 (100, vervalt vandaag); de losse creditnota telt niet.
+    openstaand: 242 + 100,
     betaaldDezeMaand: 121,
-    verlopen: 2,
+    verlopen: 1,
   });
+  // Gedeeltelijk gecrediteerd: €127,35 − €119,79 = €7,56 blijft openstaan.
+  const deel = [
+    f({ id: 'a', nummer: 'BB-F010', status: 'verzonden', totaal_incl: 127.35, vervaldatum: '2026-12-01' }),
+    f({ id: 'b', nummer: 'BB-CF010', status: 'verzonden', totaal_incl: -119.79, is_credit: true, credit_van_factuur_id: 'a' }),
+  ];
+  assert.equal(D.factuurKpis(deel, VANDAAG).openstaand, 7.56);
 });
 
 test('facturen: filtertabs en zoeken', () => {
   const tel = D.telFactuurFilters(facturen, VANDAAG);
-  assert.deepEqual(tel, { alle: 8, concept: 1, verzonden: 2, betaald: 2, verlopen: 2, gecrediteerd: 2 });
+  // BB-F007 ('aangemaakt', vervaldatum voorbij) is een concept, niet verlopen.
+  assert.deepEqual(tel, { alle: 8, concept: 2, verzonden: 2, betaald: 2, verlopen: 1, gecrediteerd: 2 });
   assert.equal(D.filterFacturen(facturen, { filter: 'alle', zoek: 'bakker', vandaag: VANDAAG }).length, 1);
   assert.equal(D.filterFacturen(facturen, { filter: 'gecrediteerd', zoek: 'cf', vandaag: VANDAAG }).length, 1);
 });

@@ -128,23 +128,55 @@ export type FactuurLijstItem = {
   betaald_op: string | null;
   is_credit: boolean | null;
   gecrediteerd: boolean | null;
+  /** Een creditnota wijst naar de factuur die hij (deels) terugdraait. */
+  credit_van_factuur_id?: string | null;
+  id?: string;
   customer?: { name: string | null } | null;
 };
 
 /**
- * Te laat: niet betaald en de vervaldatum ligt vóór vandaag. Precies de regel
- * van het dashboard — ook een concept met een verstreken vervaldatum telt.
+ * Te laat — `isVerlopen` van het dashboard (FacturenPage, audit 2026-10-01 H9):
+ * verstuurd (`verzonden`/`geboekt`), niet gecrediteerd, geen creditnota, en de
+ * vervaldatum ligt vóór vandaag. Een concept is nooit naar de klant gegaan en
+ * een gecrediteerde factuur is niet meer verschuldigd.
  */
 export function isFactuurVerlopen(
-  f: Pick<FactuurLijstItem, 'status' | 'vervaldatum'>,
+  f: Pick<FactuurLijstItem, 'status' | 'vervaldatum' | 'is_credit' | 'gecrediteerd'>,
   vandaag: string,
 ): boolean {
-  return f.status !== 'betaald' && Boolean(f.vervaldatum) && String(f.vervaldatum) < vandaag;
+  return (
+    ['verzonden', 'geboekt'].includes(f.status) &&
+    !f.gecrediteerd &&
+    !f.is_credit &&
+    Boolean(f.vervaldatum) &&
+    String(f.vervaldatum) < vandaag
+  );
+}
+
+/**
+ * Openstaand per factuur — `openstaandPerFactuur` van het dashboard (gelijk aan
+ * `bb_openstaand_per_factuur`): verstuurde, onbetaalde facturen (geen
+ * creditnota), met als bedrag hun totaal plus de creditnota's die naar hen
+ * verwijzen, nooit onder 0.
+ */
+export function openstaandPerFactuur<T extends FactuurLijstItem>(lijst: T[]): { factuur: T; bedrag: number }[] {
+  const credits = new Map<string, number>();
+  for (const f of lijst) {
+    if (f.is_credit && f.credit_van_factuur_id && f.status !== 'concept') {
+      credits.set(f.credit_van_factuur_id, (credits.get(f.credit_van_factuur_id) ?? 0) + (Number(f.totaal_incl) || 0));
+    }
+  }
+  return lijst
+    .filter((f) => !f.is_credit && ['verzonden', 'geboekt'].includes(f.status))
+    .map((f) => ({
+      factuur: f,
+      bedrag: Math.max(0, rond2((Number(f.totaal_incl) || 0) + (f.id ? (credits.get(f.id) ?? 0) : 0))),
+    }));
 }
 
 /** De status die je ziet: `verlopen` wint van de opgeslagen status. */
 export function factuurWeergaveStatus(
-  f: Pick<FactuurLijstItem, 'status' | 'vervaldatum'>,
+  f: Pick<FactuurLijstItem, 'status' | 'vervaldatum' | 'is_credit' | 'gecrediteerd'>,
   vandaag: string,
 ): string {
   return isFactuurVerlopen(f, vandaag) ? 'verlopen' : f.status;
@@ -208,24 +240,26 @@ export function telFactuurFilters(
 }
 
 /**
- * De vier KPI-tegels van de facturenpagina:
- * - Openstaand = Σ totaal incl. van `verzonden`/`geboekt` die níet te laat zijn;
+ * De vier KPI-tegels van de facturenpagina (FacturenPage):
+ * - Openstaand = Σ openstaand bedrag per factuur (na eigen creditnota's), van
+ *   facturen die nog niet over de vervaldatum zijn;
  * - Betaald deze maand = Σ totaal incl. met `betaald_op` in deze maand;
  * - Verlopen = aantal te late facturen.
- * Creditnota's tellen mee met hun negatieve bedrag, net als in het dashboard.
  */
 export function factuurKpis(lijst: FactuurLijstItem[], vandaag: string) {
   const maand = vandaag.slice(0, 7);
   const som = (xs: FactuurLijstItem[]) => rond2(xs.reduce((s, f) => s + (Number(f.totaal_incl) || 0), 0));
-  const openstaand = lijst.filter(
-    (f) => ['verzonden', 'geboekt'].includes(f.status) && !isFactuurVerlopen(f, vandaag),
+  const openstaandBedrag = rond2(
+    openstaandPerFactuur(lijst)
+      .filter((o) => o.bedrag > 0 && !(o.factuur.vervaldatum && String(o.factuur.vervaldatum) < vandaag))
+      .reduce((s, o) => s + o.bedrag, 0),
   );
   const betaald = lijst.filter(
     (f) => f.status === 'betaald' && String(f.betaald_op ?? '').startsWith(maand),
   );
   return {
     totaal: lijst.length,
-    openstaand: som(openstaand),
+    openstaand: openstaandBedrag,
     betaaldDezeMaand: som(betaald),
     verlopen: lijst.filter((f) => isFactuurVerlopen(f, vandaag)).length,
   };
