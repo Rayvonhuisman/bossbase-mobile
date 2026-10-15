@@ -3,48 +3,32 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Briefcase, Route as RouteIcon, Wrench } from 'lucide-react-native';
-import { useOnboarding, type RoleChoice } from '@/providers';
+import { ArrowRight, Sparkles, User, Users } from 'lucide-react-native';
+import { useOnboarding } from '@/providers';
+import { PAKKETTEN, PROEF_DAGEN, type Pakket } from '@/lib/registratie';
 import { PrimaryButton, TopBar } from './_components';
 import { onb } from './_tokens';
 
-type RoleDef = {
-  id: RoleChoice;
-  title: string;
-  desc: string;
-  Icon: typeof Briefcase;
-};
+const ICONEN: Record<Pakket, typeof User> = { groei: User, team: Users };
 
-const ROLES: RoleDef[] = [
-  {
-    id: 'owner',
-    title: 'Ondernemer',
-    desc: 'Zicht op het geheel — klanten, opdrachten, team en omzet.',
-    Icon: Briefcase,
-  },
-  {
-    id: 'planner',
-    title: 'Planner',
-    desc: 'Plan opdrachten in, stuur je team aan en houd het werk lopen.',
-    Icon: RouteIcon,
-  },
-  {
-    id: 'field',
-    title: 'Monteur',
-    desc: 'Bekijk de planning, schrijf uren en werk bonnen bij op locatie.',
-    Icon: Wrench,
-  },
-];
-
-export default function RoleScreen() {
+/**
+ * Stap 1 — welk pakket je wilt proberen. Gelijk aan de pakketstap van het
+ * dashboard (RegisterFlow): Groei of Team, zonder voorkeuze; kies je niets, dan
+ * start de proef op Groei (verify-code). Starter staat er bewust niet tussen.
+ *
+ * Hier stond eerst een rolkeuze (ondernemer / planner / monteur). Die werd
+ * nergens opgeslagen en het dashboard kent hem niet: wie zich aanmeldt, maakt
+ * altijd een eigen bedrijf aan en wordt daar admin. Medewerkers melden zich
+ * niet aan maar worden uitgenodigd (Team > Teamlid uitnodigen).
+ */
+export default function PakketScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, update } = useOnboarding();
-  const [selected, setSelected] = useState<RoleChoice | null>(data.role ?? 'owner');
+  const [selected, setSelected] = useState<Pakket | null>(data.pakket);
 
   const onContinue = () => {
-    if (!selected) return;
-    update({ role: selected });
+    update({ pakket: selected });
     router.push('/(onboarding)/company');
   };
 
@@ -54,52 +38,55 @@ export default function RoleScreen() {
       <TopBar step={0} />
 
       <View style={styles.headerBlock}>
-        <Text style={styles.title}>Hoe ga je BossBase{'\n'}gebruiken?</Text>
-        <Text style={styles.sub}>We stemmen je werkruimte en startschermen hierop af.</Text>
+        <Text style={styles.title}>Welk pakket past{'\n'}bij je?</Text>
+        <Text style={styles.sub}>Kies waar je nu staat. {PROEF_DAGEN} dagen gratis proberen, zonder creditcard.</Text>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      >
-        {ROLES.map((r) => {
-          const on = selected === r.id;
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        {PAKKETTEN.map((p) => {
+          const on = selected === p.id;
+          const Icon = ICONEN[p.id];
           return (
             <Pressable
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
               aria-checked={on}
-              key={r.id}
-              onPress={() => setSelected(r.id)}
-              style={({ pressed }) => [
-                styles.card,
-                on && styles.cardOn,
-                pressed && { opacity: 0.95 },
-              ]}
+              key={p.id}
+              onPress={() => setSelected(p.id)}
+              style={({ pressed }) => [styles.card, on && styles.cardOn, pressed && { opacity: 0.95 }]}
             >
               <View style={[styles.cardIcon, on ? styles.cardIconOn : styles.cardIconOff]}>
-                <r.Icon size={26} color={onb.ink} strokeWidth={2} />
+                <Icon size={26} color={onb.ink} strokeWidth={2} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.cardTitle}>{r.title}</Text>
-                <Text style={styles.cardDesc}>{r.desc}</Text>
+                <Text style={styles.cardTitle}>{p.titel}</Text>
+                <Text style={styles.cardDesc}>{p.omschrijving}</Text>
               </View>
-              <View style={[styles.radio, on && styles.radioOn]}>
-                {on ? (
-                  <View style={styles.radioDot} />
-                ) : null}
-              </View>
+              <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
             </Pressable>
           );
         })}
+
+        <View style={styles.trialNote}>
+          <View style={styles.trialTitleRow}>
+            <Sparkles size={15} color={onb.greenDk} strokeWidth={2} />
+            <Text style={styles.trialTitle}>{PROEF_DAGEN} dagen gratis proberen</Text>
+          </View>
+          <Text style={styles.trialText}>
+            Je probeert je keuze {PROEF_DAGEN} dagen gratis, zonder creditcard. Daarna stopt het vanzelf, tenzij je een
+            abonnement afsluit.
+          </Text>
+        </View>
+
+        <Text style={styles.inviteHint}>
+          Uitgenodigd door je werkgever? Dan maak je hier geen account aan, maar volg je de link in de uitnodigingsmail.
+        </Text>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <PrimaryButton
           label="Doorgaan"
           onPress={onContinue}
-          disabled={!selected}
           trailing={<ArrowRight size={16} color="#fff" strokeWidth={2} />}
         />
       </View>
@@ -189,6 +176,32 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: onb.green,
+  },
+  trialNote: {
+    marginTop: 4,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: onb.greenSoft,
+    gap: 6,
+  },
+  trialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trialTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: onb.ink,
+    letterSpacing: -0.2,
+  },
+  trialText: {
+    fontSize: 13.5,
+    color: onb.muted,
+    lineHeight: 19,
+  },
+  inviteHint: {
+    fontSize: 13,
+    color: onb.muted,
+    lineHeight: 19,
+    paddingHorizontal: 4,
   },
   footer: {
     paddingHorizontal: 20,

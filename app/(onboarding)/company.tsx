@@ -1,21 +1,45 @@
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { ArrowRight } from 'lucide-react-native';
+import {
+  AppWindow,
+  ArrowRight,
+  Hammer,
+  HardHat,
+  Home,
+  Paintbrush,
+  Plug,
+  ShowerHead,
+  Sparkles,
+  Trees,
+  Zap,
+} from 'lucide-react-native';
 import { useOnboarding } from '@/providers';
+import { BRANCHES, bedrijfFouten, heeftFouten, type BedrijfFouten } from '@/lib/registratie';
 import { Field, PrimaryButton, TopBar } from './_components';
 import { onb } from './_tokens';
 
+/** Iconen zoals TRADES in het dashboard (BbAuth.jsx). */
+const BRANCHE_ICOON: Record<(typeof BRANCHES)[number], typeof Hammer> = {
+  Schilder: Paintbrush,
+  Hovenier: Trees,
+  Aannemer: Hammer,
+  Kozijnen: AppWindow,
+  Installateur: Plug,
+  Dakdekker: Home,
+  Loodgieter: ShowerHead,
+  Elektricien: Zap,
+  Schoonmaak: Sparkles,
+  Anders: HardHat,
+};
+
+/**
+ * Stap 2 — het bedrijf. Dezelfde velden als het dashboard: bedrijfsnaam en
+ * telefoon verplicht, branche (vaste lijst, dezelfde als in Instellingen) en
+ * KvK optioneel. verify-code zet ze na de verificatie op het nieuwe bedrijf.
+ */
 export default function CompanyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -23,22 +47,15 @@ export default function CompanyScreen() {
 
   const [companyName, setCompanyName] = useState(data.companyName);
   const [branche, setBranche] = useState(data.branche);
-  const [teamSize, setTeamSize] = useState(data.teamSize);
-  const [isSolo, setIsSolo] = useState(data.isSolo);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [phone, setPhone] = useState(data.phone);
+  const [kvk, setKvk] = useState(data.kvk);
+  const [fouten, setFouten] = useState<BedrijfFouten>({});
 
   const onContinue = () => {
-    const trimmed = companyName.trim();
-    if (!trimmed) {
-      setErrorMsg('Vul je bedrijfsnaam in.');
-      return;
-    }
-    update({
-      companyName: trimmed,
-      branche: branche.trim(),
-      teamSize: teamSize.trim(),
-      isSolo,
-    });
+    const f = bedrijfFouten({ companyName, phone, kvk, branche });
+    setFouten(f);
+    if (heeftFouten(f)) return;
+    update({ companyName: companyName.trim(), branche, phone: phone.trim(), kvk: kvk.trim() });
     router.push('/(onboarding)/account');
   };
 
@@ -47,13 +64,10 @@ export default function CompanyScreen() {
       <StatusBar style="dark" />
       <TopBar step={1} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Over je bedrijf</Text>
-          <Text style={styles.sub}>Een paar gegevens om je werkruimte op te zetten.</Text>
+          <Text style={styles.sub}>We passen BossBase aan op jouw branche.</Text>
         </View>
 
         <ScrollView
@@ -67,40 +81,60 @@ export default function CompanyScreen() {
             value={companyName}
             onChangeText={(v) => {
               setCompanyName(v);
-              if (errorMsg) setErrorMsg(null);
+              if (fouten.companyName) setFouten((f) => ({ ...f, companyName: undefined }));
             }}
-            placeholder="Van der Berg Installaties"
+            placeholder="Veldhuis Schilderwerken"
             autoCapitalize="words"
-            error={errorMsg ?? undefined}
-          />
-          <Field
-            label="Branche"
-            value={branche}
-            onChangeText={setBranche}
-            placeholder="Loodgieter & installatie"
-          />
-          <Field
-            label="Teamgrootte"
-            value={teamSize}
-            onChangeText={setTeamSize}
-            placeholder="2 – 5 personen"
-            keyboardType="default"
+            autoComplete="organization"
+            error={fouten.companyName}
           />
 
-          {/* Solo toggle */}
-          <View style={styles.toggleCard}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.toggleTitle}>Ik werk alleen</Text>
-              <Text style={styles.toggleSub}>Sla teaminstellingen nu over</Text>
+          <View>
+            <Text style={styles.groupLabel}>Branche</Text>
+            <View style={styles.chips} accessibilityRole="radiogroup">
+              {BRANCHES.map((b) => {
+                const on = branche === b;
+                const Icon = BRANCHE_ICOON[b];
+                return (
+                  <Pressable
+                    key={b}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                    aria-checked={on}
+                    onPress={() => setBranche(b)}
+                    style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && { opacity: 0.9 }]}
+                  >
+                    <Icon size={16} color={onb.ink} strokeWidth={2} />
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      {b}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-            <Switch
-              value={isSolo}
-              onValueChange={setIsSolo}
-              trackColor={{ false: 'rgba(10,10,10,0.15)', true: onb.green }}
-              thumbColor="#fff"
-              ios_backgroundColor="rgba(10,10,10,0.15)"
-            />
           </View>
+
+          <Field
+            label="Telefoon"
+            value={phone}
+            onChangeText={(v) => {
+              setPhone(v);
+              if (fouten.phone) setFouten((f) => ({ ...f, phone: undefined }));
+            }}
+            placeholder="06-12345678"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+            error={fouten.phone}
+          />
+          <Field
+            label="KvK-nummer"
+            value={kvk}
+            onChangeText={setKvk}
+            placeholder="12345678"
+            keyboardType="number-pad"
+            hint="Optioneel"
+          />
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
@@ -136,28 +170,42 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     gap: 18,
   },
-  toggleCard: {
-    marginTop: 4,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 16,
+  groupLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: onb.muted,
+    marginBottom: 8,
+    paddingLeft: 4,
+    letterSpacing: -0.1,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: onb.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: onb.hair,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 14,
   },
-  toggleTitle: {
+  chipOn: {
+    borderColor: onb.ink,
+    backgroundColor: onb.greenSoft,
+  },
+  chipText: {
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '600',
     color: onb.ink,
     letterSpacing: -0.2,
-  },
-  toggleSub: {
-    fontSize: 13,
-    color: onb.muted,
-    marginTop: 2,
   },
   footer: {
     paddingHorizontal: 20,

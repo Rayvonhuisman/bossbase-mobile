@@ -9,10 +9,10 @@ import { GhostLink, GreenButton } from './_components';
 import { onb } from './_tokens';
 
 /**
- * Screen 1/5 — Welcome.
+ * Screen 1/6 — Welcome.
  *
  * Hero met logo + gestapelde sample-cards (planning · werkbon · uren timer),
- * grote hero-tekst, CTA naar role-screen, ghost link naar bestaande login.
+ * grote hero-tekst, CTA naar de pakketkeuze, ghost link naar bestaande login.
  */
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function WelcomeScreen() {
 
   const onStart = () => {
     reset();
-    router.push('/(onboarding)/role');
+    router.push('/(onboarding)/pakket');
   };
   const onAlreadyHaveAccount = () => {
     router.replace('/(auth)/login');

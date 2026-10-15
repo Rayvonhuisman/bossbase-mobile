@@ -6,6 +6,8 @@ export type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   role: Role;
+  /** Gezet door verify-code. Leeg + geen company_id = registratie wacht op de code. */
+  email_verified_at?: string | null;
   // NOTE: `email` is NOT a column on `profiles`. The user's email lives on
   // `auth.users` and is exposed via the Supabase session (`user.email`).
 };

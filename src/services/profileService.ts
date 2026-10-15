@@ -3,11 +3,14 @@ import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly } from '@/lib/sessionContext';
 import { translateAuthError } from '@/lib/authErrors';
 import { isNetwerkfout } from '@/lib/netwerkfout';
+import { wachtOpVerificatie } from '@/lib/registratie';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { Company, Profile } from '@/types/domain';
 
 export type ProfileFetchErrorKind =
   | 'profile_not_found'
+  /** Wel een profiel, geen bedrijf, e-mail nog niet bevestigd: de registratie wacht op de code. */
+  | 'awaiting_verification'
   | 'company_not_found'
   | 'rls_or_permission_error'
   | 'schema_error'
@@ -51,7 +54,7 @@ export async function fetchProfileWithCompany(userId: string): Promise<ProfileFe
   // it returns Postgres 42703 (undefined_column).
   const profileResp = await supabase
     .from('profiles')
-    .select('id, company_id, full_name, avatar_url, role')
+    .select('id, company_id, full_name, avatar_url, role, email_verified_at')
     .eq('id', userId)
     .maybeSingle();
 
@@ -88,6 +91,16 @@ export async function fetchProfileWithCompany(userId: string): Promise<ProfileFe
   }
 
   const profile = profileResp.data as Profile;
+
+  // Net geregistreerd (of eerder geregistreerd en nooit bevestigd): het profiel
+  // bestaat zonder bedrijf tot verify-code het aanmaakt. Zelfde regel als de
+  // verificatie-gate van het dashboard.
+  if (wachtOpVerificatie(profile)) {
+    return {
+      ok: false,
+      error: { kind: 'awaiting_verification', message: 'Profile has no company yet and email is not verified' },
+    };
+  }
 
   // ---- 2) Company ---------------------------------------------------------
   // Schema: profiles.company_id is NOT NULL. If it is empty here, the schema
