@@ -66,9 +66,9 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Route naar kaartenapp (zie 3)
 
 ### 12. Uren
-- [ ] Werking gecontroleerd tegen dashboard
+- [x] Werking gecontroleerd tegen dashboard: twee soorten gescheiden en nooit opgeteld, alleen werkdaguren bewerkbaar, collega's alleen met admin/planning (zelfde regel als de database), pauze en km. Nieuw: Week/Maand (onthouden); getest: team september 749,5 u werkdag en 254 u werkbon, gelijk aan de database
 - [x] Melding werkbonuren vs werkdaguren alleen als het bedrijf uren bijhoudt + uitleg. Voorstel en gebouwd: de oranje meldingen ("Werkdaguren ontbreken", "Uren kloppen niet", "!" in de weekbalk) zijn weg; daarvoor in de plaats de herinnering van het dashboard als kaart "Vul je werkdag in" (homepage en Uren): alleen als de urenherinnering aan staat (Instellingen › Standaardwaarden), niet voor de eigenaar/admin, niet zonder personeel, niet voor uitgesloten medewerkers, alleen op herinneringsdagen; dagen waarop je ingepland stond (werkbondag in je ploeg of activiteit) zonder werkdaguren, laatste 14 dagen; met uitleg werkdag- vs werkbonuren, "Invullen" opent Uren schrijven op die dag, "Later" verbergt hem voor het ingestelde interval. Getest: Pieter (medewerker) 12 open dagen, gelijk aan het dashboard; Niels (admin) geen kaart
-- [ ] Wat ontbreekt t.o.v. dashboard
+- [x] Wat ontbreekt t.o.v. dashboard: maandweergave (toegevoegd), de herinnering "Vul je werkdag in" (toegevoegd, zie hierboven). Bewust anders: geen "Alles"/"Dag" (dag zit in de week, "alles" is op een telefoon geen werkbare lijst); de app houdt de norm van 8 u per dag en de chip "Open"
 
 ### 13. Materialen
 - [ ] Gecontroleerd tegen dashboard

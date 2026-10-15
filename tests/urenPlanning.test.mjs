@@ -186,3 +186,12 @@ test('niet ingepland en dubbel ingepland', () => {
   assert.equal(plan.medewerkerKleur(-1), '#9ca3af');
   assert.equal(plan.medewerkerKleur(0), 'hsl(120, 65%, 50%)');
 });
+
+test('uren per maand: eerste/laatste dag, bladeren, label', () => {
+  assert.equal(uren.laatsteVanMaand('2026-10-01'), '2026-10-31');
+  assert.equal(uren.laatsteVanMaand('2028-02-10'), '2028-02-29');
+  assert.equal(uren.plusMaanden('2026-12-01', 1), '2027-01-01');
+  assert.equal(uren.plusMaanden('2026-01-01', -1), '2025-12-01');
+  assert.equal(uren.dagenTussenIso('2026-10-30', '2026-11-02').length, 4);
+  assert.equal(uren.maandLabel('2026-10-01'), 'Oktober 2026');
+});

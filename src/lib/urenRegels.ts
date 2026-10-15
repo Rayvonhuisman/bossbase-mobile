@@ -74,6 +74,36 @@ const kort = (iso: string) => {
   return `${d.getDate()} ${MAAND_KORT[d.getMonth()]}`;
 };
 
+export type UrenPeriode = 'week' | 'maand';
+
+const MAAND_LANG = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+
+/** De laatste dag van de maand waarin `iso` valt. */
+export function laatsteVanMaand(iso: string): string {
+  const d = naarDate(iso);
+  return naarIso(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12));
+}
+
+/** De eerste van de maand, `n` maanden verder (of terug). */
+export function plusMaanden(iso: string, n: number): string {
+  const d = naarDate(iso);
+  return naarIso(new Date(d.getFullYear(), d.getMonth() + n, 1, 12));
+}
+
+/** Alle datums van `van` t/m `tot`. */
+export function dagenTussenIso(van: string, tot: string): string[] {
+  const uit: string[] = [];
+  for (let d = van; d <= tot && uit.length < 400; d = plusDagen(d, 1)) uit.push(d);
+  return uit;
+}
+
+/** "Oktober 2026" */
+export function maandLabel(iso: string): string {
+  const d = naarDate(iso);
+  const m = MAAND_LANG[d.getMonth()] ?? '';
+  return `${m.charAt(0).toUpperCase()}${m.slice(1)} ${d.getFullYear()}`;
+}
+
 /** "Week 41 · 5 okt – 11 okt" */
 export function weekLabel(maandag: string): string {
   return `Week ${isoWeek(maandag)} · ${kort(maandag)} – ${kort(plusDagen(maandag, 6))}`;

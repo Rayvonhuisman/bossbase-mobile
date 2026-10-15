@@ -39,7 +39,12 @@ import { telDagenOp, urenPerDag, urenVanDag } from '@/lib/urenTotalen';
 import { berekenUren } from '@/lib/urenBerekening';
 import {
   dagKop,
+  dagenTussenIso,
   dagenVanWeek,
+  laatsteVanMaand,
+  maandLabel,
+  plusMaanden,
+  type UrenPeriode,
   filterUren,
   groepeerPerDag,
   leesKm,
@@ -97,10 +102,22 @@ export default function HoursScreen() {
   const magTeam = magTeamWerkdagen({ userId: user?.id ?? null, role, can });
 
   const vandaag = todayISO();
+  // Week of maand, zoals de periodekeuze van het dashboard (Dag valt in de week,
+  // "Alles" is op een telefoon geen werkbare lijst).
+  const [periode, setPeriode] = useOnthouden<UrenPeriode>('uren.periode', 'week', ['week', 'maand']);
   const [maandag, setMaandag] = useState(() => maandagVan(todayISO()));
+  const [maandEerste, setMaandEerste] = useState(() => `${todayISO().slice(0, 7)}-01`);
   const weekDatums = useMemo(() => dagenVanWeek(maandag), [maandag]);
-  const zondag = weekDatums[6]!;
   const isDezeWeek = weekDatums.includes(vandaag);
+  const maandLaatste = useMemo(() => laatsteVanMaand(maandEerste), [maandEerste]);
+  const isDezeMaand = vandaag.slice(0, 7) === maandEerste.slice(0, 7);
+  const van = periode === 'maand' ? maandEerste : maandag;
+  const tot = periode === 'maand' ? maandLaatste : weekDatums[6]!;
+  const isHuidig = periode === 'maand' ? isDezeMaand : isDezeWeek;
+  const stap = (r: -1 | 1) =>
+    periode === 'maand' ? setMaandEerste((m) => plusMaanden(m, r)) : setMaandag((m) => plusDagen(m, r * 7));
+  const naarNu = () =>
+    periode === 'maand' ? setMaandEerste(`${todayISO().slice(0, 7)}-01`) : setMaandag(maandagVan(todayISO()));
 
   const [scope, setScope] = useOnthouden<Scope>('uren.scope', 'ik', ['ik', 'team']);
   const team = scope === 'team' && magTeam;
@@ -118,8 +135,8 @@ export default function HoursScreen() {
     if (!userId) return;
     setError(null);
     const { data, error: fetchError } = team
-      ? await listCompanyUren(maandag, zondag)
-      : await listUrenForProfile(userId, maandag, zondag);
+      ? await listCompanyUren(van, tot)
+      : await listUrenForProfile(userId, van, tot);
     // Faalt één van de twee tabellen, dan is het totaal onvolledig — dat
     // melden we in plaats van een te laag getal als echt totaal te tonen.
     setError(fetchError);
@@ -130,7 +147,7 @@ export default function HoursScreen() {
         setNamen(Object.fromEntries(p.data.map((x) => [x.id, x.full_name ?? 'Medewerker'])));
       }
     }
-  }, [userId, team, maandag, zondag]);
+  }, [userId, team, van, tot]);
 
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
@@ -148,6 +165,11 @@ export default function HoursScreen() {
 
   const weekDagen = useMemo(() => urenPerDag(entries, weekDatums), [entries, weekDatums]);
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
+  // Maand: dezelfde telling over alle dagen van de maand.
+  const maandTotaal = useMemo(
+    () => telDagenOp(urenPerDag(entries, dagenTussenIso(maandEerste, maandLaatste))),
+    [entries, maandEerste, maandLaatste],
+  );
   const kpiWerkdag = useMemo(() => urenKpi(entries.filter((e) => e.bron === 'werkdag')), [entries]);
 
   const gefilterd = useMemo(() => filterUren(zichtbaar, filter), [zichtbaar, filter]);
@@ -232,7 +254,13 @@ export default function HoursScreen() {
         header={
           <AppTopBar
             title="Uren"
-            subtitle={team ? `Team · ${formatHM(week.werkdag)} werkdaguren` : `${formatHM(week.werkdag)} van 40 u deze week`}
+            subtitle={
+              periode === 'maand'
+                ? `${team ? 'Team · ' : ''}${formatHM(maandTotaal.werkdag)} werkdaguren ${isDezeMaand ? 'deze maand' : `in ${maandLabel(maandEerste).split(' ')[0]!.toLowerCase()}`}`
+                : team
+                  ? `Team · ${formatHM(week.werkdag)} werkdaguren`
+                  : `${formatHM(week.werkdag)} van 40 u deze week`
+            }
             rightAction={
               magSchrijven ? (
                 <HeaderIconButton icon={Plus} label="Uren registreren" size={42} onPress={naarNieuw} />
@@ -244,33 +272,52 @@ export default function HoursScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
-        {/* Weeknavigatie: ma t/m zo, zoals de periodekeuze in het dashboard. */}
+        {/* Week of maand, en bladeren — zoals de periodekeuze in het dashboard. */}
+        <View style={styles.scopeWrap}>
+          <View style={styles.scopeGroep}>
+            {(['week', 'maand'] as const).map((k) => {
+              const on = periode === k;
+              return (
+                <Pressable
+                  key={k}
+                  onPress={() => setPeriode(k)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  aria-pressed={on}
+                  style={[styles.scopeKnop, on && [styles.scopeKnopAan, dsShadow]]}
+                >
+                  <Text style={[styles.scopeTekst, on && styles.scopeTekstAan]}>{k === 'week' ? 'Week' : 'Maand'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
         <View style={styles.navRow}>
           <Pressable
-            onPress={() => setMaandag((m) => plusDagen(m, -7))}
+            onPress={() => stap(-1)}
             accessibilityRole="button"
-            accessibilityLabel="Vorige week"
+            accessibilityLabel={periode === 'maand' ? 'Vorige maand' : 'Vorige week'}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronLeft size={20} color={t.ink} strokeWidth={2.4} />
           </Pressable>
           <Text style={styles.navLabel} numberOfLines={1}>
-            {weekLabel(maandag)}
+            {periode === 'maand' ? maandLabel(maandEerste) : weekLabel(maandag)}
           </Text>
-          {!isDezeWeek ? (
+          {!isHuidig ? (
             <Pressable
-              onPress={() => setMaandag(maandagVan(todayISO()))}
+              onPress={naarNu}
               accessibilityRole="button"
-              accessibilityLabel="Naar deze week"
+              accessibilityLabel={periode === 'maand' ? 'Naar deze maand' : 'Naar deze week'}
               style={({ pressed }) => [styles.todayBtn, pressed && { opacity: 0.7 }]}
             >
               <Text style={styles.todayBtnText}>Vandaag</Text>
             </Pressable>
           ) : null}
           <Pressable
-            onPress={() => setMaandag((m) => plusDagen(m, 7))}
+            onPress={() => stap(1)}
             accessibilityRole="button"
-            accessibilityLabel="Volgende week"
+            accessibilityLabel={periode === 'maand' ? 'Volgende maand' : 'Volgende week'}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronRight size={20} color={t.ink} strokeWidth={2.4} />
@@ -316,8 +363,8 @@ export default function HoursScreen() {
           </View>
         ) : null}
 
-        {/* Vandaag — alleen in de lopende week en voor je eigen uren. */}
-        {isDezeWeek && !team ? (
+        {/* Vandaag — alleen in de lopende periode en voor je eigen uren. */}
+        {isHuidig && !team ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
             <AppCard padding={18}>
               <View style={styles.summaryTop}>
@@ -352,7 +399,37 @@ export default function HoursScreen() {
             dashboard zegt daar bewust niets van (UrenPageV2). */}
         {!team ? <UrenHerinneringKaart /> : null}
 
+        {/* Maandoverzicht: de totalen; de dagen staan in de lijst eronder. */}
+        {periode === 'maand' ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <AppCard padding={16}>
+              <View style={styles.weekKop}>
+                <Text style={styles.weekKopTitel}>Maandoverzicht</Text>
+                <Text style={styles.weekKopMeta}>{formatHM(maandTotaal.werkdag)} werkdag</Text>
+              </View>
+              <View style={styles.summaryStats}>
+                <UrenStat label="Werkdag" uren={maandTotaal.werkdag} styles={styles} />
+                <UrenStat label="Op werkbonnen" uren={maandTotaal.werkbon} styles={styles} />
+                <UrenStat
+                  label="Niet aan een klus"
+                  uren={Math.max(0, maandTotaal.verschil)}
+                  styles={styles}
+                  leeg={maandTotaal.werkdag === 0}
+                />
+              </View>
+              {team ? (
+                <Text style={styles.kpiRegel}>
+                  {kpiWerkdag.medewerkers} {kpiWerkdag.medewerkers === 1 ? 'medewerker' : 'medewerkers'} · gem.{' '}
+                  {formatHM(kpiWerkdag.gemPerDag)} per dag over {kpiWerkdag.dagen}{' '}
+                  {kpiWerkdag.dagen === 1 ? 'dag' : 'dagen'}
+                </Text>
+              ) : null}
+            </AppCard>
+          </View>
+        ) : null}
+
         {/* Weekoverzicht */}
+        {periode === 'week' ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <AppCard padding={16}>
             <View style={styles.weekKop}>
@@ -407,6 +484,7 @@ export default function HoursScreen() {
             ) : null}
           </AppCard>
         </View>
+        ) : null}
 
         {error && entries.length > 0 ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
