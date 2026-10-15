@@ -75,3 +75,108 @@ sluit aan op de live regels van 14-10 (`offerte-pdf-url` v9, opslagrechten logo'
   `/.well-known/apple-app-site-association` op `app.bossbase.nl` (Apple Team ID nodig). Niet aangemaakt.
 - Simulator op deze machine reageert niet (`simctl openurl` time-out); native visueel alleen op echt toestel te
   bevestigen.
+
+## 6. app-verbeteren
+
+Bron: `origin/app-verbeteren` (828ae24), 55 gewone commits + 8 merges boven
+`main`. Samengevoegd op `sync/testflight-met-pwa` met merge-commit 8786846 en
+vier losse fixcommits (11c5dc2 beveiliging foto/kostenbon, e6478e6 CSP/PDF,
+a965036 systeemthema, 9bd73dc permissieteksten). Niet gepusht.
+
+**Telling (55 gewone commits):** 40 overgenomen zoals ze zijn, 8 aangepast
+overgenomen, 7 niet. De 8 merges volgen hun onderliggende commits.
+
+### Per commit
+
+| Hash | Wat | Besluit | Waarom |
+|---|---|---|---|
+| 8a87a4d | Homepage: thema in Instellingen, Boss-hoofd, widgets | aangepast | Widgets, Boss-hoofd en de Appearance-listener wel; themaverplaatsing niet (één zon/maan-knop in de kop) |
+| 816abdb | Widget Nieuwe aanvragen + checklist | overgenomen | |
+| e728f81 | Voertuig; route-helper (Apple Kaarten/Google Maps) | overgenomen | `LSApplicationQueriesSchemes` in het infoPlist-blok van HEAD |
+| 67df350 | Projectkaart: statusstrook, aanvraag | overgenomen | png's niet |
+| 7670686 | Aanvraagtekst in groen vak | overgenomen | |
+| 7407306 | Filters onthouden | overgenomen | |
+| 90d7bd7 | Adres zoeken via PDOK | aangepast | `https://api.pdok.nl` in `connect-src` |
+| f2dfba7 | Werkbon-kopkaart, FotoViewer | overgenomen | |
+| bcca56e | Checklist | niet | alleen docs |
+| 34a5455 | Uren: "Vul je werkdag in" | overgenomen | |
+| 0d0a296 | Urenherinnering zonder Date.now() | overgenomen | |
+| 8ad8041 | PDF-module (jsPDF) | overgenomen | |
+| 4f3e997 | Kleur in de tegels | overgenomen | |
+| 6670de3 | PDF-weergave (WebView/iframe + pdf.js) | aangepast | pdf.js zelf gehost (web) / cdnjs (app), beide met SRI; inline script op sha256 in de CSP; WebViews met navigatiefilter |
+| befd054 | Facturen openstaand/verlopen | overgenomen | |
+| 3023829 | iPad in de app | niet (deels) | HEAD-variant beter; alleen doc-comment van `bepaalSchermklasse`. Android-lock + `expo-screen-orientation` weg |
+| 287187a | Agenda: type, project, tijden | overgenomen | |
+| c3dbcca | Planning-bouwstenen, ploegkeuze | overgenomen | |
+| e2383dc | Planning: blok aantikken | overgenomen | |
+| a44c61f | Planning met alleen het recht planning | overgenomen | testen met een rol met alleen planning |
+| 5a4b768 | Uren: week of maand | overgenomen | |
+| d5a1659 | Kosten: bon toevoegen/bekijken/verwijderen | aangepast | eigen pad per post, oude bon opruimen bij vervangen, alleen niet-gedeelde eigen paden verwijderen |
+| f8afced | Relaties: type, bron, betaaltermijn | overgenomen | png niet |
+| 59641ef | metro.config | aangepast | `metro.config.js` toegelaten in `.vercelignore` |
+| a6dd612 | Relaties: geen knop in een knop | overgenomen | png's niet |
+| 693236e | Geen knop in een knop (agenda, pipeline, database) | overgenomen | |
+| 2054339 | Nieuwe aanvragen week t.o.v. week | overgenomen | |
+| 568d548 | Offertes en facturen: alle acties | overgenomen | |
+| 0ecbfc1 | Projectkaart: alle tabs | overgenomen | png's niet |
+| 357789c | Activiteiten: meerdere toegewezenen | overgenomen | |
+| ba15ad4 | Horizontaal scrollen op web | overgenomen | |
+| 57cb51e | Checklist | niet | alleen docs |
+| 0852a7b | Klantkaart "+" vult klant in | overgenomen | |
+| 4c82564 | Regelbedragen met centen | overgenomen | png's niet |
+| 197124f | Wachtwoord vergeten in de app | overgenomen | |
+| ac45570 | Werkbon als PDF | overgenomen | |
+| 68b39f8 | Laten ondertekenen, Wkb, @-vermeldingen | aangepast | foto verwijderen weer rij-eerst; AfrondenModal/WaarschuwingModal met VelStatusbalk + `automaticallyAdjustKeyboardInsets` |
+| b895e08 | Werkbondetail gelijk aan dashboard | aangepast | modals van HEAD aangehouden; bellen via `callPhone` |
+| 69a4c64 | Afspraakbevestiging per mail | overgenomen | |
+| 696b8e7 | @-vermeldingen: één implementatie | overgenomen | |
+| 5c8d5a8 | Checklist | niet | alleen docs |
+| 8354544 | Nieuwe werkbon: maker is uitvoerder | overgenomen | |
+| 014efed | Nieuwe aanvraag: ontvangstbevestiging | overgenomen | |
+| 02459dc | Pipeline ⋮-menu zijmarge | overgenomen | |
+| 7c3c18c | Registratie zoals het dashboard | aangepast | code overgenomen, voorwaardenlinks via `openExtern`; alleen testen met een testaccount |
+| e2554e5 | Agenda: werkbon uit afspraak | overgenomen | |
+| 648949e | Checklist | niet | alleen docs |
+| 236f0b3 | Financiën | overgenomen | png's niet |
+| 67a50cd | Activiteiten: notitielog | overgenomen | |
+| f3927ef | Instellingen: betaaltermijn, branche | overgenomen | |
+| 5241c78 | Klantkaart: e-mails, tijdlijn | overgenomen | |
+| d12219f | Checklist | niet | alleen docs |
+| ee05310 | Projecten: KPI-tegels op tablet | overgenomen | alleen de code, geen screenshots |
+| 1d721b3 | @-vermeldingen via MentionInvoer | overgenomen | |
+| 828ae24 | Checklist afgerond | niet | alleen docs |
+
+Niet overgenomen: `docs/screenshots/` (289 png's, ~44 MB, met gegevens van
+het testbedrijf), `docs/app-verbeteren.md`, de Weergave-kaart in Mijn profiel,
+`src/lib/schermstand*.ts` en `expo-screen-orientation`.
+
+### Conflictbesluiten
+
+| Bestand | Besluit |
+|---|---|
+| `app.config.ts` | HEAD + `LSApplicationQueriesSchemes: ['comgooglemaps']`; daarna bredere camera-/fototekst |
+| `app/(more)/expenses.tsx`, `invoices.tsx`, `offers.tsx` | versie van de branch, geen rauwe `Linking.openURL` |
+| `app/work-orders/[id].tsx` | branch als basis, modals van HEAD (VelStatusbalk, `automaticallyAdjustKeyboardInsets`, `keyboardShouldPersistTaps`), hoofdlijst ook; `callPhone` |
+| `src/components/MobielKader.tsx` | HEAD |
+| `src/components/project/ProjectDetailScherm.tsx` | branch (foto's in FotoViewer) |
+| `src/lib/schermklasseRegels.ts` | code gelijk; comment van de branch |
+| `src/providers/ThemeProvider.tsx` | HEAD + Appearance-listener (a965036) |
+| `tests/ipad.test.mjs` | HEAD |
+| Stil samengevoegd: `ProfielTab.tsx`, `AppTopBar.tsx`, `HeaderActions.tsx`, `ThemeToggleButton.tsx`, `themaKeuze*.ts` | terug naar HEAD (één knop in de kop) |
+| Stil samengevoegd: `customers/[id].tsx`, `(tabs)/_layout.tsx`, `menu.tsx`, `linking.ts` | gecontroleerd, in orde |
+
+### Open releasepunten (App Store)
+
+- **5.1.1(v) account verwijderen:** registratie kan volledig in de app, maar
+  de eigenaar kan zijn account/bedrijf niet in de app verwijderen (alleen via
+  het dashboard of een mail). Nodig vóór indienen: een in-app-flow met
+  bevestiging.
+- **3.1.1 abonnementen:** prijzen, pakketkeuze (Groei/Team) en de link naar
+  abonneren/beheren op het dashboard. Op iOS verbergen of vooraf laten
+  toetsen.
+- **5.1.1(ii) gebruiksbeschrijvingen:** camera/foto's bijgewerkt (9bd73dc);
+  App Privacy-label aanvullen met PDOK (adresinvoer naar een derde partij).
+- **Nieuwe native build verplicht:** `react-native-webview`, `expo-print`,
+  `expo-sharing`, `expo-file-system`. Versie of `runtimeVersion` ophogen;
+  geen EAS Update naar de huidige TestFlight-build (18c2f43).
+- PDF in de app laadt pdf.js van cdnjs: zonder netwerk geen PDF-weergave.
