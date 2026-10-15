@@ -3,6 +3,8 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { AdresZoeker } from '@/components/AdresZoeker';
 import { FormField } from '@/components/FormField';
+import { SelectField } from '@/components/SelectField';
+import { BRANCHES } from '@/lib/registratie';
 import { useAuth, useTheme, useToast } from '@/providers';
 import { useSave } from '@/lib/useSave';
 import { gewijzigdeVelden, isLeeg } from '@/lib/gewijzigdeVelden';
@@ -33,7 +35,15 @@ type Form = {
   branding_color: string;
   iban: string;
   iban_tnv: string;
+  branche: string;
 };
+
+/** De vaste lijst, plus een oude waarde die er niet (meer) in staat — zoals het dashboard. */
+const brancheOpties = (huidig: string) =>
+  [...BRANCHES, ...(huidig && !(BRANCHES as readonly string[]).includes(huidig) ? [huidig] : [])].map((b) => ({
+    id: b,
+    label: b,
+  }));
 
 const naarForm = (c: CompanyRow | null): Form => ({
   name: c?.name ?? '',
@@ -49,6 +59,7 @@ const naarForm = (c: CompanyRow | null): Form => ({
   branding_color: c?.branding_color || '#1DDB62',
   iban: c?.iban ?? '',
   iban_tnv: c?.iban_tnv ?? '',
+  branche: c?.branche ?? '',
 });
 
 /**
@@ -274,6 +285,16 @@ export function BedrijfTab({
           autoCapitalize="none"
           autoCorrect={false}
           editable={magWijzigen}
+        />
+        <SelectField
+          label="Branche"
+          value={form.branche || null}
+          options={brancheOpties(form.branche)}
+          onChange={(id) => setForm((f) => ({ ...f, branche: id ?? '' }))}
+          allowEmpty
+          emptyLabel="Kies je branche"
+          placeholder="Kies je branche"
+          disabled={!magWijzigen}
         />
         {magWijzigen ? (
           <AdresZoeker
