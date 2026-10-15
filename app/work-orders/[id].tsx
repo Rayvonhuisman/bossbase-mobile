@@ -819,7 +819,8 @@ export default function WorkOrderDetailScreen() {
               title={`Planning · ${dagen.length} ${dagen.length === 1 ? 'dag' : 'dagen'}`}
               icon={<CalendarDays size={16} color={ds.green700} />}
               action={
-                canManage && can('planning') && !opSlot ? (
+                // Zoals het dashboard: het recht planning is genoeg (niet ook werkbonbeheer).
+                can('planning') && !readonly && !opSlot ? (
                   <KopKnop styles={styles} label="Planning aanpassen" onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)} />
                 ) : null
               }

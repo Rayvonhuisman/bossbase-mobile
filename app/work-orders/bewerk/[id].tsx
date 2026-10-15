@@ -33,11 +33,15 @@ export default function BewerkWerkbonScreen() {
   }, [id]);
   const { loading, opnieuw } = useLaden(laad, { onFout: setFout, bijFocus: false });
 
+  // Werkbonbeheer, of het recht planning: ook de planner past dagen, ploeg en
+  // voertuigen aan, zoals vanuit de planning van het dashboard (RLS werkbonnen_update
+  // staat `planning` toe).
   const mag = useMemo(
     () =>
       loaded &&
       !readonly &&
-      canManageWerkbonnen({ userId: user?.id ?? null, role, can, gedeeldeWerkruimte: hasFeature('gedeelde_werkruimte'), readonly }),
+      (canManageWerkbonnen({ userId: user?.id ?? null, role, can, gedeeldeWerkruimte: hasFeature('gedeelde_werkruimte'), readonly }) ||
+        can('planning')),
     [loaded, readonly, user?.id, role, can, hasFeature],
   );
 
