@@ -85,6 +85,7 @@ import {
   TegelRaster,
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
@@ -160,7 +161,11 @@ function OffersScreenInhoud() {
   const [items, setItems] = useState<OfferteRow[]>([]);
   const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
   const [zoek, setZoek] = useState('');
-  const [filter, setFilter] = useState<OfferteFilter>('alle');
+  const [filter, setFilter] = useOnthouden<OfferteFilter>(
+    'offertes.filter',
+    'alle',
+    OFFERTE_FILTERS.map((f) => f.id),
+  );
 
   // Detailweergave
   const [detail, setDetail] = useState<OfferteRow | null>(null);

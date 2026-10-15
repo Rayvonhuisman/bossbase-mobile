@@ -52,6 +52,7 @@ import {
   type UrenFilter,
   magTeamWerkdagen,
 } from '@/lib/urenRegels';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -101,14 +102,14 @@ export default function HoursScreen() {
   const zondag = weekDatums[6]!;
   const isDezeWeek = weekDatums.includes(vandaag);
 
-  const [scope, setScope] = useState<Scope>('ik');
+  const [scope, setScope] = useOnthouden<Scope>('uren.scope', 'ik', ['ik', 'team']);
   const team = scope === 'team' && magTeam;
-  const [medewerker, setMedewerker] = useState<string | null>(null);
+  const [medewerker, setMedewerker] = useOnthouden<string | null>('uren.medewerker', null, (v) => typeof v === 'string');
   const [namen, setNamen] = useState<Record<string, string>>({});
 
   const [entries, setEntries] = useState<UrenRegel[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<UrenFilter>('alles');
+  const [filter, setFilter] = useOnthouden<UrenFilter>('uren.filter', 'alles', ['alles', 'werkdag', 'werkbon', 'open']);
   const [bewerken, setBewerken] = useState<UurConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 

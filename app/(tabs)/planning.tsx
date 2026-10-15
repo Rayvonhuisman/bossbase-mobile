@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -72,6 +72,7 @@ import { notAvailableAlert } from '@/lib/notAvailable';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { alsTekst } from '@/lib/notitieTekst';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 type ViewMode = 'dag' | 'week' | 'maand';
 
@@ -196,10 +197,12 @@ export default function PlanningScreen() {
    * week of maand alleen met een tik te bereiken.
    */
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
-  const [view, setView] = useState<ViewMode>(
-    // Zelfde standaard als het dashboard: de week.
-    viewParam === 'dag' || viewParam === 'maand' ? viewParam : 'week',
-  );
+  // Zelfde standaard als het dashboard: de week. Een ?view= in de link wint
+  // bij het openen; daarna telt de laatst gekozen weergave (per gebruiker).
+  const [view, setView] = useOnthouden<ViewMode>('agenda.weergave', 'week', ['dag', 'week', 'maand']);
+  useEffect(() => {
+    if (viewParam === 'dag' || viewParam === 'week' || viewParam === 'maand') setView(viewParam);
+  }, [viewParam, setView]);
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [items, setItems] = useState<PlanningItem[]>([]);
   const [error, setError] = useState<string | null>(null);

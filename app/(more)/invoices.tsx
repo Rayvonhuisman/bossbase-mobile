@@ -93,6 +93,7 @@ import {
   TegelRaster,
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
@@ -180,7 +181,11 @@ function InvoicesScreenInhoud() {
   const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
   const [metDocument, setMetDocument] = useState<Set<string>>(new Set());
   const [zoek, setZoek] = useState('');
-  const [filter, setFilter] = useState<FactuurFilter>('alle');
+  const [filter, setFilter] = useOnthouden<FactuurFilter>(
+    'facturen.filter',
+    'alle',
+    FACTUUR_FILTERS.map((f) => f.id),
+  );
 
   // Detailweergave
   const [detail, setDetail] = useState<FactuurRow | null>(null);

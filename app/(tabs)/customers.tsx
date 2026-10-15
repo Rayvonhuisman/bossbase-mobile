@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -50,6 +50,7 @@ import { avatarKleuren, initialen } from '@/lib/avatar';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { Customer } from '@/types/domain';
 import { useLaden } from '@/lib/useLaden';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -140,7 +141,18 @@ export default function CustomersScreen() {
    * leverancierskaart weer op de leverancierslijst uitkomt.
    */
   const soort: Soort = params.soort === 'leveranciers' ? 'leveranciers' : 'klanten';
-  const kiesSoort = (s: Soort) => router.setParams({ soort: s === 'klanten' ? undefined : s });
+  // Het laatst gekozen tabblad onthouden: wie op Leveranciers stond, komt daar
+  // via de tabbalk weer uit. Een ?soort= in de link wint.
+  const [bewaardeSoort, bewaarSoort] = useOnthouden<Soort>('relaties.soort', 'klanten', ['klanten', 'leveranciers']);
+  const kiesSoort = (s: Soort) => {
+    bewaarSoort(s);
+    router.setParams({ soort: s === 'klanten' ? undefined : s });
+  };
+  useEffect(() => {
+    if (!params.soort && bewaardeSoort === 'leveranciers') router.setParams({ soort: 'leveranciers' });
+    // Alleen bij het openen en zodra de bewaarde keuze binnen is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bewaardeSoort]);
 
   /**
    * Klanten aanmaken volgt het dashboard: het recht `klanten_bewerken`. RLS
@@ -175,7 +187,13 @@ export default function CustomersScreen() {
   const [error, setError] = useState<string | null>(null);
   const [levFout, setLevFout] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<FilterKey>('alle');
+  const [filter, setFilter] = useOnthouden<FilterKey>('relaties.filter', 'alle', [
+    'alle',
+    'recent',
+    'actief',
+    'zakelijk',
+    'particulier',
+  ]);
 
   // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep
   // tijdens het renderen).

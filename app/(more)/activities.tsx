@@ -44,6 +44,7 @@ import { useLaden } from '@/lib/useLaden';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, spacing, type ThemeColors } from '@/theme';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Activiteiten — gelijk aan `ActivitiesPageV2` in het dashboard.
@@ -90,9 +91,9 @@ export default function ActivitiesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [concept, setConcept] = useState<ActivityConcept | null>(null);
 
-  const [filter, setFilter] = useState<ActiviteitFilter>('all');
+  const [filter, setFilter] = useOnthouden<ActiviteitFilter>('activiteiten.filter', 'all', ACTIVITEIT_FILTERS);
   const [zoek, setZoek] = useState('');
-  const [medewerker, setMedewerker] = useState<string | null>(null);
+  const [medewerker, setMedewerker] = useOnthouden<string | null>('activiteiten.medewerker', null, (v) => typeof v === 'string');
 
   const { save: saveVink, saving: vinkBezig, error: vinkFout } = useSave<unknown>();
 

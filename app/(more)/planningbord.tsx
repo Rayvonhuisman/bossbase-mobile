@@ -40,6 +40,7 @@ import { useLaden } from '@/lib/useLaden';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Planning — de planningpagina van het dashboard (`PlanningPage.jsx`), om te
@@ -104,8 +105,11 @@ function PlanningbordScreen() {
   const metVoertuigen = hasFeature('voertuigen');
 
   const { zicht: zichtParam } = useLocalSearchParams<{ zicht?: string }>();
-  const [zicht, setZicht] = useState<Zicht>(zichtParam === 'dag' ? 'dag' : 'week');
-  const [modus, setModus] = useState<Modus>('medewerker');
+  // Een ?zicht= in de link wint; anders de laatst gekozen weergave.
+  const [bewaardZicht, setZicht] = useOnthouden<Zicht>('planning.zicht', 'week', ['dag', 'week']);
+  const zicht: Zicht = zichtParam === 'dag' || zichtParam === 'week' ? zichtParam : bewaardZicht;
+  const [bewaardeModus, setModus] = useOnthouden<Modus>('planning.modus', 'medewerker', ['medewerker', 'voertuig']);
+  const modus: Modus = bewaardeModus === 'voertuig' && !metVoertuigen ? 'medewerker' : bewaardeModus;
   const vandaag = todayISO();
   const [anker, setAnker] = useState(vandaag);
   const weekDatums = useMemo(() => dagenVanWeek(maandagVan(anker)), [anker]);

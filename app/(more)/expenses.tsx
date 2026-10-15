@@ -63,6 +63,7 @@ import {
   type WerkbonInkoopBron,
 } from '@/lib/kostenLogica';
 import { DocumentStatusBadge, TegelRaster } from '@/components/DocumentOnderdelen';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
@@ -110,10 +111,6 @@ type Concept = {
   btwInclusief: boolean;
 };
 
-// Onthouden zolang de app open is, zoals het dashboard het in localStorage zet.
-let bewaardeWeergave: KostenWeergave = 'kosten';
-let bewaardPeriodeType: PeriodeType = 'maand';
-
 function ExpensesScreenInhoud() {
   const router = useRouter();
   const { colors: t } = useTheme();
@@ -135,18 +132,21 @@ function ExpensesScreenInhoud() {
   const [nieuweLeverancier, setNieuweLeverancier] = useState('');
   const [bijlageUrl, setBijlageUrl] = useState<string | null>(null);
 
-  const [weergave, setWeergaveState] = useState<KostenWeergave>(bewaardeWeergave);
-  const [periodeType, setPeriodeTypeState] = useState<PeriodeType>(bewaardPeriodeType);
+  // Weergave en periode onthouden, zoals het dashboard (kosten_weergave, kosten_periode_type), nu per gebruiker.
+  const [weergave, setWeergaveState] = useOnthouden<KostenWeergave>('kosten.weergave', 'kosten', ['kosten', 'materiaal']);
+  const [periodeType, setPeriodeTypeState] = useOnthouden<PeriodeType>(
+    'kosten.periode',
+    'maand',
+    PERIODE_TYPES.map((p) => p.id),
+  );
   const [periodeOffset, setPeriodeOffset] = useState(0);
-  const [filterKlant, setFilterKlant] = useState<string | null>(null);
-  const [filterCat, setFilterCat] = useState<string | null>(null);
+  const [filterKlant, setFilterKlant] = useOnthouden<string | null>('kosten.klant', null, (v) => typeof v === 'string');
+  const [filterCat, setFilterCat] = useOnthouden<string | null>('kosten.categorie', null, (v) => typeof v === 'string');
 
   const kiesWeergave = (w: KostenWeergave) => {
-    bewaardeWeergave = w;
     setWeergaveState(w);
   };
   const kiesPeriodeType = (p: PeriodeType) => {
-    bewaardPeriodeType = p;
     setPeriodeTypeState(p);
     setPeriodeOffset(0);
   };

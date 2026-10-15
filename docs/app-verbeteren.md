@@ -17,7 +17,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ## Algemeen
 
-- [ ] 1. Filters (en tabbladen) onthouden per gebruiker op elke lijstpagina
+- [x] 1. Filters en tabbladen onthouden per gebruiker (`useOnthouden`, op het toestel): werkbonnen, projecten (status, facturatie), offertes, facturen, activiteiten (+ medewerker), relaties (filter + tab Klanten/Leveranciers), uren (ik/team, soort, medewerker), kosten (weergave, periode, klant, categorie), agenda (dag/week/maand), planning (dag/week, medewerker/voertuig). Zoektekst bewust niet. Een filter dat niet meer bestaat valt terug op de standaard. Materialen heeft alleen zoeken
 - [x] 2. "bus/bussen" → "voertuig/voertuigen" in de hele app (4 teksten: werkbonformulier ×2, Instellingen › Voertuigen ×2; verder alleen code-namen)
 - [x] 3. Route-knop opent de kaartenapp: één helper (`lib/routeLinks.ts`) voor klantkaart, leverancier, werkbon (bouwde eigen Google-link), agenda en homepage. iPhone/iPad: Apple Kaarten (in de app keuze als Google Maps erop staat; `LSApplicationQueriesSchemes` toegevoegd, werkt pas na een nieuwe build); Android: Google Maps-route; altijd route i.p.v. zoeken. Projectkaart krijgt een route-knop in punt 9
 - [ ] 4. Adres zoeken zoals het dashboard in elk adresformulier
@@ -56,7 +56,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 10. Projecten
 - [ ] Projectkaart (zie 9)
-- [ ] Filter onthouden (zie 1)
+- [x] Filter onthouden (zie 1)
 - [ ] Bedragwidgets iets meer kleur
 
 ### 11. Relaties en klantkaart

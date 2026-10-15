@@ -49,6 +49,7 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { ds, radius, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Projecten — de projectenpagina van het dashboard (`ProjectsPage.jsx`):
@@ -119,8 +120,17 @@ function ProjectsInhoud() {
   const [leden, setLeden] = useState<SelectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<ProjectStatusFilter>('all');
-  const [facturatie, setFacturatie] = useState<FacturatieFilter>('all');
+  const [status, setStatus] = useOnthouden<ProjectStatusFilter>('projecten.status', 'all', [
+    'all',
+    'gepland',
+    'in_uitvoering',
+    'afgerond',
+  ]);
+  const [facturatieKeuze, setFacturatie] = useOnthouden<FacturatieFilter>('projecten.facturatie', 'all', [
+    'all',
+    'unbilled',
+    'billed',
+  ]);
   const [zoek, setZoek] = useState('');
   const [concept, setConcept] = useState<Concept | null>(null);
 
@@ -128,6 +138,8 @@ function ProjectsInhoud() {
 
   const magMaken = mag('projecten', 'maken');
   const magBedragen = can('projectbedragen');
+  // Zonder recht op bedragen geen (onzichtbaar) facturatiefilter.
+  const facturatie: FacturatieFilter = magBedragen ? facturatieKeuze : 'all';
   const magVerkoop = can('verkoop');
 
   const load = useCallback(async () => {
