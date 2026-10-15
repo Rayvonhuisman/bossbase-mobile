@@ -146,3 +146,11 @@ test('overzicht: open offertes, openstaande facturen, omzet deze maand', () => {
   // Niet-concept facturen van oktober, creditnota trekt zichzelf af.
   assert.equal(O.omzetDezeMaand(facturen, VANDAAG), 100 - 41 + 500);
 });
+
+test('overzicht: nieuwe aanvragen deze week tegen vorige week', () => {
+  const nu = Date.parse('2026-10-15T12:00:00Z');
+  const dag = 864e5;
+  const d = (n) => ({ created_at: new Date(nu - n * dag).toISOString() });
+  assert.deepEqual(O.aanvragenPerWeek([d(1), d(3), d(8), d(20)], nu), { dezeWeek: 2, delta: 1 });
+  assert.deepEqual(O.aanvragenPerWeek([{ created_at: null }, { created_at: null }], nu), { dezeWeek: 2, delta: 2 });
+});

@@ -100,6 +100,21 @@ export function nieuwsteAanvragen<D extends DealKern>(deals: D[], fases: FaseKer
     .slice(0, max);
 }
 
+/**
+ * "3 deze week · +2 t.o.v. vorige" van de tegel `new_leads`: aanvragen in de
+ * eerste fase van de laatste 7 dagen tegen de 7 dagen daarvoor (op created_at).
+ * Zonder datums telt het dashboard alles als "deze week".
+ */
+export function aanvragenPerWeek(lijst: DealKern[], nuMs: number): { dezeWeek: number; delta: number } {
+  const WEEK = 7 * 864e5;
+  const metDatum = lijst.filter((d) => d.created_at);
+  if (!metDatum.length) return { dezeWeek: lijst.length, delta: lijst.length };
+  const leeftijd = (d: DealKern) => nuMs - new Date(d.created_at as string).getTime();
+  const dezeWeek = metDatum.filter((d) => leeftijd(d) < WEEK).length;
+  const vorige = metDatum.filter((d) => leeftijd(d) >= WEEK && leeftijd(d) < 2 * WEEK).length;
+  return { dezeWeek, delta: dezeWeek - vorige };
+}
+
 export function openOffertes(offertes: OfferteKern[]): { aantal: number; waarde: number } {
   const open = offertes.filter((o) => o.status === 'concept' || o.status === 'verzonden');
   return {

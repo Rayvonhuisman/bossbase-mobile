@@ -91,6 +91,18 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 17. Wat ik vergeten ben
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
+Uit de rondgang (15-10), op volgorde van impact:
+- [ ] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken; afspraakbevestiging bij een bezoek
+- [ ] Registratie in de app: bedrijfsnaam, branche, telefoon, KvK en pakket gaan niet mee, en het akkoord met de voorwaarden wordt niet vastgelegd
+- [ ] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard)
+- [ ] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`)
+- [ ] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld
+- [ ] Klantkaart: tabbladen E-mails en Tijdlijn
+- [ ] @-vermeldingen met melding in notities (klant, activiteit, afspraak)
+- [ ] Instellingen: standaard betaaltermijn, branche, websiteformulier; integraties alleen inzien
+- [ ] Menu: Financiën ontbreekt
+- [ ] Wachtwoord vergeten in de app (nu via de website)
+- [ ] Database: bulkmail, Excel, ZIP met PDF's (bewust naar het dashboard verwezen)
 - [x] Relaties: type (Particulier/Zakelijk/VvE/Aannemer), bron en betaaltermijn per klant ontbraken. Nieuwe klant: type + bron (standaard Zakelijk/Handmatig, zoals het dashboard); bewerken: alle drie, ook zichtbaar op de klantkaart. Getest op een testklant en teruggezet
 
 ## Zelf gevonden (naast de punten hierboven)

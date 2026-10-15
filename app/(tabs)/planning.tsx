@@ -1295,10 +1295,10 @@ function PlanningCard({
     : 'Hele dag';
   const tappable = !!item.workOrderId || !!item.customerId;
 
-  const inner = (
-    <View style={[styles.card, dsShadow, highlight && styles.cardHighlight]}>
-      <View style={[styles.cardStripe, { backgroundColor: stripeColor }]} />
-      <View style={styles.cardBody}>
+  // De info is de knop (werkbon of klant openen); Bel, Route en Werkbon staan
+  // ernaast en niet erin — een knop in een knop is ongeldig op web.
+  const info = (
+    <View>
         <View style={styles.cardTopRow}>
           <Text style={styles.cardTime}>{timeLabel}</Text>
           <View style={styles.cardTopRight}>
@@ -1334,6 +1334,24 @@ function PlanningCard({
           </View>
         ) : null}
 
+    </View>
+  );
+
+  return (
+    <View style={[styles.card, dsShadow, highlight && styles.cardHighlight]}>
+      <View style={[styles.cardStripe, { backgroundColor: stripeColor }]} />
+      <View style={styles.cardBody}>
+        {tappable ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => onOpen(item)}
+            style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+          >
+            {info}
+          </Pressable>
+        ) : (
+          info
+        )}
         {!compact ? (
           <View style={styles.cardActions}>
             {item.phone ? (
@@ -1358,13 +1376,6 @@ function PlanningCard({
       </View>
     </View>
   );
-
-  if (!tappable) return inner;
-  return (
-    <Pressable accessibilityRole="button" onPress={() => onOpen(item)} style={({ pressed }) => [pressed && { opacity: 0.95 }]}>
-      {inner}
-    </Pressable>
-  );
 }
 
 function MiniBtn({ icon, label, onPress }: { icon: React.ReactNode; label: string; onPress: () => void }) {
@@ -1372,10 +1383,7 @@ function MiniBtn({ icon, label, onPress }: { icon: React.ReactNode; label: strin
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={(e) => {
-        e.stopPropagation?.();
-        onPress();
-      }}
+      onPress={onPress}
       hitSlop={4}
       style={({ pressed }) => [styles.miniBtn, pressed && { opacity: 0.85 }]}
     >
