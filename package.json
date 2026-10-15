@@ -12,7 +12,9 @@
     "lint": "expo lint",
     "build:web": "expo export --platform web && node scripts/pwa-na-export.mjs dist",
     "test": "node --test \"tests/*.test.mjs\"",
-    "check:bundel": "node scripts/controleer-bundel.mjs dist"
+    "check:bundel": "node scripts/controleer-bundel.mjs dist",
+    "pdf:overnemen": "node scripts/pdf-opbouw-overnemen.mjs",
+    "pdf:vergelijk": "node scripts/vergelijk-pdf.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/sora": "^0.4.2",
@@ -31,6 +33,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-updates": "~57.0.23",
+    "jspdf": "4.2.1",
     "lucide-react-native": "^0.544.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
