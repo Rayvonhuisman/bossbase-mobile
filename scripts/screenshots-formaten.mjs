@@ -40,6 +40,7 @@ const ALLE = [
   ['offertes', '/offers'],
   ['facturen', '/invoices'],
   ['kosten', '/expenses'],
+  ['financien', '/financien'],
   ['materialen', '/materialen'],
   ['activiteiten', '/activities'],
   ['instellingen', '/settings'],
@@ -65,12 +66,19 @@ for (const [formaat, w, h] of FORMATEN.filter(([f]) => !KIES.length || KIES.incl
   mkdirSync(join(UIT, formaat), { recursive: true });
   await page.setViewportSize({ width: w, height: h });
   for (const [naam, pad] of lijst) {
-    await page.goto(`${BASIS}${pad}`);
-    await page.waitForTimeout(Number(process.env.BB_WACHT ?? 9000));
+    // De devserver stuurt een directe link soms door naar het vorige scherm;
+    // dan nog één keer.
+    for (let poging = 0; poging < 2; poging++) {
+      await page.goto(`${BASIS}${pad}`);
+      await page.waitForTimeout(Number(process.env.BB_WACHT ?? 9000));
+      if (new URL(page.url()).pathname === pad.split('?')[0]) break;
+    }
     await page.screenshot({ path: join(UIT, formaat, `${naam}.png`) });
     // Horizontaal scrollen = iets valt buiten beeld.
     const breder = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    console.log(`${formaat}\t${naam}\t${breder > 1 ? `TE BREED +${breder}px` : 'ok'}`);
+    const echt = new URL(page.url()).pathname;
+    const fout = echt !== pad.split('?')[0] ? ` VERKEERD SCHERM ${echt}` : '';
+    console.log(`${formaat}\t${naam}\t${breder > 1 ? `TE BREED +${breder}px` : 'ok'}${fout}`);
   }
 }
 await browser.close();

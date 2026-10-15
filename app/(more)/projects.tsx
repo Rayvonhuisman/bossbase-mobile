@@ -277,16 +277,16 @@ function ProjectsInhoud() {
       >
         {/* KPI's */}
         <View style={[styles.kpis, tablet && styles.kpisTablet]}>
-          <View style={styles.kpi}>
+          <View style={[styles.kpi, tablet && styles.kpiTablet]}>
             <AppKpiCard label="Actieve projecten" value={String(kpi.actief)} />
           </View>
           {magBedragen ? (
-            <View style={styles.kpi}>
+            <View style={[styles.kpi, tablet && styles.kpiTablet]}>
               <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} valueTone="good" />
             </View>
           ) : null}
           {magBedragen ? (
-            <View style={styles.kpi}>
+            <View style={[styles.kpi, tablet && styles.kpiTablet]}>
               <AppKpiCard
                 label="Te factureren"
                 value={formatEUR(kpi.teFactureren)}
@@ -294,7 +294,7 @@ function ProjectsInhoud() {
               />
             </View>
           ) : null}
-          <View style={styles.kpi}>
+          <View style={[styles.kpi, tablet && styles.kpiTablet]}>
             <AppKpiCard label="Gewerkte uren" value={formatUren(kpi.uren)} />
           </View>
         </View>
@@ -512,6 +512,8 @@ const makeStyles = (t: ThemeColors) =>
     kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.md },
     kpisTablet: { flexWrap: 'nowrap' },
     kpi: { flexBasis: '45%', flexGrow: 1 },
+    // Op een tablet staan ze naast elkaar en delen ze de breedte gelijk.
+    kpiTablet: { flexBasis: 0, minWidth: 0 },
     zoek: { paddingHorizontal: 16, marginBottom: spacing.sm },
     lijst: { paddingHorizontal: 16, marginTop: spacing.md, gap: spacing.sm },
     lijstTablet: { flexDirection: 'row', flexWrap: 'wrap' },
