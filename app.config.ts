@@ -21,8 +21,12 @@ const config: ExpoConfig = {
     },
   },
 
-  orientation: 'portrait',
-  userInterfaceStyle: 'light',
+  // Alle standen toegestaan; de iPhone blijft staand via Info.plist (ios.infoPlist),
+  // Android-telefoons via een lock bij het starten (app/_layout.tsx). Tablets draaien mee.
+  orientation: 'default',
+  // 'automatic': "Zoals het apparaat" in Instellingen › Weergave volgt de
+  // systeeminstelling. Met 'light' meldde iOS altijd licht.
+  userInterfaceStyle: 'automatic',
 
   /**
    * Het appicoon komt uit `assets/bossbase-logo-source.jpeg`, het goedgekeurde
@@ -35,13 +39,23 @@ const config: ExpoConfig = {
 
   ios: {
     bundleIdentifier: 'nl.bossbase.app',
-    supportsTablet: false,
+    // iPad: eigen indeling (zie lib/schermklasseRegels), staand en liggend;
+    // iPadOS eist alle standen voor Split View en Stage Manager. De iPhone
+    // blijft staand (UISupportedInterfaceOrientations hieronder).
+    supportsTablet: true,
     associatedDomains: ['applinks:app.bossbase.nl'],
     // De route-knop vraagt of Google Maps erop staat (canOpenURL) om dan de
     // keuze Apple Kaarten / Google Maps te geven. Zonder deze regel antwoordt
     // iOS altijd "nee".
     infoPlist: {
       LSApplicationQueriesSchemes: ['comgooglemaps'],
+      UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
     },
     config: {
       // Exportcompliance. BossBase gebruikt uitsluitend standaard- en daarmee

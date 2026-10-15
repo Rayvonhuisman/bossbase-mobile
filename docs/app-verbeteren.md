@@ -94,7 +94,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Offerte-/factuurdetail: inhoud scrolde niet (lange offertes vielen weg) en had geen zijmarges
 - [x] Projectkaart: geen route-knop → Bel/Mail/Route in het aanvraagblok
 - [x] Werkbon: route-knop bouwde een eigen Google-link (iOS opende een webpagina)
-- [ ] iPad in de app: `supportsTablet: false` en alleen staand in `app.config.ts`, en de tabletindeling werkt alleen op web (`bepaalSchermklasse`). Nodig voor "perfect op elke iPad, staand en liggend"
+- [x] iPad in de app: `supportsTablet` aan, iPad alle standen (staand en liggend), iPhone blijft staand, Android-telefoons staand (vergrendeld bij starten), tablets draaien mee. De tabletindeling werkt nu ook in de app (was alleen web), met dezelfde gecentreerde kolom als de webapp (`MobielKader`). Werkt pas na een nieuwe build — niet zelf gebouwd of gepubliceerd
+- [x] Weergave "Zoals het apparaat" volgde in de app nooit donker: `userInterfaceStyle` stond op `light`; nu `automatic`
 
 ## Database en edge functions
 

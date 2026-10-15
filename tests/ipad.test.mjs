@@ -38,9 +38,21 @@ test('kolom op tablet en desktop begrensd; formulieren op leesbreedte', () => {
   assert.equal(kolomBreedte(390, 'telefoon', 'formulier'), 390);
 });
 
-test('native iOS en Android: altijd de telefoonindeling', () => {
-  assert.equal(bepaalSchermklasse(1024, 'ios'), 'telefoon');
-  assert.equal(bepaalSchermklasse(1280, 'android'), 'telefoon');
+test('in de app dezelfde indeling als op web: iPad tablet, iPhone telefoon', () => {
+  assert.equal(bepaalSchermklasse(1024, 'ios'), 'tablet');
+  assert.equal(bepaalSchermklasse(820, 'ios'), 'tablet');
+  assert.equal(bepaalSchermklasse(440, 'ios'), 'telefoon', 'iPhone Pro Max');
+  assert.equal(bepaalSchermklasse(1280, 'android'), 'tablet');
+});
+
+test('app.config: iPad aan, iPhone staand, iPad alle standen, systeemthema', async () => {
+  const { readFileSync } = await import('node:fs');
+  const cfg = readFileSync(new URL('../app.config.ts', import.meta.url), 'utf8');
+  assert.match(cfg, /supportsTablet: true/);
+  assert.match(cfg, /orientation: 'default'/);
+  assert.match(cfg, /UISupportedInterfaceOrientations: \['UIInterfaceOrientationPortrait'\]/);
+  assert.match(cfg, /'UISupportedInterfaceOrientations~ipad': \[[\s\S]*LandscapeLeft[\s\S]*LandscapeRight/);
+  assert.match(cfg, /userInterfaceStyle: 'automatic'/);
 });
 
 const UA = {

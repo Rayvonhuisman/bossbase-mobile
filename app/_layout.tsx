@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DialogHost, MobielKader, NieuweVersieMelding } from '@/components';
 import { registreerServiceWorker } from '@/lib/pwa';
+import { zetSchermstand } from '@/lib/schermstand';
 import { HulpProvider } from '@/providers/HulpProvider';
 import {
   AuthProvider,
@@ -26,13 +27,14 @@ export default function RootLayout() {
   // productiebuild). Op iOS en Android doet dit niets.
   useEffect(() => {
     registreerServiceWorker();
+    zetSchermstand();
   }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          {/* Op web: de app op telefoonbreedte. Op iOS en Android doet dit niets. */}
+          {/* Op een groot scherm (iPad, desktop) een gecentreerde kolom; op een telefoon het hele scherm. */}
           <MobielKader>
           {/* Sora wordt hier geladen, binnen ThemeProvider zodat het
               wachtscherm de themakleuren gebruikt en niet wit is. */}
