@@ -40,6 +40,7 @@ type Form = {
   btw: string;
   btwStelsel: string;
   geldig: string;
+  betaaltermijn: string;
   interval: number;
   moment: HerinneringMoment;
   dagen: number[];
@@ -55,6 +56,7 @@ const naarForm = (c: CompanySettings): Form => ({
   btw: String(c.btw_pct),
   btwStelsel: c.btw_stelsel === 'kas' ? 'kas' : 'factuur',
   geldig: String(c.offerte_geldig_dagen),
+  betaaltermijn: String(c.betaaltermijn_dagen),
   interval: c.uren_herinnering_interval_min,
   moment: c.uren_herinnering_moment,
   dagen: c.uren_herinnering_dagen,
@@ -73,6 +75,7 @@ const naarInvoer = (f: Form, perMedewerker: boolean): SettingsInput => ({
   btw_pct: getal(f.btw),
   btw_stelsel: f.btwStelsel,
   offerte_geldig_dagen: Number(f.geldig),
+  betaaltermijn_dagen: Number(f.betaaltermijn),
   uren_herinnering_interval_min: f.interval,
   uren_herinnering_moment: f.moment,
   uren_herinnering_dagen: f.dagen,
@@ -228,6 +231,14 @@ export function StandaardTab({
             />
           </View>
         </View>
+        <FormField
+          label="Betaaltermijn facturen (dagen)"
+          value={form.betaaltermijn}
+          onChangeText={(v) => setForm((f) => ({ ...f, betaaltermijn: v }))}
+          keyboardType="number-pad"
+          editable={magWijzigen}
+          hint="Na hoeveel dagen een nieuwe factuur vervalt. Heeft een klant een eigen betaaltermijn, dan geldt die. Bestaande facturen houden hun vervaldatum."
+        />
         <Keuze
           label="BTW-stelsel"
           opties={[

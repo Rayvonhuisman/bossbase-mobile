@@ -123,3 +123,47 @@ test('maandraster begint op maandag', () => {
   assert.equal(r[6], '2026-11-01');
   assert.equal(r.length % 7, 0);
 });
+
+// ── Planning: verzetten en meldingen per dag (dashboard PlanningPage) ────────
+
+const P = await import('../src/lib/werkbonLogica.ts');
+const bon = (x = {}) => ({
+  id: 'w1',
+  gepland_op: '2026-10-12',
+  starttijd: '08:00:00',
+  eindtijd: '16:30:00',
+  assigned_to: 'jan',
+  assigned_to_ids: ['jan', 'piet'],
+  dagen: [
+    { datum: '2026-10-12', starttijd: null, eindtijd: null, medewerker_ids: null, medewerker_tijden: null },
+    { datum: '2026-10-13', starttijd: null, eindtijd: null, medewerker_ids: null, medewerker_tijden: null },
+  ],
+  ...x,
+});
+
+test('verzetTijd: een persoon krijgt een eigen tijd, de rest blijft staan', () => {
+  const r = P.verzetTijd(bon(), '2026-10-13', 'piet', { starttijd: '12:00', eindtijd: '17:00' });
+  assert.deepEqual(r.standaard, { starttijd: '08:00', eindtijd: '16:30' });
+  assert.deepEqual(r.dagen[1].medewerker_tijden, { piet: { starttijd: '12:00', eindtijd: '17:00' } });
+  assert.equal(r.dagen[0].medewerker_tijden, null);
+  // Terug naar de dagtijd: de eigen tijd vervalt.
+  const terug = P.verzetTijd({ ...bon(), dagen: [bon().dagen[0], { ...bon().dagen[1], medewerker_tijden: { piet: { starttijd: '12:00', eindtijd: '17:00' } } }] }, '2026-10-13', 'piet', { starttijd: '08:00', eindtijd: '16:30' });
+  assert.equal(terug.dagen[1].medewerker_tijden, null);
+});
+
+test('verzetTijd: dag 1 verschuift de standaardtijd, dag 2 houdt zijn tijd', () => {
+  const r = P.verzetTijd(bon(), '2026-10-12', null, { starttijd: '09:00', eindtijd: '15:00' });
+  assert.deepEqual(r.standaard, { starttijd: '09:00', eindtijd: '15:00' });
+  assert.deepEqual([r.dagen[1].starttijd, r.dagen[1].eindtijd], ['08:00', '16:30']);
+  assert.throws(() => P.verzetTijd(bon(), '2026-10-20', null, { starttijd: '09:00', eindtijd: '10:00' }), /niet \(meer\)/);
+});
+
+test('dagMeldingen: een dag erbij of eraf voor wie op de bon blijft', () => {
+  const oud = bon().dagen;
+  const nieuw = [oud[0], { ...oud[1], medewerker_ids: ['jan'] }, { datum: '2026-10-14', starttijd: '09:00', eindtijd: '12:00', medewerker_ids: ['piet'] }];
+  const m = P.dagMeldingen({ oudeDagen: oud, nieuweDagen: nieuw, oudePloeg: ['jan', 'piet'], nieuwePloeg: ['jan', 'piet'], blijvers: ['jan', 'piet'] });
+  assert.deepEqual(
+    m.map((x) => [x.uid, x.soort, x.dag.datum]),
+    [['piet', 'ingepland', '2026-10-14'], ['piet', 'afgehaald', '2026-10-13']],
+  );
+});

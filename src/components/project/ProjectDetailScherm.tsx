@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { openExtern } from '@/lib/linking';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Image, Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Camera, Mail, MapPin, Pencil, Phone, Trash2 } from 'lucide-react-native';
 import {
+  AdresZoeker,
   AppFilterChips,
   AppScreen,
   AppTopBar,
@@ -22,14 +23,21 @@ import {
 import { FaseBadge } from '@/components/pipeline/FaseBadge';
 import { LedenKeuze, type Lid } from '@/components/pipeline/LedenKeuze';
 import { VerlorenSheet } from '@/components/pipeline/VerlorenSheet';
+import { FotoViewer } from '@/components/FotoViewer';
+import { Dialog } from '@/lib/dialog';
+import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
+import { toewijzingMeldingen } from '@/lib/collegaMeldingen';
+import { pushNotificaties } from '@/services/collegaMeldingService';
 import { usePermissions, useTheme } from '@/providers';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
-import { formatDateNL, formatEUR } from '@/lib/format';
+import { formatDateNL, formatEUR, formatEURCent } from '@/lib/format';
 import { lokaleDatum, vandaagIso } from '@/lib/nlTijd';
 import { getUserId } from '@/lib/sessionContext';
 import { alsTekst } from '@/lib/notitieTekst';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { callPhone, openMaps, sendMail } from '@/lib/linking';
+import { notAvailableAlert } from '@/lib/notAvailable';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { writeFout } from '@/lib/writeResult';
 import { faseKeuzes, heropenFase, isAfgerond, verlorenFase, behandelaarIds } from '@/lib/pipelineLogica';
@@ -42,8 +50,16 @@ import {
   urenToon,
   waardeBronUitleg,
   wanneerLabel,
+  zichtbareProjectTabs,
+  type ProjectTab,
 } from '@/lib/projectLogica';
-import { radius, spacing, typography, type ThemeColors } from '@/theme';
+import { ActieTegel, Blok, KleineKnop, makeStyles, Rij, Veld } from './bouwstenen';
+import { FacturenTab } from './FacturenTab';
+import { KostenTab } from './KostenTab';
+import { NotitiesTab } from './NotitiesTab';
+import { OffertesTab } from './OffertesTab';
+import { UrenTab } from './UrenTab';
+import { WerkbonnenTab } from './WerkbonnenTab';
 import {
   getDeal,
   heropenVerlorenDeal,
@@ -58,8 +74,8 @@ import {
   type PipelineStage,
 } from '@/services/dealService';
 import {
-  addProjectNote,
   deleteProject,
+  deleteProjectFoto,
   deleteProjectNote,
   getAanvraagBron,
   getProject,
@@ -71,6 +87,7 @@ import {
   listProjectUren,
   listProjectWerkbonnen,
   updateProject,
+  uploadProjectFoto,
   type ProjectFactuur,
   type ProjectFoto,
   type ProjectNote,
@@ -78,8 +95,9 @@ import {
   type ProjectRow,
   type ProjectUur,
   type ProjectWerkbon,
+  type AanvraagBron,
 } from '@/services/projectService';
-import { getCustomer, listCustomers } from '@/services/customerService';
+import { getCustomer, listCustomers, updateCustomer } from '@/services/customerService';
 import { listCompanyProfiles } from '@/services/teamService';
 import { OFFERTE_STATUS } from '@/services/offerteService';
 import { factuurStatusLabel } from '@/services/factuurService';
@@ -91,18 +109,23 @@ import type { Customer } from '@/types/domain';
  * dashboard. Wordt geopend vanuit Projecten (`/project/<id>`) en vanuit de
  * pipeline (`/deal/<id>`): voor de gebruiker zijn aanvraag en project één ding.
  *
- * Tabs: Overzicht · Uren · Notities. Overzicht bevat het aanvraagblok (fase,
- * voltooien, verloren, behandelaars), de aanvraag, projectinformatie,
- * planning, werkbonnen, offertes, facturen, activiteiten en klantgegevens.
+ * Tabs zoals het dashboard (`zichtbareTabs`): Overzicht · Offertes · Facturen ·
+ * Uren · Kosten · Werkbonnen · Notities. Overzicht bevat het aanvraagblok
+ * (fase, voltooien, verloren, behandelaars), de aanvraag met foto's,
+ * projectinformatie, planning, werkbonnen, offertes, facturen, activiteiten en
+ * klantgegevens. De tabs staan in eigen bestanden in deze map.
  *
  * Rechten (zoals het dashboard):
  * - aanvraagblok: `verkoop` (deals_update);
- * - project wijzigen: `projecten_bewerken` (via `mag('projecten', …)`);
+ * - project wijzigen, foto's, offerte/factuur/werkbon vanaf het project:
+ *   `projecten_bewerken` (via `mag('projecten', …)`);
+ * - klantgegevens bewerken: `klanten_bewerken`;
  * - bedragen (projectwaarde, offerte- en factuurbedragen): `projectbedragen`;
- * - offertes: `offertes`; werkbonnen: pakket `werkbonnen`.
+ * - tabs: offertes `offertes`, facturen `facturen`, kosten `kosten` + pakket
+ *   `kosten_nacalculatie`, werkbonnen pakket `werkbonnen`.
  */
 
-type Tab = 'overzicht' | 'uren' | 'notities';
+type Tab = ProjectTab;
 
 type Data = {
   project: ProjectRow | null;
@@ -117,7 +140,7 @@ type Data = {
   notities: ProjectNote[];
   fotos: ProjectFoto[];
   activiteiten: DealActiviteit[];
-  bron: { bron: string | null; binnenOp: string | null } | null;
+  bron: AanvraagBron | null;
 };
 
 const LEEG: Data = {
@@ -141,6 +164,16 @@ type Bewerk =
   | { soort: 'aanvraag'; tekst: string }
   | { soort: 'info'; start: string; eind: string; uren: string; waarde: string }
   | { soort: 'klant'; klantId: string | null }
+  | {
+      soort: 'klantgegevens';
+      naam: string;
+      contactpersoon: string;
+      telefoon: string;
+      email: string;
+      adres: string;
+      postcode: string;
+      plaats: string;
+    }
   | { soort: 'deal'; titel: string; waarde: string; tekst: string }
   | { soort: 'activiteit'; titel: string; type: string; datum: string; tijd: string };
 
@@ -149,6 +182,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, can, mag, hasFeature } = usePermissions();
+  const projectTabs = useMemo(() => zichtbareProjectTabs(can, hasFeature), [can, hasFeature]);
 
   const [data, setData] = useState<Data>(LEEG);
   const [error, setError] = useState<string | null>(null);
@@ -157,11 +191,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const [klantOpties, setKlantOpties] = useState<SelectOption[]>([]);
   const [verlorenOpen, setVerlorenOpen] = useState(false);
   const [toewijzen, setToewijzen] = useState(false);
-  const [nieuweNotitie, setNieuweNotitie] = useState('');
+  const [fotoIndex, setFotoIndex] = useState<number | null>(null);
+  const [fotoBezig, setFotoBezig] = useState(false);
+  const fotoSlot = useRef(false);
 
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
   const { save: saveDeal } = useSave<DealRow>();
-  const { save: saveNotitie, saving: notitieBezig, error: notitieFout } = useSave<ProjectNote>();
 
   const magBedragen = can('projectbedragen');
   const magOffertes = can('offertes');
@@ -169,7 +204,9 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const magProject = mag('projecten', 'wijzigen');
   const magProjectWeg = mag('projecten', 'verwijderen');
   const magActiviteit = mag('activiteiten', 'maken');
+  const magKlantBewerken = mag('klanten', 'wijzigen');
   const metWerkbonnen = hasFeature('werkbonnen');
+  const magFacturen = can('facturen');
 
   const load = useCallback(async () => {
     setError(null);
@@ -212,7 +249,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         ),
         klantId ? getCustomer(klantId).then((r) => r.data) : leeg<Customer | null>(null),
         pid ? listProjectUren(pid) : leeg<ProjectUur[]>([]),
-        pid && magBedragen ? listProjectFacturen(pid) : leeg<ProjectFactuur[]>([]),
+        pid && (magBedragen || magFacturen) ? listProjectFacturen(pid) : leeg<ProjectFactuur[]>([]),
         pid && metWerkbonnen ? listProjectWerkbonnen(pid) : leeg<ProjectWerkbon[]>([]),
         magOffertes && (project?.deal_id || deal?.id || project?.offerte_id)
           ? listProjectOffertes(project?.deal_id ?? deal?.id ?? null, project?.offerte_id ?? null)
@@ -238,7 +275,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       activiteiten: acts,
       bron,
     });
-  }, [dealId, projectId, magBedragen, magOffertes, metWerkbonnen]);
+  }, [dealId, projectId, magBedragen, magFacturen, magOffertes, metWerkbonnen]);
 
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
@@ -260,6 +297,14 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   );
 
   const terug = () => terugOfNaar(router, dealId ? '/pipeline' : '/projects');
+
+  // Verdwijnt de open tab (recht ingetrokken, pakket omlaag), val dan terug op
+  // het overzicht. Anders staar je naar een leeg paneel.
+  const tabZichtbaar = !!project && projectTabs.some((x) => x.id === tab);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (tab !== 'overzicht' && !tabZichtbaar) setTab('overzicht');
+  }, [tab, tabZichtbaar]);
 
   if (loading || !rechtenGeladen) return <LoadingScreen label="Project laden…" />;
 
@@ -305,8 +350,27 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   };
   const wijzigBehandelaars = (ids: string[]) => {
     if (!deal) return;
+    const vorige = behandelaarIds(deal);
     zetDeal({ ...deal, assigned_to_ids: ids, assigned_to: ids[0] ?? null });
-    saveDeal(() => updateDeal(deal.id, { assigned_to_ids: ids }), { onSuccess: zetDeal });
+    saveDeal(() => updateDeal(deal.id, { assigned_to_ids: ids }), {
+      onSuccess: (bij) => {
+        zetDeal(bij);
+        // Wie erbij komt, hoort dat (notifyNewAssignees, met mail) — net als
+        // bij activiteiten en werkbonnen.
+        void pushNotificaties(
+          toewijzingMeldingen({
+            userIds: ids,
+            vorigeIds: vorige,
+            maker: getUserId(),
+            type: 'toewijzing_project',
+            titel: `Je behandelt nu ${project?.name || deal.title || 'een project'}`,
+            link: project ? 'projecten' : `deal/${deal.id}`,
+            relatedType: project ? 'project' : null,
+            relatedId: project?.id ?? null,
+          }),
+        );
+      },
+    });
   };
   const wijzigPrio = (p: string) => {
     if (!deal) return;
@@ -374,6 +438,21 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           }),
         { ...naHerladen, succesMelding: 'Project bijgewerkt' },
       );
+    } else if (bewerk.soort === 'klantgegevens') {
+      if (!klant) return;
+      save(
+        () =>
+          updateCustomer(klant.id, {
+            name: bewerk.naam,
+            contactpersoon: bewerk.contactpersoon,
+            phone: bewerk.telefoon,
+            email: bewerk.email,
+            address: bewerk.adres,
+            postcode: bewerk.postcode,
+            city: bewerk.plaats,
+          }),
+        { ...naHerladen, succesMelding: 'Klantgegevens bijgewerkt' },
+      );
     } else if (bewerk.soort === 'klant') {
       save(() => updateProject(project.id, { customer_id: bewerk.klantId }), {
         ...naHerladen,
@@ -414,15 +493,91 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     );
   };
 
-  const notitieToevoegen = () => {
+  const notitiesHerladen = async () => {
     if (!project) return;
-    saveNotitie(() => addProjectNote(project.id, nieuweNotitie), {
-      onSuccess: async () => {
-        setNieuweNotitie('');
-        const r = await listProjectNotes(project.id);
-        setData((d) => ({ ...d, notities: r.data }));
-      },
+    const r = await listProjectNotes(project.id);
+    setData((d) => ({ ...d, notities: r.data }));
+  };
+
+  // ── Foto's bij de aanvraag (uploadProjectFoto / deleteProjectFoto) ────────
+  const fotoToevoegen = () => {
+    if (!project || fotoSlot.current || fotoBezig) return;
+    Dialog.alert("Foto toevoegen", 'Waar komt de foto vandaan?', [
+      { text: 'Camera', onPress: () => pakEnUpload('camera') },
+      { text: 'Fotobibliotheek', onPress: () => pakEnUpload('bibliotheek') },
+      { text: 'Annuleren', style: 'cancel' },
+    ]);
+  };
+
+  const pakEnUpload = async (bron: 'camera' | 'bibliotheek') => {
+    if (!project || fotoSlot.current) return;
+    fotoSlot.current = true;
+    try {
+      // Op web geen toestemming vragen: elke await vóór de kiezer kan in
+      // Safari de gebruikersactie laten verlopen.
+      if (Platform.OS !== 'web') {
+        const vraag =
+          bron === 'camera'
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!vraag.granted) {
+          Dialog.alert(
+            'Geen toestemming',
+            bron === 'camera'
+              ? 'Geef BossBase toegang tot de camera om een foto te maken.'
+              : "Geef BossBase toegang tot je foto's om er een te kiezen.",
+          );
+          return;
+        }
+      }
+      const opties: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        quality: 0.7,
+        base64: FOTO_ALS_BASE64,
+        // Meerdere tegelijk uit de bibliotheek, zoals het dashboard (`multiple`).
+        allowsMultipleSelection: bron === 'bibliotheek',
+      };
+      const res =
+        bron === 'camera' ? await ImagePicker.launchCameraAsync(opties) : await ImagePicker.launchImageLibraryAsync(opties);
+      if (res.canceled || !res.assets?.length) return;
+      setFotoBezig(true);
+      for (const asset of res.assets) {
+        const foto = await bereidFotoVoor(asset);
+        if (!foto.ok) {
+          Dialog.alert(foto.titel, foto.tekst);
+          continue;
+        }
+        const up = await uploadProjectFoto({
+          projectId: project.id,
+          bytes: foto.bytes,
+          contentType: foto.contentType,
+          extensie: foto.extensie,
+        });
+        if (!up.ok) {
+          Dialog.alert('Foto niet opgeslagen', up.melding);
+          break;
+        }
+        setData((d) => ({ ...d, fotos: [...d.fotos, up.data] }));
+      }
+    } finally {
+      setFotoBezig(false);
+      fotoSlot.current = false;
+    }
+  };
+
+  const fotoWeg = (foto: ProjectFoto) => {
+    bevestigVerwijderen('Deze foto', () => {
+      save(() => deleteProjectFoto(foto), {
+        onSuccess: () => setData((d) => ({ ...d, fotos: d.fotos.filter((x) => x.id !== foto.id) })),
+      });
     });
+  };
+
+  const koppelOfferte = async (offerteId: string) => {
+    if (!project) return writeFout('onbekend', 'Geen project.');
+    const res = await updateProject(project.id, { offerte_id: offerteId });
+    if (res.ok) await herlaad();
+    return res;
   };
   const notitieWeg = (n: ProjectNote) => {
     bevestigVerwijderen('Notitie', () => {
@@ -442,11 +597,63 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     urenToon(cijfers.hoursPercentage)
   ];
 
+  const bronLabel = !deal
+    ? null
+    : data.bron?.bron === 'bossbase_website'
+      ? 'Via het websiteformulier'
+      : data.bron?.bron === 'website'
+        ? 'Via de website'
+        : data.bron?.bron
+          ? `Via ${data.bron.bron}`
+          : magVerkoop
+            ? 'Handmatig aangemaakt'
+            : null;
+  const binnenOp = deal ? data.bron?.binnenOp || deal.created_at : null;
+  // De omschrijving staat al bovenaan; alleen een aangepaste tekst laat het origineel zien.
+  const websiteVelden = (data.bron?.velden ?? []).filter(
+    (v) => v.key !== 'omschrijving' || v.waarde.trim() !== aanvraagTekst.trim(),
+  );
+  const klantAdres = [klant?.address, [klant?.postcode, klant?.city].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ');
+  const aanvraagBewerken =
+    project && magProject
+      ? () => {
+          setSaveError(null);
+          setBewerk({ soort: 'aanvraag', tekst: aanvraagTekst });
+        }
+      : !project && deal && magVerkoop
+        ? () => {
+            setSaveError(null);
+            setBewerk({
+              soort: 'deal',
+              titel: deal.title ?? '',
+              waarde: deal.expected_revenue != null ? String(deal.expected_revenue) : '',
+              tekst: alsTekst(deal.description),
+            });
+          }
+        : null;
+
   // ── Overzicht ────────────────────────────────────────────────────────────
   const overzicht = (
     <>
+      {/* ── Status: compact, zoals de statusstrook van het dashboard ─────── */}
       {deal ? (
-        <Blok titel="Status">
+        <View style={styles.blok}>
+          <View style={styles.blokKop}>
+            <Text style={styles.blokTitel}>Status</Text>
+            {magVerkoop && !dealVerloren && !dealAfgerond ? (
+              <Pressable
+                onPress={() => setVerlorenOpen(true)}
+                accessibilityRole="button"
+                hitSlop={10}
+                style={({ pressed }) => [styles.stilLink, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.stilLinkTekst}>Verloren</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
           {dealVerloren ? (
             <View style={styles.rijMidden}>
               <StatusBadge status="Verloren" />
@@ -467,78 +674,70 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           ) : (
             <Text style={styles.waarde}>Loopt</Text>
           )}
-          {huidigeFase && magVerkoop && !dealVerloren && !dealAfgerond ? (
-            <FaseBadge label={huidigeFase.name ?? 'Fase'} colorClass={huidigeFase.color_class} positie={huidigeFase.position} />
-          ) : null}
 
           {magVerkoop ? (
-            <View style={styles.knoppen}>
-              {dealVerloren ? (
-                <Button label="Heropenen" variant="secondary" onPress={heropenVerloren} />
-              ) : (
-                <>
+            toewijzen && !dealAfgerond ? (
+              <View style={styles.veldKolom}>
+                <Text style={styles.veldLabel}>Behandeld door</Text>
+                <LedenKeuze label="" leden={data.leden} waarde={behandelaarIds(deal)} onChange={wijzigBehandelaars} />
+              </View>
+            ) : (
+              <View style={styles.statusRij}>
+                <Pressable
+                  onPress={() => setToewijzen(true)}
+                  disabled={dealAfgerond}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Behandeld door: ${behandelaars.length ? behandelaars.join(', ') : 'niemand'}`}
+                  style={({ pressed }) => [styles.behandelaarKnop, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.veldLabel}>Behandeld door</Text>
+                  <View style={styles.rijMidden}>
+                    <Text style={[styles.waarde, { flexShrink: 1 }]} numberOfLines={1}>
+                      {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'}
+                    </Text>
+                    {!dealAfgerond ? <Pencil size={13} color={t.muted} /> : null}
+                  </View>
+                </Pressable>
+                {dealVerloren ? (
+                  <Button label="Heropenen" variant="secondary" onPress={heropenVerloren} />
+                ) : (
                   <Button
-                    label={dealAfgerond ? 'Heropenen' : 'Project voltooien'}
+                    label={dealAfgerond ? 'Heropenen' : 'Voltooien'}
                     variant={dealAfgerond ? 'secondary' : 'primary'}
                     onPress={() => zetAfgerond(!dealAfgerond)}
                   />
-                  {!dealAfgerond ? (
-                    <Button label="Verloren" variant="ghost" onPress={() => setVerlorenOpen(true)} />
-                  ) : null}
-                </>
-              )}
-            </View>
+                )}
+              </View>
+            )
           ) : null}
 
-          {magVerkoop ? (
-            <>
-              <Veld label="Behandeld door">
-                {toewijzen && !dealAfgerond ? (
-                  <LedenKeuze
-                    label=""
-                    leden={data.leden}
-                    waarde={behandelaarIds(deal)}
-                    onChange={wijzigBehandelaars}
-                  />
-                ) : (
-                  <Pressable
-                    onPress={() => setToewijzen(true)}
-                    disabled={dealAfgerond}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.toewijsKnop, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.waarde} numberOfLines={2}>
-                      {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'}
-                    </Text>
-                    {!dealAfgerond ? <Pencil size={14} color={t.muted} /> : null}
-                  </Pressable>
-                )}
-              </Veld>
-              <Veld label="Prioriteit">
-                <View style={styles.chipRij}>
-                  {DEAL_PRIORITEITEN.map((p) => {
-                    const aan = (deal.priority || 'med') === p.id;
-                    return (
-                      <Pressable
-                        key={String(p.id)}
-                        onPress={() => wijzigPrio(String(p.id))}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: aan }}
-                        aria-checked={aan}
-                        style={[styles.chip, aan && styles.chipAan]}
-                      >
-                        <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Veld>
-            </>
+          {magVerkoop && !dealVerloren && !dealAfgerond ? (
+            <View style={styles.prioRij}>
+              <Text style={styles.veldLabel}>Prioriteit</Text>
+              <View style={styles.prioChips}>
+                {DEAL_PRIORITEITEN.map((p) => {
+                  const aan = (deal.priority || 'med') === p.id;
+                  return (
+                    <Pressable
+                      key={String(p.id)}
+                      onPress={() => wijzigPrio(String(p.id))}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: aan }}
+                      aria-checked={aan}
+                      hitSlop={6}
+                      style={[styles.prioChip, aan && styles.chipAan]}
+                    >
+                      <Text style={[styles.prioChipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           ) : null}
           {!project && magVerkoop ? (
             <Text style={styles.klein}>Bij deze aanvraag hoort nog geen project.</Text>
           ) : null}
-        </Blok>
+        </View>
       ) : project ? (
         <Blok titel="Status">
           <StatusBadge status={project.status ?? 'gepland'} />
@@ -548,91 +747,152 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         </Blok>
       ) : null}
 
-      <Blok
-        titel="De aanvraag"
-        actie={
-          project && magProject ? (
-            <KleineKnop
-              label="Bewerken"
-              onPress={() => {
-                setSaveError(null);
-                setBewerk({ soort: 'aanvraag', tekst: aanvraagTekst });
-              }}
-            />
-          ) : !project && deal && magVerkoop ? (
-            <KleineKnop
-              label="Bewerken"
-              onPress={() => {
-                setSaveError(null);
-                setBewerk({
-                  soort: 'deal',
-                  titel: deal.title ?? '',
-                  waarde: deal.expected_revenue != null ? String(deal.expected_revenue) : '',
-                  tekst: alsTekst(deal.description),
-                });
-              }}
-            />
-          ) : undefined
-        }
-      >
-        <Text style={[styles.tekst, !aanvraagTekst && { color: t.muted }]}>
-          {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
-        </Text>
+      {/* ── De aanvraag: het belangrijkste blok, en zo ziet het er ook uit ── */}
+      <View style={[styles.blok, styles.aanvraagBlok]}>
+        <View style={styles.blokKop}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.aanvraagEyebrow}>De aanvraag</Text>
+            <Text style={styles.klein} numberOfLines={2}>
+              {[bronLabel, binnenOp ? `binnen op ${formatDateNL(lokaleDatum(binnenOp))}` : null].filter(Boolean).join(' · ') || ' '}
+            </Text>
+          </View>
+          {aanvraagBewerken ? <KleineKnop label="Bewerken" onPress={aanvraagBewerken} /> : null}
+        </View>
+
+        <View style={styles.aanvraagVak}>
+          <Text style={[styles.veldLabel, { color: t.green700 }]}>Wat de klant vraagt</Text>
+          <Text style={[styles.aanvraagTekst, !aanvraagTekst && { color: t.muted, fontWeight: '400', fontSize: 15 }]}>
+            {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
+          </Text>
+        </View>
+
+        {websiteVelden.length || data.bron?.fotos ? (
+          <View style={styles.websiteVak}>
+            <Text style={styles.veldLabel}>
+              Ingevuld op de website{data.bron?.isTest ? ' (testaanvraag)' : ''}
+            </Text>
+            {websiteVelden.map((v) => (
+              <View key={v.key} style={styles.websiteRij}>
+                <Text style={styles.websiteLabel}>{v.label}</Text>
+                <Text
+                  style={[styles.websiteWaarde, (v.key === 'email' || v.key === 'telefoon') && styles.websiteLink]}
+                  onPress={
+                    v.key === 'email'
+                      ? () => sendMail(v.waarde)
+                      : v.key === 'telefoon'
+                        ? () => callPhone(v.waarde)
+                        : undefined
+                  }
+                >
+                  {(v.key === 'gewensteDatum' || v.eigen) && /^\d{4}-\d{2}-\d{2}$/.test(v.waarde)
+                    ? formatDateNL(v.waarde)
+                    : v.waarde}
+                </Text>
+              </View>
+            ))}
+            {data.bron?.fotos ? (
+              <View style={styles.websiteRij}>
+                <Text style={styles.websiteLabel}>Foto&apos;s</Text>
+                <Text style={styles.websiteWaarde}>
+                  {data.bron.fotos === 1 ? '1 foto, hieronder' : `${data.bron.fotos} foto's, hieronder`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.raster}>
-          <Veld label="Waar">
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Waar</Text>
             <Text style={styles.waarde}>{klant?.address || '—'}</Text>
             {klant?.postcode || klant?.city ? (
               <Text style={styles.klein}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</Text>
             ) : null}
-          </Veld>
-          <Veld label="Wanneer">
+          </View>
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Wanneer</Text>
             <Text style={styles.waarde}>{wanneerLabel(regels, project?.start_date ?? null, vandaag)}</Text>
             {project?.deadline ? <Text style={styles.klein}>deadline {formatDateNL(project.deadline)}</Text> : null}
-          </Veld>
-          {deal ? (
-            <Veld label="Via">
-              <Text style={styles.waarde}>
-                {data.bron?.bron === 'bossbase_website'
-                  ? 'Websiteformulier'
-                  : data.bron?.bron
-                    ? data.bron.bron
-                    : magVerkoop
-                      ? 'Handmatig aangemaakt'
-                      : '—'}
-              </Text>
-              {data.bron?.binnenOp || deal.created_at ? (
-                <Text style={styles.klein}>
-                  binnen op {formatDateNL(lokaleDatum(data.bron?.binnenOp || deal.created_at))}
-                </Text>
-              ) : null}
-            </Veld>
-          ) : null}
-          <Veld label="Contact">
-            <Text style={styles.waarde}>{klant?.phone || klant?.email || '—'}</Text>
-          </Veld>
+          </View>
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Contact</Text>
+            <Text style={styles.waarde} numberOfLines={1}>{klant?.phone || klant?.email || '—'}</Text>
+          </View>
           {!project && deal ? (
-            <Veld label="Verwachte omzet">
+            <View style={styles.rasterVeld}>
+              <Text style={styles.veldLabel}>Verwachte omzet</Text>
               <Text style={styles.waarde}>{formatEUR(Number(deal.expected_revenue ?? 0))}</Text>
-            </Veld>
+            </View>
           ) : null}
         </View>
-        {data.fotos.length ? (
-          <Veld label="Foto's">
+
+        {/* Bel, mail en route: dezelfde tegels als op de werkbon. */}
+        <View style={styles.actieRij}>
+          <ActieTegel
+            icon={<Phone size={18} color={t.green700} />}
+            label="Bel"
+            uit={!klant?.phone}
+            onPress={() => callPhone(klant?.phone) || notAvailableAlert('Bellen', 'Geen telefoonnummer bekend.')}
+          />
+          <ActieTegel
+            icon={<Mail size={18} color={t.green700} />}
+            label="Mail"
+            uit={!klant?.email}
+            onPress={() => sendMail(klant?.email) || notAvailableAlert('Mailen', 'Geen e-mailadres bekend.')}
+          />
+          <ActieTegel
+            icon={<MapPin size={18} color={t.green700} />}
+            label="Route"
+            uit={!klantAdres}
+            onPress={() => openMaps(klantAdres) || notAvailableAlert('Navigeren', 'Geen adres bekend.')}
+          />
+        </View>
+
+        {/* Foto's: zelfde opzet als de werkbonfoto's (privébucket, verkleind
+            bij het kiezen). Toevoegen en verwijderen met projecten_bewerken. */}
+        {project && (data.fotos.length || magProject) ? (
+          <View style={styles.veldKolom}>
+            <Text style={styles.veldLabel}>Foto&apos;s</Text>
             <View style={styles.fotos}>
-              {data.fotos.map((f) => (
-                <Pressable
-                  key={f.id}
-                  onPress={() => openExtern(f.url, 'De foto kon niet worden geopend.')}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel="Foto openen"
-                >
-                  <Image source={{ uri: f.url }} style={styles.foto} />
-                </Pressable>
+              {data.fotos.map((f, i) => (
+                <View key={f.id} style={styles.fotoVak}>
+                  <Pressable
+                    onPress={() => setFotoIndex(i)}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel={`Foto ${i + 1} van ${data.fotos.length} bekijken`}
+                  >
+                    <Image source={{ uri: f.url }} style={styles.foto} />
+                  </Pressable>
+                  {magProject ? (
+                    <Pressable
+                      onPress={() => fotoWeg(f)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Foto verwijderen"
+                      hitSlop={6}
+                      style={styles.fotoWeg}
+                    >
+                      <Trash2 size={14} color={t.statusRejectFg} />
+                    </Pressable>
+                  ) : null}
+                </View>
               ))}
+              {magProject ? (
+                <Pressable
+                  onPress={fotoToevoegen}
+                  disabled={fotoBezig}
+                  accessibilityRole="button"
+                  accessibilityLabel="Foto toevoegen"
+                  accessibilityState={{ disabled: fotoBezig, busy: fotoBezig }}
+                  style={({ pressed }) => [styles.fotoToevoegen, pressed && { opacity: 0.7 }]}
+                >
+                  {fotoBezig ? <ActivityIndicator size="small" color={t.green700} /> : <Camera size={18} color={t.ink2} />}
+                  <Text style={styles.kleineKnopTekst}>{fotoBezig ? 'Bezig…' : 'Foto'}</Text>
+                </Pressable>
+              ) : null}
             </View>
-          </Veld>
+          </View>
         ) : null}
-      </Blok>
+      </View>
 
       {project ? (
         <Blok
@@ -729,7 +989,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       ) : null}
 
       {project && metWerkbonnen ? (
-        <Blok titel="Werkbonnen">
+        <Blok titel="Werkbonnen" onTitel={() => setTab('werkbonnen')}>
           {data.werkbonnen.length === 0 ? (
             <Text style={styles.leeg}>Geen werkbonnen</Text>
           ) : (
@@ -749,7 +1009,25 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       ) : null}
 
       {magOffertes ? (
-        <Blok titel="Offertes">
+        <Blok
+          titel="Offertes"
+          onTitel={project ? () => setTab('offertes') : undefined}
+          actie={
+            magProject && mag('offertes', 'maken') ? (
+              <KleineKnop
+                label="Nieuwe offerte"
+                icon="plus"
+                onPress={() =>
+                  router.push(
+                    `/offers?nieuw=1${project ? `&project=${encodeURIComponent(project.id)}` : ''}${
+                      (project?.deal_id ?? deal?.id) ? `&deal=${encodeURIComponent((project?.deal_id ?? deal?.id) as string)}` : ''
+                    }${klant ? `&klant=${encodeURIComponent(klant.id)}` : ''}`,
+                  )
+                }
+              />
+            ) : undefined
+          }
+        >
           {data.offertes.length === 0 ? (
             <Text style={styles.leeg}>Geen offertes</Text>
           ) : (
@@ -760,8 +1038,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 sub={[o.omschrijving ? o.nummer : null, OFFERTE_STATUS[o.status ?? ''] ?? o.status]
                   .filter(Boolean)
                   .join(' · ')}
-                rechts={magBedragen ? <Text style={styles.bedrag}>{formatEUR(Number(o.totaal_incl ?? 0))}</Text> : undefined}
-                onPress={() => router.push('/offers')}
+                rechts={magBedragen ? <Text style={styles.bedrag}>{formatEURCent(Number(o.totaal_incl ?? 0))}</Text> : undefined}
+                onPress={() => router.push(`/offers?id=${encodeURIComponent(o.id)}`)}
               />
             ))
           )}
@@ -769,7 +1047,23 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       ) : null}
 
       {project && magBedragen ? (
-        <Blok titel="Facturen">
+        <Blok
+          titel="Facturen"
+          onTitel={magFacturen ? () => setTab('facturen') : undefined}
+          actie={
+            magProject && mag('facturen', 'maken') ? (
+              <KleineKnop
+                label="Nieuwe factuur"
+                icon="plus"
+                onPress={() =>
+                  router.push(
+                    `/invoices?nieuw=1&project=${encodeURIComponent(project.id)}${klant ? `&klant=${encodeURIComponent(klant.id)}` : ''}`,
+                  )
+                }
+              />
+            ) : undefined
+          }
+        >
           {data.facturen.length === 0 ? (
             <Text style={styles.leeg}>Geen facturen</Text>
           ) : (
@@ -784,8 +1078,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 ]
                   .filter(Boolean)
                   .join(' · ')}
-                rechts={<Text style={styles.bedrag}>{formatEUR(Number(f.totaal_incl ?? 0))}</Text>}
-                onPress={can('facturen') ? () => router.push('/invoices') : undefined}
+                rechts={<Text style={styles.bedrag}>{formatEURCent(Number(f.totaal_incl ?? 0))}</Text>}
+                onPress={magFacturen ? () => router.push(`/invoices?id=${encodeURIComponent(f.id)}`) : undefined}
               />
             ))
           )}
@@ -837,8 +1131,30 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         <Blok
           titel="Klantgegevens"
           actie={
-            project && magProject ? (
-              <KleineKnop label={klant ? 'Andere klant' : 'Klant kiezen'} onPress={openKlantKiezen} />
+            (project && magProject) || (klant && magKlantBewerken) ? (
+              <View style={[styles.knoppen, { flexShrink: 1, justifyContent: 'flex-end' }]}>
+                {klant && magKlantBewerken ? (
+                  <KleineKnop
+                    label="Bewerken"
+                    onPress={() => {
+                      setSaveError(null);
+                      setBewerk({
+                        soort: 'klantgegevens',
+                        naam: klant.name ?? '',
+                        contactpersoon: klant.contactpersoon ?? '',
+                        telefoon: klant.phone ?? '',
+                        email: klant.email ?? '',
+                        adres: klant.address ?? '',
+                        postcode: klant.postcode ?? '',
+                        plaats: klant.city ?? '',
+                      });
+                    }}
+                  />
+                ) : null}
+                {project && magProject ? (
+                  <KleineKnop label={klant ? 'Andere klant' : 'Klant kiezen'} onPress={openKlantKiezen} />
+                ) : null}
+              </View>
             ) : undefined
           }
         >
@@ -850,6 +1166,9 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 onPress={() => router.push(`/customers/${klant.id}`)}
               />
               <View style={styles.raster}>
+                <Veld label="Contactpersoon">
+                  <Text style={styles.waarde}>{klant.contactpersoon || '—'}</Text>
+                </Veld>
                 <Veld label="Telefoon">
                   <Text style={styles.waarde}>{klant.phone || '—'}</Text>
                 </Veld>
@@ -878,81 +1197,84 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     </>
   );
 
-  // ── Uren ─────────────────────────────────────────────────────────────────
-  const urenTab = (
-    <Blok titel={`Uren · ${formatUren(cijfers.usedHours)}`}>
-      <Text style={styles.klein}>Uit de werkbonuren van dit project. Boeken gaat via de werkbon.</Text>
-      {data.uren.length === 0 ? (
-        <Text style={styles.leeg}>Nog geen uren geboekt.</Text>
-      ) : (
-        data.uren.map((u) => (
-          <Rij
-            key={u.id}
-            titel={`${formatDateNL(u.datum)} · ${u.medewerker?.full_name ?? 'Onbekend'}`}
-            sub={u.notitie ? alsTekst(u.notitie) : undefined}
-            rechts={<Text style={styles.bedrag}>{formatUren(u.uren)}</Text>}
-            onPress={u.werkbon_id ? () => router.push(`/work-orders/${u.werkbon_id}`) : undefined}
-          />
-        ))
-      )}
-    </Blok>
-  );
-
-  // ── Notities ─────────────────────────────────────────────────────────────
+  // ── De andere tabs (eigen bestanden in deze map) ──────────────────────────
   const eigenId = getUserId();
-  const notitiesTab = (
-    <Blok titel="Notities">
-      <FormField
-        label="Nieuwe notitie"
-        value={nieuweNotitie}
-        onChangeText={setNieuweNotitie}
-        placeholder="Schrijf een notitie over dit project…"
-        multiline
-      />
-      {notitieFout ? <Text style={[styles.klein, { color: t.statusRejectFg }]}>{notitieFout}</Text> : null}
-      <View style={{ alignItems: 'flex-end' }}>
-        <Button
-          label="Notitie toevoegen"
-          onPress={notitieToevoegen}
-          loading={notitieBezig}
-          disabled={!nieuweNotitie.trim() || notitieBezig || !mag('projectNotities', 'maken')}
-        />
-      </View>
-      {data.notities.length === 0 ? (
-        <Text style={styles.leeg}>Nog geen notities. Voeg de eerste notitie toe.</Text>
-      ) : (
-        data.notities.map((n) => (
-          <View key={n.id} style={styles.notitie}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.notitieMeta}>
-                {n.auteur?.full_name || 'Onbekend'} · {formatDateNL(lokaleDatum(n.created_at))}
-              </Text>
-              <Text style={styles.tekst}>{alsTekst(n.note)}</Text>
-            </View>
-            {/* project_notes_delete: de auteur, of bb_is_admin_or_permission('projecten_bewerken'). */}
-            {n.created_by === eigenId || can('projecten_bewerken') ? (
-              <Pressable
-                onPress={() => notitieWeg(n)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Notitie verwijderen"
-                style={styles.notitieWeg}
-              >
-                <Trash2 size={16} color={t.statusRejectFg} />
-              </Pressable>
-            ) : null}
-          </View>
-        ))
-      )}
-    </Blok>
-  );
+  const tabInhoud = (): ReactNode => {
+    if (!project || tab === 'overzicht') return overzicht;
+    switch (tab) {
+      case 'offertes':
+        return (
+          <OffertesTab
+            project={project}
+            offertes={data.offertes}
+            magBeheren={magProject}
+            magOfferteMaken={mag('offertes', 'maken')}
+            magFactuurMaken={mag('facturen', 'maken')}
+            onKoppel={koppelOfferte}
+          />
+        );
+      case 'facturen':
+        return (
+          <FacturenTab
+            projectId={project.id}
+            klantId={klant?.id ?? project.customer_id}
+            projectWaarde={Number(project.project_value ?? 0)}
+            cijfers={cijfers}
+            facturen={data.facturen}
+            magBedragen={magBedragen}
+            magMaken={mag('facturen', 'maken')}
+          />
+        );
+      case 'uren':
+        return (
+          <UrenTab
+            begroot={project.quoted_hours}
+            uren={data.uren}
+            onWerkbon={(id) => router.push(`/work-orders/${id}`)}
+          />
+        );
+      case 'kosten':
+        return (
+          <KostenTab
+            projectId={project.id}
+            omzetExclBtw={cijfers.omzetExclBtw}
+            uren={data.uren}
+            magBedragen={magBedragen}
+            magInkoop={can('inkoopprijzen')}
+            magBewerken={magProject && mag('kosten', 'wijzigen')}
+          />
+        );
+      case 'werkbonnen':
+        return (
+          <WerkbonnenTab
+            projectId={project.id}
+            klantId={klant?.id ?? project.customer_id}
+            werkbonnen={data.werkbonnen}
+            magMaken={magProject && mag('werkbonnen', 'maken')}
+            naamVan={naamVan}
+          />
+        );
+      case 'notities':
+        return (
+          <NotitiesTab
+            projectId={project.id}
+            projectNaam={project.name ?? ''}
+            notities={data.notities}
+            leden={data.leden}
+            magMaken={mag('projectNotities', 'maken')}
+            // project_notes_delete: de auteur, of bb_is_admin_or_permission('projecten_bewerken').
+            magVerwijderen={(n) => n.created_by === eigenId || can('projecten_bewerken')}
+            onToegevoegd={notitiesHerladen}
+            onVerwijder={notitieWeg}
+          />
+        );
+      default:
+        return overzicht;
+    }
+  };
 
   const tabs: { id: Tab; label: string; count?: number }[] = project
-    ? [
-        { id: 'overzicht', label: 'Overzicht' },
-        { id: 'uren', label: 'Uren' },
-        { id: 'notities', label: 'Notities', count: data.notities.length },
-      ]
+    ? projectTabs.map((x) => (x.id === 'notities' ? { ...x, count: data.notities.length } : x))
     : [{ id: 'overzicht', label: 'Overzicht' }];
 
   return (
@@ -987,9 +1309,24 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               <AppFilterChips chips={tabs} active={tab} onChange={setTab} />
             </View>
           ) : null}
-          {tab === 'overzicht' ? overzicht : tab === 'uren' ? urenTab : notitiesTab}
+          {tabInhoud()}
         </View>
       </AppScreen>
+
+      <FotoViewer
+        fotos={data.fotos}
+        index={fotoIndex}
+        titel="Foto's bij de aanvraag"
+        onSluit={() => setFotoIndex(null)}
+        onVerwijder={
+          magProject
+            ? (v) => {
+                const foto = data.fotos.find((x) => x.id === v.id);
+                if (foto) fotoWeg(foto);
+              }
+            : undefined
+        }
+      />
 
       <VerlorenSheet
         deal={verlorenOpen && deal ? deal : null}
@@ -1009,6 +1346,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 ? 'Projectinformatie'
                 : bewerk?.soort === 'klant'
                   ? 'Klant kiezen'
+                  : bewerk?.soort === 'klantgegevens'
+                    ? 'Klantgegevens'
                   : bewerk?.soort === 'activiteit'
                     ? 'Activiteit inplannen'
                     : 'Aanvraag bewerken'
@@ -1019,7 +1358,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         submitDisabled={
           (bewerk?.soort === 'naam' && !bewerk.naam.trim()) ||
           (bewerk?.soort === 'activiteit' && !bewerk.titel.trim()) ||
-          (bewerk?.soort === 'deal' && !bewerk.titel.trim())
+          (bewerk?.soort === 'deal' && !bewerk.titel.trim()) ||
+          (bewerk?.soort === 'klantgegevens' && !bewerk.naam.trim())
         }
         onSubmit={opslaan}
         onClose={() => setBewerk(null)}
@@ -1095,6 +1435,53 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             searchable
           />
         ) : null}
+        {bewerk?.soort === 'klantgegevens' ? (
+          <>
+            {/* Dezelfde klant als op de klantkaart, geen kopie: dit schrijft naar customers. */}
+            <FormField label="Naam" value={bewerk.naam} onChangeText={(v) => setBewerk({ ...bewerk, naam: v })} />
+            <FormField
+              label="Contactpersoon"
+              value={bewerk.contactpersoon}
+              onChangeText={(v) => setBewerk({ ...bewerk, contactpersoon: v })}
+            />
+            <FormField
+              label="Telefoon"
+              value={bewerk.telefoon}
+              onChangeText={(v) => setBewerk({ ...bewerk, telefoon: v })}
+              keyboardType="phone-pad"
+            />
+            <FormField
+              label="E-mail"
+              value={bewerk.email}
+              onChangeText={(v) => setBewerk({ ...bewerk, email: v })}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <AdresZoeker
+              onSelect={(a) =>
+                setBewerk((b) =>
+                  b?.soort === 'klantgegevens'
+                    ? { ...b, adres: a.address || b.adres, postcode: a.postcode || b.postcode, plaats: a.city || b.plaats }
+                    : b,
+                )
+              }
+            />
+            <FormField label="Adres" value={bewerk.adres} onChangeText={(v) => setBewerk({ ...bewerk, adres: v })} />
+            <View style={styles.formRij}>
+              <View style={{ flex: 1 }}>
+                <FormField
+                  label="Postcode"
+                  value={bewerk.postcode}
+                  onChangeText={(v) => setBewerk({ ...bewerk, postcode: v })}
+                  autoCapitalize="characters"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <FormField label="Plaats" value={bewerk.plaats} onChangeText={(v) => setBewerk({ ...bewerk, plaats: v })} />
+              </View>
+            </View>
+          </>
+        ) : null}
         {bewerk?.soort === 'deal' ? (
           <>
             <FormField label="Titel" value={bewerk.titel} onChangeText={(v) => setBewerk({ ...bewerk, titel: v })} />
@@ -1162,160 +1549,3 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     </View>
   );
 }
-
-
-// ── Bouwstenen (buiten de render, anders verliest een invoerveld zijn focus) ──
-
-function useStijl() {
-  const { colors: t } = useTheme();
-  const styles = useMemo(() => makeStyles(t), [t]);
-  return { t, styles };
-}
-
-function Blok({ titel, actie, children }: { titel: string; actie?: ReactNode; children: ReactNode }) {
-  const { styles } = useStijl();
-  return (
-    <View style={styles.blok}>
-      <View style={styles.blokKop}>
-        <Text style={styles.blokTitel}>{titel}</Text>
-        {actie}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function Veld({ label, children }: { label: string; children: ReactNode }) {
-  const { styles } = useStijl();
-  return (
-    <View style={styles.veld}>
-      {label ? <Text style={styles.veldLabel}>{label}</Text> : null}
-      {children}
-    </View>
-  );
-}
-
-function KleineKnop({ label, onPress, icon }: { label: string; onPress: () => void; icon?: 'plus' | 'pen' }) {
-  const { t, styles } = useStijl();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={6}
-      style={({ pressed }) => [styles.kleineKnop, pressed && { opacity: 0.7 }]}
-    >
-      {icon === 'plus' ? <Plus size={16} color={t.ink2} /> : <Pencil size={14} color={t.ink2} />}
-      <Text style={styles.kleineKnopTekst}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Rij({
-  titel,
-  sub,
-  rechts,
-  onPress,
-}: {
-  titel: string;
-  sub?: string;
-  rechts?: ReactNode;
-  onPress?: () => void;
-}) {
-  const { t, styles } = useStijl();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed }) => [styles.rij, pressed && onPress ? { opacity: 0.7 } : null]}
-    >
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.rijTitel} numberOfLines={1}>
-          {titel}
-        </Text>
-        {sub ? (
-          <Text style={styles.rijSub} numberOfLines={1}>
-            {sub}
-          </Text>
-        ) : null}
-      </View>
-      {rechts}
-      {onPress ? <ChevronRight size={16} color={t.muted2} /> : null}
-    </Pressable>
-  );
-}
-
-const makeStyles = (t: ThemeColors) =>
-  StyleSheet.create({
-    inhoud: { paddingHorizontal: 16, gap: spacing.md },
-    blok: {
-      backgroundColor: t.card,
-      borderRadius: radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: t.line,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
-    blokKop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-    blokTitel: { fontSize: 15, fontWeight: '700', color: t.ink },
-    veld: { gap: 2, flexBasis: 140, flexGrow: 1 },
-    veldLabel: { ...typography.eyebrow, color: t.muted2 },
-    waarde: { fontSize: 14, fontWeight: '600', color: t.ink },
-    klein: { fontSize: 12.5, color: t.muted },
-    tekst: { fontSize: 14, lineHeight: 21, color: t.ink },
-    leeg: { fontSize: 13, color: t.muted },
-    link: { fontSize: 12.5, color: t.green700, textDecorationLine: 'underline', marginTop: 2 },
-    raster: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-    rijMidden: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
-    knoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    toewijsKnop: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
-    kleineKnop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      minHeight: 36,
-      paddingHorizontal: 12,
-      borderRadius: radius.pill,
-      backgroundColor: t.bgAlt,
-    },
-    kleineKnopTekst: { fontSize: 13, fontWeight: '600', color: t.ink2 },
-    rij: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      minHeight: 48,
-      paddingVertical: 6,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: t.line,
-    },
-    rijTitel: { fontSize: 14, fontWeight: '600', color: t.ink },
-    rijSub: { fontSize: 12.5, color: t.muted, marginTop: 1 },
-    bedrag: { fontSize: 13.5, fontWeight: '700', color: t.ink2 },
-    fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 4 },
-    foto: { width: 92, height: 70, borderRadius: 8, backgroundColor: t.bgAlt },
-    chipRij: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    chip: {
-      minHeight: 44,
-      justifyContent: 'center',
-      paddingHorizontal: 14,
-      borderRadius: radius.pill,
-      backgroundColor: t.card,
-      borderWidth: 1,
-      borderColor: t.line,
-    },
-    chipAan: { backgroundColor: t.green50, borderColor: t.green600 },
-    chipTekst: { fontSize: 13.5, fontWeight: '600', color: t.ink2 },
-    chipTekstAan: { color: t.green700 },
-    voet: { alignItems: 'flex-end' },
-    formRij: { flexDirection: 'row', gap: spacing.md },
-    notitie: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      paddingTop: spacing.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: t.line,
-    },
-    notitieMeta: { fontSize: 12, color: t.muted, marginBottom: 2 },
-    notitieWeg: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  });

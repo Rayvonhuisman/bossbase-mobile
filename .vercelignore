@@ -15,5 +15,6 @@
 !/package-lock.json
 !/app.config.ts
 !/babel.config.js
+!/metro.config.js
 !/tsconfig.json
 !/vercel.json

@@ -451,7 +451,7 @@ function PipelineScreenInhoud() {
         onSluit={() => setMenuDeal(null)}
       >
         {menuDeal ? (
-          <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
             <Text style={styles.menuLabel}>Prioriteit</Text>
             {DEAL_PRIORITEITEN.map((p) => (
               <Pressable

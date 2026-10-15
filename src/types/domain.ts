@@ -6,6 +6,8 @@ export type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   role: Role;
+  /** Gezet door verify-code. Leeg + geen company_id = registratie wacht op de code. */
+  email_verified_at?: string | null;
   // NOTE: `email` is NOT a column on `profiles`. The user's email lives on
   // `auth.users` and is exposed via the Supabase session (`user.email`).
 };
@@ -115,6 +117,7 @@ export type Customer = {
   id: string;
   company_id: string;
   name: string | null;
+  contactpersoon?: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -130,6 +133,10 @@ export type Customer = {
   updated_at?: string | null;
   /** Particulier | Zakelijk | VvE | Aannemer, of null (customers_type_check). */
   type?: string | null;
+  /** Bron ("Website, aanbeveling, …"). */
+  source?: string | null;
+  /** Eigen betaaltermijn; null = de standaard uit Instellingen. */
+  betaaltermijn_dagen?: number | null;
 };
 
 export type CustomerType = 'Zakelijk' | 'Particulier' | 'Lead';

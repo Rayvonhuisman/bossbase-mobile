@@ -1,0 +1,105 @@
+/**
+ * De pagina die een PDF schermvullend tekent, voor de PDF-weergave van
+ * offertes en facturen (`components/PdfWeergave`). Eén pagina voor web
+ * (iframe) én app (WebView), zodat het overal hetzelfde werkt — ook op iOS,
+ * waar een ingesloten PDF anders alleen zijn eerste pagina laat zien.
+ *
+ * pdf.js tekent elke pagina op A4-verhouding in een canvas, scherp op het
+ * scherm (devicePixelRatio), onder elkaar en scrollbaar. Knijpen om te zoomen
+ * mag. Een tik (geen veeg) meldt zich bij de app, die dan de knoppenlaag
+ * toont of verbergt.
+ *
+ * Berichten:
+ *   app → pagina  { type: 'pdf', base64 }
+ *   pagina → app  { type: 'klaar', paginas } | { type: 'fout', melding } | { type: 'tik' }
+ *
+ * Geen imports: draait in de Node-tests.
+ */
+
+export const PDFJS_VERSIE = '4.10.38';
+const CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSIE}`;
+
+export function pdfWeergaveHtml(): string {
+  return `<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes">
+<style>
+  html, body { margin: 0; padding: 0; background: #2b2b2b; -webkit-tap-highlight-color: transparent; }
+  #paginas { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0 24px; }
+  canvas { display: block; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #melding { color: #ddd; font: 15px -apple-system, system-ui, sans-serif; text-align: center; padding: 40vh 24px 0; }
+</style>
+</head>
+<body>
+<div id="paginas"></div>
+<div id="melding">PDF laden…</div>
+<script type="module">
+  const stuur = (bericht) => {
+    const tekst = JSON.stringify(bericht);
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(tekst);
+    else if (window.parent !== window) window.parent.postMessage({ bbPdf: bericht }, '*');
+  };
+
+  // Tik = kort, zonder te bewegen; vegen en knijpen tellen niet.
+  let start = null;
+  document.addEventListener('touchstart', (e) => {
+    start = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!start || e.changedTouches.length !== 1) return;
+    const p = e.changedTouches[0];
+    if (Math.abs(p.clientX - start.x) < 10 && Math.abs(p.clientY - start.y) < 10 && Date.now() - start.t < 400) stuur({ type: 'tik' });
+    start = null;
+  }, { passive: true });
+  let laatsteTouch = 0;
+  document.addEventListener('touchend', () => { laatsteTouch = Date.now(); }, { passive: true });
+  document.addEventListener('click', () => { if (Date.now() - laatsteTouch > 600) stuur({ type: 'tik' }); });
+
+  async function teken(base64) {
+    const melding = document.getElementById('melding');
+    try {
+      const pdfjs = await import('${CDN}/pdf.min.mjs');
+      pdfjs.GlobalWorkerOptions.workerSrc = '${CDN}/pdf.worker.min.mjs';
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const doc = await pdfjs.getDocument({ data: bytes }).promise;
+      const houder = document.getElementById('paginas');
+      houder.innerHTML = '';
+      const breedte = Math.min(window.innerWidth - 16, 900);
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      for (let n = 1; n <= doc.numPages; n++) {
+        const pagina = await doc.getPage(n);
+        const basis = pagina.getViewport({ scale: 1 });
+        const schaal = breedte / basis.width;
+        const vp = pagina.getViewport({ scale: schaal * dpr });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.floor(vp.width);
+        canvas.height = Math.floor(vp.height);
+        canvas.style.width = Math.floor(basis.width * schaal) + 'px';
+        canvas.style.height = Math.floor(basis.height * schaal) + 'px';
+        canvas.setAttribute('aria-label', 'Pagina ' + n + ' van ' + doc.numPages);
+        houder.appendChild(canvas);
+        await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        if (n === 1) melding.style.display = 'none';
+      }
+      stuur({ type: 'klaar', paginas: doc.numPages });
+    } catch (e) {
+      melding.textContent = 'De PDF kon niet worden getoond.';
+      stuur({ type: 'fout', melding: String((e && e.message) || e) });
+    }
+  }
+
+  const ontvang = (data) => {
+    try {
+      const b = typeof data === 'string' ? JSON.parse(data) : (data && data.bbPdf) || data;
+      if (b && b.type === 'pdf' && typeof b.base64 === 'string') teken(b.base64);
+    } catch (_) {}
+  };
+  window.addEventListener('message', (e) => ontvang(e.data));
+  document.addEventListener('message', (e) => ontvang(e.data));
+  stuur({ type: 'gereed' });
+</script>
+</body>
+</html>`;
+}

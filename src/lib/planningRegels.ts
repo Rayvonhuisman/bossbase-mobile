@@ -151,7 +151,9 @@ export type AgendaWerkbonItem<W extends WerkbonPlanbaar = WerkbonPlanbaar> = {
 /**
  * De werkbonitems in de agenda, per geplande dag en per tijdvenster.
  *
- * - Afgeronde werkbonnen en werkbonnen zonder `gepland_op` doen niet mee.
+ * - Werkbonnen zonder `gepland_op` doen niet mee; afgeronde ook niet, tenzij
+ *   `ookAfgerond` (de homepage telt "x van y klaar", net als de dashboardtegel
+ *   `werkbonnen_today`).
  * - Persoonlijk (standaard, ook voor admin): alleen de dagen waarop jij in de
  *   dagploeg staat, met jóuw tijd.
  * - Gedeelde werkruimte: één item per verschillende tijd binnen de ploeg.
@@ -159,12 +161,12 @@ export type AgendaWerkbonItem<W extends WerkbonPlanbaar = WerkbonPlanbaar> = {
  */
 export function agendaWerkbonItems<W extends WerkbonPlanbaar>(
   werkbonnen: W[],
-  opties: { uid: string | null; gedeeld: boolean; van: string; tot: string },
+  opties: { uid: string | null; gedeeld: boolean; van: string; tot: string; ookAfgerond?: boolean },
 ): AgendaWerkbonItem<W>[] {
-  const { uid, gedeeld, van, tot } = opties;
+  const { uid, gedeeld, van, tot, ookAfgerond = false } = opties;
   const uit: AgendaWerkbonItem<W>[] = [];
   for (const w of werkbonnen) {
-    if (!w.gepland_op || w.status === 'afgerond') continue;
+    if (!w.gepland_op || (w.status === 'afgerond' && !ookAfgerond)) continue;
     for (const dag of werkbonDagen(w)) {
       if (dag.datum < van || dag.datum > tot) continue;
       const ploeg = ploegOpDag(w, dag);

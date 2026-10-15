@@ -61,6 +61,10 @@ const config: ExpoConfig = {
       usesNonExemptEncryption: false,
     },
     infoPlist: {
+      // De route-knop vraagt of Google Maps erop staat (canOpenURL) om dan de
+      // keuze Apple Kaarten / Google Maps te geven. Zonder deze regel antwoordt
+      // iOS altijd "nee".
+      LSApplicationQueriesSchemes: ['comgooglemaps'],
       UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
       'UISupportedInterfaceOrientations~ipad': [
         'UIInterfaceOrientationPortrait',

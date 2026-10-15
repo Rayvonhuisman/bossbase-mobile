@@ -1,5 +1,6 @@
 import { Linking, Platform } from 'react-native';
 import { Dialog } from './dialog';
+import { routeApparaatVanBrowser, routeKeuzes, type RouteApparaat } from './routeLinks';
 
 /**
  * Centralized helpers for OS deep-link actions used across screens.
@@ -46,31 +47,38 @@ export function sendMail(email: string | null | undefined): boolean {
   return true;
 }
 
-/**
- * Wachtwoordherstel loopt via de website: daar vraag je met "Wachtwoord
- * vergeten?" een resetlink aan, die per mail komt en op
- * `www.bossbase.nl/reset-password?token=…` landt. De app doet zelf niets met
- * wachtwoorden die je kwijt bent.
- *
- * Bewust naar `/login` en niet naar `/reset-password`: zonder token toont die
- * pagina alleen "Deze link is ongeldig". Het aanvraagformulier zit achter
- * "Wachtwoord vergeten?" op de inlogpagina, en die werkt ook op een telefoon.
- */
-export const WACHTWOORD_HERSTEL_URL = 'https://www.bossbase.nl/login';
-
-export function openWachtwoordHerstel(): void {
-  safeOpen(WACHTWOORD_HERSTEL_URL, 'Ga in je browser naar www.bossbase.nl/login.');
+/** Route-apparaat: in de app het platform, op web uit de browser. */
+function routeApparaat(): RouteApparaat {
+  if (Platform.OS === 'ios') return 'ios';
+  if (Platform.OS === 'android') return 'android';
+  if (typeof navigator === 'undefined') return 'computer';
+  return routeApparaatVanBrowser(navigator.userAgent ?? '', navigator.maxTouchPoints ?? 0);
 }
 
-/** Open maps app at the given address string. Falls back to Google Maps web. */
+/**
+ * Route naar dit adres in de kaartenapp van het toestel (zie `routeLinks.ts`):
+ * Apple Kaarten op iPhone/iPad, Google Maps op Android. Staat in de iOS-app
+ * ook Google Maps erop, dan kies je. Geeft false als er geen adres is.
+ */
 export function openMaps(address: string | null | undefined): boolean {
-  if (!address) return false;
-  const q = encodeURIComponent(address.trim());
-  if (!q) return false;
-  const url =
-    Platform.OS === 'ios'
-      ? `http://maps.apple.com/?q=${q}`
-      : `https://maps.google.com/?q=${q}`;
-  safeOpen(url, 'Navigeren werkt niet op dit toestel.');
+  const adres = (address ?? '').trim();
+  if (!adres) return false;
+  void (async () => {
+    const apparaat = routeApparaat();
+    let google = false;
+    if (Platform.OS === 'ios') {
+      // Vraagt LSApplicationQueriesSchemes 'comgooglemaps' (app.config.ts).
+      google = await Linking.canOpenURL('comgooglemaps://').catch(() => false);
+    }
+    const keuzes = routeKeuzes(adres, apparaat, google);
+    if (keuzes.length > 1) {
+      Dialog.alert('Route openen in', undefined, [
+        ...keuzes.map((k) => ({ text: k.label, onPress: () => void safeOpen(k.url, 'Navigeren werkt niet op dit toestel.') })),
+        { text: 'Annuleren', style: 'cancel' as const },
+      ]);
+      return;
+    }
+    if (keuzes[0]) await safeOpen(keuzes[0].url, 'Navigeren werkt niet op dit toestel.');
+  })();
   return true;
 }

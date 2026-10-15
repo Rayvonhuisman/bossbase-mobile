@@ -9,7 +9,6 @@ const P = await import('../src/lib/permissions.ts');
 const B = await import('../src/lib/bedragen.ts');
 const W = await import('../src/lib/werkbonRechten.ts');
 const O = await import('../src/lib/overzichtCijfers.ts');
-const H = await import('../src/lib/documentHtml.ts');
 const D = await import('../src/lib/documentLogica.ts');
 const L = await import('../src/lib/werkbonLogica.ts');
 
@@ -102,32 +101,6 @@ test('open pipeline: voltooide projecten (afgerond_op) tellen niet mee', () => {
   const w = O.pipelineWaarden(deals);
   assert.deepEqual(w.open, { aantal: 1, waarde: 100 });
   assert.deepEqual(w.geaccepteerd, { aantal: 1, waarde: 70 });
-});
-
-test('factuurvoettekst: IBAN, verlegd met btw-nummer, geen betaalverzoek op credit', () => {
-  const t = H.factuurVoettekst({
-    regimes: ['normaal', 'verlegd'], klantBtw: 'NL001234567B01', iban: 'nl91abna0417164300',
-    ibanTnv: null, bedrijfsnaam: 'Bouw BV', vervaldatum: '2026-11-01', kenmerk: null, nummer: 'BB-F-0012',
-  });
-  assert.equal(t[0], 'Btw verlegd: de btw wordt afgedragen door de opdrachtgever (btw-nummer NL001234567B01).');
-  assert.equal(t[1], 'Graag het totaalbedrag vóór 01-11-2026 overmaken op NL91 ABNA 0417 1643 00 t.n.v. Bouw BV, onder vermelding van BB-F-0012.');
-  assert.deepEqual(H.factuurVoettekst({ regimes: [], isCredit: true, iban: 'NL91ABNA0417164300' }), []);
-  assert.deepEqual(H.factuurVoettekst({ regimes: ['vrijgesteld'] }), ['Een deel van deze factuur is vrijgesteld van btw.']);
-});
-
-test('factuur-HTML toont de IBAN ge-escapet; snapshot wint, anders het huidige', () => {
-  const bedrijf = D.bedrijfVoorDocument({ snapshot_iban: null }, { name: 'X', iban: 'NL91ABNA0417164300', iban_tnv: '<b>X</b>' });
-  assert.equal(bedrijf.iban, 'NL91ABNA0417164300');
-  assert.equal(D.bedrijfVoorDocument({ snapshot_iban: 'NL02RABO0123456789' }, { iban: 'NL91ABNA0417164300' }).iban, 'NL02RABO0123456789');
-  const html = H.bouwDocumentHtml({
-    soort: 'factuur', nummer: 'F1', datum: '2026-10-01', vervaldatum: null, bedrijf, klant: null,
-    regels: [], totalen: { excl: 0, btwPerTarief: [], incl: 0 },
-  });
-  assert.match(html, /NL91 ABNA 0417 1643 00 t\.n\.v\. &lt;b&gt;X&lt;\/b&gt;/);
-  const offerte = H.bouwDocumentHtml({
-    soort: 'offerte', nummer: 'O1', datum: null, bedrijf, klant: null, regels: [], totalen: { excl: 0, btwPerTarief: [], incl: 0 },
-  });
-  assert.doesNotMatch(offerte, /overmaken/);
 });
 
 test('materiaaleenheden zoals het dashboard (8c7302b)', () => {

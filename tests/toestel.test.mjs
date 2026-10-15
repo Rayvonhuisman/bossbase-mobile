@@ -50,8 +50,16 @@ test('formuliervellen gebruiken geen KeyboardAvoidingView zonder vensteroffset',
   assert.match(lees('src/components/FormSheet.tsx'), /<ToetsenbordVlak/);
   const werkbon = lees('app/work-orders/[id].tsx');
   assert.doesNotMatch(werkbon, /<KeyboardAvoidingView/);
-  // Elke formSheet-ScrollView met invoer laat iOS de inset in venstercoördinaten zetten.
+  // Elke formSheet-ScrollView met invoer (notitie, materiaal, uren) en de
+  // hoofdlijst met de inline taakinvoer laat iOS de inset zelf zetten.
   assert.equal(werkbon.match(/automaticallyAdjustKeyboardInsets/g)?.length, 4);
+  // De vellen uit app-verbeteren volgen hetzelfde patroon.
+  for (const pad of ['src/components/werkbon/AfrondenModal.tsx', 'src/components/werkbon/WaarschuwingModal.tsx']) {
+    const bron = lees(pad);
+    assert.doesNotMatch(bron, /KeyboardAvoidingView/, pad);
+    assert.match(bron, /<VelStatusbalk \/>/, pad);
+    assert.match(bron, /keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets/, pad);
+  }
 });
 
 test('geen keyboardDismissMode on-drag: scrollen sluit het toetsenbord niet', () => {
@@ -69,7 +77,9 @@ test('externe links lopen via openExtern (nette melding bij weigering)', () => {
     'app/(tabs)/menu.tsx',
     'src/components/project/ProjectDetailScherm.tsx',
     'src/components/instellingen/ProfielTab.tsx',
+    'app/work-orders/[id].tsx',
+    'app/(onboarding)/account.tsx',
   ]) {
-    assert.doesNotMatch(lees(pad), /void Linking\.openURL|=> Linking\.openURL/, pad);
+    assert.doesNotMatch(lees(pad), /Linking\.openURL/, pad);
   }
 });

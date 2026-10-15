@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { Pakket } from '@/lib/registratie';
 
 /**
  * Onboarding state — gedeeld over de 5 schermen via context.
@@ -16,24 +17,26 @@ import {
  * - In-memory `data` state houdt de tussenvalues vast tijdens de flow.
  */
 
-export type RoleChoice = 'owner' | 'planner' | 'field';
-
+/**
+ * Wat de registratie vraagt — dezelfde velden als het dashboard (RegisterFlow).
+ * Het wachtwoord staat hier bewust niet in: dat blijft in het accountscherm.
+ */
 export type OnboardingData = {
-  role: RoleChoice | null;
+  pakket: Pakket | null;
   companyName: string;
   branche: string;
-  teamSize: string;
-  isSolo: boolean;
+  phone: string;
+  kvk: string;
   fullName: string;
   email: string;
 };
 
 const EMPTY: OnboardingData = {
-  role: null,
+  pakket: null,
   companyName: '',
   branche: '',
-  teamSize: '',
-  isSolo: false,
+  phone: '',
+  kvk: '',
   fullName: '',
   email: '',
 };

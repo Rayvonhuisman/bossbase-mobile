@@ -9,15 +9,23 @@ import {
   Phone,
   Users,
 } from 'lucide-react-native';
-import { AppCard, AppScreen, AppTopBar, NoticeBanner, StatusBadge, statusKey } from '@/components';
+import {
+  AppCard,
+  AppListItem,
+  AppScreen,
+  AppTopBar,
+  NoticeBanner,
+  StatusBadge,
+  statusKey,
+} from '@/components';
 import { ActiviteitRij } from '@/components/ActiviteitRij';
+import { UrenHerinneringKaart } from '@/components/UrenHerinneringKaart';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canCreateWorkOrder } from '@/services/workOrderService';
 import { listUrenForProfile } from '@/services/timeEntryService';
 import {
-  getNextPlanningItem,
   listEigenOpenActiviteitenTot,
-  listPlanningItemsForRange,
+  listMijnPlanning,
   setActivityCompleted,
   type ActivityRow,
   type PlanningItem,
@@ -31,6 +39,8 @@ import {
 } from '@/services/overzichtService';
 import {
   nieuweAanvragen,
+  nieuwsteAanvragen,
+  aanvragenPerWeek,
   omzetDezeMaand,
   openFacturen,
   openOffertes,
@@ -48,6 +58,7 @@ import { getDayRange } from '@/lib/dateRange';
 import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
 import { formatEUR, formatPlanningTime } from '@/lib/format';
+import { avatarKleuren, initialen } from '@/lib/avatar';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
@@ -82,6 +93,9 @@ const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 /** Zoveel activiteiten toont de homepage, net als `FEED_LIMIET` in het dashboard. */
 const ACTIVITEITEN_MAX = 8;
 
+/** Zoveel aanvragen toont de lijst, net als de tegel `new_leads` in het dashboard. */
+const AANVRAGEN_MAX = 6;
+
 const dagVan = (iso: string) => lokaleDatum(iso);
 
 type Overzicht = {
@@ -99,6 +113,9 @@ const LEEG_OVERZICHT: Overzicht = {
   facturen: null,
   klanten: null,
 };
+
+/** Zo ver kijkt "Volgende" vooruit als er vandaag niets meer openstaat. */
+const VOLGENDE_DAGEN = 60;
 
 /** De normwerkdag uit het ontwerp — dezelfde 8 uur als de oude KPI-kaart. */
 const NORM_UREN = 8;
@@ -131,6 +148,17 @@ function formatUrenLang(hours: number): string {
   return `${formatUren(hours)} u`;
 }
 
+/** "zojuist", "5u", "3d" — hoe lang geleden, zoals de tegel in het dashboard (`relAgo`). */
+function geledenKort(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return null;
+  const uur = Math.floor(ms / 36e5);
+  if (uur < 1) return 'zojuist';
+  if (uur < 24) return `${uur}u`;
+  return `${Math.floor(uur / 24)}d`;
+}
+
 /** Afgeronde werkbon? Eén bron voor de statusvertaling: `statusKey`. */
 function isAfgerond(status: string | null): boolean {
   return statusKey(status) === 'completed';
@@ -149,7 +177,7 @@ function isVervallen(status: string | null): boolean {
 export default function TodayScreen() {
   const router = useRouter();
   const { user, profile, role } = useAuth();
-  const { colors: c } = useTheme();
+  const { colors: c, colorMode } = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
   const { loaded: rechtenGeladen, can, mag, allowsRoute, hasFeature, readonly } = usePermissions();
   // Zelfde regel als de knop op Werkbonnen (policy `werkbonnen_insert`).
@@ -172,7 +200,6 @@ export default function TodayScreen() {
     const d = NL_LONG_DATE.format(new Date());
     return d.charAt(0).toUpperCase() + d.slice(1);
   }, []);
-  const assignedToUserId = role === 'medewerker' ? (user?.id ?? null) : null;
 
   // ─── Week + today hours (real, Supabase) ────────────────────────────────
   const weekStart = useMemo(() => startOfWeek(new Date()), []);
@@ -218,20 +245,32 @@ export default function TodayScreen() {
           })
         : Promise.resolve();
 
+      // Vooruitkijken voor "Volgende" als er vandaag niets meer openstaat.
+      const nu = new Date();
+      const verderTot = new Date(nu);
+      verderTot.setDate(verderTot.getDate() + VOLGENDE_DAGEN);
+
       const [planRes, weekRes, nextRes, actRes] = await Promise.all([
-        listPlanningItemsForRange({
+        // Persoonlijk, ook voor een admin — zoals de dashboardtegels.
+        listMijnPlanning({
+          uid: userId,
+          van: dayRange.startDate,
+          tot: dayRange.endDate,
           startISO: dayRange.startISO,
           endISO: dayRange.endISO,
-          startDate: dayRange.startDate,
-          endDate: dayRange.endDate,
-          assignedToUserId,
-          currentUserId: userId,
           currentUserName,
         }),
         // Werkdag- én werkbonuren, net als de Uren-tab: wie alleen op klussen
         // boekt, zag hier anders altijd 0.
         listUrenForProfile(userId, toISODate(weekStart), toISODate(weekEnd)),
-        getNextPlanningItem({ assignedToUserId, currentUserId: userId, currentUserName }),
+        listMijnPlanning({
+          uid: userId,
+          van: toISODate(nu),
+          tot: toISODate(verderTot),
+          startISO: nu.toISOString(),
+          endISO: verderTot.toISOString(),
+          currentUserName,
+        }),
         // Eigen open activiteiten tot en met vandaag: vandaag én te laat.
         listEigenOpenActiviteitenTot(userId, dayRange.endISO),
       ]);
@@ -239,7 +278,10 @@ export default function TodayScreen() {
       setTodayItems(planRes.items);
       setActiviteitenFout(actRes.error);
       if (!actRes.error) setActiviteiten(actRes.data);
-      setNextItem(nextRes.item);
+      const nuMs = nu.getTime();
+      setNextItem(
+        nextRes.items.find((i) => !!i.startAt && new Date(i.startAt).getTime() >= nuMs) ?? null,
+      );
 
       if (!weekRes.error && weekRes.data) {
         // Zelfde telling als de Uren-tab: werkdag- en werkbonuren apart, nooit
@@ -256,7 +298,6 @@ export default function TodayScreen() {
     },
     [
       userId,
-      assignedToUserId,
       currentUserName,
       weekStart,
       weekEnd,
@@ -285,8 +326,11 @@ export default function TodayScreen() {
     () => eigenActiviteitenVandaag(activiteiten, userId, vandaag, dagVan),
     [activiteiten, userId, vandaag],
   );
+  // Vandaag eerst, zoals de dashboardtegel (die toont alleen vandaag); de te
+  // late eronder, zodat je ze ook kunt afvinken. Andersom drukten 8 of meer te
+  // late de activiteit van vandaag uit de lijst.
   const activiteitenLijst = useMemo(
-    () => [...eigen.teLaat, ...eigen.vandaag].slice(0, ACTIVITEITEN_MAX),
+    () => [...eigen.vandaag, ...eigen.teLaat].slice(0, ACTIVITEITEN_MAX),
     [eigen],
   );
   const activiteitenTotaal = eigen.teLaat.length + eigen.vandaag.length;
@@ -298,12 +342,22 @@ export default function TodayScreen() {
     });
   };
 
+  // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep tijdens het renderen).
+  const [nuMs] = useState(() => Date.now());
+  // Nieuwe aanvragen: eerste pipelinefase, nieuwste eerst (tegel `new_leads`).
+  const aanvragen = useMemo(() => {
+    if (!overzicht.deals || !overzicht.fases) return null;
+    return {
+      ...nieuweAanvragen(overzicht.deals, overzicht.fases),
+      lijst: nieuwsteAanvragen(overzicht.deals, overzicht.fases, AANVRAGEN_MAX),
+      week: aanvragenPerWeek(nieuwsteAanvragen(overzicht.deals, overzicht.fases, Number.MAX_SAFE_INTEGER), nuMs),
+    };
+  }, [overzicht.deals, overzicht.fases, nuMs]);
+
   // De norm (8 uur per dag) gaat over werkdaguren; werkbonuren staan ernaast.
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
   const vandaagUren = weekDagen[todayWeekIdx];
   const loggedToday = vandaagUren?.werkdag ?? 0;
-  const werkdagOntbreekt = (vandaagUren?.zonderWerkdag ?? 0) > 0;
-  const klusGroter = (vandaagUren?.klusGroter ?? 0) > 0;
 
   // ─── Afgeleiden voor de herokaart ───────────────────────────────────────
   const werkbonnen = useMemo(
@@ -344,11 +398,7 @@ export default function TodayScreen() {
     : werkbonnen.length > 0
       ? 'Alles afgerond voor vandaag'
       : 'Niets gepland voor vandaag';
-  const heroRechts = werkdagOntbreekt
-    ? 'werkdag ontbreekt'
-    : urenOver > 0
-      ? `nog ${formatUrenLang(urenOver)}`
-      : 'dag compleet';
+  const heroRechts = urenOver > 0 ? `nog ${formatUrenLang(urenOver)}` : 'dag compleet';
 
   // Kort gehouden: de bovenbalk geeft één regel, en "geschreven" erachter
   // viel er in de simulator al af op een iPhone 17.
@@ -390,22 +440,19 @@ export default function TodayScreen() {
                   {NL_DAYS_SHORT.map((label, idx) => {
                     const dag = weekDagen[idx];
                     const hours = dag?.werkdag ?? 0;
-                    const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                     const on = idx === todayWeekIdx;
-                    const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
+                    const height = Math.max(hours ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
                     return (
                       <View key={label + idx} style={styles.weekItem}>
-                        <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
-                          {hours ? formatUren(hours) : signaal ? '!' : ''}
+                        <Text style={[styles.weekHours, on && { color: c.ink }]}>
+                          {hours ? formatUren(hours) : ''}
                         </Text>
                         <View style={[styles.weekBarFrame, tablet && styles.weekBarFrameBreed]}>
                           <View
                             style={[
                               styles.weekBar,
                               { height },
-                              signaal
-                                ? styles.weekBarLet
-                                : on
+                              on
                                   ? styles.weekBarOn
                                   : hours >= NORM_UREN
                                     ? styles.weekBarVol
@@ -493,21 +540,8 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* Uren die niet kloppen: zeggen, niet wegrekenen (lib/urenTotalen). */}
-        {!loading && (werkdagOntbreekt || klusGroter) && vandaagUren ? (
-          <View style={styles.signaalWrap}>
-            <NoticeBanner
-              toon="waarschuwing"
-              title={werkdagOntbreekt ? 'Werkdaguren ontbreken' : 'Uren kloppen niet'}
-              message={
-                werkdagOntbreekt
-                  ? `Je hebt vandaag ${formatUrenLang(vandaagUren.werkbon)} op werkbonnen geboekt, maar nog geen werkdaguren geschreven.`
-                  : `Je werkbonuren (${formatUrenLang(vandaagUren.werkbon)}) zijn hoger dan je werkdaguren (${formatUrenLang(vandaagUren.werkdag)}).`
-              }
-              onPress={() => router.push('/(tabs)/hours')}
-            />
-          </View>
-        ) : null}
+        {/* "Vul je werkdag in" — alleen als het bedrijf uren bijhoudt (urenherinnering). */}
+        <UrenHerinneringKaart />
 
         {/* ── Snelle acties ───────────────────────────────────────────── */}
         <View style={styles.quickRow}>
@@ -698,6 +732,71 @@ export default function TodayScreen() {
               </Pressable>
             </View>
 
+            {/* ── Nieuwe aanvragen (tegel `new_leads`) ─────────────────────── */}
+            {zieVerkoop ? (
+              <View style={styles.block}>
+                <View style={styles.blockHead}>
+                  <Text style={styles.blockTitle}>Nieuwe aanvragen</Text>
+                  {allowsRoute('/pipeline') ? (
+                    <Pressable accessibilityRole="link" onPress={() => router.push('/pipeline')} hitSlop={8}>
+                      <Text style={styles.blockLink}>Pipeline ›</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                {aanvragen && aanvragen.aantal > 0 ? (
+                  <Text style={styles.blockMeta}>
+                    {aanvragen.week.dezeWeek} deze week · {aanvragen.week.delta >= 0 ? '+' : ''}
+                    {aanvragen.week.delta} t.o.v. vorige week
+                  </Text>
+                ) : null}
+                {!aanvragen ? (
+                  <AppCard padding={18} style={{ alignItems: 'center' }}>
+                    <Text style={styles.emptyText}>{loading ? 'Laden…' : 'Aanvragen konden niet worden geladen.'}</Text>
+                  </AppCard>
+                ) : aanvragen.lijst.length === 0 ? (
+                  <AppCard padding={18} style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>Geen nieuwe aanvragen</Text>
+                    <Text style={styles.emptyText}>Tijd om je netwerk aan te spreken.</Text>
+                  </AppCard>
+                ) : (
+                  <View style={styles.lijstKaart}>
+                    {aanvragen.lijst.map((d, i) => {
+                      const naam = d.customer?.name || 'Onbekende klant';
+                      const kleur = avatarKleuren(naam, colorMode === 'dark');
+                      return (
+                        <AppListItem
+                          key={d.id ?? i}
+                          first={i === 0}
+                          title={naam}
+                          subtitle={[d.title, d.customer?.city].filter(Boolean).join(' · ') || undefined}
+                          leading={
+                            <View style={[styles.aanvraagAvatar, { backgroundColor: kleur.bg }]}>
+                              <Text style={[styles.aanvraagInitialen, { color: kleur.fg }]}>{initialen(naam, '?')}</Text>
+                            </View>
+                          }
+                          trailing={<Text style={styles.aanvraagLeeftijd}>{geledenKort(d.created_at) ?? ''}</Text>}
+                          onPress={d.id ? () => router.push(`/deal/${d.id}`) : undefined}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
+                {aanvragen && aanvragen.aantal > 0 ? (
+                  <Pressable
+                    onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
+                    accessibilityRole="link"
+                    style={({ pressed }) => [styles.voetLink, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.blockLink}>
+                      {`${aanvragen.aantal} ${aanvragen.aantal === 1 ? 'aanvraag' : 'aanvragen'}`}
+                      {zieFinancien ? ` · ${formatEUR(aanvragen.waarde)} potentieel` : ''}
+                      {allowsRoute('/pipeline') ? ' ›' : ''}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
             {tablet ? null : dezeWeek}
           </View>
         </View>
@@ -741,24 +840,6 @@ export default function TodayScreen() {
                   waarde={overzicht.facturen ? formatEUR(omzetDezeMaand(overzicht.facturen, vandaag)) : '—'}
                   sub="excl. btw"
                   onPress={allowsRoute('/invoices') ? () => router.push('/invoices') : undefined}
-                />
-              ) : null}
-              {zieVerkoop ? (
-                <KpiTegel
-                  styles={styles}
-                  tablet={tablet}
-                  label="Nieuwe aanvragen"
-                  waarde={
-                    overzicht.deals && overzicht.fases
-                      ? String(nieuweAanvragen(overzicht.deals, overzicht.fases).aantal)
-                      : '—'
-                  }
-                  sub={
-                    overzicht.deals && overzicht.fases && zieFinancien
-                      ? `${formatEUR(nieuweAanvragen(overzicht.deals, overzicht.fases).waarde)} potentieel`
-                      : undefined
-                  }
-                  onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}
               {zieOffertes ? (
@@ -1169,9 +1250,6 @@ const makeStyles = (c: ThemeColors) =>
     weekLabelOn: { color: c.green700, fontWeight: '700' },
     weekBarIdle: { backgroundColor: c.bgAlt },
     weekLabel: { fontSize: 11, fontWeight: '600', color: c.muted },
-    // Een dag die niet klopt: zelfde amber als de waarschuwingen elders.
-    weekBarLet: { backgroundColor: c.statusWarnStripe },
-    weekHoursLet: { color: c.statusWarnFg },
     weekKlus: { marginTop: 12, fontSize: 12, fontWeight: '600', color: c.muted },
     signaalWrap: { paddingHorizontal: 16, paddingTop: 12 },
 
@@ -1190,6 +1268,9 @@ const makeStyles = (c: ThemeColors) =>
       overflow: 'hidden',
     },
     voetLink: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+    aanvraagAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    aanvraagInitialen: { fontSize: 13, fontWeight: '800' },
+    aanvraagLeeftijd: { fontSize: 12, fontWeight: '600', color: c.muted },
 
     // ── Overzichtstegels ───────────────────────────────────────────────
     tegels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

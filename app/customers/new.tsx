@@ -9,9 +9,9 @@ import {
 import { Dialog } from '@/lib/dialog';
 import { terugOfNaar } from '@/lib/navigatie';
 import { Stack, useRouter } from 'expo-router';
-import { AppTopBar, FormField, PermissionGate, FormFooter } from '@/components';
+import { AdresZoeker, AppTopBar, FormField, PermissionGate, FormFooter, SelectField } from '@/components';
 import { useAuth, useTheme } from '@/providers';
-import { createCustomer } from '@/services/customerService';
+import { createCustomer, KLANT_TYPES } from '@/services/customerService';
 import { spacing, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 
@@ -48,6 +48,9 @@ function NewCustomerInhoud() {
   const [btw, setBtw] = useState('');
   const [iban, setIban] = useState('');
   const [notes, setNotes] = useState('');
+  // Zoals NewCustomerModal in het dashboard: standaard Zakelijk en Handmatig.
+  const [klantType, setKlantType] = useState<string | null>('Zakelijk');
+  const [bron, setBron] = useState('Handmatig');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +82,8 @@ function NewCustomerInhoud() {
       btw_number: btw,
       iban,
       notes,
+      type: klantType,
+      source: bron,
     });
     setSaving(false);
     if (saveError) {
@@ -128,6 +133,13 @@ function NewCustomerInhoud() {
               placeholder="06 12 34 56 78"
               keyboardType="phone-pad"
             />
+            <AdresZoeker
+              onSelect={(v) => {
+                setAddress(v.address);
+                setPostcode(v.postcode);
+                setCity(v.city);
+              }}
+            />
             <FormField
               label="Adres"
               value={address}
@@ -170,6 +182,20 @@ function NewCustomerInhoud() {
               placeholder="Optioneel"
               autoCapitalize="characters"
               autoCorrect={false}
+            />
+            <SelectField
+              label="Type"
+              value={klantType}
+              options={KLANT_TYPES.map((k) => ({ id: k, label: k }))}
+              onChange={setKlantType}
+              allowEmpty
+              emptyLabel="Geen type"
+            />
+            <FormField
+              label="Bron"
+              value={bron}
+              onChangeText={setBron}
+              placeholder="Website, aanbeveling, …"
             />
             <FormField
               label="Notities"

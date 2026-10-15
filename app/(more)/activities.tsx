@@ -29,6 +29,7 @@ import {
   type ActivityRow,
 } from '@/services/activityService';
 import { listCustomers } from '@/services/customerService';
+import { listDeals } from '@/services/dealService';
 import { listCompanyProfiles } from '@/services/teamService';
 import {
   activiteitStatus,
@@ -44,6 +45,7 @@ import { useLaden } from '@/lib/useLaden';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, spacing, type ThemeColors } from '@/theme';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Activiteiten — gelijk aan `ActivitiesPageV2` in het dashboard.
@@ -86,13 +88,14 @@ export default function ActivitiesScreen() {
 
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
+  const [projecten, setProjecten] = useState<(SelectOption & { customerId: string | null })[]>([]);
   const [team, setTeam] = useState<TeamLid[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [concept, setConcept] = useState<ActivityConcept | null>(null);
 
-  const [filter, setFilter] = useState<ActiviteitFilter>('all');
+  const [filter, setFilter] = useOnthouden<ActiviteitFilter>('activiteiten.filter', 'all', ACTIVITEIT_FILTERS);
   const [zoek, setZoek] = useState('');
-  const [medewerker, setMedewerker] = useState<string | null>(null);
+  const [medewerker, setMedewerker] = useOnthouden<string | null>('activiteiten.medewerker', null, (v) => typeof v === 'string');
 
   const { save: saveVink, saving: vinkBezig, error: vinkFout } = useSave<unknown>();
 
@@ -105,10 +108,11 @@ export default function ActivitiesScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [actRes, klantRes, teamRes] = await Promise.all([
+    const [actRes, klantRes, teamRes, dealRes] = await Promise.all([
       listAllActivities(),
       listCustomers(),
       listCompanyProfiles(),
+      listDeals(),
     ]);
     if (actRes.error) setError(actRes.error);
     else setItems(actRes.data);
@@ -119,6 +123,11 @@ export default function ActivitiesScreen() {
       );
     }
     if (!teamRes.error) setTeam(teamRes.data);
+    if (!dealRes.error) {
+      setProjecten(
+        dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Project', sub: d.customer?.name ?? undefined, customerId: d.customer_id })),
+      );
+    }
   }, []);
 
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
@@ -379,6 +388,7 @@ export default function ActivitiesScreen() {
         concept={concept}
         klanten={klanten}
         medewerkers={medewerkersVoorFormulier}
+        projecten={projecten}
         magBewerken={magBewerken}
         onClose={() => setConcept(null)}
         onSaved={() => herlaad()}

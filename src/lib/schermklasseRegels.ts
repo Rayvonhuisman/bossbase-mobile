@@ -34,8 +34,10 @@ export const leesbreedte = {
 export const TABBALK_MAX = 520;
 
 /**
- * Welke indeling hoort bij dit venster. Alleen in de webapp: de iOS- en
- * Android-app houden hun eigen (telefoon)indeling.
+ * Welke indeling hoort bij dit venster — op web en in de app hetzelfde, zodat
+ * een iPad in de app net zo werkt als de webapp op dezelfde iPad. Een iPhone
+ * (ook Pro Max, 440 breed) blijft onder de grens; iPad in Split View ook.
+ * `platform` blijft als parameter voor bestaande aanroepen, maar telt niet.
  */
 export function bepaalSchermklasse(breedte: number, _platform?: string): Schermklasse {
   // Op elk platform dezelfde regel: de iOS-app op een iPad (ook in Split View

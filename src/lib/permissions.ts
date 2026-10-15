@@ -135,6 +135,9 @@ export const ROUTE_GATES: Record<string, NavGate> = {
   '/offers': { permission: 'offertes' },
   '/invoices': { permission: 'facturen' },
   '/expenses': { permission: 'kosten', feature: 'kosten_nacalculatie' },
+  // Financiën (NAV `revenue`): alleen het recht, geen pakketfeature — net als
+  // het dashboard. Het btw-blok daar (feature btw_overzicht) staat niet in de app.
+  '/financien': { permission: 'bedrijfsfinancien' },
   '/team': { permission: 'team' },
   // Instellingen zelf is open (Mijn profiel is voor iedereen); de pagina
   // toont per tab wat je mag, zoals het dashboard.

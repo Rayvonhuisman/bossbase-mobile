@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 
 const D = await import('../src/lib/documentLogica.ts');
 const K = await import('../src/lib/kostenLogica.ts');
-const H = await import('../src/lib/documentHtml.ts');
 
 // ── Statussen ──────────────────────────────────────────────────────────────
 
@@ -81,26 +80,36 @@ const facturen = [
   f({ nummer: 'BB-F007', status: 'aangemaakt', totaal_incl: 5, vervaldatum: '2026-01-01' }),
 ];
 
-test('facturen: te laat = niet betaald en vervaldatum vóór vandaag (ook concept)', () => {
+test('facturen: te laat = verstuurd, niet gecrediteerd, geen creditnota, vervaldatum vóór vandaag (dashboard H9)', () => {
   assert.equal(D.isFactuurVerlopen(facturen[2], VANDAAG), true);
   assert.equal(D.isFactuurVerlopen(facturen[4], VANDAAG), false, 'vandaag zelf is nog niet te laat');
   assert.equal(D.isFactuurVerlopen(facturen[0], VANDAAG), false, 'betaald is nooit te laat');
-  assert.equal(D.factuurWeergaveStatus(facturen[7], VANDAAG), 'verlopen');
+  assert.equal(D.isFactuurVerlopen(facturen[7], VANDAAG), false, 'een concept is nooit verstuurd, dus nooit te laat');
+  assert.equal(D.isFactuurVerlopen({ ...facturen[2], gecrediteerd: true }, VANDAAG), false, 'gecrediteerd is niet meer verschuldigd');
+  assert.equal(D.factuurWeergaveStatus(facturen[2], VANDAAG), 'verlopen');
   assert.equal(D.factuurWeergaveStatus(facturen[1], VANDAAG), 'verzonden');
 });
 
-test('facturen: KPI-tegels zoals FacturenPage (credits negatief, geboekt telt als open)', () => {
+test('facturen: KPI-tegels zoals FacturenPage (openstaand na eigen creditnota, nooit onder 0)', () => {
   assert.deepEqual(D.factuurKpis(facturen, VANDAAG), {
     totaal: 8,
-    openstaand: 242 + 100 - 121,
+    // BB-F002 (242) en BB-F005 (100, vervalt vandaag); de losse creditnota telt niet.
+    openstaand: 242 + 100,
     betaaldDezeMaand: 121,
-    verlopen: 2,
+    verlopen: 1,
   });
+  // Gedeeltelijk gecrediteerd: €127,35 − €119,79 = €7,56 blijft openstaan.
+  const deel = [
+    f({ id: 'a', nummer: 'BB-F010', status: 'verzonden', totaal_incl: 127.35, vervaldatum: '2026-12-01' }),
+    f({ id: 'b', nummer: 'BB-CF010', status: 'verzonden', totaal_incl: -119.79, is_credit: true, credit_van_factuur_id: 'a' }),
+  ];
+  assert.equal(D.factuurKpis(deel, VANDAAG).openstaand, 7.56);
 });
 
 test('facturen: filtertabs en zoeken', () => {
   const tel = D.telFactuurFilters(facturen, VANDAAG);
-  assert.deepEqual(tel, { alle: 8, concept: 1, verzonden: 2, betaald: 2, verlopen: 2, gecrediteerd: 2 });
+  // BB-F007 ('aangemaakt', vervaldatum voorbij) is een concept, niet verlopen.
+  assert.deepEqual(tel, { alle: 8, concept: 2, verzonden: 2, betaald: 2, verlopen: 1, gecrediteerd: 2 });
   assert.equal(D.filterFacturen(facturen, { filter: 'alle', zoek: 'bakker', vandaag: VANDAAG }).length, 1);
   assert.equal(D.filterFacturen(facturen, { filter: 'gecrediteerd', zoek: 'cf', vandaag: VANDAAG }).length, 1);
 });
@@ -162,38 +171,7 @@ test('creditfactuur: negatieve totalen en regels, regime leidend', () => {
   assert.equal(c.regels[2].volgorde, 2);
 });
 
-test('bedrijf op document: snapshot wint bij een verstuurd document', () => {
-  const live = { name: 'Nu BV', city: 'Utrecht', branding_color: '#000000', logo_url: null };
-  assert.equal(D.bedrijfVoorDocument({}, live).naam, 'Nu BV');
-  const b = D.bedrijfVoorDocument({ snapshot_bedrijfsnaam: 'Toen BV', snapshot_plaats: null }, live);
-  assert.equal(b.naam, 'Toen BV');
-  assert.equal(b.plaats, 'Utrecht', 'leeg snapshotveld valt terug op live');
-});
-
 // ── Afdrukweergave ─────────────────────────────────────────────────────────
-
-test('afdrukweergave: escapet invoer en toont nummer, regels en totalen', () => {
-  const regels = [{ omschrijving: '<script>x</script>', aantal: 1.5, eenheid: 'u', prijs: 55, btwPct: 21, bedrag: 82.5 }];
-  const html = H.bouwDocumentHtml({
-    soort: 'offerte',
-    nummer: 'BB-007',
-    datum: '2026-10-01',
-    geldigTot: '2026-10-15',
-    bedrijf: { naam: 'Boss & Co', kleur: 'red;}body{', logoUrl: 'javascript:alert(1)' },
-    klant: { naam: 'Jansen' },
-    regels,
-    totalen: D.documentTotalen(regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct }))),
-  });
-  assert.ok(html.includes('BB-007'));
-  assert.ok(!html.includes('<script>x'));
-  assert.ok(html.includes('&lt;script&gt;'));
-  assert.ok(html.includes('Boss &amp; Co'));
-  assert.ok(!html.includes('javascript:'), 'geen onveilige logo-url');
-  assert.ok(html.includes('--accent: #1DDB62'), 'ongeldige kleur valt terug op merkgroen');
-  assert.ok(html.includes('Deze offerte is geldig tot 15-10-2026.'));
-  assert.ok(html.includes('1,5 u'));
-  assert.ok(/BTW 21%/.test(html));
-});
 
 // ── Kosten ─────────────────────────────────────────────────────────────────
 

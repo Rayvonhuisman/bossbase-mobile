@@ -78,7 +78,7 @@ export function VoertuigenTab() {
     <>
       <Kaart
         titel="Voertuigen"
-        sub="Bussen en aanhangers die je bij een klus inplant."
+        sub="Bestelauto's, aanhangers, machines: alles wat je bij een klus inplant."
         rechts={
           <Button
             label="Toevoegen"
@@ -151,7 +151,7 @@ export function VoertuigenTab() {
           label="Naam *"
           value={concept?.naam ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, naam: v } : c))}
-          placeholder="Bijv. Bus 1"
+          placeholder="Bijv. Bestelauto 1"
           autoFocus={!concept?.id}
         />
         <View style={s.rij}>

@@ -71,7 +71,7 @@ export default function NewTimeEntryScreen() {
   const { toonResultaat } = useToast();
   const styles = useMemo(() => makeStyles(t), [t]);
 
-  const params = useLocalSearchParams<{ soort?: string; werkbon?: string }>();
+  const params = useLocalSearchParams<{ soort?: string; werkbon?: string; datum?: string }>();
   const [soort, setSoort] = useState<Soort>(params.soort === 'werkbon' || params.werkbon ? 'werkbon' : 'overig');
   // Werkdaguren voor een ander boeken: admin of recht planning, zoals het
   // dashboard (`canBookForOthers = magBewerken('planning')`) en de policy op
@@ -86,7 +86,10 @@ export default function NewTimeEntryScreen() {
   const [woError, setWoError] = useState<string | null>(null);
 
   const [selectedWoId, setSelectedWoId] = useState<string | null>(params.werkbon ?? null);
-  const [datum, setDatum] = useState(vandaagISO());
+  // Vanuit "Vul je werkdag in" komt de dag mee (?datum=).
+  const [datum, setDatum] = useState(
+    typeof params.datum === 'string' && isGeldigeISODatum(params.datum) ? params.datum : vandaagISO(),
+  );
   const [van, setVan] = useState<string | null>(null);
   const [tot, setTot] = useState<string | null>(null);
   const [pauze, setPauze] = useState(0);

@@ -1,11 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import { buildDueAt, isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
+import { buildDueAt, isGeldigeDatum, isGeldigeTijd, splitsLokaal } from '@/lib/nlTijd';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
-import { listWorkOrdersForPlanningRange } from './workOrderService';
+import { listAgendaEvents, listWerkbonnenInBereik, type PlanWerkbon } from './planningService';
+import { agendaWerkbonItems, zichtbareAfspraken, type AgendaWerkbonItem } from '@/lib/planningRegels';
 import { toLocalISODate } from '@/lib/dateRange';
 import { haalInStukken } from '@/lib/inStukken';
-import type { WorkOrderWithCustomer } from '@/types/domain';
+import { leesAfspraakNotities, type AfspraakNotitie } from '@/lib/afspraakNotities';
 
 /**
  * Activities + calendar_events ophalen voor mobile Planning + Vandaag.
@@ -38,8 +39,8 @@ const CALENDAR_COLUMNS = `
 // maar GEEN `body`, `author` of `completed_at`. Wel: type, due_at, completed,
 // customer_id, deal_id, assigned_to.
 const ACTIVITY_COLUMNS = `
-  id, company_id, customer_id, deal_id, assigned_to, title, type, notes,
-  due_at, completed, created_at,
+  id, company_id, customer_id, deal_id, assigned_to, assigned_to_ids, title, type, notes,
+  due_at, end_time, location, completed, created_at,
   customer:customers ( id, name, phone, address, postcode, city )
 `;
 
@@ -77,6 +78,9 @@ export type ActivityRow = {
   /** Omschrijving/notities — echte kolom is `notes` (geen `body`). */
   notes: string | null;
   due_at: string | null;
+  /** HH:mm(:ss) eindtijd op dezelfde dag; leeg = geen. */
+  end_time?: string | null;
+  location?: string | null;
   completed: boolean;
   // Live schema: activities heeft geen `updated_at`.
   created_at: string;
@@ -104,25 +108,6 @@ export async function listCalendarEventsForRange(
     return { data: [], error: 'Agenda kon niet worden geladen.' };
   }
   return { data: (data as unknown as CalendarEvent[]) ?? [], error: null };
-}
-
-/** Activities met `due_at` binnen range, niet voltooid eerst. */
-export async function listActivitiesForRange(
-  fromISO: string,
-  toISO: string,
-): Promise<{ data: ActivityRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('activities')
-    .select(ACTIVITY_COLUMNS)
-    .gte('due_at', fromISO)
-    .lte('due_at', toISO)
-    .order('due_at', { ascending: true });
-
-  if (error) {
-    console.warn('[activityService.listActivitiesForRange]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
-  }
-  return { data: (data as unknown as ActivityRow[]) ?? [], error: null };
 }
 
 /**
@@ -184,8 +169,9 @@ export async function listAllActivities(): Promise<{ data: ActivityRow[]; error:
 /**
  * Eigen open activiteiten met `due_at` tot en met `totISO` (einde van vandaag):
  * de bron voor "Activiteiten vandaag" en "te laat" op de homepage. "Eigen" =
- * primair toegewezen óf in `assigned_to_ids`, net als het Persoonlijk-filter
- * van het dashboard (`myActivities`).
+ * primair toegewezen óf in `assigned_to_ids` (het Persoonlijk-filter van het
+ * dashboard, `myActivities`), plus wat aan niemand is toegewezen — zie
+ * `eigenActiviteitenVandaag`.
  */
 export async function listEigenOpenActiviteitenTot(
   userId: string,
@@ -197,7 +183,10 @@ export async function listEigenOpenActiviteitenTot(
       .select(ACTIVITY_LIST_SELECT)
       .eq('completed', false)
       .lte('due_at', totISO)
-      .or(`assigned_to.eq.${userId},assigned_to_ids.cs.{${userId}}`)
+      .or(
+        `assigned_to.eq.${userId},assigned_to_ids.cs.{${userId}},` +
+          'and(assigned_to.is.null,or(assigned_to_ids.is.null,assigned_to_ids.eq.{}))',
+      )
       .order('due_at', { ascending: true })
       .order('id', { ascending: true })
       .range(van, tot)
@@ -266,36 +255,6 @@ export type PlanningItem = {
   typeLabel: string;
 };
 
-export type PlanningRangeParams = {
-  /** UTC instants for the timestamptz columns (calendar_events, activities). */
-  startISO: string;
-  endISO: string;
-  /** Local YYYY-MM-DD for the date column (werkbonnen.gepland_op). */
-  startDate: string;
-  endDate: string;
-  /** Restrict werkbonnen to one assignee (medewerker view). */
-  assignedToUserId?: string | null;
-  /** Current user — used to label self-assigned work orders. */
-  currentUserId?: string | null;
-  currentUserName?: string | null;
-};
-
-export type PlanningResult = {
-  items: PlanningItem[];
-  /** Per-source soft failures (dev/diagnostic) when other sources still loaded. */
-  partialErrors: string[];
-  /** Hard error: every source failed → show user-facing error + retry. */
-  error: string | null;
-};
-
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  call: 'Telefoon',
-  email: 'E-mail',
-  meeting: 'Afspraak',
-  task: 'Taak',
-  note: 'Notitie',
-};
-
 function joinAddress(c: CalendarEvent['customer']): string | null {
   if (!c) return null;
   return [c.address, c.postcode, c.city].filter(Boolean).join(', ') || null;
@@ -341,65 +300,6 @@ function fromEvent(e: CalendarEvent): PlanningItem {
   };
 }
 
-function fromActivity(a: ActivityRow): PlanningItem {
-  return {
-    id: `activity-${a.id}`,
-    source: 'activity',
-    number: null,
-    title: a.title ?? ACTIVITY_TYPE_LABELS[a.type ?? ''] ?? 'Activiteit',
-    customerName: a.customer?.name ?? null,
-    customerId: a.customer_id,
-    description: a.notes,
-    address: joinAddress(a.customer),
-    phone: a.customer?.phone ?? null,
-    startAt: a.due_at,
-    endAt: null,
-    date: a.due_at ? toLocalISODate(new Date(a.due_at)) : '',
-    status: a.completed ? 'completed' : 'gepland',
-    assigneeName: null,
-    assigneeId: null,
-    workOrderId: null,
-    typeLabel: (a.type && ACTIVITY_TYPE_LABELS[a.type]) || 'Activiteit',
-  };
-}
-
-function fromWorkOrder(
-  w: WorkOrderWithCustomer,
-  currentUserId?: string | null,
-  currentUserName?: string | null,
-): PlanningItem {
-  // Assignment lives in assigned_to_ids; the legacy assigned_to column is only
-  // a fallback for rows the dashboard has not rewritten.
-  const assignees = w.assigned_to_ids?.length
-    ? w.assigned_to_ids
-    : w.assigned_to
-      ? [w.assigned_to]
-      : [];
-  const assigneeName =
-    currentUserId && assignees.includes(currentUserId)
-      ? currentUserName?.trim() || 'Jij'
-      : null;
-  return {
-    id: `wo-${w.id}`,
-    source: 'work_order',
-    number: w.nummer ?? null,
-    title: w.titel || 'Werkbon',
-    customerName: w.customer?.name ?? null,
-    customerId: w.customer_id,
-    description: w.omschrijving,
-    address: w.locatie ?? joinAddress(w.customer),
-    phone: w.customer?.phone ?? null,
-    startAt: combineDateTime(w.gepland_op, w.starttijd),
-    endAt: combineDateTime(w.gepland_op, w.eindtijd),
-    date: w.gepland_op ?? '',
-    status: w.status ?? null,
-    assigneeName,
-    assigneeId: assignees[0] ?? null,
-    workOrderId: w.id,
-    typeLabel: 'Werkbon',
-  };
-}
-
 /** Effective sort timestamp: real start, else end-of-day so untimed items sort last. */
 function sortMs(item: PlanningItem): number {
   if (item.startAt) {
@@ -414,99 +314,70 @@ function sortMs(item: PlanningItem): number {
 }
 
 /**
- * Combined planning items for a range across all three real backend sources.
+ * Jouw planning voor de homepage, persoonlijk — ook voor een admin, net als de
+ * dashboardtegels `werkbonnen_today` en `agenda_week` (`myWerkbonnen`,
+ * `myCalendarEvents`):
  *
- * Resilient: if one source fails (missing column/table/RLS), its rows are
- * dropped, the failure is recorded in `partialErrors`, and the other sources
- * still render. A hard error is only returned when ALL sources fail.
+ * - werkbonnen per geplande dag (`werkbon_dagen`) waarop jij in de dagploeg
+ *   staat, met jóuw tijd. Een klus van ma t/m vr staat dus ook woensdag hier;
+ *   `gepland_op` is alleen de eerste dag. Afgeronde tellen mee ("x van y
+ *   klaar").
+ * - je eigen agenda-items (`assigned_to`), zonder de rijen die bij een werkbon
+ *   of activiteit horen — die staan er al als werkbon of activiteit.
  *
- * RLS scopes every query to the caller's company. No service-role, no client
- * company_id filter. `assignedToUserId` narrows werkbonnen for the medewerker
- * view (calendar_events/activities have no per-user assignment, so RLS — which
- * is company-wide for those — governs visibility).
+ * `van`/`tot` zijn lokale datums (YYYY-MM-DD), `startISO`/`endISO` dezelfde
+ * grenzen als tijdstip voor `calendar_events.start_at`.
  */
-export async function listPlanningItemsForRange(
-  params: PlanningRangeParams,
-): Promise<PlanningResult> {
-  const { startISO, endISO, startDate, endDate, assignedToUserId, currentUserId, currentUserName } =
-    params;
-
-  const [evRes, actRes, woRes] = await Promise.all([
-    listCalendarEventsForRange(startISO, endISO),
-    listActivitiesForRange(startISO, endISO),
-    listWorkOrdersForPlanningRange(startDate, endDate, { assignedToUserId }),
+export async function listMijnPlanning(params: {
+  uid: string;
+  van: string;
+  tot: string;
+  startISO: string;
+  endISO: string;
+  currentUserName?: string | null;
+}): Promise<{ items: PlanningItem[]; error: string | null }> {
+  const { uid, van, tot, startISO, endISO, currentUserName } = params;
+  const [evRes, wbRes] = await Promise.all([
+    listAgendaEvents(startISO, endISO),
+    listWerkbonnenInBereik(van, tot),
   ]);
 
   const items: PlanningItem[] = [];
-  const partialErrors: string[] = [];
-
-  if (evRes.error) partialErrors.push(`calendar_events: ${evRes.error}`);
-  else items.push(...evRes.data.map(fromEvent));
-
-  if (actRes.error) partialErrors.push(`activities: ${actRes.error}`);
-  else items.push(...actRes.data.map(fromActivity));
-
-  if (woRes.error) partialErrors.push(`werkbonnen: ${woRes.error}`);
-  else items.push(...woRes.data.map((w) => fromWorkOrder(w, currentUserId, currentUserName)));
-
+  if (!evRes.error) {
+    const eigen = zichtbareAfspraken(evRes.data, { uid, gedeeld: false }).filter((e) => !e.activiteit_id);
+    items.push(...eigen.map((e) => fromEvent(e as unknown as CalendarEvent)));
+  }
+  if (!wbRes.error) {
+    const dagItems = agendaWerkbonItems(wbRes.data, { uid, gedeeld: false, van, tot, ookAfgerond: true });
+    items.push(...dagItems.map((it) => fromWerkbonDag(it, currentUserName ?? null)));
+  }
   items.sort((a, b) => sortMs(a) - sortMs(b));
 
-  const allFailed = !!evRes.error && !!actRes.error && !!woRes.error;
-
-  if (__DEV__) {
-    console.log('[activityService.listPlanningItemsForRange]', {
-      range: { startISO, endISO, startDate, endDate },
-      counts: {
-        events: evRes.error ? 'ERR' : evRes.data.length,
-        activities: actRes.error ? 'ERR' : actRes.data.length,
-        werkbonnen: woRes.error ? 'ERR' : woRes.data.length,
-        total: items.length,
-      },
-      partialErrors,
-    });
-  }
-
-  return {
-    items,
-    partialErrors,
-    error: allFailed ? 'Planning kon niet worden geladen.' : null,
-  };
+  const fout = evRes.error && wbRes.error ? 'Planning kon niet worden geladen.' : (evRes.error ?? wbRes.error);
+  return { items, error: fout };
 }
 
-/**
- * Next upcoming planning item from now (across all sources), within a forward
- * window. Returns null when nothing is scheduled. Used by the "volgende
- * afspraak" affordance.
- */
-export async function getNextPlanningItem(params?: {
-  assignedToUserId?: string | null;
-  currentUserId?: string | null;
-  currentUserName?: string | null;
-  /** Forward window in days (default 60). */
-  windowDays?: number;
-}): Promise<{ item: PlanningItem | null; error: string | null }> {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + (params?.windowDays ?? 60));
-
-  const result = await listPlanningItemsForRange({
-    startISO: now.toISOString(),
-    endISO: end.toISOString(),
-    startDate: toLocalISODate(now),
-    endDate: toLocalISODate(end),
-    assignedToUserId: params?.assignedToUserId ?? null,
-    currentUserId: params?.currentUserId ?? null,
-    currentUserName: params?.currentUserName ?? null,
-  });
-
-  const nowMs = now.getTime();
-  const upcoming = result.items.find((i) => {
-    if (!i.startAt) return false;
-    const ms = new Date(i.startAt).getTime();
-    return !Number.isNaN(ms) && ms >= nowMs;
-  });
-
-  return { item: upcoming ?? null, error: result.error };
+function fromWerkbonDag(it: AgendaWerkbonItem<PlanWerkbon>, currentUserName: string | null): PlanningItem {
+  const w = it.werkbon;
+  return {
+    id: `wo-${it.sleutel}`,
+    source: 'work_order',
+    number: w.nummer ?? null,
+    title: w.titel || 'Werkbon',
+    customerName: w.customer?.name ?? null,
+    customerId: w.customer_id,
+    description: null,
+    address: w.locatie ?? joinAddress(w.customer),
+    phone: w.customer?.phone ?? null,
+    startAt: combineDateTime(it.datum, it.starttijd),
+    endAt: combineDateTime(it.datum, it.eindtijd),
+    date: it.datum,
+    status: w.status ?? null,
+    assigneeName: currentUserName?.trim() || 'Jij',
+    assigneeId: null,
+    workOrderId: w.id,
+    typeLabel: 'Werkbon',
+  };
 }
 
 // ===========================================================================
@@ -565,6 +436,8 @@ export type ActivityInput = {
   assigned_to_ids?: string[] | null;
   location?: string | null;
   completed?: boolean;
+  /** HH:mm eindtijd (dashboard: start + 15 min tenzij zelf gekozen). */
+  end_time?: string | null;
 };
 
 function mapActivityInput(input: Partial<ActivityInput>): Record<string, unknown> {
@@ -597,6 +470,7 @@ function mapActivityInput(input: Partial<ActivityInput>): Record<string, unknown
   }
 
   if (input.completed !== undefined) payload.completed = Boolean(input.completed);
+  if (input.end_time !== undefined) payload.end_time = input.end_time || null;
 
   return payload;
 }
@@ -610,6 +484,7 @@ function valideerActivity(input: Partial<ActivityInput>, nieuw: boolean): string
     if (input.time && !isGeldigeTijd(input.time)) return 'Vul een geldige tijd in (uu:mm).';
   }
   if (!input.date && input.time) return 'Kies eerst een datum bij deze tijd.';
+  if (input.end_time && !isGeldigeTijd(input.end_time)) return 'Vul een geldige eindtijd in (uu:mm).';
   return null;
 }
 
@@ -656,10 +531,86 @@ export async function updateActivity(
     return writeFout('validatie', 'Er is niets gewijzigd.');
   }
 
-  return schrijf<ActivityRow>(
+  const res = await schrijf<ActivityRow>(
     () => supabase.from('activities').update(updates).eq('id', id).select(ACTIVITY_COLUMNS),
     { context: 'activityService.updateActivity', bedrijfReadonly: isReadonly() },
   );
+  // Een gekoppeld agenda-item loopt mee, zoals het dashboard (syncLinkedActivityEvent).
+  if (res.ok && res.data) await syncGekoppeldAgendaItem(res.data);
+  return res;
+}
+
+/**
+ * Houdt het agenda-item van een ingeplande activiteit (`calendar_events.activiteit_id`)
+ * gelijk aan de activiteit — `syncLinkedActivityEvent` + `upsertActivityEvent`
+ * van het dashboard. Alleen een bestaand item; nooit een nieuw. Best effort.
+ */
+async function syncGekoppeldAgendaItem(a: ActivityRow): Promise<void> {
+  try {
+    const { data: bestaand } = await supabase
+      .from('calendar_events')
+      .select('id')
+      .eq('activiteit_id', a.id)
+      .maybeSingle();
+    if (!bestaand) return;
+    const { date, time } = splitsLokaal(a.due_at);
+    const t = afspraakTijden(date, time, a.end_time ? String(a.end_time).slice(0, 5) : '');
+    await supabase
+      .from('calendar_events')
+      .update({
+        title: a.title || 'Activiteit',
+        customer_id: a.customer_id || null,
+        location: a.location || null,
+        // Het dashboard geeft hier geen omschrijving mee en zet de notities leeg.
+        notes: null,
+        assigned_to: a.assigned_to || null,
+        start_at: t.start_at,
+        end_at: t.end_at,
+      })
+      .eq('id', (bestaand as { id: string }).id);
+  } catch {
+    // Synchroniseren is een extra; de activiteit zelf is opgeslagen.
+  }
+}
+
+/**
+ * Wie nieuw aan een activiteit is toegewezen, hoort het — `notifyNewAssignees`
+ * (type `toewijzing_activiteit`) van het dashboard, met optioneel een mail. De
+ * Edge Function `create-notification` zoekt het adres zelf op. Jezelf niet.
+ */
+export async function meldActiviteitToewijzing(o: {
+  activiteitId: string;
+  titel: string;
+  datum: string | null;
+  toegewezen: string[];
+  vorige?: string[];
+  maker: string | null;
+  stuurMail: boolean;
+}): Promise<void> {
+  const vorig = new Set(o.vorige ?? []);
+  const nieuw = [...new Set(o.toegewezen)].filter((id) => id && !vorig.has(id) && id !== o.maker);
+  if (!nieuw.length) return;
+  const datum = o.datum
+    ? new Date(`${o.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+    : null;
+  try {
+    await supabase.functions.invoke('create-notification', {
+      body: {
+        notifications: nieuw.map((uid) => ({
+          user_id: uid,
+          type: 'toewijzing_activiteit',
+          title: `Je bent toegewezen aan ${o.titel}`,
+          body: datum ? `Datum: ${datum}` : null,
+          link: 'activities',
+          related_type: 'activiteit',
+          related_id: o.activiteitId,
+          ...(o.stuurMail ? { email: true } : {}),
+        })),
+      },
+    });
+  } catch {
+    // Een melding mag het opslaan nooit tegenhouden.
+  }
 }
 
 /** Afronden en heropenen — `completeActivity`/`reopenActivity` uit het dashboard. */
@@ -725,12 +676,39 @@ export type AfspraakInput = {
   date: string;
   /** HH:mm; leeg = hele dag vanaf 09:00, net als het dashboard. */
   time?: string | null;
-  /** HH:mm eindtijd; leeg = geen eindtijd. */
+  /** HH:mm eindtijd; leeg = een uur na de begintijd, net als het dashboard. */
   end?: string | null;
   location?: string | null;
   notes?: string | null;
   customer_id?: string | null;
+  /** Project/aanvraag waar de afspraak bij hoort. */
+  deal_id?: string | null;
+  /** `event` (Afspraak), `job` (Klus), `visit` (Opname) of `activity`. */
+  type?: AfspraakType | null;
 };
+
+export const AFSPRAAK_TYPES = [
+  { id: 'event', label: 'Afspraak' },
+  { id: 'job', label: 'Klus' },
+  { id: 'visit', label: 'Opname' },
+  { id: 'activity', label: 'Activiteit' },
+] as const;
+export type AfspraakType = (typeof AFSPRAAK_TYPES)[number]['id'];
+
+/**
+ * Begin en eind van een afspraak — `buildEventTimes` van het dashboard: zonder
+ * begintijd 09:00, zonder eindtijd een uur later.
+ */
+export function afspraakTijden(
+  date: string,
+  time?: string | null,
+  end?: string | null,
+): { start_at: string | null; end_at: string | null } {
+  const start = buildDueAt(date, time ?? '');
+  if (!start) return { start_at: null, end_at: null };
+  const eind = end ? buildDueAt(date, end) : null;
+  return { start_at: start, end_at: eind ?? new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() };
+}
 
 function mapAfspraak(input: Partial<AfspraakInput>): Record<string, unknown> {
   const p: Record<string, unknown> = {};
@@ -738,11 +716,13 @@ function mapAfspraak(input: Partial<AfspraakInput>): Record<string, unknown> {
   if (input.location !== undefined) p.location = input.location?.trim() || null;
   if (input.notes !== undefined) p.notes = input.notes?.trim() || null;
   if (input.customer_id !== undefined) p.customer_id = input.customer_id || null;
+  if (input.deal_id !== undefined) p.deal_id = input.deal_id || null;
+  if (input.type !== undefined) p.type = input.type || null;
 
   if (input.date !== undefined) {
-    p.start_at = buildDueAt(input.date, input.time ?? '');
-    // Eindtijd hoort bij dezelfde dag; leeg laten mag.
-    p.end_at = input.end ? buildDueAt(input.date, input.end) : null;
+    const t = afspraakTijden(input.date, input.time, input.end);
+    p.start_at = t.start_at;
+    p.end_at = t.end_at;
   }
   return p;
 }
@@ -779,10 +759,46 @@ export async function createAfspraak(
     return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
   }
 
-  return schrijf<CalendarEvent>(
+  const res = await schrijf<CalendarEvent>(
     () => supabase.from('calendar_events').insert(payload).select(CALENDAR_COLUMNS),
     { context: 'activityService.createAfspraak', bedrijfReadonly: isReadonly() },
   );
+  // Op de tijdlijn van de klant, zoals het dashboard (logTijdlijnSafe):
+  // "Afspraak ingepland: Inmeten op 3 nov". Mislukt dat, dan blijft de afspraak staan.
+  if (res.ok && res.data?.customer_id) {
+    const startAt = res.data.start_at;
+    const op = startAt
+      ? ` op ${new Date(startAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', timeZone: 'Europe/Amsterdam' })}`
+      : '';
+    void logKlantTijdlijn(res.data.customer_id, 'afspraak_ingepland', `Afspraak ingepland: ${res.data.title ?? ''}${op}`, {
+      title: res.data.title,
+      startAt,
+    });
+  }
+  return res;
+}
+
+/** Een regel op de tijdlijn van een klant (`klant_tijdlijn`), zoals `logTijdlijnSafe`. Faalt stil. */
+async function logKlantTijdlijn(
+  customerId: string,
+  type: string,
+  omschrijving: string,
+  meta: Record<string, unknown> | null = null,
+): Promise<void> {
+  try {
+    const payload = withCompanyId({
+      customer_id: customerId,
+      type,
+      omschrijving,
+      aangemaakt_op: new Date().toISOString(),
+      ...(meta ? { meta } : {}),
+      ...(getUserId() ? { created_by: getUserId() } : {}),
+    });
+    if (!payload) return;
+    await supabase.from('klant_tijdlijn').insert(payload);
+  } catch {
+    // Stil: de tijdlijn is een extra, geen voorwaarde.
+  }
 }
 
 export async function updateAfspraak(
@@ -822,4 +838,94 @@ export async function deleteAfspraak(id: string): Promise<WriteStatus> {
     },
   );
   return res.ok ? { ok: true, data: null } : res;
+}
+
+// ── Werkbon en notitielog bij een afspraak (CalendarEventDetailDrawer) ──────
+
+/** `setCalendarEventWerkbon`: de afspraak aan een (net gemaakte) werkbon hangen. */
+export async function koppelWerkbonAanAfspraak(id: string, werkbonId: string): Promise<WriteStatus> {
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('calendar_events').update({ werkbon_id: werkbonId }).eq('id', id).select('id'),
+    {
+      context: 'activityService.koppelWerkbonAanAfspraak',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'De werkbon is gemaakt, maar kon niet aan de afspraak worden gekoppeld.',
+    },
+  );
+  return res.ok ? { ok: true, data: null } : res;
+}
+
+/** De werkbon en het notitielog van één afspraak, bij het openen. */
+export async function getAfspraakExtra(
+  id: string,
+): Promise<{ werkbonId: string | null; notities: AfspraakNotitie[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .select('werkbon_id, comments')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return { werkbonId: null, notities: [], error: 'De notities konden niet worden geladen.' };
+  const rij = data as { werkbon_id?: string | null; comments?: unknown } | null;
+  return { werkbonId: rij?.werkbon_id ?? null, notities: leesAfspraakNotities(rij?.comments), error: null };
+}
+
+/**
+ * Een notitie onderaan het log (`updateCalendarEventComments`). Eerst opnieuw
+ * lezen: dan gaat een notitie van een collega die net ervoor plaatste niet
+ * verloren (het dashboard schrijft zijn eigen lijst terug).
+ */
+export async function plaatsAfspraakNotitie(
+  id: string,
+  notitie: AfspraakNotitie,
+): Promise<WriteResult<AfspraakNotitie[]>> {
+  const huidig = await getAfspraakExtra(id);
+  if (huidig.error) return writeFout('onbekend', huidig.error);
+  const lijst = [...huidig.notities, notitie];
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('calendar_events').update({ comments: lijst }).eq('id', id).select('id'),
+    {
+      context: 'activityService.plaatsAfspraakNotitie',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'De notitie is niet geplaatst: je mag deze afspraak niet wijzigen.',
+    },
+  );
+  return res.ok ? { ok: true, data: lijst } : res;
+}
+
+// ── Notitielog van een activiteit (activiteit_notities) ────────────────────
+
+export type ActiviteitNotitie = { id: string; note: string; created_at: string; auteur: string };
+
+/** `getActiviteitNotities`: nieuwste eerst, met de naam van de schrijver. */
+export async function listActiviteitNotities(
+  activityId: string,
+): Promise<{ data: ActiviteitNotitie[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('activiteit_notities')
+    .select('id, note, created_at, profiles(full_name)')
+    .eq('activity_id', activityId)
+    .order('created_at', { ascending: false });
+  if (error) return { data: [], error: 'De notities van deze activiteit konden niet worden geladen.' };
+  type Rij = { id: string; note: string | null; created_at: string; profiles: { full_name: string | null } | null };
+  const rijen = (data ?? []) as unknown as Rij[];
+  return {
+    data: rijen.map((r) => ({ id: r.id, note: r.note ?? '', created_at: r.created_at, auteur: r.profiles?.full_name ?? '' })),
+    error: null,
+  };
+}
+
+/** `addActiviteitNotitie`: een losse regel in het log. */
+export async function addActiviteitNotitie(activityId: string, html: string): Promise<WriteResult<{ id: string }>> {
+  if (!html.trim()) return writeFout('validatie', 'Notitie mag niet leeg zijn');
+  const userId = getUserId();
+  const payload = withCompanyId({ activity_id: activityId, note: html, ...(userId ? { created_by: userId } : {}) });
+  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+  return schrijf<{ id: string }>(() => supabase.from('activiteit_notities').insert(payload).select('id'), {
+    context: 'activityService.addActiviteitNotitie',
+    bedrijfReadonly: isReadonly(),
+    leegSoort: 'geen-rechten',
+    leegMelding: 'De notitie is niet opgeslagen.',
+  });
 }

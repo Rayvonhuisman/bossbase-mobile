@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/providers';
-import { formatEUR } from '@/lib/format';
+import { formatEURCent } from '@/lib/format';
 import {
   BTW_REGIMES,
   berekenTotalen,
@@ -158,7 +158,7 @@ export function RegelEditor({ regels, onChange, standaard, eenheden = [], disabl
 
             <View style={styles.regelTotaal}>
               <Text style={styles.regelTotaalLabel}>Regelbedrag</Text>
-              <Text style={styles.regelTotaalBedrag}>{formatEUR(regelprijs(r))}</Text>
+              <Text style={styles.regelTotaalBedrag}>{formatEURCent(regelprijs(r))}</Text>
             </View>
           </View>
         );
@@ -217,7 +217,7 @@ function Rij({
     <View style={styles.totaalRij}>
       <Text style={[styles.totaalLabel, groot && styles.totaalLabelGroot]}>{label}</Text>
       <Text style={[styles.totaalBedrag, groot && styles.totaalBedragGroot]}>
-        {formatEUR(bedrag)}
+        {formatEURCent(bedrag)}
       </Text>
     </View>
   );

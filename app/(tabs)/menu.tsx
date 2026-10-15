@@ -8,6 +8,7 @@ import {
   Bug,
   CalendarDays,
   CalendarRange,
+  ChartColumn,
   ChevronRight,
   ClipboardList,
   Database,
@@ -108,6 +109,7 @@ export default function MenuScreen() {
         { icon: FileText, title: 'Offertes', sub: 'Opstellen en opvolgen', route: '/offers', onPress: ga('/offers') },
         { icon: Receipt, title: 'Facturen', sub: 'Aanmaken en betaald zetten', route: '/invoices', onPress: ga('/invoices') },
         { icon: Wallet, title: 'Kosten', sub: 'Geboekte kosten en materiaal', route: '/expenses', onPress: ga('/expenses') },
+        { icon: ChartColumn, title: 'Financiën', sub: 'Financieel overzicht', route: '/financien', onPress: ga('/financien') },
       ],
     },
   ];
