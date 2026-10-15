@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button, FormField } from '@/components';
+import { Button } from '@/components';
+import { NotitieLog, type LogLid } from '@/components/NotitieLog';
 import { useAuth, useToast } from '@/providers';
 import { useStijl } from '@/components/project/bouwstenen';
 import { typography } from '@/theme';
-import { formatDateNL, formatPlanningTime } from '@/lib/format';
-import { lokaleDatum } from '@/lib/nlTijd';
-import { alsHtml, alsTekst } from '@/lib/notitieTekst';
-import { mentionMeldingen, mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
+import { mentionMeldingen } from '@/lib/mentions';
 import { nieuweAfspraakNotitie, nieuwsteEerst, type AfspraakNotitie } from '@/lib/afspraakNotities';
 import { getCompanyId } from '@/lib/sessionContext';
 import { useSave } from '@/lib/useSave';
@@ -17,7 +15,7 @@ import { listCompanyProfiles } from '@/services/teamService';
 import { createWorkOrder } from '@/services/workOrderService';
 import { getAfspraakExtra, koppelWerkbonAanAfspraak, plaatsAfspraakNotitie } from '@/services/activityService';
 
-type Lid = { id: string; full_name: string };
+type Lid = LogLid;
 
 const nieuwId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c-${Date.now()}`;
@@ -59,9 +57,6 @@ export function AfspraakExtra({
   const [notities, setNotities] = useState<AfspraakNotitie[]>([]);
   const [laadFout, setLaadFout] = useState<string | null>(null);
   const [leden, setLeden] = useState<Lid[]>([]);
-  const [tekst, setTekst] = useState('');
-  const [cursor, setCursor] = useState(0);
-  const [gekozen, setGekozen] = useState<{ id: string; naam: string }[]>([]);
   const [maken, setMaken] = useState(false);
   const plaatsen = useSave<AfspraakNotitie[]>();
 
@@ -107,26 +102,7 @@ export function AfspraakExtra({
     }
   };
 
-  // "@" vóór de cursor: de keuzelijst met namen (NoteEditor.detectMention).
-  const zoek = mentionZoekterm(tekst, cursor);
-  const keuzes =
-    zoek === null
-      ? []
-      : leden.filter((l) => l.full_name.toLowerCase().includes(zoek.term.trim().toLowerCase())).slice(0, 6);
-
-  const kies = (l: Lid) => {
-    if (!zoek) return;
-    const invoeg = `@${l.full_name} `;
-    setTekst((v) => `${v.slice(0, zoek.start)}${invoeg}${v.slice(cursor)}`);
-    setCursor(zoek.start + invoeg.length);
-    setGekozen((g) => (g.some((x) => x.id === l.id) ? g : [...g, { id: l.id, naam: l.full_name }]));
-  };
-
-  const plaats = () => {
-    const schoon = tekst.trim();
-    if (!schoon) return;
-    const metTag = gekozen.filter((g) => schoon.includes(`@${g.naam}`));
-    const html = metTag.length ? tekstMetVermeldingen(schoon, metTag) : alsHtml(schoon);
+  const plaats = async (html: string, getagd: boolean): Promise<boolean> => {
     const notitie = nieuweAfspraakNotitie({
       id: nieuwId(),
       userId: user?.id ?? null,
@@ -134,26 +110,22 @@ export function AfspraakExtra({
       tekst: html,
       nu: new Date(),
     });
-    plaatsen.save(() => plaatsAfspraakNotitie(afspraakId, notitie), {
-      onSuccess: (lijst) => {
-        setNotities(lijst);
-        setTekst('');
-        setGekozen([]);
-        setCursor(0);
-        if (metTag.length) {
-          void pushNotificaties(
-            mentionMeldingen({
-              text: html,
-              relatedType: 'calendar_event',
-              relatedId: afspraakId,
-              link: 'calendar',
-              creatorName: profile?.full_name ?? null,
-              contextName: vorm.title,
-            }),
-          );
-        }
-      },
-    });
+    const res = await plaatsen.save(() => plaatsAfspraakNotitie(afspraakId, notitie));
+    if (!res?.ok) return false;
+    setNotities(res.data);
+    if (getagd) {
+      void pushNotificaties(
+        mentionMeldingen({
+          text: html,
+          relatedType: 'calendar_event',
+          relatedId: afspraakId,
+          link: 'calendar',
+          creatorName: profile?.full_name ?? null,
+          contextName: vorm.title,
+        }),
+      );
+    }
+    return true;
   };
 
   return (
@@ -183,53 +155,15 @@ export function AfspraakExtra({
         )}
       </View>
 
-      <View style={{ gap: 8 }}>
-        <FormField
-          label="Notitielog"
-          value={tekst}
-          onChangeText={setTekst}
-          onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
-          placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
-          multiline
-        />
-        {keuzes.length ? (
-          <View style={styles.chipRij} accessibilityLabel="Collega taggen">
-            {keuzes.map((l) => (
-              <Pressable
-                key={l.id}
-                onPress={() => kies(l)}
-                accessibilityRole="button"
-                accessibilityLabel={`${l.full_name} taggen`}
-                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.chipTekst}>@{l.full_name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {plaatsen.error ? <Text style={[styles.klein, { color: t.statusRejectFg }]}>{plaatsen.error}</Text> : null}
-        <View style={{ alignItems: 'flex-end' }}>
-          <Button
-            label="Plaatsen"
-            variant="secondary"
-            onPress={plaats}
-            loading={plaatsen.saving}
-            disabled={!tekst.trim() || plaatsen.saving}
-          />
-        </View>
-        {laadFout ? <Text style={styles.leeg}>{laadFout}</Text> : null}
-        {!laadFout && notities.length === 0 ? <Text style={styles.leeg}>Nog geen notities.</Text> : null}
-        {nieuwsteEerst(notities).map((n) => (
-          <View key={n.id} style={styles.notitie}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.notitieMeta}>
-                {n.name} · {formatDateNL(lokaleDatum(n.at))} {formatPlanningTime(n.at)}
-              </Text>
-              <Text style={styles.tekst}>{alsTekst(n.text)}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
+      {laadFout ? <Text style={styles.leeg}>{laadFout}</Text> : null}
+      <NotitieLog
+        label="Notitielog"
+        items={nieuwsteEerst(notities).map((n) => ({ id: n.id, html: n.text, auteur: n.name, at: n.at }))}
+        leden={leden}
+        bezig={plaatsen.saving}
+        fout={plaatsen.error}
+        onPlaats={plaats}
+      />
     </View>
   );
 }

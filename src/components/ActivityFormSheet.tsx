@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { FormField } from './FormField';
 import { DateField, TimeField } from './DateField';
@@ -8,11 +8,16 @@ import { useAuth, usePermissions, useTheme, useToast } from '@/providers';
 import { afspraakDatum } from '@/lib/autoMail';
 import { stuurAfspraakbevestiging } from '@/services/autoMailService';
 import { LedenKeuze } from './pipeline/LedenKeuze';
+import { MentionInvoer, naarHtml, NotitieLog, type Getagd, type LogItem } from './NotitieLog';
+import { mentionMeldingen } from '@/lib/mentions';
+import { pushNotificaties } from '@/services/collegaMeldingService';
 import {
   ACTIVITEIT_TYPES,
   activiteitTypeLabel,
+  addActiviteitNotitie,
   createActivity,
   deleteActivity,
+  listActiviteitNotities,
   meldActiviteitToewijzing,
   updateActivity,
   type ActivityRow,
@@ -121,12 +126,19 @@ export function ActivityFormSheet({
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { mag } = usePermissions();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toon } = useToast();
   const [stuurMail, setStuurMail] = useState(true);
   // Eindtijd zelf gekozen? Dan schuift hij niet meer mee met het begin.
   const [eindHandmatig, setEindHandmatig] = useState(false);
   const { save, saving, error, setError } = useSave<unknown>();
+  // @-vermeldingen in de notitie van een nieuwe activiteit.
+  const [getagd, setGetagd] = useState<Getagd[]>([]);
+  // Het notitielog van een bestaande activiteit (activiteit_notities).
+  const [log, setLog] = useState<LogItem[]>([]);
+  const [logFout, setLogFout] = useState<string | null>(null);
+  const logOpslaan = useSave<{ id: string }>();
+  const activiteitId = concept?.id ?? null;
 
   const [vorm, setVorm] = useState<ActivityConcept | null>(concept);
 
@@ -137,7 +149,44 @@ export function ActivityFormSheet({
     setVorm(concept);
     setError(null);
     setEindHandmatig(!!concept?.id);
+    setGetagd([]);
   }, [concept, setError]);
+
+  const laadLog = useCallback(async () => {
+    if (!activiteitId) return;
+    const r = await listActiviteitNotities(activiteitId);
+    setLogFout(r.error);
+    setLog(r.data.map((n) => ({ id: n.id, html: n.note, auteur: n.auteur, at: n.created_at })));
+  }, [activiteitId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLog([]);
+    void laadLog();
+  }, [laadLog]);
+
+  const klantNaam = (id: string | null) => klanten.find((k) => k.id === id)?.label ?? '';
+  const leden = useMemo(() => medewerkers.map((m) => ({ id: m.id, full_name: m.label })), [medewerkers]);
+
+  const plaatsInLog = async (html: string, metTag: boolean): Promise<boolean> => {
+    if (!activiteitId) return false;
+    const res = await logOpslaan.save(() => addActiviteitNotitie(activiteitId, html));
+    if (!res?.ok) return false;
+    if (metTag) {
+      void pushNotificaties(
+        mentionMeldingen({
+          text: html,
+          relatedType: 'activiteit',
+          relatedId: activiteitId,
+          link: 'activities',
+          creatorName: profile?.full_name ?? null,
+          contextName: klantNaam(vorm?.customerId ?? null),
+        }),
+      );
+    }
+    await laadLog();
+    return true;
+  };
 
   const zetVeld = <K extends keyof ActivityConcept>(sleutel: K, waarde: ActivityConcept[K]) =>
     setVorm((v) => (v ? { ...v, [sleutel]: waarde } : v));
@@ -158,6 +207,7 @@ export function ActivityFormSheet({
       });
       return;
     }
+    const nieuweNotitie = naarHtml(vorm.notes, getagd);
     const invoer = {
       title: vorm.title,
       type: vorm.type,
@@ -165,11 +215,15 @@ export function ActivityFormSheet({
       time: vorm.time || null,
       // Ongewijzigd? Dan de notitie niet meesturen, zodat opmaak en @-tags uit
       // het dashboard intact blijven. Gewijzigd: als veilige HTML terug.
+      // Bestaand: de notitie staat in het log hieronder en gaat niet mee
+      // (zoals het dashboard). Nieuw: met @-vermeldingen als mention-span.
       notes:
         vorm.id && vorm.notes === alsTekst(vorm.notesOrigineel)
           ? undefined
           : vorm.notes.trim()
-            ? alsHtml(vorm.notes)
+            ? vorm.id
+              ? alsHtml(vorm.notes)
+              : nieuweNotitie.html
             : '',
       customer_id: vorm.customerId,
       deal_id: vorm.dealId,
@@ -192,6 +246,18 @@ export function ActivityFormSheet({
             maker: user?.id ?? null,
             stuurMail,
           });
+        }
+        if (rij?.id && !vorm.id && nieuweNotitie.getagd) {
+          void pushNotificaties(
+            mentionMeldingen({
+              text: nieuweNotitie.html,
+              relatedType: 'activiteit',
+              relatedId: rij.id,
+              link: 'activities',
+              creatorName: profile?.full_name ?? null,
+              contextName: klantNaam(vorm.customerId),
+            }),
+          );
         }
         // Nieuw bezoek bij een klant: de afspraakbevestiging, zoals het dashboard.
         if (rij?.id && !vorm.id && vorm.type === 'visit' && vorm.customerId) {
@@ -353,14 +419,31 @@ export function ActivityFormSheet({
         </View>
       ) : null}
 
-      <FormField
-        label="Notities"
-        value={vorm?.notes ?? ''}
-        onChangeText={(v) => zetVeld('notes', v)}
-        placeholder="Optioneel"
-        multiline
-        editable={!alleenLezen}
-      />
+      {vorm?.id ? (
+        // Zoals het dashboard: een bestaande activiteit heeft een notitielog
+        // (losse regels) in plaats van één veld dat overschreven wordt.
+        <>
+          {logFout ? <Text style={styles.schakelUitleg}>{logFout}</Text> : null}
+          <NotitieLog
+            items={log}
+            leden={leden}
+            magSchrijven={!alleenLezen}
+            bezig={logOpslaan.saving}
+            fout={logOpslaan.error}
+            onPlaats={plaatsInLog}
+          />
+        </>
+      ) : (
+        <MentionInvoer
+          label="Notities"
+          value={vorm?.notes ?? ''}
+          onChangeText={(v) => zetVeld('notes', v)}
+          gekozen={getagd}
+          onGekozen={setGetagd}
+          leden={leden}
+          placeholder="Optioneel. Typ @ om iemand te taggen"
+        />
+      )}
 
       {vorm ? (
         <View style={styles.schakelRij}>

@@ -893,3 +893,39 @@ export async function plaatsAfspraakNotitie(
   );
   return res.ok ? { ok: true, data: lijst } : res;
 }
+
+// ── Notitielog van een activiteit (activiteit_notities) ────────────────────
+
+export type ActiviteitNotitie = { id: string; note: string; created_at: string; auteur: string };
+
+/** `getActiviteitNotities`: nieuwste eerst, met de naam van de schrijver. */
+export async function listActiviteitNotities(
+  activityId: string,
+): Promise<{ data: ActiviteitNotitie[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('activiteit_notities')
+    .select('id, note, created_at, profiles(full_name)')
+    .eq('activity_id', activityId)
+    .order('created_at', { ascending: false });
+  if (error) return { data: [], error: 'De notities van deze activiteit konden niet worden geladen.' };
+  type Rij = { id: string; note: string | null; created_at: string; profiles: { full_name: string | null } | null };
+  const rijen = (data ?? []) as unknown as Rij[];
+  return {
+    data: rijen.map((r) => ({ id: r.id, note: r.note ?? '', created_at: r.created_at, auteur: r.profiles?.full_name ?? '' })),
+    error: null,
+  };
+}
+
+/** `addActiviteitNotitie`: een losse regel in het log. */
+export async function addActiviteitNotitie(activityId: string, html: string): Promise<WriteResult<{ id: string }>> {
+  if (!html.trim()) return writeFout('validatie', 'Notitie mag niet leeg zijn');
+  const userId = getUserId();
+  const payload = withCompanyId({ activity_id: activityId, note: html, ...(userId ? { created_by: userId } : {}) });
+  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+  return schrijf<{ id: string }>(() => supabase.from('activiteit_notities').insert(payload).select('id'), {
+    context: 'activityService.addActiviteitNotitie',
+    bedrijfReadonly: isReadonly(),
+    leegSoort: 'geen-rechten',
+    leegMelding: 'De notitie is niet opgeslagen.',
+  });
+}
