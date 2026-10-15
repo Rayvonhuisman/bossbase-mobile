@@ -103,44 +103,29 @@ test('toewijzing: alleen nieuwe behandelaars, jezelf niet, met diepe link en mai
   assert.equal(M.diepeLinkVoor('pipeline', null, 'd1'), 'pipeline');
 });
 
-test('vermelding: open tag aan het eind, e-mailadres is geen tag', () => {
-  assert.equal(M.actieveVermelding('Bel @Da'), 'Da');
-  assert.equal(M.actieveVermelding('@'), '');
-  assert.equal(M.actieveVermelding('mail info@bedrijf.nl'), null);
-  assert.equal(M.actieveVermelding('geen tag'), null);
-  assert.equal(M.actieveVermelding('@Daan Visser ', [{ id: 'u', naam: 'Daan Visser' }]), null);
-  assert.equal(M.voegVermeldingIn('Bel @Da', 'Daan Visser'), 'Bel @Daan Visser ');
-  const leden = [{ id: '1', full_name: 'Daan Visser' }, { id: '2', full_name: 'Sanne de Wit' }, { id: '3', full_name: null }];
-  assert.deepEqual(M.vermeldingKeuzes(leden, 'an').map((l) => l.id), ['1', '2']);
-  assert.deepEqual(M.vermeldingKeuzes(leden, 'vis').map((l) => l.id), ['1']);
-});
-
-test('vermelding: opslaan in het formaat van het dashboard', () => {
-  const zonder = M.notitieMetVermeldingen('  gewoon <tekst>  ', []);
-  assert.deepEqual(zonder, { opslag: 'gewoon <tekst>', vermeld: [] });
-
-  const r = M.notitieMetVermeldingen('@Jan Jansen en @Jan:\nkijk <hier>', [
-    { id: 'u2', naam: 'Jan' },
-    { id: 'u1', naam: 'Jan Jansen' },
-    { id: 'u3', naam: 'Weg' },
-  ]);
-  assert.deepEqual(r.vermeld.map((v) => v.id), ['u2', 'u1']);
+test('vermelding (gedeeld met de werkbon): opslag zoals het dashboard, ook midden in de tekst', async () => {
+  const V = await import('../src/lib/mentions.ts');
+  assert.deepEqual(V.mentionZoekterm('Bel @Da en dan', 7), { start: 4, term: 'Da' });
+  assert.equal(V.mentionZoekterm('mail info@bedrijf.nl', 20), null);
   assert.equal(
-    r.opslag,
+    V.tekstMetVermeldingen('@Jan Jansen en @Jan:\nkijk <hier>', [
+      { id: 'u2', naam: 'Jan' },
+      { id: 'u1', naam: 'Jan Jansen' },
+    ]),
     '<span class="bb-mention" data-id="u1" data-name="Jan Jansen" contenteditable="false">@Jan Jansen</span> en ' +
       '<span class="bb-mention" data-id="u2" data-name="Jan" contenteditable="false">@Jan</span>:<br>kijk &lt;hier&gt;',
   );
 });
 
-test('vermelding: melding per getagde, ook jezelf, met mail', () => {
-  const rijen = M.vermeldingMeldingen({
-    vermeld: [{ id: 'u1', naam: 'Jan' }],
-    tekst: '@Jan   kijk even',
-    maker: 'Niels',
-    context: 'Dakgoot',
-    link: 'projecten',
+test('vermelding: melding per getagde op een project, met mail en diepe link', async () => {
+  const V = await import('../src/lib/mentions.ts');
+  const rijen = V.mentionMeldingen({
+    text: V.tekstMetVermeldingen('@Jan   kijk even', [{ id: 'u1', naam: 'Jan' }]),
     relatedType: 'project',
     relatedId: 'p1',
+    link: 'projecten',
+    creatorName: 'Niels',
+    contextName: 'Dakgoot',
   });
   assert.deepEqual(rijen, [
     {

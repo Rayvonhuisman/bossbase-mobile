@@ -7,14 +7,7 @@ import { useAuth } from '@/providers';
 import { formatDateNL } from '@/lib/format';
 import { lokaleDatum } from '@/lib/nlTijd';
 import { alsTekst } from '@/lib/notitieTekst';
-import {
-  actieveVermelding,
-  notitieMetVermeldingen,
-  vermeldingKeuzes,
-  vermeldingMeldingen,
-  voegVermeldingIn,
-  type Vermelding,
-} from '@/lib/collegaMeldingen';
+import { mentionMeldingen, mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
 import { useSave } from '@/lib/useSave';
 import { pushNotificaties } from '@/services/collegaMeldingService';
 import { addProjectNote, type ProjectNote } from '@/services/projectService';
@@ -49,37 +42,52 @@ export function NotitiesTab({
   const { t, styles } = useStijl();
   const { profile } = useAuth();
   const [tekst, setTekst] = useState('');
-  const [gekozen, setGekozen] = useState<Vermelding[]>([]);
+  const [gekozen, setGekozen] = useState<{ id: string; naam: string }[]>([]);
+  const [cursor, setCursor] = useState(0);
   const { save, saving, error } = useSave<ProjectNote>();
 
-  const zoek = actieveVermelding(tekst, gekozen);
-  const keuzes = zoek === null ? [] : vermeldingKeuzes(leden, zoek);
+  // "@" vóór de cursor: de keuzelijst met namen (NoteEditor.detectMention).
+  const zoek = mentionZoekterm(tekst, cursor);
+  const keuzes =
+    zoek === null
+      ? []
+      : leden
+          .filter((l) => l.full_name && l.full_name.toLowerCase().includes(zoek.term.trim().toLowerCase()))
+          .slice(0, 6);
 
   const kies = (l: Lid) => {
+    if (!zoek) return;
     const naam = l.full_name ?? '';
-    setTekst((v) => voegVermeldingIn(v, naam));
+    const invoeg = `@${naam} `;
+    setTekst((v) => `${v.slice(0, zoek.start)}${invoeg}${v.slice(cursor)}`);
+    setCursor(zoek.start + invoeg.length);
     setGekozen((g) => (g.some((x) => x.id === l.id) ? g : [...g, { id: l.id, naam }]));
   };
 
   const toevoegen = () => {
-    const { opslag, vermeld } = notitieMetVermeldingen(tekst, gekozen);
-    const plat = tekst.trim();
+    const schoon = tekst.trim();
+    // Alleen met een tag HTML (mention-span, zoals het dashboard); anders de
+    // platte tekst, zoals de app projectnotities altijd opsloeg.
+    const metTag = gekozen.filter((g) => g.naam && schoon.includes(`@${g.naam}`));
+    const opslag = metTag.length ? tekstMetVermeldingen(schoon, metTag) : schoon;
     save(() => addProjectNote(projectId, opslag), {
       onSuccess: async () => {
         setTekst('');
         setGekozen([]);
+        setCursor(0);
         // De getagde collega hoort het; mislukt de melding, dan blijft de notitie staan.
-        void pushNotificaties(
-          vermeldingMeldingen({
-            vermeld,
-            tekst: plat,
-            maker: profile?.full_name ?? null,
-            context: projectNaam || 'een project',
-            link: 'projecten',
-            relatedType: 'project',
-            relatedId: projectId,
-          }),
-        );
+        if (metTag.length) {
+          void pushNotificaties(
+            mentionMeldingen({
+              text: opslag,
+              relatedType: 'project',
+              relatedId: projectId,
+              link: 'projecten',
+              creatorName: profile?.full_name ?? null,
+              contextName: projectNaam || 'een project',
+            }),
+          );
+        }
         await onToegevoegd();
       },
     });
@@ -91,6 +99,7 @@ export function NotitiesTab({
         label="Nieuwe notitie"
         value={tekst}
         onChangeText={setTekst}
+        onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
         placeholder="Schrijf een notitie over dit project… Typ @ om iemand te taggen"
         multiline
       />
