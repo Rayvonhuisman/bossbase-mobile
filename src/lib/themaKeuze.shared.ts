@@ -12,8 +12,16 @@ export function bepaalThema(opgeslagen: string | null | undefined, systeem: stri
   return systeem === 'dark' ? 'dark' : 'light';
 }
 
-/** Toegankelijke naam van de themaknop: wat een tik doet. */
-export function themaKnopLabel(huidig: Thema): string {
-  return huidig === 'dark' ? 'Lichte modus inschakelen' : 'Donkere modus inschakelen';
+/** Wat de gebruiker in Instellingen kiest; `systeem` = geen opgeslagen keuze. */
+export type ThemaVoorkeur = Thema | 'systeem';
+
+export const THEMA_OPTIES: { id: ThemaVoorkeur; label: string }[] = [
+  { id: 'light', label: 'Licht' },
+  { id: 'dark', label: 'Donker' },
+  { id: 'systeem', label: 'Zoals het apparaat' },
+];
+
+export function leesVoorkeur(opgeslagen: string | null | undefined): ThemaVoorkeur {
+  return opgeslagen === 'light' || opgeslagen === 'dark' ? opgeslagen : 'systeem';
 }
 

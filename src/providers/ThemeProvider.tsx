@@ -10,7 +10,13 @@ import {
 } from 'react';
 import { Appearance } from 'react-native';
 import { darkTheme, lightTheme, type ThemeColors } from '@/theme';
-import { bepaalThema, leesOpgeslagenThemaDirect, THEMA_SLEUTEL } from '@/lib/themaKeuze';
+import {
+  bepaalThema,
+  leesOpgeslagenThemaDirect,
+  leesVoorkeur,
+  THEMA_SLEUTEL,
+  type ThemaVoorkeur,
+} from '@/lib/themaKeuze';
 
 export type ColorMode = 'light' | 'dark';
 
@@ -20,23 +26,27 @@ type ThemeContextValue = {
   colorMode: ColorMode;
   /** Themed token palette — drop-in replacement for the static `ds` object. */
   colors: ThemeColors;
-  toggleColorMode: () => void;
-  setColorMode: (mode: ColorMode) => void;
+  /** Wat er in Instellingen › Mijn profiel › Weergave gekozen is. */
+  voorkeur: ThemaVoorkeur;
+  setVoorkeur: (voorkeur: ThemaVoorkeur) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /**
- * App-wide light/dark theme. The saved choice wins; without one the system
- * preference is followed. Persisted on every change. Non-sensitive, so
- * AsyncStorage (already a dependency) is used rather than SecureStore.
+ * App-wide light/dark theme. The saved choice wins; without one ("Zoals het
+ * apparaat") the system preference is followed, ook als die verandert terwijl
+ * de app open staat. Gekozen in Instellingen › Mijn profiel; er is geen
+ * themaknop in de kop meer. Non-sensitive, so AsyncStorage (already a
+ * dependency) is used rather than SecureStore.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Eerste weergave meteen goed: op web is de opgeslagen keuze synchroon te
   // lezen (geen licht→donker-flits); zonder keuze volgt de app het systeem.
-  const [colorMode, setColorModeState] = useState<ColorMode>(() =>
-    bepaalThema(leesOpgeslagenThemaDirect(), Appearance.getColorScheme()),
+  const [voorkeur, setVoorkeurState] = useState<ThemaVoorkeur>(() =>
+    leesVoorkeur(leesOpgeslagenThemaDirect()),
   );
+  const [systeem, setSysteem] = useState(() => Appearance.getColorScheme());
 
   // Native: de opgeslagen keuze komt asynchroon binnen en wint van het systeem.
   useEffect(() => {
@@ -44,40 +54,40 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((saved) => {
         if (mounted && (saved === 'light' || saved === 'dark')) {
-          setColorModeState(saved);
+          setVoorkeurState(saved);
         }
       })
       .catch(() => {
-        // Ignore read failures — fall back to the light default.
+        // Ignore read failures — fall back to the system preference.
       });
     return () => {
       mounted = false;
     };
   }, []);
 
-  const setColorMode = useCallback((mode: ColorMode) => {
-    setColorModeState(mode);
-    AsyncStorage.setItem(STORAGE_KEY, mode).catch(() => {
-      // Persistence is best-effort; the in-memory state still updates.
-    });
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => setSysteem(colorScheme));
+    return () => sub.remove();
   }, []);
 
-  const toggleColorMode = useCallback(() => {
-    setColorModeState((prev) => {
-      const next: ColorMode = prev === 'light' ? 'dark' : 'light';
-      AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {});
-      return next;
-    });
+  const setVoorkeur = useCallback((nieuw: ThemaVoorkeur) => {
+    setVoorkeurState(nieuw);
+    // Persistence is best-effort; the in-memory state still updates.
+    const opslag =
+      nieuw === 'systeem' ? AsyncStorage.removeItem(STORAGE_KEY) : AsyncStorage.setItem(STORAGE_KEY, nieuw);
+    opslag.catch(() => {});
   }, []);
+
+  const colorMode: ColorMode = bepaalThema(voorkeur === 'systeem' ? null : voorkeur, systeem);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       colorMode,
       colors: colorMode === 'dark' ? darkTheme : lightTheme,
-      toggleColorMode,
-      setColorMode,
+      voorkeur,
+      setVoorkeur,
     }),
-    [colorMode, toggleColorMode, setColorMode],
+    [colorMode, voorkeur, setVoorkeur],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

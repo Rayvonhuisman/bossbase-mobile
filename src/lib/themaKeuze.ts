@@ -1,4 +1,11 @@
-export { bepaalThema, THEMA_SLEUTEL, themaKnopLabel, type Thema } from './themaKeuze.shared';
+export {
+  bepaalThema,
+  leesVoorkeur,
+  THEMA_OPTIES,
+  THEMA_SLEUTEL,
+  type Thema,
+  type ThemaVoorkeur,
+} from './themaKeuze.shared';
 
 /**
  * Native: de opgeslagen keuze is pas asynchroon bekend (AsyncStorage); de

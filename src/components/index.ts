@@ -36,7 +36,6 @@ export { PlaceholderState } from './PlaceholderState';
 export { ProfileSettingsButton } from './ProfileSettingsButton';
 export { ScreenErrorBoundary } from './ScreenErrorBoundary';
 export { StatusBarScrim } from './StatusBarScrim';
-export { ThemeToggleButton } from './ThemeToggleButton';
 export { HeaderActions } from './HeaderActions';
 export { HeaderIconButton } from './HeaderIconButton';
 export { ScreenContainer } from './ScreenContainer';

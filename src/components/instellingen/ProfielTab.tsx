@@ -10,6 +10,7 @@ import { useSave } from '@/lib/useSave';
 import { avatarKleuren, initialen } from '@/lib/avatar';
 import { WACHTWOORD_REGELS, wachtwoordGeldig } from '@/lib/instellingenRegels';
 import { openDashboard } from '@/lib/dashboardLink';
+import { THEMA_OPTIES, type ThemaVoorkeur } from '@/lib/themaKeuze';
 import {
   deactiveerEigenAccount,
   updateEigenProfiel,
@@ -19,7 +20,7 @@ import {
 } from '@/services/profileService';
 import { getEigenaarId } from '@/services/teamService';
 import { spacing } from '@/theme';
-import { Gegeven, Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { Gegeven, Kaart, Keuze, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
 import { kiesAfbeelding } from './kiesAfbeelding';
 
 const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewerker: 'Medewerker' };
@@ -27,7 +28,8 @@ const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewe
 /**
  * Mijn profiel — voor iedereen, zoals de tab `profiel` in het dashboard:
  * profielfoto, naam, e-mail (alleen lezen), rol (alleen lezen), wachtwoord
- * wijzigen (met het huidige wachtwoord) en de Gevarenzone.
+ * wijzigen (met het huidige wachtwoord) en de Gevarenzone. Daarnaast, alleen
+ * in de app, Weergave: licht, donker of zoals het apparaat (per toestel).
  *
  * Gevarenzone: een teamlid kan zijn eigen account deactiveren (RPC
  * `delete_own_account`). De eigenaar sluit met "Bedrijf sluiten" het hele
@@ -35,7 +37,7 @@ const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewe
  * de app bewust niet zelf en verwijst daarvoor naar het dashboard.
  */
 export function ProfielTab() {
-  const { colors: t, colorMode } = useTheme();
+  const { colors: t, colorMode, voorkeur, setVoorkeur } = useTheme();
   const s = useMemo(() => stijlVoorInstellingen(t), [t]);
   const { user, profile, role, refreshProfile, signOut } = useAuth();
 
@@ -175,6 +177,14 @@ export function ProfielTab() {
         <Gegeven label="E-mailadres" waarde={user?.email ?? ''} />
         <Text style={s.hint}>Je e-mailadres kan niet worden gewijzigd.</Text>
         <Gegeven label="Rol" waarde={ROL[role ?? ''] ?? 'Medewerker'} />
+      </Kaart>
+
+      <Kaart titel="Weergave" sub="Geldt alleen op dit apparaat">
+        <Keuze
+          opties={THEMA_OPTIES}
+          waarde={voorkeur}
+          onKies={(id) => setVoorkeur(id as ThemaVoorkeur)}
+        />
       </Kaart>
 
       <Kaart titel="Wachtwoord">

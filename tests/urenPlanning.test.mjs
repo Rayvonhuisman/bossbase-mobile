@@ -127,6 +127,15 @@ test('agenda: gedeelde werkruimte één item per verschillende tijd; afgerond te
   assert.equal(plan.agendaWerkbonItems([{ ...meerdaags, status: 'afgerond' }], { uid: 'jan', gedeeld: true, van: '2026-10-01', tot: '2026-10-31' }).length, 0);
 });
 
+test('homepage: werkbon op dag 2 van een meerdaagse klus telt mee, afgerond ook, andermans dag niet', () => {
+  // gepland_op is dag 1 (12-10); op 13-10 moet piet hem zien, jan niet (dagploeg).
+  const opDag2 = (uid, w = meerdaags) =>
+    plan.agendaWerkbonItems([w], { uid, gedeeld: false, van: '2026-10-13', tot: '2026-10-13', ookAfgerond: true });
+  assert.deepEqual(opDag2('piet').map((i) => [i.datum, i.starttijd]), [['2026-10-13', '09:00']]);
+  assert.equal(opDag2('jan').length, 0);
+  assert.equal(opDag2('piet', { ...meerdaags, status: 'afgerond' }).length, 1);
+});
+
 test('agenda: afspraken persoonlijk filteren, werkbon-gekoppelde verbergen, bewerkrecht', () => {
   const ev = [
     { id: 1, assigned_to: 'jan', werkbon_id: null, herkomst: 'zelf' },

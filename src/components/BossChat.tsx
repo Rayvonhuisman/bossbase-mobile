@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Send } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { vraagBoss, type BossBericht } from '@/services/bossService';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { Paneel } from './Paneel';
 
+const BOSS_HOOFD = require('../../assets/boss-hoofd.png');
+
 const BEGROETING = 'Hoi! Ik ben Boss. Waar kan ik je mee helpen?';
 
-/** Boss-avatar: de groene "B" uit het dashboard (fallback van de afbeelding). */
+/**
+ * Boss-avatar: zijn hoofd, net als de gids in de rondleiding van het dashboard
+ * (`boss-gids.png`, `.rl-boss`): lichtgroen rondje met groene rand, het plaatje
+ * (doorzichtige achtergrond) vult het rondje vanaf de bovenkant.
+ */
 export function BossAvatar({ size = 36 }: { size?: number }) {
   return (
     <View
@@ -16,12 +22,13 @@ export function BossAvatar({ size = 36 }: { size?: number }) {
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: '#1DDB62',
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: '#d1fae5',
+        borderWidth: size >= 48 ? 2 : 1.5,
+        borderColor: '#1DDB62',
+        overflow: 'hidden',
       }}
     >
-      <Text style={{ color: '#0D0D0D', fontWeight: '800', fontFamily: fonts.bold, fontSize: size * 0.45 }}>B</Text>
+      <Image source={BOSS_HOOFD} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityIgnoresInvertColors />
     </View>
   );
 }

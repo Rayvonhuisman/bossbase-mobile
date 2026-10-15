@@ -2,10 +2,10 @@ import { supabase } from '@/lib/supabase';
 import { buildDueAt, isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
-import { listWorkOrdersForPlanningRange } from './workOrderService';
+import { listAgendaEvents, listWerkbonnenInBereik, type PlanWerkbon } from './planningService';
+import { agendaWerkbonItems, zichtbareAfspraken, type AgendaWerkbonItem } from '@/lib/planningRegels';
 import { toLocalISODate } from '@/lib/dateRange';
 import { haalInStukken } from '@/lib/inStukken';
-import type { WorkOrderWithCustomer } from '@/types/domain';
 
 /**
  * Activities + calendar_events ophalen voor mobile Planning + Vandaag.
@@ -106,25 +106,6 @@ export async function listCalendarEventsForRange(
   return { data: (data as unknown as CalendarEvent[]) ?? [], error: null };
 }
 
-/** Activities met `due_at` binnen range, niet voltooid eerst. */
-export async function listActivitiesForRange(
-  fromISO: string,
-  toISO: string,
-): Promise<{ data: ActivityRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('activities')
-    .select(ACTIVITY_COLUMNS)
-    .gte('due_at', fromISO)
-    .lte('due_at', toISO)
-    .order('due_at', { ascending: true });
-
-  if (error) {
-    console.warn('[activityService.listActivitiesForRange]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
-  }
-  return { data: (data as unknown as ActivityRow[]) ?? [], error: null };
-}
-
 /**
  * Recente activiteiten (alle types), niet-voltooid eerst, dan op due_at.
  * Gebruikt door het Activiteiten-menuscherm. RLS filtert op company_id.
@@ -184,8 +165,9 @@ export async function listAllActivities(): Promise<{ data: ActivityRow[]; error:
 /**
  * Eigen open activiteiten met `due_at` tot en met `totISO` (einde van vandaag):
  * de bron voor "Activiteiten vandaag" en "te laat" op de homepage. "Eigen" =
- * primair toegewezen óf in `assigned_to_ids`, net als het Persoonlijk-filter
- * van het dashboard (`myActivities`).
+ * primair toegewezen óf in `assigned_to_ids` (het Persoonlijk-filter van het
+ * dashboard, `myActivities`), plus wat aan niemand is toegewezen — zie
+ * `eigenActiviteitenVandaag`.
  */
 export async function listEigenOpenActiviteitenTot(
   userId: string,
@@ -197,7 +179,10 @@ export async function listEigenOpenActiviteitenTot(
       .select(ACTIVITY_LIST_SELECT)
       .eq('completed', false)
       .lte('due_at', totISO)
-      .or(`assigned_to.eq.${userId},assigned_to_ids.cs.{${userId}}`)
+      .or(
+        `assigned_to.eq.${userId},assigned_to_ids.cs.{${userId}},` +
+          'and(assigned_to.is.null,or(assigned_to_ids.is.null,assigned_to_ids.eq.{}))',
+      )
       .order('due_at', { ascending: true })
       .order('id', { ascending: true })
       .range(van, tot)
@@ -266,36 +251,6 @@ export type PlanningItem = {
   typeLabel: string;
 };
 
-export type PlanningRangeParams = {
-  /** UTC instants for the timestamptz columns (calendar_events, activities). */
-  startISO: string;
-  endISO: string;
-  /** Local YYYY-MM-DD for the date column (werkbonnen.gepland_op). */
-  startDate: string;
-  endDate: string;
-  /** Restrict werkbonnen to one assignee (medewerker view). */
-  assignedToUserId?: string | null;
-  /** Current user — used to label self-assigned work orders. */
-  currentUserId?: string | null;
-  currentUserName?: string | null;
-};
-
-export type PlanningResult = {
-  items: PlanningItem[];
-  /** Per-source soft failures (dev/diagnostic) when other sources still loaded. */
-  partialErrors: string[];
-  /** Hard error: every source failed → show user-facing error + retry. */
-  error: string | null;
-};
-
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  call: 'Telefoon',
-  email: 'E-mail',
-  meeting: 'Afspraak',
-  task: 'Taak',
-  note: 'Notitie',
-};
-
 function joinAddress(c: CalendarEvent['customer']): string | null {
   if (!c) return null;
   return [c.address, c.postcode, c.city].filter(Boolean).join(', ') || null;
@@ -341,65 +296,6 @@ function fromEvent(e: CalendarEvent): PlanningItem {
   };
 }
 
-function fromActivity(a: ActivityRow): PlanningItem {
-  return {
-    id: `activity-${a.id}`,
-    source: 'activity',
-    number: null,
-    title: a.title ?? ACTIVITY_TYPE_LABELS[a.type ?? ''] ?? 'Activiteit',
-    customerName: a.customer?.name ?? null,
-    customerId: a.customer_id,
-    description: a.notes,
-    address: joinAddress(a.customer),
-    phone: a.customer?.phone ?? null,
-    startAt: a.due_at,
-    endAt: null,
-    date: a.due_at ? toLocalISODate(new Date(a.due_at)) : '',
-    status: a.completed ? 'completed' : 'gepland',
-    assigneeName: null,
-    assigneeId: null,
-    workOrderId: null,
-    typeLabel: (a.type && ACTIVITY_TYPE_LABELS[a.type]) || 'Activiteit',
-  };
-}
-
-function fromWorkOrder(
-  w: WorkOrderWithCustomer,
-  currentUserId?: string | null,
-  currentUserName?: string | null,
-): PlanningItem {
-  // Assignment lives in assigned_to_ids; the legacy assigned_to column is only
-  // a fallback for rows the dashboard has not rewritten.
-  const assignees = w.assigned_to_ids?.length
-    ? w.assigned_to_ids
-    : w.assigned_to
-      ? [w.assigned_to]
-      : [];
-  const assigneeName =
-    currentUserId && assignees.includes(currentUserId)
-      ? currentUserName?.trim() || 'Jij'
-      : null;
-  return {
-    id: `wo-${w.id}`,
-    source: 'work_order',
-    number: w.nummer ?? null,
-    title: w.titel || 'Werkbon',
-    customerName: w.customer?.name ?? null,
-    customerId: w.customer_id,
-    description: w.omschrijving,
-    address: w.locatie ?? joinAddress(w.customer),
-    phone: w.customer?.phone ?? null,
-    startAt: combineDateTime(w.gepland_op, w.starttijd),
-    endAt: combineDateTime(w.gepland_op, w.eindtijd),
-    date: w.gepland_op ?? '',
-    status: w.status ?? null,
-    assigneeName,
-    assigneeId: assignees[0] ?? null,
-    workOrderId: w.id,
-    typeLabel: 'Werkbon',
-  };
-}
-
 /** Effective sort timestamp: real start, else end-of-day so untimed items sort last. */
 function sortMs(item: PlanningItem): number {
   if (item.startAt) {
@@ -414,99 +310,70 @@ function sortMs(item: PlanningItem): number {
 }
 
 /**
- * Combined planning items for a range across all three real backend sources.
+ * Jouw planning voor de homepage, persoonlijk — ook voor een admin, net als de
+ * dashboardtegels `werkbonnen_today` en `agenda_week` (`myWerkbonnen`,
+ * `myCalendarEvents`):
  *
- * Resilient: if one source fails (missing column/table/RLS), its rows are
- * dropped, the failure is recorded in `partialErrors`, and the other sources
- * still render. A hard error is only returned when ALL sources fail.
+ * - werkbonnen per geplande dag (`werkbon_dagen`) waarop jij in de dagploeg
+ *   staat, met jóuw tijd. Een klus van ma t/m vr staat dus ook woensdag hier;
+ *   `gepland_op` is alleen de eerste dag. Afgeronde tellen mee ("x van y
+ *   klaar").
+ * - je eigen agenda-items (`assigned_to`), zonder de rijen die bij een werkbon
+ *   of activiteit horen — die staan er al als werkbon of activiteit.
  *
- * RLS scopes every query to the caller's company. No service-role, no client
- * company_id filter. `assignedToUserId` narrows werkbonnen for the medewerker
- * view (calendar_events/activities have no per-user assignment, so RLS — which
- * is company-wide for those — governs visibility).
+ * `van`/`tot` zijn lokale datums (YYYY-MM-DD), `startISO`/`endISO` dezelfde
+ * grenzen als tijdstip voor `calendar_events.start_at`.
  */
-export async function listPlanningItemsForRange(
-  params: PlanningRangeParams,
-): Promise<PlanningResult> {
-  const { startISO, endISO, startDate, endDate, assignedToUserId, currentUserId, currentUserName } =
-    params;
-
-  const [evRes, actRes, woRes] = await Promise.all([
-    listCalendarEventsForRange(startISO, endISO),
-    listActivitiesForRange(startISO, endISO),
-    listWorkOrdersForPlanningRange(startDate, endDate, { assignedToUserId }),
+export async function listMijnPlanning(params: {
+  uid: string;
+  van: string;
+  tot: string;
+  startISO: string;
+  endISO: string;
+  currentUserName?: string | null;
+}): Promise<{ items: PlanningItem[]; error: string | null }> {
+  const { uid, van, tot, startISO, endISO, currentUserName } = params;
+  const [evRes, wbRes] = await Promise.all([
+    listAgendaEvents(startISO, endISO),
+    listWerkbonnenInBereik(van, tot),
   ]);
 
   const items: PlanningItem[] = [];
-  const partialErrors: string[] = [];
-
-  if (evRes.error) partialErrors.push(`calendar_events: ${evRes.error}`);
-  else items.push(...evRes.data.map(fromEvent));
-
-  if (actRes.error) partialErrors.push(`activities: ${actRes.error}`);
-  else items.push(...actRes.data.map(fromActivity));
-
-  if (woRes.error) partialErrors.push(`werkbonnen: ${woRes.error}`);
-  else items.push(...woRes.data.map((w) => fromWorkOrder(w, currentUserId, currentUserName)));
-
+  if (!evRes.error) {
+    const eigen = zichtbareAfspraken(evRes.data, { uid, gedeeld: false }).filter((e) => !e.activiteit_id);
+    items.push(...eigen.map((e) => fromEvent(e as unknown as CalendarEvent)));
+  }
+  if (!wbRes.error) {
+    const dagItems = agendaWerkbonItems(wbRes.data, { uid, gedeeld: false, van, tot, ookAfgerond: true });
+    items.push(...dagItems.map((it) => fromWerkbonDag(it, currentUserName ?? null)));
+  }
   items.sort((a, b) => sortMs(a) - sortMs(b));
 
-  const allFailed = !!evRes.error && !!actRes.error && !!woRes.error;
-
-  if (__DEV__) {
-    console.log('[activityService.listPlanningItemsForRange]', {
-      range: { startISO, endISO, startDate, endDate },
-      counts: {
-        events: evRes.error ? 'ERR' : evRes.data.length,
-        activities: actRes.error ? 'ERR' : actRes.data.length,
-        werkbonnen: woRes.error ? 'ERR' : woRes.data.length,
-        total: items.length,
-      },
-      partialErrors,
-    });
-  }
-
-  return {
-    items,
-    partialErrors,
-    error: allFailed ? 'Planning kon niet worden geladen.' : null,
-  };
+  const fout = evRes.error && wbRes.error ? 'Planning kon niet worden geladen.' : (evRes.error ?? wbRes.error);
+  return { items, error: fout };
 }
 
-/**
- * Next upcoming planning item from now (across all sources), within a forward
- * window. Returns null when nothing is scheduled. Used by the "volgende
- * afspraak" affordance.
- */
-export async function getNextPlanningItem(params?: {
-  assignedToUserId?: string | null;
-  currentUserId?: string | null;
-  currentUserName?: string | null;
-  /** Forward window in days (default 60). */
-  windowDays?: number;
-}): Promise<{ item: PlanningItem | null; error: string | null }> {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + (params?.windowDays ?? 60));
-
-  const result = await listPlanningItemsForRange({
-    startISO: now.toISOString(),
-    endISO: end.toISOString(),
-    startDate: toLocalISODate(now),
-    endDate: toLocalISODate(end),
-    assignedToUserId: params?.assignedToUserId ?? null,
-    currentUserId: params?.currentUserId ?? null,
-    currentUserName: params?.currentUserName ?? null,
-  });
-
-  const nowMs = now.getTime();
-  const upcoming = result.items.find((i) => {
-    if (!i.startAt) return false;
-    const ms = new Date(i.startAt).getTime();
-    return !Number.isNaN(ms) && ms >= nowMs;
-  });
-
-  return { item: upcoming ?? null, error: result.error };
+function fromWerkbonDag(it: AgendaWerkbonItem<PlanWerkbon>, currentUserName: string | null): PlanningItem {
+  const w = it.werkbon;
+  return {
+    id: `wo-${it.sleutel}`,
+    source: 'work_order',
+    number: w.nummer ?? null,
+    title: w.titel || 'Werkbon',
+    customerName: w.customer?.name ?? null,
+    customerId: w.customer_id,
+    description: null,
+    address: w.locatie ?? joinAddress(w.customer),
+    phone: w.customer?.phone ?? null,
+    startAt: combineDateTime(it.datum, it.starttijd),
+    endAt: combineDateTime(it.datum, it.eindtijd),
+    date: it.datum,
+    status: w.status ?? null,
+    assigneeName: currentUserName?.trim() || 'Jij',
+    assigneeId: null,
+    workOrderId: w.id,
+    typeLabel: 'Werkbon',
+  };
 }
 
 // ===========================================================================

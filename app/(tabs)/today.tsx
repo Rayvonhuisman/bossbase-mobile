@@ -15,9 +15,8 @@ import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canCreateWorkOrder } from '@/services/workOrderService';
 import { listUrenForProfile } from '@/services/timeEntryService';
 import {
-  getNextPlanningItem,
   listEigenOpenActiviteitenTot,
-  listPlanningItemsForRange,
+  listMijnPlanning,
   setActivityCompleted,
   type ActivityRow,
   type PlanningItem,
@@ -100,6 +99,9 @@ const LEEG_OVERZICHT: Overzicht = {
   klanten: null,
 };
 
+/** Zo ver kijkt "Volgende" vooruit als er vandaag niets meer openstaat. */
+const VOLGENDE_DAGEN = 60;
+
 /** De normwerkdag uit het ontwerp — dezelfde 8 uur als de oude KPI-kaart. */
 const NORM_UREN = 8;
 
@@ -172,7 +174,6 @@ export default function TodayScreen() {
     const d = NL_LONG_DATE.format(new Date());
     return d.charAt(0).toUpperCase() + d.slice(1);
   }, []);
-  const assignedToUserId = role === 'medewerker' ? (user?.id ?? null) : null;
 
   // ─── Week + today hours (real, Supabase) ────────────────────────────────
   const weekStart = useMemo(() => startOfWeek(new Date()), []);
@@ -218,20 +219,32 @@ export default function TodayScreen() {
           })
         : Promise.resolve();
 
+      // Vooruitkijken voor "Volgende" als er vandaag niets meer openstaat.
+      const nu = new Date();
+      const verderTot = new Date(nu);
+      verderTot.setDate(verderTot.getDate() + VOLGENDE_DAGEN);
+
       const [planRes, weekRes, nextRes, actRes] = await Promise.all([
-        listPlanningItemsForRange({
+        // Persoonlijk, ook voor een admin — zoals de dashboardtegels.
+        listMijnPlanning({
+          uid: userId,
+          van: dayRange.startDate,
+          tot: dayRange.endDate,
           startISO: dayRange.startISO,
           endISO: dayRange.endISO,
-          startDate: dayRange.startDate,
-          endDate: dayRange.endDate,
-          assignedToUserId,
-          currentUserId: userId,
           currentUserName,
         }),
         // Werkdag- én werkbonuren, net als de Uren-tab: wie alleen op klussen
         // boekt, zag hier anders altijd 0.
         listUrenForProfile(userId, toISODate(weekStart), toISODate(weekEnd)),
-        getNextPlanningItem({ assignedToUserId, currentUserId: userId, currentUserName }),
+        listMijnPlanning({
+          uid: userId,
+          van: toISODate(nu),
+          tot: toISODate(verderTot),
+          startISO: nu.toISOString(),
+          endISO: verderTot.toISOString(),
+          currentUserName,
+        }),
         // Eigen open activiteiten tot en met vandaag: vandaag én te laat.
         listEigenOpenActiviteitenTot(userId, dayRange.endISO),
       ]);
@@ -239,7 +252,10 @@ export default function TodayScreen() {
       setTodayItems(planRes.items);
       setActiviteitenFout(actRes.error);
       if (!actRes.error) setActiviteiten(actRes.data);
-      setNextItem(nextRes.item);
+      const nuMs = nu.getTime();
+      setNextItem(
+        nextRes.items.find((i) => !!i.startAt && new Date(i.startAt).getTime() >= nuMs) ?? null,
+      );
 
       if (!weekRes.error && weekRes.data) {
         // Zelfde telling als de Uren-tab: werkdag- en werkbonuren apart, nooit
@@ -256,7 +272,6 @@ export default function TodayScreen() {
     },
     [
       userId,
-      assignedToUserId,
       currentUserName,
       weekStart,
       weekEnd,
@@ -285,8 +300,11 @@ export default function TodayScreen() {
     () => eigenActiviteitenVandaag(activiteiten, userId, vandaag, dagVan),
     [activiteiten, userId, vandaag],
   );
+  // Vandaag eerst, zoals de dashboardtegel (die toont alleen vandaag); de te
+  // late eronder, zodat je ze ook kunt afvinken. Andersom drukten 8 of meer te
+  // late de activiteit van vandaag uit de lijst.
   const activiteitenLijst = useMemo(
-    () => [...eigen.teLaat, ...eigen.vandaag].slice(0, ACTIVITEITEN_MAX),
+    () => [...eigen.vandaag, ...eigen.teLaat].slice(0, ACTIVITEITEN_MAX),
     [eigen],
   );
   const activiteitenTotaal = eigen.teLaat.length + eigen.vandaag.length;
