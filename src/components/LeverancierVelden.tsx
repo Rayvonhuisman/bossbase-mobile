@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { AdresZoeker } from './AdresZoeker';
 import { FormField } from './FormField';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
@@ -136,6 +137,7 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
           />
         </View>
       </View>
+      <AdresZoeker onSelect={(v) => onChange({ ...waarde, ...v })} />
       <FormField
         label="Adres"
         value={waarde.address}

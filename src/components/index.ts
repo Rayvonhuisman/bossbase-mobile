@@ -1,6 +1,7 @@
 export { ActivityFormSheet, conceptVanActiviteit, leegConcept } from './ActivityFormSheet';
 export type { ActivityConcept } from './ActivityFormSheet';
 export { AnimatedScreen } from './AnimatedScreen';
+export { AdresZoeker } from './AdresZoeker';
 export { AppCard } from './AppCard';
 export { AppListItem, AppListGroup } from './AppListItem';
 export { BBMark } from './BBMark';

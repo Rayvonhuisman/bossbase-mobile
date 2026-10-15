@@ -13,6 +13,7 @@ import {
   User as UserIcon,
 } from 'lucide-react-native';
 import {
+  AdresZoeker,
   AppCard,
   AppScreen,
   AppSection,
@@ -642,11 +643,13 @@ export default function PlanningScreen() {
           emptyLabel="Geen klant"
           placeholder="Geen klant"
         />
-        <FormField
+        <AdresZoeker
           label="Locatie"
+          volledigAdres
           value={afspraak?.location ?? ''}
           onChangeText={(v) => setAfspraak((c) => (c ? { ...c, location: v } : c))}
           placeholder="Adres of omschrijving van de plek"
+          hint="Kies een adres uit de lijst, of typ zelf een omschrijving van de plek."
         />
         <FormField
           label="Notities"

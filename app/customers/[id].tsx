@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mail, Navigation as NavigationIcon, Pencil, Phone } from 'lucide-react-native';
 import {
   ActivityFormSheet,
+  AdresZoeker,
   AnimatedScreen,
   AppTopBar,
   Button,
@@ -778,6 +779,9 @@ export default function CustomerDetailScreen() {
             onChangeText={(v) => setConcept((c) => (c ? { ...c, phone: v } : c))}
             placeholder="06 12 34 56 78"
             keyboardType="phone-pad"
+          />
+          <AdresZoeker
+            onSelect={(v) => setConcept((c) => (c ? { ...c, ...v } : c))}
           />
           <FormField
             label="Adres"

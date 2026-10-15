@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
+import { AdresZoeker } from '@/components/AdresZoeker';
 import { FormField } from '@/components/FormField';
 import { useAuth, useTheme, useToast } from '@/providers';
 import { useSave } from '@/lib/useSave';
@@ -274,6 +275,11 @@ export function BedrijfTab({
           autoCorrect={false}
           editable={magWijzigen}
         />
+        {magWijzigen ? (
+          <AdresZoeker
+            onSelect={(v) => setForm((f) => ({ ...f, address: v.address, postal_code: v.postcode, city: v.city }))}
+          />
+        ) : null}
         <FormField label="Adres" value={form.address} onChangeText={zet('address')} editable={magWijzigen} />
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
