@@ -1474,11 +1474,6 @@ function InvoicesScreenInhoud() {
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
         onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
-        melding={
-          mail
-            ? `De factuur gaat als PDF mee${kanBetaallink ? '; met een actieve Stripe-koppeling staat er een knop "Factuur betalen" in de mail' : ''}.`
-            : null
-        }
         saving={mailBezig}
         error={mailFout}
         onVerstuur={verstuurFactuur}
