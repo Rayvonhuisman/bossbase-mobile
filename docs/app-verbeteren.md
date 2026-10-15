@@ -43,10 +43,10 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Zelfde rechten, module en meldingen als het dashboard
 
 ### 8. Werkbon
-- [ ] Kaartje bovenaan strak en uitgelijnd (knoppen behouden)
+- [x] Kaartje bovenaan strak en uitgelijnd (knoppen behouden): kop alleen nummer + status (titel liep af en klant stond dubbel), project + Bewerken op één regel, volledige titel, klant als link, feiten in rijen met vaste icoonkolom (locatie, planning, verantwoordelijk, medewerkers, voertuigen), minder witruimte boven
 - [ ] Planning in de werkbon gecontroleerd tegen dashboard
 - [ ] Taken en uren gecontroleerd
-- [ ] Foto's: drie knoppen naast elkaar (voor/tijdens/na) + rij voorbeelden per soort
+- [x] Foto's: drie knoppen naast elkaar (Voor/Tijdens/Na, met teller), per soort een rij voorbeelden; tik = schermvullend in de app (`FotoViewer`: vegen, pijlen, sluiten, verwijderen) i.p.v. een browsertab. Getest met upload + verwijderen als testgebruiker
 - [ ] Rest van de werkbon gecontroleerd
 
 ### 9. Pipeline en projectkaart

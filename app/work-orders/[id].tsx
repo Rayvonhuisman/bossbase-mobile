@@ -15,12 +15,15 @@ import {
 } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { openMaps } from '@/lib/linking';
+import { FotoViewer } from '@/components/FotoViewer';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
   CalendarDays,
+  Camera,
   CheckCircle2,
+  ChevronRight,
   Circle,
   Eye,
   FolderKanban,
@@ -32,12 +35,12 @@ import {
   Pencil,
   Phone,
   Play,
-  Plus,
   PlusCircle,
   Send,
   Trash2,
   Truck,
-  X,
+  UserCheck,
+  Users,
 } from 'lucide-react-native';
 import {
   AnimatedScreen,
@@ -485,6 +488,11 @@ export default function WorkOrderDetailScreen() {
     }
   };
 
+  // Schermvullend bekijken: welke soort en welke foto.
+  const [fotoInBeeld, setFotoInBeeld] = useState<{ cat: string; index: number } | null>(null);
+  const sluitFotoViewer = useCallback(() => setFotoInBeeld(null), []);
+  const fotosInBeeld = fotoInBeeld ? photos.filter((p) => (p.categorie ?? 'tijdens') === fotoInBeeld.cat) : [];
+
   const handleDeletePhoto = (foto: WorkOrderPhoto) =>
     bevestigVerwijderen('Foto verwijderen?', 'De foto wordt definitief verwijderd.', async () => {
       const { error: e } = await deleteWorkOrderPhoto(foto.id, foto.url);
@@ -592,93 +600,115 @@ export default function WorkOrderDetailScreen() {
             />
           }
         >
+          {/* Kop: alleen het nummer en de status; titel en klant staan voluit in de kaart. */}
           <AppTopBar
             variant="detail"
             onBack={() => terugOfNaar(router, '/work-orders')}
-            eyebrow={[workOrder.nummer ?? 'Werkbon', pLabel].filter(Boolean).join(' · ')}
-            title={workOrder.titel}
-            subtitle={workOrder.customer?.name ?? undefined}
+            title={workOrder.nummer ?? 'Werkbon'}
             rightAction={<WerkbonStatusBadge status={workOrder.status} />}
           />
           <AnimatedScreen style={[styles.stack, styles.stackPadding]}>
-            {/* 1. Kopkaart */}
-            <View style={styles.sectionBody}>
-              <View style={styles.kopRij}>
-                {workOrder.project ? (
-                  <View style={styles.projectPil}>
-                    <FolderKanban size={13} color="#0F7A3F" />
-                    <Text style={styles.projectPilTekst} numberOfLines={1}>
-                      {workOrder.project.name ?? 'Project'}
-                    </Text>
+            {/* 1. Kopkaart: project en Bewerken op één regel, dan titel, klant
+                en de feiten in rijen met een vaste icoonkolom. */}
+            <View style={[styles.sectionBody, styles.kopKaart]}>
+              {workOrder.project || viewOnly || canManage ? (
+                <View style={styles.kopRij}>
+                  <View style={styles.kopPillen}>
+                    {workOrder.project ? (
+                      <Pressable
+                        onPress={() => router.push(`/project/${workOrder.project!.id}`)}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Project ${workOrder.project.name ?? ''}`}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.projectPil, pressed && { opacity: 0.7 }]}
+                      >
+                        <FolderKanban size={13} color="#0F7A3F" />
+                        <Text style={styles.projectPilTekst} numberOfLines={1}>
+                          {workOrder.project.name ?? 'Project'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    {viewOnly ? (
+                      <Pressable
+                        onPress={() =>
+                          Dialog.alert(
+                            'Alleen inzage',
+                            'Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.',
+                          )
+                        }
+                        style={styles.inzagePil}
+                        accessibilityRole="button"
+                      >
+                        <Eye size={13} color={th.muted} />
+                        <Text style={styles.inzageTekst}>Alleen inzage</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
-                ) : null}
-                {viewOnly ? (
+                  {canManage ? (
+                    <Pressable
+                      onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      style={({ pressed }) => [styles.bewerkKnop, pressed && { opacity: 0.8 }]}
+                    >
+                      <Pencil size={14} color={th.ink2} />
+                      <Text style={styles.bewerkTekst}>Bewerken</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <View style={{ gap: 2 }}>
+                <Text style={styles.kopTitel}>{workOrder.titel || 'Werkbon'}</Text>
+                {workOrder.customer ? (
                   <Pressable
-                    onPress={() =>
-                      Dialog.alert(
-                        'Alleen inzage',
-                        'Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.',
-                      )
-                    }
-                    style={styles.inzagePil}
-                    accessibilityRole="button"
+                    onPress={() => router.push(`/customers/${workOrder.customer!.id}`)}
+                    accessibilityRole="link"
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.klantLink, pressed && { opacity: 0.7 }]}
                   >
-                    <Eye size={13} color={th.muted} />
-                    <Text style={styles.inzageTekst}>Alleen inzage</Text>
-                  </Pressable>
-                ) : null}
-                <View style={{ flex: 1 }} />
-                {canManage ? (
-                  <Pressable
-                    onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.bewerkKnop, pressed && { opacity: 0.8 }]}
-                  >
-                    <Pencil size={15} color={th.ink2} />
-                    <Text style={styles.bewerkTekst}>Bewerken</Text>
+                    <Text style={styles.klantLinkTekst} numberOfLines={1}>
+                      {workOrder.customer.name ?? '—'}
+                    </Text>
+                    <ChevronRight size={15} color={th.green700} />
                   </Pressable>
                 ) : null}
               </View>
-              {workOrder.customer ? (
-                <Pressable
-                  onPress={() => router.push(`/customers/${workOrder.customer!.id}`)}
-                  accessibilityRole="link"
-                  style={styles.minTouch}
-                >
-                  <Text style={styles.customerName}>{workOrder.customer.name ?? '—'}</Text>
-                </Pressable>
-              ) : null}
-              {workOrder.locatie ? (
-                <View style={styles.infoRegel}>
-                  <MapPin size={15} color={th.muted} />
-                  <Text style={styles.infoRegelTekst}>{workOrder.locatie}</Text>
-                </View>
-              ) : null}
-              <View style={styles.infoRegel}>
-                <CalendarDays size={15} color={th.muted} />
-                <Text style={styles.infoRegelTekst}>
-                  {pLabel
-                    ? `${pLabel}${venster.starttijd ? ` · ${venster.starttijd}${venster.eindtijd ? ` – ${venster.eindtijd}` : ''}` : ''}`
-                    : 'Nog niet ingepland'}
-                </Text>
+
+              <View style={styles.feiten}>
+                {workOrder.locatie ? (
+                  <KopFeit icon={<MapPin size={16} color={th.muted} />} tekst={workOrder.locatie} />
+                ) : null}
+                <KopFeit
+                  icon={<CalendarDays size={16} color={th.muted} />}
+                  tekst={
+                    pLabel
+                      ? `${pLabel}${venster.starttijd ? ` · ${venster.starttijd}${venster.eindtijd ? `–${venster.eindtijd}` : ''}` : ''}`
+                      : 'Nog niet ingepland'
+                  }
+                  gedempt={!pLabel}
+                />
+                {verantwIds.length ? (
+                  <KopFeit
+                    icon={<UserCheck size={16} color={th.muted} />}
+                    label="Verantwoordelijk"
+                    tekst={namesFor(verantwIds)}
+                  />
+                ) : null}
+                {uitvoerderIds.length ? (
+                  <KopFeit icon={<Users size={16} color={th.muted} />} label="Medewerkers" tekst={namesFor(uitvoerderIds)} />
+                ) : null}
+                {!assignedIds.length ? (
+                  <KopFeit icon={<Users size={16} color={th.muted} />} tekst="Nog niemand gekoppeld" gedempt />
+                ) : null}
+                {metVoertuigen && (workOrder.voertuig_ids ?? []).length && !mijn ? (
+                  <KopFeit
+                    icon={<Truck size={16} color={th.muted} />}
+                    label="Voertuigen"
+                    tekst={(workOrder.voertuig_ids ?? []).map(busNaam).join(', ')}
+                  />
+                ) : null}
               </View>
-              {assignedIds.length ? (
-                <Text style={styles.ploegTekst}>
-                  {verantwIds.length ? `Verantwoordelijk: ${namesFor(verantwIds)}` : ''}
-                  {verantwIds.length && uitvoerderIds.length ? '\n' : ''}
-                  {uitvoerderIds.length ? `Medewerkers: ${namesFor(uitvoerderIds)}` : ''}
-                </Text>
-              ) : (
-                <Text style={styles.ploegTekst}>Nog niemand gekoppeld.</Text>
-              )}
-              {metVoertuigen && (workOrder.voertuig_ids ?? []).length && !mijn ? (
-                <View style={styles.infoRegel}>
-                  <Truck size={15} color={th.muted} />
-                  <Text style={styles.infoRegelTekst}>
-                    Voertuigen: {(workOrder.voertuig_ids ?? []).map(busNaam).join(', ')}
-                  </Text>
-                </View>
-              ) : null}
             </View>
 
             {/* 2. Jouw planning */}
@@ -937,63 +967,94 @@ export default function WorkOrderDetailScreen() {
               ) : !canEdit && photos.length === 0 ? (
                 <Text style={styles.empty}>Geen foto&apos;s</Text>
               ) : (
-                FOTO_CATEGORIEEN.map((cat) => {
-                  const stijl = FOTO_CATEGORIE_STIJL[cat];
-                  const lijst = photos.filter((p) => (p.categorie ?? 'tijdens') === cat);
-                  if (!canEdit && lijst.length === 0) return null;
-                  return (
-                    <View key={cat} style={{ gap: 8 }}>
-                      <View style={[styles.fotoLabel, { backgroundColor: stijl.bg }]}>
-                        <Text style={[styles.fotoLabelTekst, { color: stijl.kleur }]}>
-                          {stijl.label} · {lijst.length}
-                        </Text>
-                      </View>
-                      <View style={styles.photoGrid}>
-                        {lijst.map((ph) => (
-                          <View key={ph.id}>
-                            <Pressable
-                              accessibilityRole="button"
-                              onPress={() => openUrl(ph.url)}
-                              accessibilityLabel={`Foto ${stijl.label} openen`}
-                              style={({ pressed }) => [pressed && { opacity: 0.85 }]}
-                            >
-                              <Image source={{ uri: ph.url }} style={styles.photo} />
-                            </Pressable>
-                            {canEdit ? (
-                              <Pressable
-                                accessibilityRole="button"
-                                onPress={() => handleDeletePhoto(ph)}
-                                accessibilityLabel="Foto verwijderen"
-                                hitSlop={8}
-                                style={styles.fotoWeg}
-                              >
-                                <X size={14} color="#fff" strokeWidth={3} />
-                              </Pressable>
-                            ) : null}
-                          </View>
-                        ))}
-                        {canEdit ? (
+                <View style={{ gap: spacing.md }}>
+                  {/* Drie knoppen naast elkaar: in één tik een foto bij de juiste soort. */}
+                  {canEdit ? (
+                    <View style={styles.fotoKnoppen}>
+                      {FOTO_CATEGORIEEN.map((cat) => {
+                        const stijl = FOTO_CATEGORIE_STIJL[cat];
+                        const aantal = photos.filter((p) => (p.categorie ?? 'tijdens') === cat).length;
+                        const bezig = fotoBezig === cat;
+                        return (
                           <Pressable
+                            key={cat}
                             onPress={() => kiesFoto(cat)}
                             disabled={!!fotoBezig || fotoKiezen}
                             accessibilityRole="button"
-                            accessibilityLabel={`Foto toevoegen bij ${stijl.label}`}
-                            accessibilityState={{ disabled: !!fotoBezig || fotoKiezen, busy: fotoBezig === cat }}
-                            aria-busy={fotoBezig === cat}
-                            style={({ pressed }) => [styles.fotoToevoegen, pressed && { opacity: 0.8 }]}
+                            accessibilityLabel={`Foto toevoegen bij ${stijl.label}${aantal ? `, ${aantal} foto's` : ''}`}
+                            accessibilityState={{ disabled: !!fotoBezig || fotoKiezen, busy: bezig }}
+                            aria-busy={bezig}
+                            style={({ pressed }) => [
+                              styles.fotoKnop,
+                              { backgroundColor: stijl.bg, borderColor: stijl.kleur + '33' },
+                              pressed && { opacity: 0.8 },
+                            ]}
                           >
-                            {fotoBezig === cat ? (
-                              <ActivityIndicator size="small" color={ds.green700} />
+                            {bezig ? (
+                              <ActivityIndicator size="small" color={stijl.kleur} />
                             ) : (
-                              <Plus size={20} color={th.muted} />
+                              <Camera size={18} color={stijl.kleur} strokeWidth={2.2} />
                             )}
-                            <Text style={styles.fotoToevoegenTekst}>{fotoBezig === cat ? 'Uploaden…' : 'Foto toevoegen'}</Text>
+                            <Text style={[styles.fotoKnopTekst, { color: stijl.kleur }]} numberOfLines={1}>
+                              {bezig ? 'Uploaden…' : stijl.label}
+                            </Text>
+                            {aantal ? (
+                              <View style={[styles.fotoKnopTeller, { backgroundColor: stijl.kleur }]}>
+                                <Text style={styles.fotoKnopTellerTekst}>{aantal}</Text>
+                              </View>
+                            ) : null}
                           </Pressable>
-                        ) : null}
-                      </View>
+                        );
+                      })}
                     </View>
-                  );
-                })
+                  ) : null}
+
+                  {/* Per soort een rij kleine voorbeelden; tik = schermvullend. */}
+                  {FOTO_CATEGORIEEN.map((cat) => {
+                    const stijl = FOTO_CATEGORIE_STIJL[cat];
+                    const lijst = photos.filter((p) => (p.categorie ?? 'tijdens') === cat);
+                    if (lijst.length === 0) return null;
+                    return (
+                      <View key={cat} style={{ gap: 6 }}>
+                        <Text style={[styles.fotoRijLabel, { color: stijl.kleur }]}>
+                          {stijl.label} · {lijst.length}
+                        </Text>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.fotoRij}
+                        >
+                          {lijst.map((ph, i) => (
+                            <Pressable
+                              key={ph.id}
+                              accessibilityRole="imagebutton"
+                              onPress={() => setFotoInBeeld({ cat, index: i })}
+                              accessibilityLabel={`Foto ${i + 1} van ${lijst.length} bij ${stijl.label} bekijken`}
+                              style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+                            >
+                              <Image source={{ uri: ph.url }} style={styles.fotoKlein} />
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+        <FotoViewer
+          fotos={fotosInBeeld}
+          index={fotoInBeeld?.index ?? null}
+          titel={fotoInBeeld ? FOTO_CATEGORIE_STIJL[fotoInBeeld.cat as keyof typeof FOTO_CATEGORIE_STIJL]?.label : undefined}
+          onSluit={sluitFotoViewer}
+          onVerwijder={
+            canEdit
+              ? (f) => {
+                  const ph = photos.find((x) => x.id === f.id);
+                  if (ph) handleDeletePhoto(ph);
+                }
+              : undefined
+          }
+        />
+                      </View>
+                    );
+                  })}
+                  {!canEdit && photos.length === 0 ? <Text style={styles.empty}>Geen foto&apos;s</Text> : null}
+                </View>
               )}
             </Section>
 
@@ -1943,6 +2004,31 @@ function StartMomentModal({
 // Styles
 // ---------------------------------------------------------------------------
 
+/** Eén feit in de kopkaart: icoon in een vaste kolom, eventueel een label ervoor. */
+function KopFeit({
+  icon,
+  label,
+  tekst,
+  gedempt,
+}: {
+  icon: React.ReactNode;
+  label?: string;
+  tekst: string;
+  gedempt?: boolean;
+}) {
+  const { colors: t } = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
+  return (
+    <View style={styles.feit}>
+      <View style={styles.feitIcoon}>{icon}</View>
+      <Text style={[styles.feitTekst, gedempt && styles.feitLabel]}>
+        {label ? <Text style={styles.feitLabel}>{label}: </Text> : null}
+        {tekst}
+      </Text>
+    </View>
+  );
+}
+
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     screen: {
@@ -1958,11 +2044,11 @@ const makeStyles = (t: ThemeColors) =>
       // Op iPad/desktop niet uitrekken: één leeskolom, zoals de rest.
       ...leesbreedte,
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
+      paddingTop: spacing.xs,
     },
-    // Vertical rhythm between the header + all cards (≈18px).
+    // Vaste ruimte tussen de kaarten (16).
     stack: {
-      gap: 18,
+      gap: spacing.lg,
     },
     headerBlock: {
       gap: spacing.md,
@@ -2092,17 +2178,6 @@ const makeStyles = (t: ThemeColors) =>
       fontWeight: '800',
       color: t.ink,
       letterSpacing: -0.2,
-    },
-    photoGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    photo: {
-      width: 96,
-      height: 96,
-      borderRadius: t.rSm ?? 10,
-      backgroundColor: t.bgAlt,
     },
     checkRow: {
       flexDirection: 'row',
@@ -2395,16 +2470,33 @@ const makeStyles = (t: ThemeColors) =>
       // ── Dashboardblokken ────────────────────────────────────────────────
     minTouch: { minHeight: 44, justifyContent: 'center' },
     uit: { opacity: 0.45 },
-    kopRij: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+    kopKaart: { gap: spacing.md },
+    // Pillen links (krimpen), Bewerken rechts: altijd één regel.
+    kopRij: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    kopPillen: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    kopTitel: { fontSize: 19, lineHeight: 24, fontWeight: '800', color: t.ink, letterSpacing: -0.3 },
+    klantLink: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', minHeight: 28 },
+    klantLinkTekst: { fontSize: 15, fontWeight: '700', color: t.green700, flexShrink: 1 },
+    feiten: {
+      gap: 8,
+      paddingTop: spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.line,
+    },
+    feit: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    // Icoon op de eerste tekstregel: 16 hoog in een regel van 20.
+    feitIcoon: { width: 16, height: 20, justifyContent: 'center' },
+    feitTekst: { flex: 1, fontSize: 14, lineHeight: 20, color: t.ink },
+    feitLabel: { color: t.muted },
     projectPil: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
       paddingHorizontal: 10,
-      paddingVertical: 4,
+      minHeight: 28,
       borderRadius: 999,
       backgroundColor: '#E8FBEF',
-      maxWidth: 220,
+      flexShrink: 1,
     },
     projectPilTekst: { fontSize: 12, fontWeight: '700', color: '#0F7A3F' },
     inzagePil: {
@@ -2421,8 +2513,8 @@ const makeStyles = (t: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      minHeight: 44,
-      paddingHorizontal: 14,
+      minHeight: 36,
+      paddingHorizontal: 12,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: t.line,
@@ -2483,32 +2575,32 @@ const makeStyles = (t: ThemeColors) =>
     dagBus: { fontSize: 12.5, color: t.muted },
     balk: { height: 6, borderRadius: 3, backgroundColor: t.bgAlt, overflow: 'hidden' },
     balkVulling: { height: 6, borderRadius: 3, backgroundColor: ds.green },
-    fotoLabel: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-    fotoLabelTekst: { fontSize: 12, fontWeight: '800' },
-    fotoWeg: {
-      position: 'absolute',
-      top: 4,
-      right: 4,
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(11,15,18,0.72)',
-    },
-    fotoToevoegen: {
-      width: 96,
-      height: 96,
-      borderRadius: 10,
-      borderWidth: 1.5,
-      borderStyle: 'dashed',
-      borderColor: t.line,
+    fotoKnoppen: { flexDirection: 'row', gap: 8 },
+    fotoKnop: {
+      flex: 1,
+      minHeight: 64,
+      borderRadius: 14,
+      borderWidth: 1,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 4,
-      padding: 6,
     },
-    fotoToevoegenTekst: { fontSize: 11, fontWeight: '700', color: t.muted, textAlign: 'center' },
+    fotoKnopTekst: { fontSize: 13, fontWeight: '800' },
+    fotoKnopTeller: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fotoKnopTellerTekst: { fontSize: 11, fontWeight: '800', color: '#fff' },
+    fotoRijLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+    fotoRij: { gap: 8, paddingRight: 4 },
+    fotoKlein: { width: 72, height: 72, borderRadius: 10, backgroundColor: t.bgAlt },
     materialKaart: { backgroundColor: t.bg, borderRadius: t.rMd, paddingBottom: 8 },
     materialMeta: { fontSize: 12, color: t.muted, paddingHorizontal: 12, lineHeight: 17 },
     iconKnop: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
