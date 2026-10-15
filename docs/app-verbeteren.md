@@ -20,7 +20,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] 1. Filters en tabbladen onthouden per gebruiker (`useOnthouden`, op het toestel): werkbonnen, projecten (status, facturatie), offertes, facturen, activiteiten (+ medewerker), relaties (filter + tab Klanten/Leveranciers), uren (ik/team, soort, medewerker), kosten (weergave, periode, klant, categorie), agenda (dag/week/maand), planning (dag/week, medewerker/voertuig). Zoektekst bewust niet. Een filter dat niet meer bestaat valt terug op de standaard. Materialen heeft alleen zoeken
 - [x] 2. "bus/bussen" → "voertuig/voertuigen" in de hele app (4 teksten: werkbonformulier ×2, Instellingen › Voertuigen ×2; verder alleen code-namen)
 - [x] 3. Route-knop opent de kaartenapp: één helper (`lib/routeLinks.ts`) voor klantkaart, leverancier, werkbon (bouwde eigen Google-link), agenda en homepage. iPhone/iPad: Apple Kaarten (in de app keuze als Google Maps erop staat; `LSApplicationQueriesSchemes` toegevoegd, werkt pas na een nieuwe build); Android: Google Maps-route; altijd route i.p.v. zoeken. Projectkaart krijgt een route-knop in punt 9
-- [ ] 4. Adres zoeken zoals het dashboard in elk adresformulier
+- [x] 4. Adres zoeken zoals het dashboard (PDOK Locatieserver, zelfde aanroepen als `AdresZoeker.jsx`): nieuwe klant, klant bewerken, leverancier (nieuw/bewerken), werkbon-locatie (één regel), Instellingen › Bedrijfsprofiel, afspraak-locatie (vrije tekst blijft kunnen). Velden blijven met de hand te wijzigen
 
 ## Per pagina
 
@@ -60,8 +60,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Bedragwidgets iets meer kleur
 
 ### 11. Relaties en klantkaart
-- [ ] Adres zoeken (zie 4)
-- [ ] Route naar kaartenapp (zie 3)
+- [x] Adres zoeken (zie 4)
+- [x] Route naar kaartenapp (zie 3)
 
 ### 12. Uren
 - [ ] Werking gecontroleerd tegen dashboard
