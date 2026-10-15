@@ -78,6 +78,7 @@ import { alsTekst } from '@/lib/notitieTekst';
 import { useOnthouden } from '@/lib/useOnthouden';
 import { listDeals } from '@/services/dealService';
 import { getCompanySettings } from '@/services/settingsService';
+import { AfspraakExtra } from '@/components/planning/AfspraakExtra';
 
 type ViewMode = 'dag' | 'week' | 'maand';
 
@@ -733,6 +734,15 @@ export default function PlanningScreen() {
           placeholder="Optioneel"
           multiline
         />
+        {afspraak?.id ? (
+          <AfspraakExtra
+            key={afspraak.id}
+            afspraakId={afspraak.id}
+            magBewerken={afspraak.magBewerken}
+            vorm={afspraak}
+            onNaarWerkbon={() => setAfspraak(null)}
+          />
+        ) : null}
       </FormSheet>
     </View>
   );
@@ -1293,7 +1303,8 @@ function PlanningCard({
       ? `${startLabel} – ${endLabel}`
       : startLabel
     : 'Hele dag';
-  const tappable = !!item.workOrderId || !!item.customerId;
+  // Een eigen afspraak opent het formulier, ook zonder klant (openItem).
+  const tappable = !!item.workOrderId || !!item.customerId || item.source === 'calendar_event';
 
   // De info is de knop (werkbon of klant openen); Bel, Route en Werkbon staan
   // ernaast en niet erin — een knop in een knop is ongeldig op web.

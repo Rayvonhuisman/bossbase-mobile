@@ -6,6 +6,7 @@ import { listAgendaEvents, listWerkbonnenInBereik, type PlanWerkbon } from './pl
 import { agendaWerkbonItems, zichtbareAfspraken, type AgendaWerkbonItem } from '@/lib/planningRegels';
 import { toLocalISODate } from '@/lib/dateRange';
 import { haalInStukken } from '@/lib/inStukken';
+import { leesAfspraakNotities, type AfspraakNotitie } from '@/lib/afspraakNotities';
 
 /**
  * Activities + calendar_events ophalen voor mobile Planning + Vandaag.
@@ -837,4 +838,58 @@ export async function deleteAfspraak(id: string): Promise<WriteStatus> {
     },
   );
   return res.ok ? { ok: true, data: null } : res;
+}
+
+// ── Werkbon en notitielog bij een afspraak (CalendarEventDetailDrawer) ──────
+
+/** `setCalendarEventWerkbon`: de afspraak aan een (net gemaakte) werkbon hangen. */
+export async function koppelWerkbonAanAfspraak(id: string, werkbonId: string): Promise<WriteStatus> {
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('calendar_events').update({ werkbon_id: werkbonId }).eq('id', id).select('id'),
+    {
+      context: 'activityService.koppelWerkbonAanAfspraak',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'De werkbon is gemaakt, maar kon niet aan de afspraak worden gekoppeld.',
+    },
+  );
+  return res.ok ? { ok: true, data: null } : res;
+}
+
+/** De werkbon en het notitielog van één afspraak, bij het openen. */
+export async function getAfspraakExtra(
+  id: string,
+): Promise<{ werkbonId: string | null; notities: AfspraakNotitie[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .select('werkbon_id, comments')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return { werkbonId: null, notities: [], error: 'De notities konden niet worden geladen.' };
+  const rij = data as { werkbon_id?: string | null; comments?: unknown } | null;
+  return { werkbonId: rij?.werkbon_id ?? null, notities: leesAfspraakNotities(rij?.comments), error: null };
+}
+
+/**
+ * Een notitie onderaan het log (`updateCalendarEventComments`). Eerst opnieuw
+ * lezen: dan gaat een notitie van een collega die net ervoor plaatste niet
+ * verloren (het dashboard schrijft zijn eigen lijst terug).
+ */
+export async function plaatsAfspraakNotitie(
+  id: string,
+  notitie: AfspraakNotitie,
+): Promise<WriteResult<AfspraakNotitie[]>> {
+  const huidig = await getAfspraakExtra(id);
+  if (huidig.error) return writeFout('onbekend', huidig.error);
+  const lijst = [...huidig.notities, notitie];
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('calendar_events').update({ comments: lijst }).eq('id', id).select('id'),
+    {
+      context: 'activityService.plaatsAfspraakNotitie',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'De notitie is niet geplaatst: je mag deze afspraak niet wijzigen.',
+    },
+  );
+  return res.ok ? { ok: true, data: lijst } : res;
 }

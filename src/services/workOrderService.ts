@@ -1094,6 +1094,8 @@ export type CreateWorkOrderInput = {
   company_id: string;
   titel: string;
   customer_id?: string | null;
+  /** Aanvraag/project (`deals`), zoals createWerkbon van het dashboard. */
+  deal_id?: string | null;
   project_id?: string | null;
   omschrijving?: string | null;
   gepland_op?: string | null;
@@ -1140,6 +1142,7 @@ export async function createWorkOrder(
     company_id: input.company_id,
     titel,
     customer_id: input.customer_id ?? null,
+    deal_id: input.deal_id ?? null,
     project_id: input.project_id ?? null,
     omschrijving: leegNaarNull(input.omschrijving),
     gepland_op: input.gepland_op || null,
