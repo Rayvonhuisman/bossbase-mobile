@@ -144,6 +144,10 @@ export default function TabsLayout() {
   if (status === 'loading-profile') {
     return <LoadingScreen label="Profiel laden..." />;
   }
+  // Registratie wacht op de 6-cijferige code (zoals de gate in het dashboard).
+  if (status === 'needs-verification') {
+    return <Redirect href="/(onboarding)/verify" />;
+  }
   if (status === 'profile-error') {
     const copy =
       PROFILE_ERROR_MESSAGES[profileError?.kind ?? 'unknown_error'] ??
