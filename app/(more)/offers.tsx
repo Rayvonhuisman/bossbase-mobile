@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FileText, Lock, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -33,7 +33,6 @@ import {
   deleteOfferteItem,
   getOfferteDetail,
   getOfferteItems,
-  getOndertekendeOffertePdfUrl,
   herberekenOfferteTotalen,
   inhoudLigtVast,
   listOffertes,
@@ -45,7 +44,7 @@ import {
   type OfferteRow,
 } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
-import { getCompany, getCompanySettings, type CompanyRow } from '@/services/settingsService';
+import { getCompanySettings } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import { listDeals } from '@/services/dealService';
 import {
@@ -63,12 +62,8 @@ import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
-import { Dialog } from '@/lib/dialog';
 import { useSchermklasse } from '@/lib/schermklasse';
-import { drukHtmlAf, kanAfdrukken } from '@/lib/afdrukken';
-import { bouwDocumentHtml } from '@/lib/documentHtml';
 import {
-  bedrijfVoorDocument,
   documentTotalen,
   filterOffertes,
   OFFERTE_FILTERS,
@@ -78,6 +73,7 @@ import {
   type OfferteFilter,
 } from '@/lib/documentLogica';
 import { Paneel } from '@/components/Paneel';
+import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
 import {
   DetailRij,
   DocumentStatusBadge,
@@ -159,7 +155,6 @@ function OffersScreenInhoud() {
   const breed = klasse === 'tablet';
 
   const [items, setItems] = useState<OfferteRow[]>([]);
-  const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useOnthouden<OfferteFilter>(
     'offertes.filter',
@@ -173,8 +168,6 @@ function OffersScreenInhoud() {
   const [detailRegels, setDetailRegels] = useState<OfferteItem[]>([]);
   const [detailLaden, setDetailLaden] = useState(false);
   const [detailFout, setDetailFout] = useState<string | null>(null);
-  const [getekendeUrl, setGetekendeUrl] = useState<string | null>(null);
-  const [getekendMelding, setGetekendMelding] = useState<string | null>(null);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
   const [standaardBtw, setStandaardBtw] = useState('21');
   const [instellingen, setInstellingen] = useState({
@@ -205,17 +198,13 @@ function OffersScreenInhoud() {
   const load = useCallback(async () => {
     setError(null);
 
-    const [offRes, klantRes, instRes, eenheidRes, dealRes, bedrijfRes] = await Promise.all([
+    const [offRes, klantRes, instRes, eenheidRes, dealRes] = await Promise.all([
       listOffertes(),
       listCustomers(),
       getCompanySettings(),
       listEigenEenheden(),
       listDeals(),
-      getCompany(),
     ]);
-    // Alleen voor de afdrukweergave (logo, adres, KvK); mislukt het, dan
-    // blijft het scherm gewoon werken.
-    if (!bedrijfRes.error) setBedrijf(bedrijfRes.data);
 
     if (offRes.error) setError(offRes.error);
     else setItems(offRes.data);
@@ -262,19 +251,12 @@ function OffersScreenInhoud() {
     setDetailData(null);
     setDetailRegels([]);
     setDetailFout(null);
-    setGetekendeUrl(null);
-    setGetekendMelding(null);
     setDetailLaden(true);
     const [d, r] = await Promise.all([getOfferteDetail(o.id), getOfferteItems(o.id)]);
     setDetailData(d.data);
     setDetailRegels(r.data);
     setDetailFout(d.error ?? r.error);
     setDetailLaden(false);
-    if (o.signed_at) {
-      const pdf = await getOndertekendeOffertePdfUrl(o.id);
-      setGetekendeUrl(pdf.url);
-      setGetekendMelding(pdf.melding);
-    }
   }, []);
 
   // Openen vanuit een melding of link: /offers?id=<id>
@@ -286,70 +268,20 @@ function OffersScreenInhoud() {
     router.setParams({ id: undefined });
   }, [openId, loading, items, openDetail, router]);
 
-  const afdrukken = () => {
-    if (!detail) return;
-    if (!kanAfdrukken()) {
-      Dialog.alert(
-        'Afdrukken via de webversie',
-        'In de app staat de volledige offerte hierboven. Afdrukken of als PDF bewaren kan in de ' +
-          'webversie (app.bossbase.nl) of in het dashboard.',
-      );
-      return;
-    }
-    const d = detailData;
-    const standaard = Number(d?.btw_pct ?? detail.btw_pct ?? 21);
-    const regels = detailRegels.map((r) => ({
-      omschrijving: r.omschrijving,
-      aantal: r.aantal,
-      eenheid: r.eenheid,
-      prijs: r.prijs_per,
-      btwPct: r.btw_pct,
-      btwRegime: r.btw_regime,
-      bedrag: r.subtotaal,
-    }));
-    const html = bouwDocumentHtml({
+  /**
+   * PDF bekijken: precies de PDF van het dashboard, schermvullend
+   * (`PdfWeergave`). "PDF bekijken" bouwt hem opnieuw op, zoals de
+   * voorbeeldknop van het dashboard; "Getekende offerte" toont het
+   * ondertekende exemplaar.
+   */
+  const [pdfDoc, setPdfDoc] = useState<PdfDocument | null>(null);
+  const bekijkPdf = (o: OfferteRow, getekend: boolean) =>
+    setPdfDoc({
       soort: 'offerte',
-      nummer: detail.nummer ?? '',
-      datum: (detail.created_at ?? '').slice(0, 10),
-      geldigTot: detail.geldig_tot,
-      ondertekendOp: detail.signed_at,
-      ondertekendDoor: d?.signed_by_name ?? null,
-      bedrijf: bedrijfVoorDocument(d ?? {}, bedrijf),
-      klant: d?.customer
-        ? {
-            naam: d.customer.name,
-            adres: d.customer.address,
-            postcode: d.customer.postcode,
-            plaats: d.customer.city,
-            email: d.customer.email,
-            telefoon: d.customer.phone,
-            kvk: d.customer.kvk_number,
-            btw: d.customer.btw_number,
-          }
-        : null,
-      regels,
-      standaardBtwPct: standaard,
-      totalen: documentTotalen(
-        regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct, btwRegime: r.btwRegime })),
-        standaard,
-      ),
-      notitie: alsTekst(detail.notes),
+      id: o.id,
+      titel: `${getekend ? 'Getekende offerte' : 'Offerte'} ${o.nummer ?? ''}`.trim(),
+      opgeslagenEerst: getekend,
     });
-    if (!drukHtmlAf(html)) {
-      Dialog.alert('Niet gelukt', 'De afdrukweergave kon niet worden geopend.');
-    }
-  };
-
-  const openGetekend = () => {
-    if (getekendeUrl) {
-      void Linking.openURL(getekendeUrl);
-      return;
-    }
-    Dialog.alert(
-      'Getekende offerte',
-      getekendMelding ?? 'De link naar de getekende PDF wordt nog opgehaald. Probeer het zo opnieuw.',
-    );
-  };
 
   const openNieuw = () => {
     setSaveError(null);
@@ -658,12 +590,12 @@ function OffersScreenInhoud() {
         voet={
           detail ? (
             <View style={styles.knoppen}>
-              <Button label="Bekijken / afdrukken" onPress={afdrukken} disabled={detailLaden} style={styles.knop} />
+              <Button label="PDF bekijken" onPress={() => bekijkPdf(detail, false)} style={styles.knop} />
               {detail.signed_at ? (
                 <Button
                   label="Getekende offerte"
                   variant="secondary"
-                  onPress={openGetekend}
+                  onPress={() => bekijkPdf(detail, true)}
                   style={styles.knop}
                 />
               ) : null}
@@ -694,7 +626,7 @@ function OffersScreenInhoud() {
         }
       >
         {detail ? (
-          <View style={{ gap: spacing.md }}>
+          <ScrollView contentContainerStyle={styles.detailInhoud} keyboardShouldPersistTaps="handled">
             {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
             <View>
               <DetailRij label="Klant" waarde={detail.customer?.name ?? 'Geen klant'} />
@@ -749,17 +681,16 @@ function OffersScreenInhoud() {
                   Ondertekend{detailData?.signed_by_name ? ` door ${detailData.signed_by_name}` : ''} op{' '}
                   {formatDateNL(detail.signed_at)}
                 </Text>
-                {getekendMelding ? (
-                  <Text style={[styles.uitleg, { color: t.statusWarnFg }]}>{getekendMelding}</Text>
-                ) : null}
               </View>
             ) : null}
 
             <Text style={styles.uitleg}>
               Versturen per mail en een nieuwe versie maken doe je in het dashboard.
             </Text>
-          </View>
+          </ScrollView>
         ) : null}
+        {/* In het paneel, zodat hij op iOS bovenop het paneel opent. */}
+        <PdfWeergave document={pdfDoc} onSluit={() => setPdfDoc(null)} />
       </Paneel>
 
       {/* Offerte aanmaken / bewerken */}
@@ -1001,6 +932,8 @@ function OffersScreenInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+    // Het paneel zelf heeft geen opvulling: de inhoud scrolt en houdt afstand tot de rand.
+    detailInhoud: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
     trailing: { alignItems: 'flex-end', gap: 4 },
     zoekRij: { paddingHorizontal: 16, paddingTop: 14 },
     knoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

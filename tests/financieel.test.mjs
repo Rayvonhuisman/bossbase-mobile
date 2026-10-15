@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 
 const D = await import('../src/lib/documentLogica.ts');
 const K = await import('../src/lib/kostenLogica.ts');
-const H = await import('../src/lib/documentHtml.ts');
 
 // ── Statussen ──────────────────────────────────────────────────────────────
 
@@ -162,38 +161,7 @@ test('creditfactuur: negatieve totalen en regels, regime leidend', () => {
   assert.equal(c.regels[2].volgorde, 2);
 });
 
-test('bedrijf op document: snapshot wint bij een verstuurd document', () => {
-  const live = { name: 'Nu BV', city: 'Utrecht', branding_color: '#000000', logo_url: null };
-  assert.equal(D.bedrijfVoorDocument({}, live).naam, 'Nu BV');
-  const b = D.bedrijfVoorDocument({ snapshot_bedrijfsnaam: 'Toen BV', snapshot_plaats: null }, live);
-  assert.equal(b.naam, 'Toen BV');
-  assert.equal(b.plaats, 'Utrecht', 'leeg snapshotveld valt terug op live');
-});
-
 // ── Afdrukweergave ─────────────────────────────────────────────────────────
-
-test('afdrukweergave: escapet invoer en toont nummer, regels en totalen', () => {
-  const regels = [{ omschrijving: '<script>x</script>', aantal: 1.5, eenheid: 'u', prijs: 55, btwPct: 21, bedrag: 82.5 }];
-  const html = H.bouwDocumentHtml({
-    soort: 'offerte',
-    nummer: 'BB-007',
-    datum: '2026-10-01',
-    geldigTot: '2026-10-15',
-    bedrijf: { naam: 'Boss & Co', kleur: 'red;}body{', logoUrl: 'javascript:alert(1)' },
-    klant: { naam: 'Jansen' },
-    regels,
-    totalen: D.documentTotalen(regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct }))),
-  });
-  assert.ok(html.includes('BB-007'));
-  assert.ok(!html.includes('<script>x'));
-  assert.ok(html.includes('&lt;script&gt;'));
-  assert.ok(html.includes('Boss &amp; Co'));
-  assert.ok(!html.includes('javascript:'), 'geen onveilige logo-url');
-  assert.ok(html.includes('--accent: #1DDB62'), 'ongeldige kleur valt terug op merkgroen');
-  assert.ok(html.includes('Deze offerte is geldig tot 15-10-2026.'));
-  assert.ok(html.includes('1,5 u'));
-  assert.ok(/BTW 21%/.test(html));
-});
 
 // ── Kosten ─────────────────────────────────────────────────────────────────
 

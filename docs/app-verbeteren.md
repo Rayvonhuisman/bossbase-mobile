@@ -73,12 +73,12 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 14. Offertes
 - [x] Widget "Geaccepteerd" groen (aantal en bedrag)
-- [ ] Openen: spacing, geen printscherm, dezelfde PDF als het dashboard (A4), terug kunnen
-- [ ] PDF-weergave schermvullend met tik-laag (sluiten, delen, evt. printen)
+- [x] Openen: zijmarges in het detailpaneel (inhoud scrolt nu ook), geen printscherm meer, dezelfde PDF als het dashboard (A4; byte-gelijk getest op BB-149 en BB-F140, pdfOpbouw.js uit het dashboard overgenomen met een test die afwijkingen meldt), terug met het kruisje
+- [x] PDF-weergave schermvullend met tik-laag (`PdfWeergave`): kruisje, Delen (iPhone/iPad: deelmenu met Druk af), Printen als aparte knop waar delen niet kan printen (Android, computer). Pagina's als A4 onder elkaar, knijpen om te zoomen. Op web via iframe, in de app via WebView, zelfde pagina (pdf.js)
 - [ ] Alle functies gecontroleerd
 
 ### 15. Facturen
-- [ ] Zelfde PDF-weergave en fixes als offertes
+- [x] Zelfde PDF-weergave en fixes als offertes; "PDF bekijken" toont het bewaarde bestand (wat de klant kreeg, of het origineel uit de boekhouding) en anders de PDF zoals het dashboard hem maakt — gelijk aan de paperclip in het dashboard
 - [x] Groen voor betaald (tegel "Betaald deze maand")
 - [ ] Alle functies gecontroleerd
 

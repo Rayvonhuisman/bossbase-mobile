@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Lock, Plus, Receipt, Trash2 } from 'lucide-react-native';
@@ -33,7 +33,6 @@ import {
   FACTUUR_STATUS_OPTIES,
   createCreditFactuur,
   getFactuurDetail,
-  getFactuurPdfUrl,
   getFactuurRegels,
   listFacturenMetDocument,
   type FactuurDetail,
@@ -51,7 +50,7 @@ import {
 } from '@/services/factuurService';
 import { listCustomers } from '@/services/customerService';
 import { listProjects } from '@/services/projectService';
-import { getCompany, getCompanySettings, type CompanyRow } from '@/services/settingsService';
+import { getCompanySettings } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import {
   berekenTotalen,
@@ -70,10 +69,7 @@ import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
 import { useSchermklasse } from '@/lib/schermklasse';
-import { drukHtmlAf, kanAfdrukken } from '@/lib/afdrukken';
-import { bouwDocumentHtml } from '@/lib/documentHtml';
 import {
-  bedrijfVoorDocument,
   documentTotalen,
   FACTUUR_FILTERS,
   factuurKpis,
@@ -86,6 +82,7 @@ import {
   type FactuurFilter,
 } from '@/lib/documentLogica';
 import { Paneel } from '@/components/Paneel';
+import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
 import {
   DetailRij,
   DocumentStatusBadge,
@@ -178,7 +175,6 @@ function InvoicesScreenInhoud() {
   const vandaag = vandaagIso();
 
   const [items, setItems] = useState<FactuurRow[]>([]);
-  const [bedrijf, setBedrijf] = useState<CompanyRow | null>(null);
   const [metDocument, setMetDocument] = useState<Set<string>>(new Set());
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useOnthouden<FactuurFilter>(
@@ -193,7 +189,6 @@ function InvoicesScreenInhoud() {
   const [detailRegels, setDetailRegels] = useState<FactuurRegel[]>([]);
   const [detailLaden, setDetailLaden] = useState(false);
   const [detailFout, setDetailFout] = useState<string | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
   const [projecten, setProjecten] = useState<SelectOption[]>([]);
   const [instellingen, setInstellingen] = useState({
@@ -225,16 +220,14 @@ function InvoicesScreenInhoud() {
   const load = useCallback(async () => {
     setError(null);
 
-    const [factRes, klantRes, projRes, instRes, eenheidRes, bedrijfRes, docRes] = await Promise.all([
+    const [factRes, klantRes, projRes, instRes, eenheidRes, docRes] = await Promise.all([
       listFacturen(),
       listCustomers(),
       listProjects(),
       getCompanySettings(),
       listEigenEenheden(),
-      getCompany(),
       listFacturenMetDocument(),
     ]);
-    if (!bedrijfRes.error) setBedrijf(bedrijfRes.data);
     setMetDocument(docRes);
 
     if (factRes.error) setError(factRes.error);
@@ -279,17 +272,11 @@ function InvoicesScreenInhoud() {
     setDetailData(null);
     setDetailRegels([]);
     setDetailFout(null);
-    setPdfUrl(null);
     setDetailLaden(true);
-    const [d, r, url] = await Promise.all([
-      getFactuurDetail(f.id),
-      getFactuurRegels(f.id),
-      metDocument.has(f.id) ? getFactuurPdfUrl(f.id) : Promise.resolve(null),
-    ]);
+    const [d, r] = await Promise.all([getFactuurDetail(f.id), getFactuurRegels(f.id)]);
     setDetailData(d.data);
     setDetailRegels(r.data);
     setDetailFout(d.error ?? r.error);
-    setPdfUrl(url);
     setDetailLaden(false);
   };
 
@@ -300,69 +287,16 @@ function InvoicesScreenInhoud() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (f) void openDetail(f);
     router.setParams({ id: undefined });
-    // `openDetail` is een gewone functie (nieuw bij elke render); alleen een
-    // nieuwe id of een geladen lijst moet dit opnieuw laten lopen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, items, router]);
 
-  const openPdf = () => {
-    if (pdfUrl) {
-      void Linking.openURL(pdfUrl);
-      return;
-    }
-    Dialog.alert('Niet gelukt', 'De bewaarde PDF kon niet worden geopend. Probeer het opnieuw.');
-  };
-
-  const afdrukken = () => {
-    if (!detail) return;
-    if (!kanAfdrukken()) {
-      Dialog.alert(
-        'Afdrukken via de webversie',
-        'In de app staat de volledige factuur hierboven. Afdrukken of als PDF bewaren kan in de ' +
-          'webversie (app.bossbase.nl) of in het dashboard.',
-      );
-      return;
-    }
-    const d = detailData;
-    const regels = detailRegels.map((r) => ({
-      omschrijving: r.omschrijving,
-      aantal: r.aantal,
-      prijs: r.eenheidsprijs,
-      btwPct: r.btw_pct,
-      btwRegime: r.btw_regime,
-      bedrag: r.regelprijs,
-    }));
-    const html = bouwDocumentHtml({
-      soort: 'factuur',
-      nummer: detail.nummer,
-      datum: detail.factuurdatum,
-      vervaldatum: detail.vervaldatum,
-      kenmerk: detail.betalingskenmerk,
-      creditNote: detail.is_credit ? alsTekst(detail.notities) : null,
-      isCredit: Boolean(detail.is_credit),
-      bedrijf: bedrijfVoorDocument(d ?? {}, bedrijf),
-      klant: d?.customer
-        ? {
-            naam: d.customer.name,
-            adres: d.customer.address,
-            postcode: d.customer.postcode,
-            plaats: d.customer.city,
-            email: d.customer.email,
-            telefoon: d.customer.phone,
-            kvk: d.customer.kvk_number,
-            btw: d.customer.btw_number,
-          }
-        : null,
-      regels,
-      totalen: documentTotalen(
-        regels.map((r) => ({ bedrag: r.bedrag, btwPct: r.btwPct, btwRegime: r.btwRegime })),
-      ),
-      notitie: detail.is_credit ? null : alsTekst(detail.notities),
-    });
-    if (!drukHtmlAf(html)) {
-      Dialog.alert('Niet gelukt', 'De afdrukweergave kon niet worden geopend.');
-    }
-  };
+  /**
+   * PDF bekijken (`PdfWeergave`), zoals de paperclip in het dashboard: het
+   * bewaarde bestand als dat er is (wat de klant kreeg, of het origineel uit
+   * de boekhouding), anders dezelfde PDF die het dashboard opbouwt.
+   */
+  const [pdfDoc, setPdfDoc] = useState<PdfDocument | null>(null);
+  const bekijkPdf = (f: FactuurRow) =>
+    setPdfDoc({ soort: 'factuur', id: f.id, titel: `Factuur ${f.nummer ?? ''}`.trim(), opgeslagenEerst: true });
 
   const crediteren = (f: FactuurRow) => {
     Dialog.alert(
@@ -719,18 +653,10 @@ function InvoicesScreenInhoud() {
         voet={
           detail ? (
             <View style={styles.knoppen}>
-              {metDocument.has(detail.id) ? (
+              {metDocument.has(detail.id) || !detailGeimporteerd ? (
                 <Button
-                  label={detailGeimporteerd ? 'Origineel document' : 'Bewaarde PDF openen'}
-                  onPress={openPdf}
-                  disabled={detailLaden}
-                  style={styles.knop}
-                />
-              ) : !detailGeimporteerd ? (
-                <Button
-                  label="Bekijken / afdrukken"
-                  onPress={afdrukken}
-                  disabled={detailLaden}
+                  label={detailGeimporteerd ? 'Origineel document' : 'PDF bekijken'}
+                  onPress={() => bekijkPdf(detail)}
                   style={styles.knop}
                 />
               ) : null}
@@ -785,7 +711,7 @@ function InvoicesScreenInhoud() {
         }
       >
         {detail ? (
-          <View style={{ gap: spacing.md }}>
+          <ScrollView contentContainerStyle={styles.detailInhoud} keyboardShouldPersistTaps="handled">
             {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
             {saveError ? <NoticeBanner toon="fout" message={saveError} /> : null}
             <View>
@@ -865,8 +791,10 @@ function InvoicesScreenInhoud() {
             <Text style={styles.uitleg}>
               Versturen per mail en herinneringen sturen doe je in het dashboard.
             </Text>
-          </View>
+          </ScrollView>
         ) : null}
+        {/* In het paneel, zodat hij op iOS bovenop het paneel opent. */}
+        <PdfWeergave document={pdfDoc} onSluit={() => setPdfDoc(null)} />
       </Paneel>
 
       {/* Factuur aanmaken / bewerken */}
@@ -1128,6 +1056,8 @@ function InvoicesScreenInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+    // Het paneel zelf heeft geen opvulling: de inhoud scrolt en houdt afstand tot de rand.
+    detailInhoud: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
     trailing: { alignItems: 'flex-end', gap: 4 },
     zoekRij: { paddingHorizontal: 16, paddingTop: 14 },
     knoppen: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
