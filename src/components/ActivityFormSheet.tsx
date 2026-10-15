@@ -4,7 +4,9 @@ import { FormField } from './FormField';
 import { DateField, TimeField } from './DateField';
 import { FormSheet } from './FormSheet';
 import { SelectField, type SelectOption } from './SelectField';
-import { useAuth, usePermissions, useTheme } from '@/providers';
+import { useAuth, usePermissions, useTheme, useToast } from '@/providers';
+import { afspraakDatum } from '@/lib/autoMail';
+import { stuurAfspraakbevestiging } from '@/services/autoMailService';
 import { LedenKeuze } from './pipeline/LedenKeuze';
 import {
   ACTIVITEIT_TYPES,
@@ -120,6 +122,7 @@ export function ActivityFormSheet({
   const styles = useMemo(() => makeStyles(t), [t]);
   const { mag } = usePermissions();
   const { user } = useAuth();
+  const { toon } = useToast();
   const [stuurMail, setStuurMail] = useState(true);
   // Eindtijd zelf gekozen? Dan schuift hij niet meer mee met het begin.
   const [eindHandmatig, setEindHandmatig] = useState(false);
@@ -188,6 +191,17 @@ export function ActivityFormSheet({
             vorige,
             maker: user?.id ?? null,
             stuurMail,
+          });
+        }
+        // Nieuw bezoek bij een klant: de afspraakbevestiging, zoals het dashboard.
+        if (rij?.id && !vorm.id && vorm.type === 'visit' && vorm.customerId) {
+          void stuurAfspraakbevestiging({
+            activiteitId: rij.id,
+            customerId: vorm.customerId,
+            datum: afspraakDatum(vorm.date),
+            tijd: vorm.time || '',
+          }).then(({ resultaat, aan }) => {
+            if (resultaat === false) toon(`De afspraakbevestiging aan ${aan} is niet verstuurd.`, 'fout');
           });
         }
         onClose();
