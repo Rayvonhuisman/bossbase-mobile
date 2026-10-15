@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -49,6 +50,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [colorMode, setColorModeState] = useState<ColorMode>(() =>
     bepaalThema(leesOpgeslagenThemaDirect(), Appearance.getColorScheme()),
   );
+  /**
+   * Of er een eigen keuze (zon/maan-knop) is. Zolang dat niet zo is, volgt de
+   * app het systeem — ook als dat wisselt terwijl de app open staat.
+   */
+  const [eersteKeuze] = useState(leesOpgeslagenThemaDirect);
+  const eigenKeuze = useRef(eersteKeuze === 'light' || eersteKeuze === 'dark');
 
   // Native: de opgeslagen keuze komt asynchroon binnen en wint van het systeem.
   // Tot dan tekent de app niets (het opstartscherm staat nog).
@@ -61,6 +68,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((saved) => {
         if (mounted && (saved === 'light' || saved === 'dark')) {
+          eigenKeuze.current = true;
           setColorModeState(saved);
         }
       })
@@ -80,7 +88,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (klaar && NATIVE) SplashScreen.hideAsync().catch(() => {});
   }, [klaar]);
 
+  // Systeem wisselt (bijv. automatisch donker 's avonds): volgen zolang er
+  // geen eigen keuze is opgeslagen.
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      if (!eigenKeuze.current) setColorModeState(bepaalThema(null, colorScheme));
+    });
+    return () => sub.remove();
+  }, []);
+
   const setColorMode = useCallback((mode: ColorMode) => {
+    eigenKeuze.current = true;
     setColorModeState(mode);
     AsyncStorage.setItem(STORAGE_KEY, mode).catch(() => {
       // Persistence is best-effort; the in-memory state still updates.
@@ -88,6 +106,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleColorMode = useCallback(() => {
+    eigenKeuze.current = true;
     setColorModeState((prev) => {
       const next: ColorMode = prev === 'light' ? 'dark' : 'light';
       AsyncStorage.setItem(STORAGE_KEY, next).catch(() => {});

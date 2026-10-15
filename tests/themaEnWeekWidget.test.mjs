@@ -57,3 +57,13 @@ test('weekurenwidget: op iPad onder de kolommen over de volle breedte, op telefo
   const overzicht = bron.indexOf('Overzicht: de cijfertegels');
   assert.ok(kolommenEinde > 0 && kolommenEinde < overzicht, 'tussen de kolommen en het overzicht');
 });
+
+test('zonder eigen keuze volgt het thema een systeemwissel; geen tweede bediening in Mijn profiel', () => {
+  const provider = lees('src/providers/ThemeProvider.tsx');
+  assert.match(provider, /Appearance\.addChangeListener/);
+  assert.match(provider, /if \(!eigenKeuze\.current\) setColorModeState/);
+  // Splash blijft staan tot de keuze gelezen is (native).
+  assert.match(provider, /SplashScreen\.preventAutoHideAsync/);
+  const profiel = lees('src/components/instellingen/ProfielTab.tsx');
+  assert.doesNotMatch(profiel, /Weergave|THEMA_OPTIES|setVoorkeur|toggleColorMode/);
+});
