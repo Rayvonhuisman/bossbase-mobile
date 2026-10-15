@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { FormField } from './FormField';
 import { FormSheet } from './FormSheet';
@@ -21,6 +22,8 @@ export function DocumentMailSheet({
   concept,
   onWijzig,
   melding,
+  kop,
+  vereistOnderwerp,
   saving,
   error,
   onVerstuur,
@@ -34,6 +37,10 @@ export function DocumentMailSheet({
   onWijzig: (c: MailConcept) => void;
   /** Bijvoorbeeld de ondertekenlink; staat boven de velden. */
   melding?: string | null;
+  /** Extra veld boven Aan, bijvoorbeeld de sjabloonkeuze op de klantkaart. */
+  kop?: ReactNode;
+  /** Versturen pas met een onderwerp (de losse klantmail; documenten hebben er altijd een). */
+  vereistOnderwerp?: boolean;
   saving: boolean;
   error: string | null;
   onVerstuur: () => void;
@@ -48,7 +55,7 @@ export function DocumentMailSheet({
       error={error}
       saving={saving}
       submitLabel={saving ? 'Versturen...' : 'Versturen'}
-      submitDisabled={laden || !concept.aan.trim()}
+      submitDisabled={laden || !concept.aan.trim() || (vereistOnderwerp && !concept.onderwerp.trim())}
       onSubmit={onVerstuur}
       onClose={onSluit}
     >
@@ -59,6 +66,7 @@ export function DocumentMailSheet({
       ) : (
         <>
           {melding ? <NoticeBanner toon="info" message={melding} /> : null}
+          {kop}
           <FormField
             label="Aan"
             value={concept.aan}

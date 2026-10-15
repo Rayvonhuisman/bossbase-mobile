@@ -116,6 +116,11 @@ export type NoteInput = {
   body: string;
   /** Verplicht: de tijdlijn hangt altijd aan een klant (`customer_id` NOT NULL). */
   customer_id: string;
+  /**
+   * Kant-en-klare HTML met @-vermeldingen (`tekstMetVermeldingen`, die zelf
+   * escapet). Zonder: `body` als platte tekst, ge-escaped.
+   */
+  html?: string;
 };
 
 function valideer(input: NoteInput): string | null {
@@ -132,7 +137,7 @@ export async function createNote(input: NoteInput): Promise<WriteResult<NoteRow>
   const payload = withCompanyId({
     customer_id: input.customer_id,
     type: NOTITIE_TYPE,
-    omschrijving: alsHtml(input.body),
+    omschrijving: input.html ?? alsHtml(input.body),
     aangemaakt_op: new Date().toISOString(),
     // Net als het dashboard: expliciet meegeven wie het schreef. De kolom heeft
     // ook een default (`auth.uid()`), maar dan staat het nergens zwart op wit.

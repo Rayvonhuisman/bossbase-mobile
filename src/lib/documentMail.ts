@@ -396,6 +396,46 @@ export function factuurMailHtml(input: {
   });
 }
 
+// ── Losse mail aan een klant (E-mails op de klantkaart) ───────────────────
+
+/**
+ * Onderwerp en tekst na het kiezen van een sjabloon (`handleTemplateSelect` in
+ * CustomerPage): alleen `{{klant_naam}}` en `{{bedrijfsnaam}}` worden ingevuld,
+ * met "klant" en "BossBase" als terugval. Zonder sjabloon: leeg.
+ */
+export function klantMailConcept(input: {
+  sjabloon: MailSjabloon;
+  klantNaam: string | null | undefined;
+  bedrijfsnaam: string | null | undefined;
+}): { onderwerp: string; tekst: string } {
+  if (!input.sjabloon) return { onderwerp: '', tekst: '' };
+  const vars = { klant_naam: input.klantNaam || 'klant', bedrijfsnaam: input.bedrijfsnaam || 'BossBase' };
+  return {
+    onderwerp: substituteVars(input.sjabloon.onderwerp || '', vars),
+    tekst: substituteVars(input.sjabloon.body || '', vars),
+  };
+}
+
+/**
+ * De HTML die verstuurd wordt (`handleSendEmail`): de tekst, of zonder tekst
+ * het onderwerp als alinea, in de zakelijke mail met het bedrijfslogo. Het
+ * dashboard zet dat onderwerp er onge-escaped in; hier ge-escaped.
+ */
+export function klantMailHtml(input: {
+  onderwerp: string;
+  tekst: string;
+  bedrijfsnaam: string | null | undefined;
+  logoUrl?: string | null;
+}): string {
+  const body = input.tekst.trim() ? tekstNaarHtml(input.tekst) : `<p>${escapeHtml(input.onderwerp)}</p>`;
+  return zakelijkeMail({
+    titel: input.onderwerp,
+    body,
+    bedrijfsnaam: input.bedrijfsnaam || 'Ons bedrijf',
+    logoUrl: input.logoUrl,
+  });
+}
+
 /** Geldig genoeg om te versturen: het dashboard eist alleen een adres. */
 export function heeftOntvanger(aan: string): boolean {
   return aan.trim().length > 0;

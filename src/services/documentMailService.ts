@@ -45,6 +45,64 @@ export async function getMailSjabloon(type: string): Promise<{ data: MailSjabloo
   };
 }
 
+export type KlantMailSjabloon = { id: string; type: string; naam: string; onderwerp: string; body: string };
+
+/**
+ * De sjablonen in de keuzelijst van het schrijfvak op de klantkaart:
+ * `getEmailTemplates().filter(t => t.actief)`, gesorteerd op type. De body
+ * wordt platte tekst, zoals bij `getMailSjabloon`.
+ */
+export async function listKlantMailSjablonen(): Promise<{ data: KlantMailSjabloon[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('email_templates')
+    .select('id, type, name, onderwerp, body, actief')
+    .eq('actief', true)
+    .order('type', { ascending: true });
+  if (error) {
+    console.warn('[documentMailService.listKlantMailSjablonen]', error.message);
+    return { data: [], error: 'De e-mailsjablonen konden niet worden geladen.' };
+  }
+  type Rij = { id: string; type: string | null; name: string | null; onderwerp: string | null; body: string | null };
+  return {
+    data: ((data as Rij[]) ?? []).map((r) => {
+      const body = r.body ?? '';
+      return {
+        id: r.id,
+        type: r.type ?? '',
+        naam: r.name || r.type || 'Sjabloon',
+        onderwerp: r.onderwerp ?? '',
+        body: /<[a-zA-Z]/.test(body) ? alsTekst(body) : body,
+      };
+    }),
+    error: null,
+  };
+}
+
+export type VerstuurdeMail = {
+  id: string;
+  to_email: string | null;
+  subject: string | null;
+  body_html: string | null;
+  related_type: string | null;
+  sent_at: string | null;
+};
+
+/** `getSentEmailsByCustomer`: de mails aan deze klant, nieuwste eerst. */
+export async function listVerstuurdeMails(
+  customerId: string,
+): Promise<{ data: VerstuurdeMail[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('sent_emails')
+    .select('id, to_email, subject, body_html, related_type, sent_at')
+    .eq('customer_id', customerId)
+    .order('sent_at', { ascending: false });
+  if (error) {
+    console.warn('[documentMailService.listVerstuurdeMails]', error.message);
+    return { data: [], error: 'De verstuurde e-mails konden niet worden geladen.' };
+  }
+  return { data: (data as VerstuurdeMail[]) ?? [], error: null };
+}
+
 /** Het bedrijf zoals het dashboard het kent (`toCompany`), voor mail en snapshot. */
 export async function getBedrijfVoorDocument(): Promise<PdfBedrijf | null> {
   const companyId = getCompanyId();
@@ -120,16 +178,21 @@ export async function logVerstuurdeMail(input: {
   toEmail: string;
   subject: string;
   bodyHtml: string;
-  relatedType: 'offerte' | 'factuur';
-  relatedId: string;
+  /**
+   * 'offerte' of 'factuur' bij een document; bij een losse mail vanaf de
+   * klantkaart het type van het gekozen sjabloon, of null (zoals het dashboard:
+   * `relatedType: tpl?.type || null`).
+   */
+  relatedType: string | null;
+  relatedId?: string | null;
   customerId: string | null;
 }): Promise<void> {
   const payload = withCompanyId({
     to_email: input.toEmail,
     subject: input.subject,
     body_html: input.bodyHtml || null,
-    related_type: input.relatedType,
-    related_id: input.relatedId,
+    related_type: input.relatedType || null,
+    related_id: input.relatedId || null,
     customer_id: input.customerId || null,
     status: 'sent',
   });
