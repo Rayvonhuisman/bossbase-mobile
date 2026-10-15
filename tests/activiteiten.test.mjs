@@ -154,3 +154,10 @@ test('overzicht: nieuwe aanvragen deze week tegen vorige week', () => {
   assert.deepEqual(O.aanvragenPerWeek([d(1), d(3), d(8), d(20)], nu), { dezeWeek: 2, delta: 1 });
   assert.deepEqual(O.aanvragenPerWeek([{ created_at: null }, { created_at: null }], nu), { dezeWeek: 2, delta: 2 });
 });
+
+test('activiteit: eindtijd standaard een kwartier na het begin (addMins van het dashboard)', async () => {
+  const D = await import('../src/lib/datum.ts');
+  assert.equal(D.plusMinuten('09:00', 15), '09:15');
+  assert.equal(D.plusMinuten('23:50', 15), '00:05');
+  assert.equal(D.plusMinuten('', 15), '');
+});

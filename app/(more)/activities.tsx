@@ -29,6 +29,7 @@ import {
   type ActivityRow,
 } from '@/services/activityService';
 import { listCustomers } from '@/services/customerService';
+import { listDeals } from '@/services/dealService';
 import { listCompanyProfiles } from '@/services/teamService';
 import {
   activiteitStatus,
@@ -87,6 +88,7 @@ export default function ActivitiesScreen() {
 
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
+  const [projecten, setProjecten] = useState<(SelectOption & { customerId: string | null })[]>([]);
   const [team, setTeam] = useState<TeamLid[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [concept, setConcept] = useState<ActivityConcept | null>(null);
@@ -106,10 +108,11 @@ export default function ActivitiesScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [actRes, klantRes, teamRes] = await Promise.all([
+    const [actRes, klantRes, teamRes, dealRes] = await Promise.all([
       listAllActivities(),
       listCustomers(),
       listCompanyProfiles(),
+      listDeals(),
     ]);
     if (actRes.error) setError(actRes.error);
     else setItems(actRes.data);
@@ -120,6 +123,11 @@ export default function ActivitiesScreen() {
       );
     }
     if (!teamRes.error) setTeam(teamRes.data);
+    if (!dealRes.error) {
+      setProjecten(
+        dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Project', sub: d.customer?.name ?? undefined, customerId: d.customer_id })),
+      );
+    }
   }, []);
 
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
@@ -380,6 +388,7 @@ export default function ActivitiesScreen() {
         concept={concept}
         klanten={klanten}
         medewerkers={medewerkersVoorFormulier}
+        projecten={projecten}
         magBewerken={magBewerken}
         onClose={() => setConcept(null)}
         onSaved={() => herlaad()}

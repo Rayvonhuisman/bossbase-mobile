@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { buildDueAt, isGeldigeDatum, isGeldigeTijd } from '@/lib/nlTijd';
+import { buildDueAt, isGeldigeDatum, isGeldigeTijd, splitsLokaal } from '@/lib/nlTijd';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { listAgendaEvents, listWerkbonnenInBereik, type PlanWerkbon } from './planningService';
@@ -38,8 +38,8 @@ const CALENDAR_COLUMNS = `
 // maar GEEN `body`, `author` of `completed_at`. Wel: type, due_at, completed,
 // customer_id, deal_id, assigned_to.
 const ACTIVITY_COLUMNS = `
-  id, company_id, customer_id, deal_id, assigned_to, title, type, notes,
-  due_at, completed, created_at,
+  id, company_id, customer_id, deal_id, assigned_to, assigned_to_ids, title, type, notes,
+  due_at, end_time, location, completed, created_at,
   customer:customers ( id, name, phone, address, postcode, city )
 `;
 
@@ -77,6 +77,9 @@ export type ActivityRow = {
   /** Omschrijving/notities — echte kolom is `notes` (geen `body`). */
   notes: string | null;
   due_at: string | null;
+  /** HH:mm(:ss) eindtijd op dezelfde dag; leeg = geen. */
+  end_time?: string | null;
+  location?: string | null;
   completed: boolean;
   // Live schema: activities heeft geen `updated_at`.
   created_at: string;
@@ -432,6 +435,8 @@ export type ActivityInput = {
   assigned_to_ids?: string[] | null;
   location?: string | null;
   completed?: boolean;
+  /** HH:mm eindtijd (dashboard: start + 15 min tenzij zelf gekozen). */
+  end_time?: string | null;
 };
 
 function mapActivityInput(input: Partial<ActivityInput>): Record<string, unknown> {
@@ -464,6 +469,7 @@ function mapActivityInput(input: Partial<ActivityInput>): Record<string, unknown
   }
 
   if (input.completed !== undefined) payload.completed = Boolean(input.completed);
+  if (input.end_time !== undefined) payload.end_time = input.end_time || null;
 
   return payload;
 }
@@ -477,6 +483,7 @@ function valideerActivity(input: Partial<ActivityInput>, nieuw: boolean): string
     if (input.time && !isGeldigeTijd(input.time)) return 'Vul een geldige tijd in (uu:mm).';
   }
   if (!input.date && input.time) return 'Kies eerst een datum bij deze tijd.';
+  if (input.end_time && !isGeldigeTijd(input.end_time)) return 'Vul een geldige eindtijd in (uu:mm).';
   return null;
 }
 
@@ -523,10 +530,86 @@ export async function updateActivity(
     return writeFout('validatie', 'Er is niets gewijzigd.');
   }
 
-  return schrijf<ActivityRow>(
+  const res = await schrijf<ActivityRow>(
     () => supabase.from('activities').update(updates).eq('id', id).select(ACTIVITY_COLUMNS),
     { context: 'activityService.updateActivity', bedrijfReadonly: isReadonly() },
   );
+  // Een gekoppeld agenda-item loopt mee, zoals het dashboard (syncLinkedActivityEvent).
+  if (res.ok && res.data) await syncGekoppeldAgendaItem(res.data);
+  return res;
+}
+
+/**
+ * Houdt het agenda-item van een ingeplande activiteit (`calendar_events.activiteit_id`)
+ * gelijk aan de activiteit — `syncLinkedActivityEvent` + `upsertActivityEvent`
+ * van het dashboard. Alleen een bestaand item; nooit een nieuw. Best effort.
+ */
+async function syncGekoppeldAgendaItem(a: ActivityRow): Promise<void> {
+  try {
+    const { data: bestaand } = await supabase
+      .from('calendar_events')
+      .select('id')
+      .eq('activiteit_id', a.id)
+      .maybeSingle();
+    if (!bestaand) return;
+    const { date, time } = splitsLokaal(a.due_at);
+    const t = afspraakTijden(date, time, a.end_time ? String(a.end_time).slice(0, 5) : '');
+    await supabase
+      .from('calendar_events')
+      .update({
+        title: a.title || 'Activiteit',
+        customer_id: a.customer_id || null,
+        location: a.location || null,
+        // Het dashboard geeft hier geen omschrijving mee en zet de notities leeg.
+        notes: null,
+        assigned_to: a.assigned_to || null,
+        start_at: t.start_at,
+        end_at: t.end_at,
+      })
+      .eq('id', (bestaand as { id: string }).id);
+  } catch {
+    // Synchroniseren is een extra; de activiteit zelf is opgeslagen.
+  }
+}
+
+/**
+ * Wie nieuw aan een activiteit is toegewezen, hoort het — `notifyNewAssignees`
+ * (type `toewijzing_activiteit`) van het dashboard, met optioneel een mail. De
+ * Edge Function `create-notification` zoekt het adres zelf op. Jezelf niet.
+ */
+export async function meldActiviteitToewijzing(o: {
+  activiteitId: string;
+  titel: string;
+  datum: string | null;
+  toegewezen: string[];
+  vorige?: string[];
+  maker: string | null;
+  stuurMail: boolean;
+}): Promise<void> {
+  const vorig = new Set(o.vorige ?? []);
+  const nieuw = [...new Set(o.toegewezen)].filter((id) => id && !vorig.has(id) && id !== o.maker);
+  if (!nieuw.length) return;
+  const datum = o.datum
+    ? new Date(`${o.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+    : null;
+  try {
+    await supabase.functions.invoke('create-notification', {
+      body: {
+        notifications: nieuw.map((uid) => ({
+          user_id: uid,
+          type: 'toewijzing_activiteit',
+          title: `Je bent toegewezen aan ${o.titel}`,
+          body: datum ? `Datum: ${datum}` : null,
+          link: 'activities',
+          related_type: 'activiteit',
+          related_id: o.activiteitId,
+          ...(o.stuurMail ? { email: true } : {}),
+        })),
+      },
+    });
+  } catch {
+    // Een melding mag het opslaan nooit tegenhouden.
+  }
 }
 
 /** Afronden en heropenen — `completeActivity`/`reopenActivity` uit het dashboard. */

@@ -88,3 +88,12 @@ export function minutenVanTijd(waarde: string): number {
   const [u, m] = waarde.split(':').map(Number);
   return (u ?? 0) * 60 + (m ?? 0);
 }
+
+/** "09:00" + 15 → "09:15" (`addMins` van het dashboard). */
+export function plusMinuten(tijd: string, min: number): string {
+  if (!/^\d{1,2}:\d{2}/.test(tijd)) return '';
+  const [u, m] = tijd.split(':').map(Number);
+  if (u === undefined || Number.isNaN(u)) return '';
+  const totaal = (((u * 60 + (m || 0) + min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(totaal / 60)).padStart(2, '0')}:${String(totaal % 60).padStart(2, '0')}`;
+}
