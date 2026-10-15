@@ -34,8 +34,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Inhoud (afspraken, werkbonnen per geplande dag met jouw tijd, ingeplande activiteiten via hun agenda-item) gelijk aan dashboard; persoonlijk, met gedeelde werkruimte alles. Een ingeplande activiteit opent nu de activiteit (was het afspraakformulier, alleen-lezen)
 - [x] Weergaven: dag/week/maand zoals het dashboard; uurvenster nu uit Instellingen (`agenda_start_uur`/`agenda_eind_uur`, standaard 07–20) i.p.v. vast 08–17. Bewust anders gelaten (ontwerp app): maandweergave met stippen i.p.v. titels, weekblokjes niet los aantikbaar (tik op de dag toont de lijst)
 - [x] Afspraak aanmaken/wijzigen met de velden van het dashboard: titel, type (Afspraak/Klus/Opname/Activiteit — werd niet opgeslagen), datum, van/tot (nieuw 09:00–10:00, eind schuift mee, leeg = een uur; bewerken wiste de eindtijd), klant, project (nieuw), locatie (adres zoeken), notities; "Klant openen" / "Project openen"; klanttijdlijn "Afspraak ingepland: … op 15 okt" zoals het dashboard. Getest: aangemaakt, gecontroleerd in de database, verwijderd. Het dashboard kent geen deelnemers, herinnering of herhaling bij een afspraak
-- [ ] Notitielog met @vermeldingen bij een afspraak (dashboard: `comments` + meldingen) — de @-vermeldingen bestaan nu (werkbon, project); nog niet bij afspraken
-- [ ] Werkbon maken vanuit een afspraak, en "Werkbon inplannen" zonder planningsmodule
+- [x] Notitielog met @vermeldingen bij een afspraak (`calendar_events.comments`, zelfde vorm als het dashboard; melding met link naar de agenda). Getest met één notitie zonder tag op "Sollicitatiegesprek" (blijft staan: een notitie verwijderen kan ook in het dashboard niet) (e2554e5)
+- [x] Werkbon maken vanuit een afspraak ("Werkbon aanmaken": titel, klant, project, datum, tijden, locatie; daarna gekoppeld) of "Werkbon openen". Getest: WB-221 uit "Sollicitatiegesprek" — blijft staan, want werkbonnen verwijderen kan in app en dashboard niet. Eigen afspraken zonder klant waren in de weekweergave niet aan te tikken; opgelost (e2554e5)
 
 ### 7. Planning
 - [x] Kalender in de stijl van de agenda: weekstrip met dag, datum en stip (tik = die dag), dag/week, per medewerker en per voertuig; periodelabel past op de telefoon
@@ -97,9 +97,9 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 Uit de rondgang (15-10), op volgorde van impact:
 - [x] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken. Getest: alleen de nieuw toegewezene kreeg de melding, testactiviteit en agenda-item verwijderd (357789c)
 - [x] Activiteiten: afspraakbevestiging per mail bij een nieuw bezoek (`triggerAutoEmail`: sjabloon van het bedrijf of de standaard, uitgezet = niets, archief, mailfout vastgelegd). Getest met testklant Bram van Dijk (eigen alias), testbezoeken verwijderd (69a4c64)
-- [ ] Registratie in de app: bedrijfsnaam, branche, telefoon, KvK en pakket gaan niet mee, en het akkoord met de voorwaarden wordt niet vastgelegd. Erger: er komt geen verificatiecode en dus geen bedrijf (verify-code), en het voorwaardenvinkje staat standaard aan — in bewerking (branch wt/registratie)
-- [ ] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard)
-- [ ] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`)
+- [x] Registratie in de app gelijk aan het dashboard: pakketkeuze (Groei/Team) i.p.v. rolkeuze, bedrijf met branche/telefoon/KvK, wachtwoordeisen + herhalen, akkoordtekst met links (geen voorgevinkt vakje), akkoord vastleggen, 6-cijferige code (`verify-code` maakt het bedrijf), en wie onbevestigd inlogt krijgt het codescherm (6a69bc3). Ongetest: een echte aanmelding tegen productie (zou een bedrijf aanmaken en mail sturen), native
+- [x] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard) (8354544)
+- [x] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`) aan een bestaande klant, zoals het dashboard. Getest met Bram van Dijk (eigen alias); de testaanvraag kon niet weg (aanvragen verwijderen kan nergens) en staat op Verloren met toelichting (014efed)
 - [x] Klantkaart: "+" bij offerte/factuur/project opent een nieuw item met de klant ingevuld, met dezelfde rechten (0852a7b)
 - [ ] Klantkaart: tabbladen E-mails en Tijdlijn
 - [ ] @-vermeldingen met melding in notities (klant, activiteit, afspraak) — werkbon en project hebben ze (één gedeelde implementatie, `lib/mentions`)
@@ -116,6 +116,7 @@ Uit de rondgang (15-10), op volgorde van impact:
 - [x] Projectkaart: geen route-knop → Bel/Mail/Route in het aanvraagblok
 - [x] Werkbon: route-knop bouwde een eigen Google-link (iOS opende een webpagina)
 - [x] iPad in de app: `supportsTablet` aan, iPad alle standen (staand en liggend), iPhone blijft staand, Android-telefoons staand (vergrendeld bij starten), tablets draaien mee. De tabletindeling werkt nu ook in de app (was alleen web), met dezelfde gecentreerde kolom als de webapp (`MobielKader`). Werkt pas na een nieuwe build — niet zelf gebouwd of gepubliceerd
+- [x] Pipeline: het ⋮-menu had geen zijmarge (opties tegen de rand) (02459dc)
 - [x] Web/PWA: horizontaal scrollen (filterchips, tabs, weekstrook) sprong na elke veeg terug naar het begin — `zichtbareViewport` zette elk element met `overflow-y: hidden` terug, ook horizontale ScrollViews. Nu per as. De actieve chip schuift ook vanzelf in beeld (ba15ad4)
 - [x] Weergave "Zoals het apparaat" volgde in de app nooit donker: `userInterfaceStyle` stond op `light`; nu `automatic`
 
@@ -159,6 +160,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 15-10 — Registratie samengevoegd; agenda (werkbon uit afspraak, notitielog), nieuwe werkbon en nieuwe aanvraag gelijk aan het dashboard.
 - 15-10 — Documenten- en werkbon-branches samengevoegd; klantkaart "+", wachtwoord vergeten, afspraakbevestiging. Financiën en registratie uitbesteed aan agents.
 - 15-10 — Activiteiten af (meerdere toegewezenen, melding). Projectkaart-branch samengevoegd. Bug horizontaal scrollen op web gevonden en opgelost.
 - 15-10 — Planning: bewerken (tijd, inplannen), agenda-look, meldingen per dag, mail bij toewijzen.
