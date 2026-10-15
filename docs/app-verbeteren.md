@@ -18,8 +18,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 ## Algemeen
 
 - [ ] 1. Filters (en tabbladen) onthouden per gebruiker op elke lijstpagina
-- [ ] 2. "bus/bussen" → "voertuig/voertuigen" in de hele app
-- [ ] 3. Route-knop opent de kaartenapp (Apple Kaarten; Google Maps als geïnstalleerd of op Android), overal
+- [x] 2. "bus/bussen" → "voertuig/voertuigen" in de hele app (4 teksten: werkbonformulier ×2, Instellingen › Voertuigen ×2; verder alleen code-namen)
+- [x] 3. Route-knop opent de kaartenapp: één helper (`lib/routeLinks.ts`) voor klantkaart, leverancier, werkbon (bouwde eigen Google-link), agenda en homepage. iPhone/iPad: Apple Kaarten (in de app keuze als Google Maps erop staat; `LSApplicationQueriesSchemes` toegevoegd, werkt pas na een nieuwe build); Android: Google Maps-route; altijd route i.p.v. zoeken. Projectkaart krijgt een route-knop in punt 9
 - [ ] 4. Adres zoeken zoals het dashboard in elk adresformulier
 
 ## Per pagina

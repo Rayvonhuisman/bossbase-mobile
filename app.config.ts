@@ -37,6 +37,12 @@ const config: ExpoConfig = {
     bundleIdentifier: 'nl.bossbase.app',
     supportsTablet: false,
     associatedDomains: ['applinks:app.bossbase.nl'],
+    // De route-knop vraagt of Google Maps erop staat (canOpenURL) om dan de
+    // keuze Apple Kaarten / Google Maps te geven. Zonder deze regel antwoordt
+    // iOS altijd "nee".
+    infoPlist: {
+      LSApplicationQueriesSchemes: ['comgooglemaps'],
+    },
     config: {
       // Exportcompliance. BossBase gebruikt uitsluitend standaard- en daarmee
       // vrijgestelde beveiliging: HTTPS/TLS naar Supabase en de ingebouwde

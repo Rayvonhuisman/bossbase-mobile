@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Dialog } from '@/lib/dialog';
+import { openMaps } from '@/lib/linking';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -710,9 +711,7 @@ export default function WorkOrderDetailScreen() {
                 <Text style={styles.actieTegelTekst}>Bel klant</Text>
               </Pressable>
               <Pressable
-                onPress={() =>
-                  workOrder.locatie && openUrl(`https://maps.google.com/?q=${encodeURIComponent(workOrder.locatie)}`)
-                }
+                onPress={() => openMaps(workOrder.locatie)}
                 disabled={!workOrder.locatie}
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.actieTegel, !workOrder.locatie && styles.uit, pressed && { opacity: 0.8 }]}

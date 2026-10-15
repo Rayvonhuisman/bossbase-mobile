@@ -584,13 +584,13 @@ export function WerkbonFormulier({
         {/* Voertuigen (modules planning + voertuigen) */}
         {metVoertuigen && voertuigen ? (
           <View style={styles.blok}>
-            <Text style={styles.label}>Bussen op deze klus</Text>
+            <Text style={styles.label}>Voertuigen op deze klus</Text>
             {zichtbareVoertuigen.length === 0 ? (
               <Text style={styles.hint}>Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.</Text>
             ) : (
               <>
                 <Text style={styles.hint}>
-                  Meerdere mogelijk. Wie per dag in welke bus zit, plan je op het dashboard.
+                  Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je op het dashboard.
                 </Text>
                 <View style={styles.chipRij}>
                   {zichtbareVoertuigen.map((v) => {
