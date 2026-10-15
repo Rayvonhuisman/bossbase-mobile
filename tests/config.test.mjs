@@ -25,7 +25,10 @@ test('Git-deployments: alleen main en feature/pwa-web, al het andere uit', () =>
 test('beveiligingsheaders op elke pagina', () => {
   const csp = header('/(.*)', 'Content-Security-Policy');
   assert.match(csp, /default-src 'self'/);
-  assert.match(csp, /script-src 'self'(;|$)/);
+  // Alleen eigen scripts plus het ene inline script van de PDF-weergave op
+  // zijn hash (zie tests/pdfWeergave.test.mjs); nooit unsafe-inline of een CDN.
+  assert.match(csp, /script-src 'self'( 'sha256-[A-Za-z0-9+/]+=*')?(;|$)/);
+  assert.doesNotMatch(csp, /script-src[^;]*(unsafe-inline|https?:)/);
   assert.doesNotMatch(csp, /unsafe-eval/);
   assert.match(csp, /connect-src[^;]*https:\/\/mawzqpnsluljxpbarhng\.supabase\.co/);
   assert.match(csp, /frame-ancestors 'none'/);

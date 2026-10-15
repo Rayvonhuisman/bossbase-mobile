@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { magWebviewLaden, WEBVIEW_LEGE_PAGINA } from '@/lib/webviewVeilig';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { handtekeningHtml } from '@/lib/handtekeningHtml';
 import { useTheme } from '@/providers';
@@ -54,8 +55,10 @@ export function HandtekeningVak({
       >
         <WebView
           ref={ref}
-          originWhitelist={['*']}
+          originWhitelist={[WEBVIEW_LEGE_PAGINA]}
           source={{ html }}
+          onShouldStartLoadWithRequest={(r) => magWebviewLaden(r.url)}
+          allowFileAccess={false}
           onMessage={ontvang}
           scrollEnabled={false}
           bounces={false}
