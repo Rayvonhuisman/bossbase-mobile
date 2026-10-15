@@ -149,7 +149,8 @@ export function TotalenBlok({
 }
 
 /** Een tegel van het KPI-raster: label, waarde en een optionele toelichting. */
-export type Tegel = { id: string; label: string; waarde: string; uitleg?: string };
+/** `toon: 'goed'` = groen getal, voor wat positief is (geaccepteerd, betaald). */
+export type Tegel = { id: string; label: string; waarde: string; uitleg?: string; toon?: 'goed' };
 
 /**
  * KPI-raster: twee kolommen op een telefoon, alles op één rij vanaf tabletbreedte
@@ -170,11 +171,11 @@ export function TegelRaster({ tegels, breed }: { tegels: Tegel[]; breed: boolean
           <Text style={styles.tegelLabel} numberOfLines={2}>
             {tg.label}
           </Text>
-          <Text style={styles.tegelWaarde} numberOfLines={1} adjustsFontSizeToFit>
+          <Text style={[styles.tegelWaarde, tg.toon === 'goed' && { color: t.green700 }]} numberOfLines={1} adjustsFontSizeToFit>
             {tg.waarde}
           </Text>
           {tg.uitleg ? (
-            <Text style={styles.tegelUitleg} numberOfLines={2}>
+            <Text style={[styles.tegelUitleg, tg.toon === 'goed' && { color: t.green700 }]} numberOfLines={2}>
               {tg.uitleg}
             </Text>
           ) : null}

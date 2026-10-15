@@ -267,12 +267,16 @@ function ProjectsInhoud() {
           </View>
           {magBedragen ? (
             <View style={styles.kpi}>
-              <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} />
+              <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} valueTone="good" />
             </View>
           ) : null}
           {magBedragen ? (
             <View style={styles.kpi}>
-              <AppKpiCard label="Te factureren" value={formatEUR(kpi.teFactureren)} />
+              <AppKpiCard
+                label="Te factureren"
+                value={formatEUR(kpi.teFactureren)}
+                valueTone={kpi.teFactureren > 0 ? 'warn' : 'default'}
+              />
             </View>
           ) : null}
           <View style={styles.kpi}>

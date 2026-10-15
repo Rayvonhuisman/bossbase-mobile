@@ -57,7 +57,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 ### 10. Projecten
 - [ ] Projectkaart (zie 9)
 - [x] Filter onthouden (zie 1)
-- [ ] Bedragwidgets iets meer kleur
+- [x] Bedragwidgets iets meer kleur: totale projectwaarde groen, te factureren amber (als er iets openstaat), zoals "nog te factureren" in het dashboard
 
 ### 11. Relaties en klantkaart
 - [x] Adres zoeken (zie 4)
@@ -72,14 +72,14 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Gecontroleerd tegen dashboard
 
 ### 14. Offertes
-- [ ] Widget "Geaccepteerd" groen
+- [x] Widget "Geaccepteerd" groen (aantal en bedrag)
 - [ ] Openen: spacing, geen printscherm, dezelfde PDF als het dashboard (A4), terug kunnen
 - [ ] PDF-weergave schermvullend met tik-laag (sluiten, delen, evt. printen)
 - [ ] Alle functies gecontroleerd
 
 ### 15. Facturen
 - [ ] Zelfde PDF-weergave en fixes als offertes
-- [ ] Groen voor betaald
+- [x] Groen voor betaald (tegel "Betaald deze maand")
 - [ ] Alle functies gecontroleerd
 
 ### 16. Kosten

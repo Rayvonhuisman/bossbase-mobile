@@ -585,6 +585,7 @@ function OffersScreenInhoud() {
               label: 'Geaccepteerd',
               waarde: String(kpis.geaccepteerd),
               uitleg: formatEUR(kpis.geaccepteerdBedrag),
+              toon: 'goed',
             },
           ]}
         />

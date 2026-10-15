@@ -646,7 +646,7 @@ function InvoicesScreenInhoud() {
           tegels={[
             { id: 'totaal', label: 'Totaal facturen', waarde: String(kpis.totaal) },
             { id: 'open', label: 'Openstaand', waarde: formatEUR(kpis.openstaand) },
-            { id: 'betaald', label: 'Betaald deze maand', waarde: formatEUR(kpis.betaaldDezeMaand) },
+            { id: 'betaald', label: 'Betaald deze maand', waarde: formatEUR(kpis.betaaldDezeMaand), toon: 'goed' },
             { id: 'verlopen', label: 'Verlopen', waarde: String(kpis.verlopen) },
           ]}
         />
