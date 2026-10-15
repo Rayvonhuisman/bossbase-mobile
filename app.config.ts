@@ -127,6 +127,8 @@ const config: ExpoConfig = {
           'BossBase gebruikt je fotobibliotheek om foto\'s bij werkbonnen, kostenbonnen en projecten toe te voegen.',
         cameraPermission:
           'BossBase gebruikt je camera om foto\'s bij werkbonnen, kostenbonnen en projecten vast te leggen.',
+        // De app neemt geen video op: geen microfoontoestemming in Info.plist.
+        microphonePermission: false,
       },
     ],
     [

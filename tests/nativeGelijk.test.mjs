@@ -61,3 +61,13 @@ test('Info.plist: gebruiksteksten dekken werkbon, kostenbon en project; Google M
   const pkg = JSON.parse(lees('package.json'));
   assert.equal(pkg.dependencies['expo-screen-orientation'], undefined);
 });
+
+test('interne previewbuild: eigen kanaal, wél de Supabase-variabelen van de app; geen microfoontekst', () => {
+  const eas = JSON.parse(lees('eas.json'));
+  assert.equal(eas.build.preview.distribution, 'internal');
+  assert.equal(eas.build.preview.channel, 'preview');
+  assert.equal(eas.build.preview.environment, 'production');
+  assert.equal(eas.build.production.channel, 'production');
+  assert.match(lees('app.config.ts'), /microphonePermission: false/);
+  assert.match(lees('app.config.ts'), /version: '0\.2\.0'/);
+});
