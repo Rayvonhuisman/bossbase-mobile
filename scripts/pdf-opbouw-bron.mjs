@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 export const VENDOR_MAP_DASHBOARD = 'supabase/functions/_shared';
 
 /** pdfOpbouw.js en alles wat hij importeert (en zij weer). */
-export const VENDOR_BESTANDEN = ['pdfOpbouw.js', 'documentTotalen.js', 'btwRegime.js', 'notitieTekst.js'];
+export const VENDOR_BESTANDEN = ['pdfOpbouw.js', 'documentTotalen.js', 'btwRegime.js', 'notitieTekst.js', 'werkbonPdfData.js'];
 
 export const KOP_EINDE = '// ── einde overgenomen kop ──';
 
