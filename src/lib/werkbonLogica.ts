@@ -380,6 +380,78 @@ export function dagenUitPlanning(p: Planning, ploegIds: string[] | null = null, 
   });
 }
 
+/**
+ * Eén blok in de planning op een nieuwe tijd zetten — `verzetTijd` van het
+ * dashboard (utils/werkbonDagen.js). Geeft terug wat er naar de database moet:
+ * `dagen` (voor zetWerkbonDagen) en `standaard` (de tijd van de werkbon zelf,
+ * gelijk aan die van de eerste dag).
+ *
+ * Met `pid`: alleen die persoon op die dag krijgt een eigen tijd; komt die weer
+ * gelijk aan de dagtijd, dan vervalt de eigen tijd. Zonder `pid`: de tijd van
+ * díé datum.
+ */
+export function verzetTijd(
+  werkbon: WerkbonPlanbaar & { dagen?: WerkbonDag[] | null },
+  datum: string,
+  pid: string | null,
+  nieuw: { starttijd: string; eindtijd: string },
+): { dagen: DagPayload[]; standaard: { starttijd: string; eindtijd: string } } {
+  // De planning levert de dagen als `dagen`, de werkbon zelf als `werkbon_dagen`.
+  const w: WerkbonPlanbaar = { ...werkbon, werkbon_dagen: werkbon.werkbon_dagen ?? werkbon.dagen ?? null };
+  const p = planningUitWerkbon(w);
+  if (!p.dagen.includes(datum)) throw new Error('Deze dag staat niet (meer) op de werkbon. Ververs de planning.');
+  const t = { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };
+  if (pid) {
+    const dagTijd = tijdVanDag(p, datum);
+    const eigen = { ...(p.persoonTijden[datum] ?? {}) };
+    if (t.starttijd === dagTijd.starttijd && t.eindtijd === dagTijd.eindtijd) delete eigen[pid];
+    else eigen[pid] = t;
+    p.persoonTijden = { ...p.persoonTijden, [datum]: eigen };
+  } else {
+    p.tijden = { ...p.tijden, [datum]: t };
+  }
+  const standaard = tijdVanDag(p, geplandeDatums(p)[0]!, { starttijd: w.starttijd, eindtijd: w.eindtijd });
+  const ploeg = w.assigned_to_ids?.length ? w.assigned_to_ids : w.assigned_to ? [w.assigned_to] : [];
+  return { dagen: dagenUitPlanning(p, ploeg, standaard), standaard };
+}
+
+export type DagMelding = {
+  uid: string;
+  soort: 'ingepland' | 'afgehaald';
+  dag: { datum: string; start: string; eind: string };
+};
+
+/**
+ * Per dag: wie op de werkbon blijft, kan er bij een meerdaagse klus een dag
+ * bij krijgen of er een kwijtraken — dat valt buiten "toegewezen/afgehaald".
+ * Zelfde regel als de planning in het dashboard (DetailModal): medewerker_ids
+ * null = de hele ploeg die dag, [] = niemand.
+ */
+export function dagMeldingen(o: {
+  oudeDagen: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[];
+  nieuweDagen: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[];
+  oudePloeg: string[];
+  nieuwePloeg: string[];
+  blijvers: string[];
+}): DagMelding[] {
+  const dagenVan = (
+    lijst: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[],
+    id: string,
+    ploeg: string[],
+  ) =>
+    lijst
+      .filter((d) => (d.medewerker_ids == null ? ploeg.includes(id) : d.medewerker_ids.includes(id)))
+      .map((d) => ({ datum: d.datum, start: hhmm(d.starttijd), eind: hhmm(d.eindtijd) }));
+  const uit: DagMelding[] = [];
+  for (const uid of o.blijvers) {
+    const oud = dagenVan(o.oudeDagen, uid, o.oudePloeg);
+    const nieuw = dagenVan(o.nieuweDagen, uid, o.nieuwePloeg);
+    for (const d of nieuw) if (!oud.some((x) => x.datum === d.datum)) uit.push({ uid, soort: 'ingepland', dag: d });
+    for (const d of oud) if (!nieuw.some((x) => x.datum === d.datum)) uit.push({ uid, soort: 'afgehaald', dag: d });
+  }
+  return uit;
+}
+
 /** Foutmelding of '' (controleerPlanning van het dashboard). */
 export function controleerPlanning(p: Planning, standaard: Partial<Tijdvak> = {}): string {
   const datums = geplandeDatums(p);

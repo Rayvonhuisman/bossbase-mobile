@@ -1314,6 +1314,8 @@ type NotificatieRij = {
   link?: string | null;
   related_type?: string | null;
   related_id?: string | null;
+  /** Ook mailen; de Edge Function bouwt de mail en zoekt het adres zelf op. */
+  email?: boolean;
 };
 
 async function pushNotificaties(rijen: NotificatieRij[]): Promise<void> {
@@ -1341,8 +1343,11 @@ export async function meldToewijzingen(opts: {
   vorigeUitvoerders?: string[];
   vorigeVerantwoordelijken?: string[];
   maker: string | null;
+  /** "Stuur e-mail" van het dashboard: naast de melding in de app ook een mail. */
+  stuurMail?: boolean;
 }): Promise<void> {
   const link = `werkbonnen/${opts.werkbonId}`;
+  const mail = opts.stuurMail ? { email: true } : {};
   const prevV = new Set(opts.vorigeVerantwoordelijken ?? []);
   const nieuweV = [...new Set(opts.verantwoordelijken)].filter((id) => !prevV.has(id) && id !== opts.maker);
   const prevU = new Set(opts.vorigeUitvoerders ?? []);
@@ -1358,6 +1363,7 @@ export async function meldToewijzingen(opts: {
       link,
       related_type: 'werkbon',
       related_id: opts.werkbonId,
+      ...mail,
     })),
     ...nieuweV.map((uid) => ({
       user_id: uid,
@@ -1367,6 +1373,7 @@ export async function meldToewijzingen(opts: {
       link,
       related_type: 'werkbon',
       related_id: opts.werkbonId,
+      ...mail,
     })),
   ]);
 }
@@ -1380,13 +1387,15 @@ export async function meldPlanningWijziging(opts: {
   userIds: string[];
   soort: 'verzet' | 'ingepland' | 'afgehaald';
   werkbon: { id: string; nummer: string | null; titel: string; klant: string | null };
-  oud: { datum: string | null; start: string; eind: string };
+  /** Leeg bij een dag die er nieuw bij komt. */
+  oud?: { datum: string | null; start: string; eind: string };
   nieuw?: { datum: string | null; start: string; eind: string };
   maker: string | null;
 }): Promise<void> {
   const ontvangers = [...new Set(opts.userIds.filter(Boolean))].filter((id) => id !== opts.maker);
   if (!ontvangers.length) return;
   const nieuw = opts.nieuw ?? { datum: null, start: '', eind: '' };
+  const oud = opts.oud ?? { datum: null, start: '', eind: '' };
   const omschrijf = (d: string | null, s: string) => (d ? `${d}${s ? ` om ${s}` : ''}` : 'niet ingepland');
   const titel =
     opts.soort === 'afgehaald'
@@ -1396,8 +1405,8 @@ export async function meldPlanningWijziging(opts: {
         : `Planning gewijzigd: ${opts.werkbon.titel || 'een klus'}`;
   const body =
     opts.soort === 'afgehaald'
-      ? `Was: ${omschrijf(opts.oud.datum, opts.oud.start)}`
-      : `Was ${omschrijf(opts.oud.datum, opts.oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
+      ? `Was: ${omschrijf(oud.datum, oud.start)}`
+      : `Was ${omschrijf(oud.datum, oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
   await pushNotificaties(
     ontvangers.map((uid) => ({
       user_id: uid,
@@ -1418,9 +1427,9 @@ export async function meldPlanningWijziging(opts: {
       titel: opts.werkbon.titel,
       klant: opts.werkbon.klant,
       soort: opts.soort,
-      oude_datum: opts.oud.datum || null,
-      oude_start: opts.oud.start || null,
-      oude_eind: opts.oud.eind || null,
+      oude_datum: oud.datum || null,
+      oude_start: oud.start || null,
+      oude_eind: oud.eind || null,
       nieuwe_datum: nieuw.datum || null,
       nieuwe_start: nieuw.start || null,
       nieuwe_eind: nieuw.eind || null,
