@@ -40,6 +40,7 @@ import {
 import {
   nieuweAanvragen,
   nieuwsteAanvragen,
+  aanvragenPerWeek,
   omzetDezeMaand,
   openFacturen,
   openOffertes,
@@ -341,14 +342,17 @@ export default function TodayScreen() {
     });
   };
 
+  // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep tijdens het renderen).
+  const [nuMs] = useState(() => Date.now());
   // Nieuwe aanvragen: eerste pipelinefase, nieuwste eerst (tegel `new_leads`).
   const aanvragen = useMemo(() => {
     if (!overzicht.deals || !overzicht.fases) return null;
     return {
       ...nieuweAanvragen(overzicht.deals, overzicht.fases),
       lijst: nieuwsteAanvragen(overzicht.deals, overzicht.fases, AANVRAGEN_MAX),
+      week: aanvragenPerWeek(nieuwsteAanvragen(overzicht.deals, overzicht.fases, Number.MAX_SAFE_INTEGER), nuMs),
     };
-  }, [overzicht.deals, overzicht.fases]);
+  }, [overzicht.deals, overzicht.fases, nuMs]);
 
   // De norm (8 uur per dag) gaat over werkdaguren; werkbonuren staan ernaast.
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
@@ -739,6 +743,12 @@ export default function TodayScreen() {
                     </Pressable>
                   ) : null}
                 </View>
+                {aanvragen && aanvragen.aantal > 0 ? (
+                  <Text style={styles.blockMeta}>
+                    {aanvragen.week.dezeWeek} deze week · {aanvragen.week.delta >= 0 ? '+' : ''}
+                    {aanvragen.week.delta} t.o.v. vorige week
+                  </Text>
+                ) : null}
                 {!aanvragen ? (
                   <AppCard padding={18} style={{ alignItems: 'center' }}>
                     <Text style={styles.emptyText}>{loading ? 'Laden…' : 'Aanvragen konden niet worden geladen.'}</Text>
