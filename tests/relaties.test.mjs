@@ -131,3 +131,11 @@ test('lokaleDatumTijd: middernacht is geen tijd', () => {
   assert.deepEqual(r.lokaleDatumTijd('2026-10-20T00:00:00'), { datum: '2026-10-20', tijd: null });
   assert.equal(r.lokaleDatumTijd('geen datum'), null);
 });
+
+test('betaaltermijn per klant: leeg = standaard, anders hele dagen 0–365', async () => {
+  const { leesBetaaltermijn } = await import('../src/lib/relatieValidatie.ts');
+  assert.deepEqual(leesBetaaltermijn(''), { waarde: null, fout: null });
+  assert.deepEqual(leesBetaaltermijn(' 30 '), { waarde: 30, fout: null });
+  assert.ok(leesBetaaltermijn('14,5').fout);
+  assert.ok(leesBetaaltermijn('400').fout);
+});

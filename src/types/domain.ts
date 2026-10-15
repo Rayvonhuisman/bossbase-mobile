@@ -130,6 +130,10 @@ export type Customer = {
   updated_at?: string | null;
   /** Particulier | Zakelijk | VvE | Aannemer, of null (customers_type_check). */
   type?: string | null;
+  /** Bron ("Website, aanbeveling, …"). */
+  source?: string | null;
+  /** Eigen betaaltermijn; null = de standaard uit Instellingen. */
+  betaaltermijn_dagen?: number | null;
 };
 
 export type CustomerType = 'Zakelijk' | 'Particulier' | 'Lead';

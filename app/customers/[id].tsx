@@ -23,6 +23,7 @@ import {
   FormSheet,
   HeaderIconButton,
   LoadingScreen,
+  SelectField,
   StatusBadge,
   StatusBarScrim,
   conceptVanActiviteit,
@@ -48,6 +49,8 @@ import {
   listKlantOffertes,
   listKlantProjecten,
   listKlantWerkbonnen,
+  KLANT_TYPES,
+  leesBetaaltermijn,
   updateCustomer,
   type KlantFactuur,
   type KlantOfferte,
@@ -98,6 +101,10 @@ type KlantConcept = {
   btw: string;
   iban: string;
   notes: string;
+  type: string | null;
+  source: string;
+  /** Tekst in het formulier; leeg = de standaard uit Instellingen. */
+  betaaltermijn: string;
 };
 
 function initials(name: string | null | undefined): string {
@@ -333,6 +340,11 @@ export default function CustomerDetailScreen() {
         {customer.kvk_number ? <GegevensRij label="KvK" waarde={customer.kvk_number} /> : null}
         {customer.btw_number ? <GegevensRij label="Btw" waarde={customer.btw_number} /> : null}
         {customer.iban ? <GegevensRij label="IBAN" waarde={customer.iban} /> : null}
+        {customer.type ? <GegevensRij label="Type" waarde={customer.type} /> : null}
+        {customer.source ? <GegevensRij label="Bron" waarde={customer.source} /> : null}
+        {customer.betaaltermijn_dagen != null ? (
+          <GegevensRij label="Betaaltermijn" waarde={`${customer.betaaltermijn_dagen} dagen`} />
+        ) : null}
       </KaartBlok>
 
       <KaartBlok
@@ -619,6 +631,9 @@ export default function CustomerDetailScreen() {
                       btw: customer.btw_number ?? '',
                       iban: customer.iban ?? '',
                       notes: alsTekst(customer.notes),
+                      type: customer.type ?? null,
+                      source: customer.source ?? '',
+                      betaaltermijn: customer.betaaltermijn_dagen != null ? String(customer.betaaltermijn_dagen) : '',
                     });
                   }}
                 />
@@ -706,6 +721,11 @@ export default function CustomerDetailScreen() {
           submitDisabled={!concept?.name.trim()}
           onSubmit={() => {
             if (!concept || !id) return;
+            const termijn = leesBetaaltermijn(concept.betaaltermijn);
+            if (termijn.fout) {
+              setSaveError(termijn.fout);
+              return;
+            }
             save(
               () =>
                 updateCustomer(id, {
@@ -718,6 +738,9 @@ export default function CustomerDetailScreen() {
                   kvk_number: concept.kvk,
                   btw_number: concept.btw,
                   iban: concept.iban,
+                  type: concept.type,
+                  source: concept.source,
+                  betaaltermijn_dagen: termijn.waarde,
                   // Ongewijzigd? Niet meesturen: anders gaan opmaak en
                   // @-vermeldingen uit de dashboard-editor verloren.
                   notes:
@@ -835,6 +858,28 @@ export default function CustomerDetailScreen() {
             placeholder="NL00 BANK 0123 4567 89"
             autoCapitalize="characters"
             autoCorrect={false}
+          />
+          <SelectField
+            label="Type"
+            value={concept?.type ?? null}
+            options={KLANT_TYPES.map((k) => ({ id: k, label: k }))}
+            onChange={(v) => setConcept((c) => (c ? { ...c, type: v } : c))}
+            allowEmpty
+            emptyLabel="Geen type"
+          />
+          <FormField
+            label="Bron"
+            value={concept?.source ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, source: v } : c))}
+            placeholder="Website, aanbeveling, …"
+          />
+          <FormField
+            label="Betaaltermijn (dagen)"
+            value={concept?.betaaltermijn ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, betaaltermijn: v } : c))}
+            keyboardType="number-pad"
+            placeholder="Standaard uit Instellingen"
+            hint="Leeg = de standaard betaaltermijn uit Instellingen."
           />
           <FormField
             label="Notities"

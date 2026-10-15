@@ -91,6 +91,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 17. Wat ik vergeten ben
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
+- [x] Relaties: type (Particulier/Zakelijk/VvE/Aannemer), bron en betaaltermijn per klant ontbraken. Nieuwe klant: type + bron (standaard Zakelijk/Handmatig, zoals het dashboard); bewerken: alle drie, ook zichtbaar op de klantkaart. Getest op een testklant en teruggezet
 
 ## Zelf gevonden (naast de punten hierboven)
 
