@@ -6,8 +6,8 @@ export type { Schermklasse } from './schermklasseRegels';
 /**
  * Telefoon of tablet, en hoe breed de app-kolom is. Volgt het venster: draaien,
  * Split View en een ander formaat in Stage Manager worden meteen meegenomen
- * (`useWindowDimensions` luistert zelf naar resize). Op iOS en Android altijd
- * de telefoonindeling.
+ * (`useWindowDimensions` luistert zelf naar resize). Dezelfde regel op web,
+ * iOS en Android: een iPad krijgt de tabletindeling, een telefoon niet.
  */
 export function useSchermklasse(): { klasse: Schermklasse; kolomBreedte: number } {
   const { width } = useWindowDimensions();

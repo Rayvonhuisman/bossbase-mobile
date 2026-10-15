@@ -37,8 +37,10 @@ export const TABBALK_MAX = 520;
  * Welke indeling hoort bij dit venster. Alleen in de webapp: de iOS- en
  * Android-app houden hun eigen (telefoon)indeling.
  */
-export function bepaalSchermklasse(breedte: number, platform: string): Schermklasse {
-  if (platform !== 'web') return 'telefoon';
+export function bepaalSchermklasse(breedte: number, _platform?: string): Schermklasse {
+  // Op elk platform dezelfde regel: de iOS-app op een iPad (ook in Split View
+  // of Stage Manager) volgt net als de webapp de breedte van het venster.
+  // Telefoons komen in staande stand nooit aan 700 punten.
   return breedte >= TABLET_VANAF ? 'tablet' : 'telefoon';
 }
 

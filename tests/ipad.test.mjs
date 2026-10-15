@@ -38,9 +38,12 @@ test('kolom op tablet en desktop begrensd; formulieren op leesbreedte', () => {
   assert.equal(kolomBreedte(390, 'telefoon', 'formulier'), 390);
 });
 
-test('native iOS en Android: altijd de telefoonindeling', () => {
-  assert.equal(bepaalSchermklasse(1024, 'ios'), 'telefoon');
-  assert.equal(bepaalSchermklasse(1280, 'android'), 'telefoon');
+test('native iOS en Android: zelfde regel als web (iPad = tablet, telefoon = telefoon)', () => {
+  assert.equal(bepaalSchermklasse(1024, 'ios'), 'tablet');
+  assert.equal(bepaalSchermklasse(820, 'ios'), 'tablet');
+  assert.equal(bepaalSchermklasse(507, 'ios'), 'telefoon', 'Split View smal');
+  assert.equal(bepaalSchermklasse(430, 'ios'), 'telefoon', 'grote iPhone');
+  assert.equal(bepaalSchermklasse(1280, 'android'), 'tablet');
 });
 
 const UA = {
