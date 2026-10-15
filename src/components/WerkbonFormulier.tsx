@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Check, ChevronLeft, ChevronRight, Star } from 'lucide-react-native';
+import { AdresZoeker } from '@/components/AdresZoeker';
 import { FormField } from '@/components/FormField';
 import { FormFooter } from '@/components/FormFooter';
 import { TimeField } from '@/components/DateField';
@@ -419,7 +420,14 @@ export function WerkbonFormulier({
           options={projectOpties}
         />
 
-        <FormField label="Locatie" value={locatie} onChangeText={setLocatie} placeholder="Straat + huisnummer + plaats" />
+        <AdresZoeker
+          label="Locatie"
+          volledigAdres
+          value={locatie}
+          onChangeText={setLocatie}
+          placeholder="Zoek straat + huisnummer + plaats"
+          hint="Kies een adres uit de lijst, of typ zelf een omschrijving (bijv. bouwkavel)."
+        />
 
         {/* Dagen en tijden */}
         <View style={styles.blok}>

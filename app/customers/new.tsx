@@ -9,7 +9,7 @@ import {
 import { Dialog } from '@/lib/dialog';
 import { terugOfNaar } from '@/lib/navigatie';
 import { Stack, useRouter } from 'expo-router';
-import { AppTopBar, FormField, PermissionGate, FormFooter } from '@/components';
+import { AdresZoeker, AppTopBar, FormField, PermissionGate, FormFooter } from '@/components';
 import { useAuth, useTheme } from '@/providers';
 import { createCustomer } from '@/services/customerService';
 import { spacing, type ThemeColors } from '@/theme';
@@ -127,6 +127,13 @@ function NewCustomerInhoud() {
               onChangeText={setPhone}
               placeholder="06 12 34 56 78"
               keyboardType="phone-pad"
+            />
+            <AdresZoeker
+              onSelect={(v) => {
+                setAddress(v.address);
+                setPostcode(v.postcode);
+                setCity(v.city);
+              }}
             />
             <FormField
               label="Adres"
