@@ -60,7 +60,8 @@ await inputs.nth(1).fill(process.env.BB_TEST_WACHTWOORD);
 await inputs.nth(1).press('Enter');
 await page.waitForTimeout(12000);
 
-for (const [formaat, w, h] of FORMATEN) {
+const KIES = (process.env.BB_FORMATEN ?? '').split(',').filter(Boolean);
+for (const [formaat, w, h] of FORMATEN.filter(([f]) => !KIES.length || KIES.includes(f))) {
   mkdirSync(join(UIT, formaat), { recursive: true });
   await page.setViewportSize({ width: w, height: h });
   for (const [naam, pad] of lijst) {
