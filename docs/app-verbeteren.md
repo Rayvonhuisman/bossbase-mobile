@@ -54,10 +54,11 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 ### 9. Pipeline en projectkaart
 - [x] Aanvraag prominent: eigen kaart met groene rand, tekst in een groen vak "Wat de klant vraagt" (na feedback 15-10), websitevelden zoals het dashboard, Bel/Mail/Route
 - [x] Redesign eerste blok (fase, toegewezen aan, …) — getoond en akkoord 15-10 (`docs/screenshots/projectkaart-voorstel/`). Oorzaak leeg vlak: `flexBasis: 140` van een veld in een kolom
-- [ ] Alle functies van de projectkaart in het dashboard
+- [x] Alle functies van de projectkaart in het dashboard: tabs Offertes/Facturen/Uren/Kosten/Werkbonnen/Notities met dezelfde rechten en pakketfeatures, offerte koppelen of nieuw maken, factuur/werkbon vanuit het project (vooringevuld, terug naar het project), inkopen toevoegen/bewerken/verwijderen, kostprijs en "brutowinst vóór arbeid", foto's bij de aanvraag, klantgegevens bewerken, behandelaars met melding, @-vermeldingen in notities. Getest als admin en als monteur (alleen Overzicht/Uren/Werkbonnen/Notities, niets bewerkbaar); testdata opgeruimd (`docs/screenshots/projectkaart/`)
+  - Bewust anders: klantgegevens in één venster i.p.v. per veld; geen "nieuwe leverancier" binnen een inkoop; "Opslaan en versturen" (offerte/factuur mailen) blijft in het dashboard; @-tag alleen aan het eind van de tekst herkend
 
 ### 10. Projecten
-- [ ] Projectkaart (zie 9)
+- [x] Projectkaart (zie 9)
 - [x] Filter onthouden (zie 1)
 - [x] Bedragwidgets iets meer kleur: totale projectwaarde groen, te factureren amber (als er iets openstaat), zoals "nog te factureren" in het dashboard
 
@@ -92,7 +93,8 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 ### 17. Wat ik vergeten ben
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard
 Uit de rondgang (15-10), op volgorde van impact:
-- [ ] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken; afspraakbevestiging bij een bezoek
+- [x] Activiteiten: melding (en optioneel mail) bij toewijzen; meerdere toegewezenen (bewerken in de app overschreef ze); eindtijd en project; status bij aanmaken; 09:00 als begin; bijbehorend agenda-item bijwerken. Getest: alleen de nieuw toegewezene kreeg de melding, testactiviteit en agenda-item verwijderd (357789c)
+- [ ] Activiteiten: afspraakbevestiging per mail bij een bezoek — wacht op de documenten-branch (mailservice)
 - [ ] Registratie in de app: bedrijfsnaam, branche, telefoon, KvK en pakket gaan niet mee, en het akkoord met de voorwaarden wordt niet vastgelegd
 - [ ] Nieuwe werkbon: maker standaard uitvoerder en verantwoordelijke (zoals het dashboard)
 - [ ] Nieuwe aanvraag: e-mail en telefoon van een nieuwe klant, en de ontvangstbevestiging (`aanvraag_ontvangen`)
@@ -112,6 +114,7 @@ Uit de rondgang (15-10), op volgorde van impact:
 - [x] Projectkaart: geen route-knop → Bel/Mail/Route in het aanvraagblok
 - [x] Werkbon: route-knop bouwde een eigen Google-link (iOS opende een webpagina)
 - [x] iPad in de app: `supportsTablet` aan, iPad alle standen (staand en liggend), iPhone blijft staand, Android-telefoons staand (vergrendeld bij starten), tablets draaien mee. De tabletindeling werkt nu ook in de app (was alleen web), met dezelfde gecentreerde kolom als de webapp (`MobielKader`). Werkt pas na een nieuwe build — niet zelf gebouwd of gepubliceerd
+- [x] Web/PWA: horizontaal scrollen (filterchips, tabs, weekstrook) sprong na elke veeg terug naar het begin — `zichtbareViewport` zette elk element met `overflow-y: hidden` terug, ook horizontale ScrollViews. Nu per as. De actieve chip schuift ook vanzelf in beeld (ba15ad4)
 - [x] Weergave "Zoals het apparaat" volgde in de app nooit donker: `userInterfaceStyle` stond op `light`; nu `automatic`
 
 ## Testomgeving (tijdelijk)
@@ -154,6 +157,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 15-10 — Activiteiten af (meerdere toegewezenen, melding). Projectkaart-branch samengevoegd. Bug horizontaal scrollen op web gevonden en opgelost.
 - 15-10 — Planning: bewerken (tijd, inplannen), agenda-look, meldingen per dag, mail bij toewijzen.
 - 15-10 — Branch aangemaakt. Homepage: thema naar Instellingen, Boss-hoofd,
   widgets vergeleken en gefixt (commit 8a87a4d). Onderzoek per onderdeel gestart.
