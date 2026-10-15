@@ -586,3 +586,87 @@ export function rondAfOpVijf(t: string): string {
   if (min >= 24 * 60) min = 24 * 60 - 5;
   return `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
 }
+
+// ── Planningblok op de werkbon (PlanningRegels / planRegels) ─────────────────
+
+export type PlanRegel = { dag: WerkbonDag; datum: string; starttijd: string | null; eindtijd: string | null; wie: string[] };
+
+/**
+ * De regels van het Planning-blok, zoals planRegels() in het dashboard
+ * (components/PlanningBlok.jsx): per dag het venster, en wie er werkt. Een
+ * eigen tijd staat achter de naam, maar alleen als die afwijkt van het
+ * venster van de dag. Een onbekende naam valt weg.
+ */
+export function planRegels(w: WerkbonPlanbaar & { voertuig_ids?: string[] | null }, naamVan: (pid: string) => string | null | undefined): PlanRegel[] {
+  return werkbonDagen(w)
+    .map((dag) => {
+      const t = dagVenster(w, dag);
+      const wie = ploegOpDag(w, dag)
+        .map((pid) => {
+          const naam = naamVan(pid);
+          if (!naam) return null;
+          const eigen = tijdenVoorPersoon(w, dag, pid);
+          const afwijkend = eigen.starttijd !== t.starttijd || eigen.eindtijd !== t.eindtijd;
+          return afwijkend && eigen.starttijd ? `${naam} (${eigen.starttijd}${eigen.eindtijd ? `–${eigen.eindtijd}` : ''})` : naam;
+        })
+        .filter((n): n is string => !!n);
+      return { dag, datum: dag.datum, starttijd: t.starttijd, eindtijd: t.eindtijd, wie };
+    })
+    .filter((r) => r.datum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+}
+
+/** "08:00–16:30", of "geen tijd". */
+export const planTijd = (r: Pick<PlanRegel, 'starttijd' | 'eindtijd'>) =>
+  r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd';
+
+/** Voertuigen op die dag: de eigen lijst van de dag, anders die van de werkbon (voertuigenOpDag). */
+export const voertuigenOpDag = (w: { voertuig_ids?: string[] | null }, dag: WerkbonDag) =>
+  Array.isArray(dag?.voertuig_ids) ? dag.voertuig_ids : (w?.voertuig_ids ?? []);
+
+/** Tijd van een voertuig: eigen tijd → tijd van de dag → tijd van de werkbon (tijdVanVoertuig). */
+export function tijdVanVoertuig(w: WerkbonPlanbaar, dag: WerkbonDag, vid: string): Tijdvak {
+  const eigen = dag?.voertuig_tijden?.[vid];
+  if (eigen && hhmm(eigen.starttijd) && hhmm(eigen.eindtijd)) {
+    return { starttijd: hhmm(eigen.starttijd), eindtijd: hhmm(eigen.eindtijd) };
+  }
+  return tijdenOpDag(w, dag);
+}
+
+/**
+ * De regel onder een dag per voertuig (busRegels in PlanningBlok.jsx):
+ * naam · tijd · wie erin zit (alleen koppelingen die die dag gelden) · bezetting.
+ * Een voertuig dat niet (meer) bestaat valt weg.
+ */
+export function busRegels(
+  w: WerkbonPlanbaar & { voertuig_ids?: string[] | null },
+  dag: WerkbonDag,
+  voertuigen: Record<string, { naam: string; zitplaatsen?: number | null }>,
+  naamVan: (pid: string) => string | null | undefined,
+): { vid: string; tekst: string }[] {
+  const ploeg = ploegOpDag(w, dag);
+  const opDag = voertuigenOpDag(w, dag);
+  return opDag.flatMap((vid) => {
+    const v = voertuigen[vid];
+    if (!v) return [];
+    const t = tijdVanVoertuig(w, dag, vid);
+    const inzittenden = ploeg.filter((pid) => {
+      const zit = dag?.medewerker_voertuig?.[pid];
+      return !!zit && zit === vid && opDag.includes(zit);
+    });
+    const namen = inzittenden.map(naamVan).filter((n): n is string => !!n);
+    return [
+      {
+        vid,
+        tekst: [
+          v.naam,
+          t.starttijd ? `${t.starttijd}–${t.eindtijd || '?'}` : null,
+          namen.length ? namen.join(', ') : 'niemand erin',
+          v.zitplaatsen ? `${inzittenden.length}/${v.zitplaatsen}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      },
+    ];
+  });
+}
