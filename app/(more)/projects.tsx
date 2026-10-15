@@ -99,7 +99,13 @@ const LEEG_CONCEPT: Concept = {
 
 function ProjectsInhoud() {
   const router = useRouter();
-  const { id: openId } = useLocalSearchParams<{ id?: string }>();
+  // `?nieuw=1&klant=<id>` (de "+" op de klantkaart) opent meteen een nieuw
+  // project met die klant ingevuld, zoals NewProjectModal in het dashboard.
+  const {
+    id: openId,
+    nieuw: nieuwParam,
+    klant: klantParam,
+  } = useLocalSearchParams<{ id?: string; nieuw?: string; klant?: string }>();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, can } = usePermissions();
@@ -177,9 +183,9 @@ function ProjectsInhoud() {
   }, [items]);
   const vandaag = vandaagIso();
 
-  const openNieuw = async () => {
+  const openNieuw = async (klantId?: string | null) => {
     setSaveError(null);
-    setConcept(LEEG_CONCEPT);
+    setConcept(klantId ? { ...LEEG_CONCEPT, customerId: klantId } : LEEG_CONCEPT);
     // Keuzelijsten pas bij het openen: de lijst zelf heeft ze niet nodig.
     const [k, l, d] = await Promise.all([
       klanten.length ? null : listCustomers(),
@@ -224,6 +230,15 @@ function ProjectsInhoud() {
     );
   };
 
+  useEffect(() => {
+    if (nieuwParam !== '1' || loading || !rechtenGeladen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (magMaken) openNieuw(klantParam || null);
+    router.setParams({ nieuw: undefined, klant: undefined });
+    // openNieuw als afhankelijkheid zou bij elke render opnieuw openen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nieuwParam, loading, rechtenGeladen]);
+
   if (loading || !rechtenGeladen) return <LoadingScreen label="Projecten laden…" />;
 
   if (error) {
@@ -253,7 +268,7 @@ function ProjectsInhoud() {
             subtitle="Beheer projecten, uren, offertes en facturatie"
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
-              magMaken ? <HeaderIconButton icon={Plus} label="Nieuw project" onPress={openNieuw} /> : undefined
+              magMaken ? <HeaderIconButton icon={Plus} label="Nieuw project" onPress={() => openNieuw()} /> : undefined
             }
           />
         }
@@ -324,7 +339,7 @@ function ProjectsInhoud() {
             />
             {items.length === 0 && magMaken ? (
               <View style={{ alignItems: 'center' }}>
-                <Button label="Eerste project" onPress={openNieuw} />
+                <Button label="Eerste project" onPress={() => openNieuw()} />
               </View>
             ) : null}
           </View>

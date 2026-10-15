@@ -295,6 +295,9 @@ export default function CustomerDetailScreen() {
   const magWerkbonInplannen =
     rechtenGeladen && !readonly && (can('planning') || can('werkbonnen_bewerken'));
   const magActiviteitMaken = rechtenGeladen && mag('activiteiten', 'maken');
+  const magOfferteMaken = magOffertes && mag('offertes', 'maken');
+  const magFactuurMaken = magFacturen && mag('facturen', 'maken');
+  const magProjectMaken = magProjecten && mag('projecten', 'maken');
   const magActiviteitBewerken =
     // Dashboard ActivityEditModal: canEdit = magBewerken('planning').
     mag('activiteiten', 'wijzigen') && can('planning');
@@ -470,6 +473,12 @@ export default function CustomerDetailScreen() {
           aantal={offertes.length}
           actie={offertes.length ? 'Alle offertes' : undefined}
           onActie={() => router.push('/offers')}
+          toevoegLabel="Nieuwe offerte"
+          onToevoegen={
+            magOfferteMaken
+              ? () => router.push({ pathname: '/offers', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {offertes.length === 0 ? (
             <KaartLeeg tekst="Nog geen offertes voor deze klant." />
@@ -504,6 +513,12 @@ export default function CustomerDetailScreen() {
           aantal={facturen.length}
           actie={facturen.length ? 'Alle facturen' : undefined}
           onActie={() => router.push('/invoices')}
+          toevoegLabel="Nieuwe factuur"
+          onToevoegen={
+            magFactuurMaken
+              ? () => router.push({ pathname: '/invoices', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {facturen.length === 0 ? (
             <KaartLeeg tekst="Nog geen facturen voor deze klant." />
@@ -536,6 +551,12 @@ export default function CustomerDetailScreen() {
           aantal={projecten.length}
           actie={projecten.length ? 'Alle projecten' : undefined}
           onActie={() => router.push('/projects')}
+          toevoegLabel="Nieuw project"
+          onToevoegen={
+            magProjectMaken
+              ? () => router.push({ pathname: '/projects', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {projecten.length === 0 ? (
             <KaartLeeg tekst="Nog geen projecten voor deze klant." />
