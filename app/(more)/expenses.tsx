@@ -354,7 +354,7 @@ function ExpensesScreenInhoud() {
         // meteen; mislukt de upload, dan zeggen we dat.
         const rij = resultaat as JobCostRow | null;
         if (bonnen.length && rij?.id) {
-          const fout = await koppelBonnen([rij.id], bonnen);
+          const fout = await koppelBonnen(rij.id, bonnen);
           if (fout) Dialog.alert('Kostenpost opgeslagen', fout);
         }
         await herlaad();

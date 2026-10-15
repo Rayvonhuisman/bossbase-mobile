@@ -5,6 +5,9 @@ import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/wr
 import { negeerBijImport } from './importPrullenbak';
 import { haalInStukken } from '@/lib/inStukken';
 import { calcBtw, type WerkbonInkoopBron } from '@/lib/kostenLogica';
+import { bijlagePaden, bonPad, teVerwijderenBonPaden } from '@/lib/kostenBonnen';
+
+export { bijlagePaden };
 
 /**
  * Kosten (`job_costs`) — dezelfde tabel en dezelfde categorieën als het
@@ -254,45 +257,82 @@ export async function getBijlageUrl(stored: string | null): Promise<string | nul
   return data?.signedUrl ?? null;
 }
 
-/** Opslagpaden uit `bijlage_url` (JSON-array of één pad); oude http-URL's tellen niet. */
-export function bijlagePaden(stored: string | null): string[] {
-  if (!stored) return [];
-  let items: unknown;
-  try {
-    items = JSON.parse(stored);
-  } catch {
-    items = [stored];
+/**
+ * Paden die (ook) bij een ándere kostenpost staan. Zo'n bestand blijft staan:
+ * verwijderen of vervangen van de bon van deze post mag de bon van een andere
+ * post nooit raken (bijv. een dubbel gekoppelde bon uit het dashboard).
+ * Bij twijfel (fout bij het lezen) tellen alle paden als gedeeld.
+ */
+async function gedeeldeBonPaden(kostId: string, paden: string[]): Promise<Set<string>> {
+  const gedeeld = new Set<string>();
+  for (const pad of paden) {
+    const { data, error } = await supabase
+      .from('job_costs')
+      .select('id')
+      .neq('id', kostId)
+      .like('bijlage_url', `%${pad}%`)
+      .limit(1);
+    if (error || (data ?? []).length) gedeeld.add(pad);
   }
-  return (Array.isArray(items) ? items : [items]).filter(
-    (p): p is string => typeof p === 'string' && !!p && !p.startsWith('http'),
-  );
+  return gedeeld;
+}
+
+/** Bestanden weggooien die alleen bij deze post hoorden (stil bij mislukken). */
+async function ruimBonnenOp(kostId: string, paden: string[], behouden: string[] = []): Promise<void> {
+  const companyId = getCompanyId();
+  if (!companyId || !paden.length) return;
+  const kandidaten = teVerwijderenBonPaden(paden, companyId, [], behouden);
+  if (!kandidaten.length) return;
+  const gedeeld = await gedeeldeBonPaden(kostId, kandidaten);
+  const weg = teVerwijderenBonPaden(kandidaten, companyId, gedeeld, behouden);
+  if (!weg.length) return;
+  const { error } = await supabase.storage.from('kosten-bijlagen').remove(weg);
+  if (error && __DEV__) console.warn('[jobCostService] bon opruimen mislukt', error.message);
 }
 
 /**
- * Bonnen uploaden naar `kosten-bijlagen/{company_id}/{tijd}-{willekeurig}.{ext}`
- * — hetzelfde pad als het dashboard (NewJobCostModal) — en de paden als
- * JSON-array in `bijlage_url` zetten. Geeft een foutmelding of null.
+ * De bon(nen) van één kostenpost vervangen: uploaden naar een eigen pad
+ * (`kosten-bijlagen/{company_id}/{kost_id}-{tijd}-{willekeurig}.{ext}`, zie
+ * `kostenBonnen.ts`), de paden als JSON-array in `bijlage_url` zetten en
+ * daarna de oude bestanden van deze post opruimen. Mislukt het koppelen, dan
+ * gaan de net geüploade bestanden weer weg (geen wezen). Geeft een
+ * foutmelding of null.
  */
 export async function koppelBonnen(
-  kostenIds: string[],
+  kostId: string,
   bonnen: { bytes: ArrayBuffer; contentType: string; extensie: string }[],
 ): Promise<string | null> {
   const companyId = getCompanyId();
-  if (!companyId || !bonnen.length || !kostenIds.length) return null;
+  if (!companyId || !bonnen.length || !kostId) return null;
+
+  const { data: cur } = await supabase.from('job_costs').select('bijlage_url').eq('id', kostId).maybeSingle();
+  const oud = bijlagePaden((cur as { bijlage_url: string | null } | null)?.bijlage_url ?? null);
+
   const paden: string[] = [];
+  const terugdraaien = async () => {
+    if (paden.length) await supabase.storage.from('kosten-bijlagen').remove(paden);
+  };
   for (const b of bonnen) {
-    const pad = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${b.extensie}`;
+    const pad = bonPad(companyId, kostId, b.extensie, Date.now(), Math.random().toString(36).slice(2));
     const { error } = await supabase.storage
       .from('kosten-bijlagen')
       .upload(pad, b.bytes, { contentType: b.contentType, upsert: false });
-    if (error) return 'De bon kon niet worden geüpload. Probeer het opnieuw.';
+    if (error) {
+      await terugdraaien();
+      return 'De bon kon niet worden geüpload. Probeer het opnieuw.';
+    }
     paden.push(pad);
   }
-  const bijlage_url = JSON.stringify(paden);
-  for (const id of kostenIds) {
-    const { error } = await supabase.from('job_costs').update({ bijlage_url }).eq('id', id);
-    if (error) return 'De bon is geüpload maar niet aan de kostenpost gekoppeld.';
+  const { data: bijgewerkt, error } = await supabase
+    .from('job_costs')
+    .update({ bijlage_url: JSON.stringify(paden) })
+    .eq('id', kostId)
+    .select('id');
+  if (error || !(bijgewerkt ?? []).length) {
+    await terugdraaien();
+    return 'De bon is niet aan de kostenpost gekoppeld. Probeer het opnieuw.';
   }
+  await ruimBonnenOp(kostId, oud, paden);
   return null;
 }
 
@@ -484,14 +524,12 @@ export async function deleteJobCost(
   );
   if (!res.ok) return res;
 
-  // De bon(nen) mee weggooien, zoals het dashboard: verwijderd is echt weg, en
-  // een bon zonder kostenpost vindt niemand meer. Mislukt dat, dan is de post
-  // toch weg; het bestand blijft tot de opschoning.
-  const paden = bijlagePaden(kost?.bijlage_url ?? null);
-  if (paden.length) {
-    const { error: opslagFout } = await supabase.storage.from('kosten-bijlagen').remove(paden);
-    if (opslagFout && __DEV__) console.warn('[jobCostService] bon verwijderen mislukt', opslagFout.message);
-  }
+  // Eerst de rij (hierboven), dan de bon(nen), zoals het dashboard: verwijderd
+  // is echt weg, en een bon zonder kostenpost vindt niemand meer. Alleen het
+  // eigen bestand van déze post: een pad dat ook bij een andere post staat
+  // blijft staan (zie ruimBonnenOp). Mislukt het opruimen, dan is de post toch
+  // weg; het bestand blijft tot de opschoning.
+  await ruimBonnenOp(id, bijlagePaden(kost?.bijlage_url ?? null));
 
   // Uit de boekhouding geïmporteerd? Dan op de negeerlijst, anders komt hij bij
   // de volgende synchronisatie terug.
