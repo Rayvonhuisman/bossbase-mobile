@@ -120,3 +120,36 @@ export async function stuurAfspraakbevestiging(input: {
   });
   return { resultaat, aan };
 }
+
+/**
+ * Ontvangstbevestiging na een nieuwe aanvraag voor een bestaande klant, zoals
+ * `NewLeadModal` in het dashboard (een klant die je er net bij maakte krijgt
+ * hem daar niet, en hier dus ook niet). Alleen als de klant een e-mailadres heeft.
+ */
+export async function stuurAanvraagOntvangen(input: {
+  dealId: string;
+  customerId: string;
+}): Promise<{ resultaat: boolean | null; aan: string | null }> {
+  const companyId = getCompanyId();
+  const [{ data: klant }, { data: bedrijf }] = await Promise.all([
+    supabase.from('customers').select('name, email').eq('id', input.customerId).maybeSingle(),
+    companyId
+      ? supabase.from('companies').select('name').eq('id', companyId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const k = klant as { name?: string | null; email?: string | null } | null;
+  const aan = k?.email?.trim() || null;
+  if (!aan) return { resultaat: null, aan: null };
+  const resultaat = await verstuurAutoMail({
+    type: 'aanvraag_ontvangen',
+    vars: {
+      klant_naam: k?.name ?? '',
+      bedrijfsnaam: (bedrijf as { name?: string | null } | null)?.name || 'BossBase',
+    },
+    aan,
+    relatedType: 'deal',
+    relatedId: input.dealId,
+    customerId: input.customerId,
+  });
+  return { resultaat, aan };
+}
