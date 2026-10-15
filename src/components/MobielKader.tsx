@@ -17,7 +17,9 @@ export function MobielKader({ children, soort = 'app' }: { children: ReactNode; 
   const { width } = useWindowDimensions();
   const { colors: t, colorMode } = useTheme();
   const max = kolomMax(bepaalSchermklasse(width), soort);
-  if (width <= max) return <>{children}</>;
+  // In een native vel (formulier, kiezer) bepaalt iOS de breedte al zelf; de
+  // vensterbreedte zegt daar niets over het vel, dus geen extra kolom.
+  if (soort === 'formulier' || width <= max) return <>{children}</>;
   return (
     <View style={[styles.buiten, { backgroundColor: colorMode === 'dark' ? '#000000' : '#E5E7EB' }]}>
       <View style={[styles.kolom, { maxWidth: max, backgroundColor: t.bg, borderColor: t.lineStrong }]}>{children}</View>

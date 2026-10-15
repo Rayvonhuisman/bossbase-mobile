@@ -147,6 +147,10 @@ export function AppScreen({
         // begint de inhoud een stuk lager dan bedoeld.
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
+        // iOS: velden in de pagina zelf (instellingen, filters) schuiven boven
+        // het toetsenbord; iOS rekent in venstercoördinaten, dus dit klopt ook
+        // in de gecentreerde iPad-kolom.
+        automaticallyAdjustKeyboardInsets
         onScroll={onScroll}
         scrollEventThrottle={32}
         {...trek.handlers}

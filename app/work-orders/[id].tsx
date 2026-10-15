@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -52,6 +51,7 @@ import {
   TimeField,
 } from '@/components';
 import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
+import { VelStatusbalk } from '@/components/VelStatusbalk';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -1476,10 +1476,11 @@ function AddNoteModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <ModalKop styles={styles} titel={voorKlant ? 'Notitie voor de klant' : 'Interne notitie'} onClose={close} />
-          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
             {voorKlant ? (
               <View style={styles.klantInfo}>
                 <Text style={styles.klantInfoTekst}>
@@ -1499,7 +1500,7 @@ function AddNoteModal({
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
             <Button label="Opslaan" onPress={submit} loading={submitting} />
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
     </Modal>
   );
@@ -1551,10 +1552,11 @@ function AddTaskModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <ModalKop styles={styles} titel={meerwerk ? 'Meerwerk' : 'Taak'} onClose={close} />
-          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
             {meerwerk ? (
               <Text style={styles.meerwerkHint}>
                 Werk dat er tijdens de klus bij kwam. Telt niet mee in de taakvoortgang.
@@ -1574,7 +1576,7 @@ function AddTaskModal({
             <Button label={meerwerk ? '+ Meerwerk' : '+ Taak'} onPress={submit} loading={submitting} />
             <Button label="Klaar" variant="secondary" onPress={close} disabled={submitting} />
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
     </Modal>
   );
@@ -1677,10 +1679,11 @@ function AddMaterialModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <ModalKop styles={styles} titel="Materiaal" onClose={onClose} />
-          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
             <SelectField
               label="Kies materiaal"
               value={keuze}
@@ -1751,7 +1754,7 @@ function AddMaterialModal({
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
             <Button label="Toevoegen" onPress={submit} loading={submitting} disabled={!keuze || (vrij && !naam.trim())} />
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
     </Modal>
   );
@@ -1841,10 +1844,11 @@ function AddTimeEntryModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <ModalKop styles={styles} titel="Uren boeken" onClose={onClose} />
-          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
             <DateField label="Datum *" value={datum} onChange={setDatum} disabled={submitting} />
             {kiesMedewerker ? (
               <SelectField
@@ -1894,7 +1898,7 @@ function AddTimeEntryModal({
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
             <Button label="Opslaan" onPress={submit} loading={submitting} disabled={!start || !eind || !!tijdFout} />
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
     </Modal>
   );
@@ -1925,10 +1929,11 @@ function StartMomentModal({
   };
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
         <View style={{ flex: 1, backgroundColor: th.bg }}>
           <ModalKop styles={styles} titel="Wanneer is de klus gestart?" onClose={onClose} />
-          <ScrollView contentContainerStyle={styles.modalBody}>
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             <DateField label="Startdatum" value={datum} onChange={setDatum} maximum={vandaagISO()} />
             <TimeField label="Starttijd" value={tijd || null} onChange={setTijd} />
             {fout ? <Text style={styles.modalError}>{fout}</Text> : null}

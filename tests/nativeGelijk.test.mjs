@@ -14,7 +14,7 @@ test('iPad-formaten krijgen native de tabletindeling, telefoons en smalle Split 
 test('native kader: gecentreerde kolom op tablet, niets op telefoon', () => {
   const bron = lees('src/components/MobielKader.tsx');
   assert.match(bron, /kolomMax\(bepaalSchermklasse\(width\), soort\)/);
-  assert.match(bron, /if \(width <= max\) return <>\{children\}<\/>;/);
+  assert.match(bron, /if \(soort === 'formulier' \|\| width <= max\) return <>\{children\}<\/>;/);
   assert.equal(kolomMax('tablet'), 880);
   assert.equal(kolomMax('tablet', 'formulier'), 600);
 });

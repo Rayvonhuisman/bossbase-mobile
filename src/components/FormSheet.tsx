@@ -12,6 +12,7 @@ import { X } from 'lucide-react-native';
 import { Button } from './Button';
 import { MobielKader } from './MobielKader';
 import { ToetsenbordVlak } from './ToetsenbordVlak';
+import { VelStatusbalk } from './VelStatusbalk';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
@@ -83,6 +84,7 @@ export function FormSheet({
       presentationStyle="pageSheet"
       onRequestClose={sluit}
     >
+      <VelStatusbalk />
       {/* Op web staat het vel op telefoonbreedte, net als de app eronder. */}
       <MobielKader soort="formulier">
       {/* iOS: een pageSheet begint niet bovenaan het scherm, daarom geen

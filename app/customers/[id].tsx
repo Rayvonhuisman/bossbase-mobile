@@ -582,6 +582,10 @@ export default function CustomerDetailScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
+          // iOS: de notitie-invoer blijft boven het toetsenbord en "Toevoegen"
+          // werkt met één tik terwijl het toetsenbord open is.
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
