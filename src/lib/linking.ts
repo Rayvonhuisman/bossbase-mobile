@@ -37,22 +37,6 @@ export function sendMail(email: string | null | undefined): boolean {
   return true;
 }
 
-/**
- * Wachtwoordherstel loopt via de website: daar vraag je met "Wachtwoord
- * vergeten?" een resetlink aan, die per mail komt en op
- * `www.bossbase.nl/reset-password?token=…` landt. De app doet zelf niets met
- * wachtwoorden die je kwijt bent.
- *
- * Bewust naar `/login` en niet naar `/reset-password`: zonder token toont die
- * pagina alleen "Deze link is ongeldig". Het aanvraagformulier zit achter
- * "Wachtwoord vergeten?" op de inlogpagina, en die werkt ook op een telefoon.
- */
-export const WACHTWOORD_HERSTEL_URL = 'https://www.bossbase.nl/login';
-
-export function openWachtwoordHerstel(): void {
-  safeOpen(WACHTWOORD_HERSTEL_URL, 'Ga in je browser naar www.bossbase.nl/login.');
-}
-
 /** Route-apparaat: in de app het platform, op web uit de browser. */
 function routeApparaat(): RouteApparaat {
   if (Platform.OS === 'ios') return 'ios';
