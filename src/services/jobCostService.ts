@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { isReadonly, withCompanyId } from '@/lib/sessionContext';
+import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { negeerBijImport } from './importPrullenbak';
@@ -254,6 +254,48 @@ export async function getBijlageUrl(stored: string | null): Promise<string | nul
   return data?.signedUrl ?? null;
 }
 
+/** Opslagpaden uit `bijlage_url` (JSON-array of één pad); oude http-URL's tellen niet. */
+export function bijlagePaden(stored: string | null): string[] {
+  if (!stored) return [];
+  let items: unknown;
+  try {
+    items = JSON.parse(stored);
+  } catch {
+    items = [stored];
+  }
+  return (Array.isArray(items) ? items : [items]).filter(
+    (p): p is string => typeof p === 'string' && !!p && !p.startsWith('http'),
+  );
+}
+
+/**
+ * Bonnen uploaden naar `kosten-bijlagen/{company_id}/{tijd}-{willekeurig}.{ext}`
+ * — hetzelfde pad als het dashboard (NewJobCostModal) — en de paden als
+ * JSON-array in `bijlage_url` zetten. Geeft een foutmelding of null.
+ */
+export async function koppelBonnen(
+  kostenIds: string[],
+  bonnen: { bytes: ArrayBuffer; contentType: string; extensie: string }[],
+): Promise<string | null> {
+  const companyId = getCompanyId();
+  if (!companyId || !bonnen.length || !kostenIds.length) return null;
+  const paden: string[] = [];
+  for (const b of bonnen) {
+    const pad = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${b.extensie}`;
+    const { error } = await supabase.storage
+      .from('kosten-bijlagen')
+      .upload(pad, b.bytes, { contentType: b.contentType, upsert: false });
+    if (error) return 'De bon kon niet worden geüpload. Probeer het opnieuw.';
+    paden.push(pad);
+  }
+  const bijlage_url = JSON.stringify(paden);
+  for (const id of kostenIds) {
+    const { error } = await supabase.from('job_costs').update({ bijlage_url }).eq('id', id);
+    if (error) return 'De bon is geüpload maar niet aan de kostenpost gekoppeld.';
+  }
+  return null;
+}
+
 export type JobCostInput = {
   description: string;
   amount: number;
@@ -404,10 +446,14 @@ export async function deleteJobCost(
 ): Promise<WriteStatus & { waarschuwing?: string }> {
   const { data: cur } = await supabase
     .from('job_costs')
-    .select('werkbon_materiaal_id, externe_referentie')
+    .select('werkbon_materiaal_id, externe_referentie, bijlage_url')
     .eq('id', id)
     .maybeSingle();
-  const kost = cur as { werkbon_materiaal_id: string | null; externe_referentie: string | null } | null;
+  const kost = cur as {
+    werkbon_materiaal_id: string | null;
+    externe_referentie: string | null;
+    bijlage_url: string | null;
+  } | null;
 
   if (kost?.werkbon_materiaal_id) {
     const res = await schrijf<{ id: string }>(
@@ -437,6 +483,15 @@ export async function deleteJobCost(
     },
   );
   if (!res.ok) return res;
+
+  // De bon(nen) mee weggooien, zoals het dashboard: verwijderd is echt weg, en
+  // een bon zonder kostenpost vindt niemand meer. Mislukt dat, dan is de post
+  // toch weg; het bestand blijft tot de opschoning.
+  const paden = bijlagePaden(kost?.bijlage_url ?? null);
+  if (paden.length) {
+    const { error: opslagFout } = await supabase.storage.from('kosten-bijlagen').remove(paden);
+    if (opslagFout && __DEV__) console.warn('[jobCostService] bon verwijderen mislukt', opslagFout.message);
+  }
 
   // Uit de boekhouding geïmporteerd? Dan op de negeerlijst, anders komt hij bij
   // de volgende synchronisatie terug.

@@ -71,7 +71,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Wat ontbreekt t.o.v. dashboard: maandweergave (toegevoegd), de herinnering "Vul je werkdag in" (toegevoegd, zie hierboven). Bewust anders: geen "Alles"/"Dag" (dag zit in de week, "alles" is op een telefoon geen werkbare lijst); de app houdt de norm van 8 u per dag en de chip "Open"
 
 ### 13. Materialen
-- [ ] Gecontroleerd tegen dashboard
+- [x] Gecontroleerd tegen dashboard: zoeken, eenheden, marge, inkoopprijs alleen met recht, leverancier verplicht, btw, actief/inactief, verwijderen met uitleg — gelijk. Niets aangepast
 
 ### 14. Offertes
 - [x] Widget "Geaccepteerd" groen (aantal en bedrag)
@@ -85,7 +85,9 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Alle functies gecontroleerd
 
 ### 16. Kosten
-- [ ] Werking, totalen en filters gecontroleerd
+- [x] Werking, totalen en filters gecontroleerd: weergave kosten/materiaal, periode, klant- en categoriefilter en tegels rekenen gelijk aan het dashboard; weergave en periode worden nu onthouden (zie 1)
+- [x] Bon toevoegen (ontbrak: "kan alleen in het dashboard"): foto maken of kiezen, meerdere mogelijk, zelfde opslag als het dashboard (`kosten-bijlagen/{bedrijf}/…`, paden in `bijlage_url`); "bon verplicht" per categorie nu afgedwongen met de tekst van het dashboard; bon bekijken in de app; bij verwijderen gaat de bon ook uit de opslag (zoals het dashboard). Getest: aangemaakt met bon, database en opslag gecontroleerd, bekeken, verwijderd (bestand ook weg). PDF als bon kan in de app niet (alleen foto's)
+- [x] Bedragen met centen zoals het dashboard (`fmt`); de app rondde af op hele euro's (€ 12,50 → € 13)
 
 ### 17. Wat ik vergeten ben
 - [ ] Hele app nogmaals langs, elke pagina en elk venster tegen het dashboard

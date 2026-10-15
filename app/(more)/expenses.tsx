@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Lock, Plus, Wallet } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Lock, Plus, Wallet, X } from 'lucide-react-native';
 import {
   AppFilterChips,
   AppListGroup,
@@ -35,6 +35,7 @@ import {
   listLeveranciers,
   listWerkbonInkopen,
   updateJobCost,
+  koppelBonnen,
   type JobCostRow,
   type KostenCategorie,
 } from '@/services/jobCostService';
@@ -42,7 +43,7 @@ import { listCustomers } from '@/services/customerService';
 import { listProjects } from '@/services/projectService';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { vandaagIso } from '@/lib/nlTijd';
-import { formatDateNL, formatEUR } from '@/lib/format';
+import { formatDateNL, formatEURCent } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
@@ -64,6 +65,8 @@ import {
 } from '@/lib/kostenLogica';
 import { DocumentStatusBadge, TegelRaster } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { FotoViewer } from '@/components/FotoViewer';
+import { kiesFotoBron, maakOfKiesFoto, type GekozenFoto } from '@/lib/kiesFoto';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
@@ -109,7 +112,16 @@ type Concept = {
   projectId: string | null;
   btwPct: string;
   btwInclusief: boolean;
+  /** Nieuwe bonnen (foto's), die na het opslaan worden geüpload. */
+  bonnen: GekozenFoto[];
+  /** Heeft deze post al een bijlage? */
+  heeftBijlage: boolean;
 };
+
+/** Zelfde tekst als het dashboard (lib/kostenCategorieen BON_VERPLICHT_MELDING). */
+const BON_VERPLICHT_MELDING =
+  'Voeg de factuur of bon toe. Zonder bewijsstuk kun je de btw niet terugvorderen ' +
+  'en staat de kostenpost straks zonder document in je boekhouding.';
 
 function ExpensesScreenInhoud() {
   const router = useRouter();
@@ -131,6 +143,7 @@ function ExpensesScreenInhoud() {
   const [concept, setConcept] = useState<Concept | null>(null);
   const [nieuweLeverancier, setNieuweLeverancier] = useState('');
   const [bijlageUrl, setBijlageUrl] = useState<string | null>(null);
+  const [bonInBeeld, setBonInBeeld] = useState<string | null>(null);
 
   // Weergave en periode onthouden, zoals het dashboard (kosten_weergave, kosten_periode_type), nu per gebruiker.
   const [weergave, setWeergaveState] = useOnthouden<KostenWeergave>('kosten.weergave', 'kosten', ['kosten', 'materiaal']);
@@ -285,6 +298,8 @@ function ExpensesScreenInhoud() {
       projectId: null,
       btwPct: '21',
       btwInclusief: false,
+      bonnen: [],
+      heeftBijlage: false,
     });
   };
 
@@ -312,6 +327,8 @@ function ExpensesScreenInhoud() {
       // `amount` is altijd exclusief btw opgeslagen (dashboardregel), dus een
       // bestaande post opent in de stand "excl.".
       btwInclusief: false,
+      bonnen: [],
+      heeftBijlage: !!k.bijlage_url,
     });
   };
 
@@ -329,9 +346,17 @@ function ExpensesScreenInhoud() {
       btw_inclusief: concept.btwInclusief,
       klant_type: (concept.customerId ? 'klant' : 'algemeen') as 'klant' | 'algemeen',
     };
+    const bonnen = concept.bonnen;
     save(() => (concept.id ? updateJobCost(concept.id, invoer) : createJobCost(invoer)), {
-      onSuccess: async () => {
+      onSuccess: async (resultaat) => {
         setConcept(null);
+        // Eerst de post, dan de bon(nen) — zoals het dashboard: de post staat er
+        // meteen; mislukt de upload, dan zeggen we dat.
+        const rij = resultaat as JobCostRow | null;
+        if (bonnen.length && rij?.id) {
+          const fout = await koppelBonnen([rij.id], bonnen);
+          if (fout) Dialog.alert('Kostenpost opgeslagen', fout);
+        }
         await herlaad();
       },
     });
@@ -415,7 +440,7 @@ function ExpensesScreenInhoud() {
             variant="detail"
             title="Kosten"
             subtitle={periodeLabel}
-            meta={formatEUR(pagina.totaal)}
+            meta={formatEURCent(pagina.totaal)}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
@@ -511,7 +536,7 @@ function ExpensesScreenInhoud() {
           tegels={pagina.tegels.map((tg) => ({
             id: tg.id,
             label: tg.label,
-            waarde: formatEUR(tg.bedrag),
+            waarde: formatEURCent(tg.bedrag),
             uitleg: tg.uitleg,
           }))}
         />
@@ -578,10 +603,10 @@ function ExpensesScreenInhoud() {
                     }
                     trailing={
                       <View style={styles.trailing}>
-                        <Text style={styles.bedrag}>{formatEUR(r.bedrag)}</Text>
+                        <Text style={styles.bedrag}>{formatEURCent(r.bedrag)}</Text>
                         {r.btwPct != null ? (
                           <Text style={styles.incl}>
-                            {formatEUR(calcBtw(r.bedrag, r.btwPct, 'excl').incl)} incl. · {r.btwPct}%
+                            {formatEURCent(calcBtw(r.bedrag, r.btwPct, 'excl').incl)} incl. · {r.btwPct}%
                           </Text>
                         ) : null}
                         <DocumentStatusBadge toon={cat.toon} label={cat.label} />
@@ -606,7 +631,11 @@ function ExpensesScreenInhoud() {
         error={saveError}
         saving={saving}
         submitDisabled={
-          concept?.opSlot || !concept?.description.trim() || !concept?.bedrag.trim()
+          concept?.opSlot ||
+          !concept?.description.trim() ||
+          !concept?.bedrag.trim() ||
+          // Bon verplicht voor deze categorie (Instellingen): zonder bon niet opslaan, zoals het dashboard.
+          (!!conceptCategorie?.bonVerplicht && !concept?.bonnen.length && !concept?.heeftBijlage)
         }
         onSubmit={opslaan}
         onClose={() => setConcept(null)}
@@ -668,8 +697,8 @@ function ExpensesScreenInhoud() {
           </View>
           {btwOverzicht ? (
             <Text style={styles.schakelUitleg}>
-              Excl. {formatEUR(btwOverzicht.excl)} · btw {formatEUR(btwOverzicht.btw)} · incl.{' '}
-              {formatEUR(btwOverzicht.incl)}. Opgeslagen wordt het bedrag excl. btw, net als in
+              Excl. {formatEURCent(btwOverzicht.excl)} · btw {formatEURCent(btwOverzicht.btw)} · incl.{' '}
+              {formatEURCent(btwOverzicht.incl)}. Opgeslagen wordt het bedrag excl. btw, net als in
               het dashboard.
             </Text>
           ) : null}
@@ -710,19 +739,47 @@ function ExpensesScreenInhoud() {
           </View>
         </View>
 
-        {conceptCategorie?.bonVerplicht && !concept?.id ? (
-          <NoticeBanner
-            toon="info"
-            message="Voor deze categorie vraagt het dashboard een bon. Een bon toevoegen kan (nog) alleen in het dashboard."
-          />
+        {/* Bon: foto maken of kiezen; bekijken in de app. */}
+        {!concept?.opSlot ? (
+          <View style={{ gap: 8 }}>
+            {conceptCategorie?.bonVerplicht && !concept?.bonnen.length && !concept?.heeftBijlage ? (
+              <NoticeBanner toon="info" message={BON_VERPLICHT_MELDING} />
+            ) : null}
+            {concept?.bonnen.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {concept.bonnen.map((b, i) => (
+                  <View key={`${b.uri}-${i}`}>
+                    <Image source={{ uri: b.uri }} style={styles.bonVoorbeeld} accessibilityIgnoresInvertColors />
+                    <Pressable
+                      onPress={() => setConcept((c) => (c ? { ...c, bonnen: c.bonnen.filter((_, j) => j !== i) } : c))}
+                      accessibilityRole="button"
+                      accessibilityLabel="Bon weghalen"
+                      hitSlop={8}
+                      style={styles.bonWeg}
+                    >
+                      <X size={13} color="#fff" strokeWidth={3} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+            {!concept?.heeftBijlage ? (
+              <Button
+                label={concept?.bonnen.length ? 'Nog een bon toevoegen' : 'Bon toevoegen'}
+                variant="secondary"
+                onPress={async () => {
+                  const bron = await kiesFotoBron('Bon toevoegen');
+                  if (!bron) return;
+                  const foto = await maakOfKiesFoto(bron);
+                  if (foto) setConcept((c) => (c ? { ...c, bonnen: [...c.bonnen, foto] } : c));
+                }}
+              />
+            ) : null}
+          </View>
         ) : null}
 
         {concept?.id && bijlageUrl ? (
-          <Button
-            label="Bijlage bekijken"
-            variant="secondary"
-            onPress={() => void Linking.openURL(bijlageUrl)}
-          />
+          <Button label="Bon bekijken" variant="secondary" onPress={() => setBonInBeeld(bijlageUrl)} />
         ) : null}
 
         <SelectField
@@ -783,6 +840,12 @@ function ExpensesScreenInhoud() {
           emptyLabel="Geen project"
           placeholder="Geen project"
           hint="Bepaalt onder welk project de nacalculatie deze kost meetelt."
+        />
+        <FotoViewer
+          fotos={bonInBeeld ? [{ id: 'bon', url: bonInBeeld }] : []}
+          index={bonInBeeld ? 0 : null}
+          titel="Bon"
+          onSluit={() => setBonInBeeld(null)}
         />
       </FormSheet>
     </View>
@@ -851,6 +914,18 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.bgAlt,
     },
     levFout: { fontSize: 12.5, fontWeight: '600', color: t.statusRejectFg },
+    bonVoorbeeld: { width: 72, height: 72, borderRadius: 10, backgroundColor: t.bgAlt },
+    bonWeg: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: 'rgba(13,13,13,0.7)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     voetnoot: {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.md,
