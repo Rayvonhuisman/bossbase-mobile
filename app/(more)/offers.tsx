@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FileText, Lock, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -337,7 +338,7 @@ function OffersScreenInhoud() {
 
   const openGetekend = () => {
     if (getekendeUrl) {
-      void Linking.openURL(getekendeUrl);
+      openExtern(getekendeUrl, 'De getekende PDF kon niet worden geopend.');
       return;
     }
     Dialog.alert(

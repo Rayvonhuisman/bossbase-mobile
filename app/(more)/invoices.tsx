@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { Dialog } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Lock, Plus, Receipt, Trash2 } from 'lucide-react-native';
@@ -302,7 +303,7 @@ function InvoicesScreenInhoud() {
 
   const openPdf = () => {
     if (pdfUrl) {
-      void Linking.openURL(pdfUrl);
+      openExtern(pdfUrl, 'De PDF kon niet worden geopend.');
       return;
     }
     Dialog.alert('Niet gelukt', 'De bewaarde PDF kon niet worden geopend. Probeer het opnieuw.');

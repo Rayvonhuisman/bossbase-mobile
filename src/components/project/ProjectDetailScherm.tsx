@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -621,7 +622,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               {data.fotos.map((f) => (
                 <Pressable
                   key={f.id}
-                  onPress={() => Linking.openURL(f.url)}
+                  onPress={() => openExtern(f.url, 'De foto kon niet worden geopend.')}
                   accessibilityRole="imagebutton"
                   accessibilityLabel="Foto openen"
                 >

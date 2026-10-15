@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
+import { moetVerversenBijActief } from './toestelRegels';
 
 /**
  * Laden, verversen en pull-to-refresh — met drie toestanden in plaats van twee.
@@ -140,14 +141,20 @@ export function useLaden(
     voerUit('focus');
   }, [isFocused, bijFocus, klaarOmTeLaden, voerUit]);
 
-  // Web: een geïnstalleerde app (of een tabblad) staat soms dagen open. Komt
-  // hij weer in beeld, dan stil bijwerken — net als terugkeren op een scherm.
-  // Alleen het scherm dat in beeld is. Op iOS en Android blijft het gedrag
-  // zoals het was.
+  // Een geïnstalleerde app (of een tabblad) staat soms dagen open. Komt hij
+  // weer in beeld, dan stil bijwerken — net als terugkeren op een scherm.
+  // Alleen het scherm dat in beeld is. Op iOS en Android alleen na een echte
+  // terugkeer uit de achtergrond: 'inactive' → 'active' gebeurt daar ook bij
+  // Face ID, een systeemmelding of het Bedieningspaneel, en dat is geen reden
+  // om opnieuw op te halen.
+  const vorigeStand = useRef(AppState.currentState);
   useEffect(() => {
-    if (Platform.OS !== 'web' || !bijFocus || !klaarOmTeLaden || !isFocused) return;
+    if (!bijFocus || !klaarOmTeLaden || !isFocused) return;
     const sub = AppState.addEventListener('change', (stand) => {
-      if (stand === 'active' && eersteGedaan.current) voerUit('focus');
+      const vorige = vorigeStand.current;
+      vorigeStand.current = stand;
+      if (stand !== 'active' || !eersteGedaan.current) return;
+      if (moetVerversenBijActief(Platform.OS, vorige)) voerUit('focus');
     });
     return () => sub.remove();
   }, [isFocused, bijFocus, klaarOmTeLaden, voerUit]);

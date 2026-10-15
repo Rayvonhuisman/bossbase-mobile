@@ -18,6 +18,16 @@ async function safeOpen(url: string, fallbackMsg = 'Deze actie wordt niet onders
   }
 }
 
+/**
+ * Een externe link (PDF, bijlage, foto, website, tel:/mailto:) openen met een
+ * nette melding als het toestel weigert — bijvoorbeeld `tel:` op een iPad
+ * zonder telefoonfunctie, of geen app die het bestand kan tonen. Zonder deze
+ * vangst gebeurt er op iOS bij een weigering gewoon niets.
+ */
+export function openExtern(url: string, fallbackMsg = 'Deze link kon niet worden geopend.'): void {
+  void safeOpen(url, fallbackMsg);
+}
+
 /** Open phone dialer. Returns false if no usable number was supplied. */
 export function callPhone(phone: string | null | undefined): boolean {
   if (!phone) return false;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { Dialog } from '@/lib/dialog';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, Lock, Plus, Wallet } from 'lucide-react-native';
@@ -721,7 +722,7 @@ function ExpensesScreenInhoud() {
           <Button
             label="Bijlage bekijken"
             variant="secondary"
-            onPress={() => void Linking.openURL(bijlageUrl)}
+            onPress={() => openExtern(bijlageUrl, 'De bijlage kon niet worden geopend.')}
           />
         ) : null}
 

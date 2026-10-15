@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Linking, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { Check, X } from 'lucide-react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
@@ -205,7 +206,7 @@ export function ProfielTab() {
             label="Verwijdering aanvragen"
             variant="ghost"
             onPress={() =>
-              void Linking.openURL(
+              openExtern(
                 `mailto:info@bossbase.nl?subject=${encodeURIComponent(
                   zegtBedrijfOp
                     ? 'Verzoek: gegevens van mijn bedrijf verwijderen'
