@@ -53,6 +53,7 @@ export type AgendaEvent = {
   id: string;
   company_id: string;
   customer_id: string | null;
+  deal_id: string | null;
   title: string | null;
   type: string | null;
   start_at: string | null;
@@ -67,7 +68,7 @@ export type AgendaEvent = {
 };
 
 const EVENT_KOLOMMEN = `
-  id, company_id, customer_id, title, type, start_at, end_at, location, notes,
+  id, company_id, customer_id, deal_id, title, type, start_at, end_at, location, notes,
   assigned_to, werkbon_id, activiteit_id, herkomst,
   customer:customers ( id, name, phone, address, postcode, city )
 `;

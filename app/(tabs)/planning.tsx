@@ -31,7 +31,9 @@ import {
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import {
+  AFSPRAAK_TYPES,
   createAfspraak,
+  type AfspraakType,
   deleteAfspraak,
   updateAfspraak,
   type PlanningItem,
@@ -74,6 +76,8 @@ import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { alsTekst } from '@/lib/notitieTekst';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { listDeals } from '@/services/dealService';
+import { getCompanySettings } from '@/services/settingsService';
 
 type ViewMode = 'dag' | 'week' | 'maand';
 
@@ -168,6 +172,9 @@ type AfspraakConcept = {
   location: string;
   notes: string;
   customerId: string | null;
+  /** Project/aanvraag (`deal_id`). */
+  dealId: string | null;
+  type: AfspraakType;
   /**
    * Mag deze gebruiker het item wijzigen/verwijderen? Spiegelt de RLS: recht
    * `planning`, of je eigen item dat niet uit de planning komt.
@@ -210,6 +217,9 @@ export default function PlanningScreen() {
   const [deelFout, setDeelFout] = useState<string | null>(null);
   const [events, setEvents] = useState<Map<string, AgendaEvent>>(() => new Map());
   const [klanten, setKlanten] = useState<SelectOption[]>([]);
+  const [projectOpties, setProjectOpties] = useState<SelectOption[]>([]);
+  // Uurvenster van week- en dagweergave; tot de instelling er is het standaardvenster.
+  const [agendaUren, setAgendaUren] = useState({ van: 7, tot: 20 });
   const [afspraak, setAfspraak] = useState<AfspraakConcept | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
@@ -286,10 +296,17 @@ export default function PlanningScreen() {
 
       // De klantenlijst is alleen voor het keuzeveld in het afspraakformulier;
       // mislukt hij, dan blijft de afspraak gewoon te maken — zonder klant.
-      const klantRes = await listCustomers();
+      const [klantRes, dealRes, instRes] = await Promise.all([listCustomers(), listDeals(), getCompanySettings()]);
       if (!klantRes.error) {
         setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
       }
+      if (!dealRes.error) {
+        setProjectOpties(
+          dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Project', sub: d.customer?.name ?? undefined })),
+        );
+      }
+      // Het uurvenster van de agenda, zoals ingesteld (Instellingen › Standaardwaarden).
+      if (!instRes.error) setAgendaUren({ van: instRes.data.agenda_start_uur, tot: instRes.data.agenda_eind_uur });
     },
     [range.startISO, range.endISO, range.startDate, range.endDate, currentUserId, gedeeld, metVoertuigen],
   );
@@ -347,9 +364,14 @@ export default function PlanningScreen() {
     // Een eigen agenda-afspraak openen we in het formulier; een activiteit
     // hoort thuis op het Activiteiten-scherm en een klant op de klantkaart.
     if (p.source === 'calendar_event') {
+      const ev = events.get(p.id);
+      // Een ingeplande activiteit opent de activiteit zelf, zoals in het dashboard.
+      if (ev?.activiteit_id) {
+        router.push({ pathname: '/activities', params: { id: ev.activiteit_id } });
+        return;
+      }
       setSaveError(null);
       const { date, time } = splitsLokaal(p.startAt);
-      const ev = events.get(p.id);
       setAfspraak({
         magBewerken: !!ev && magAfspraakBewerken(ev, { uid: currentUserId, planningRecht }),
         id: p.id.replace(/^event-/, ''),
@@ -360,6 +382,8 @@ export default function PlanningScreen() {
         location: p.address ?? '',
         notes: alsTekst(p.description),
         customerId: p.customerId,
+        dealId: ev?.deal_id ?? null,
+        type: ev ? (eventType(ev) as AfspraakType) : 'event',
       });
       return;
     }
@@ -373,11 +397,14 @@ export default function PlanningScreen() {
       id: null,
       title: '',
       date: toLocalISODate(selectedDate),
-      time: '',
-      end: '',
+      // Zoals het dashboard: 09:00–10:00, het eind loopt mee met het begin.
+      time: '09:00',
+      end: '10:00',
       location: '',
       notes: '',
       customerId: null,
+      dealId: null,
+      type: 'event',
     });
   };
 
@@ -391,6 +418,8 @@ export default function PlanningScreen() {
       location: afspraak.location,
       notes: afspraak.notes,
       customer_id: afspraak.customerId,
+      deal_id: afspraak.dealId,
+      type: afspraak.type,
     };
     save(
       () => (afspraak.id ? updateAfspraak(afspraak.id, invoer) : createAfspraak(invoer)),
@@ -515,9 +544,11 @@ export default function PlanningScreen() {
             onCall={onCall}
             onRoute={onRoute}
             onOpen={openItem}
+            agendaUren={agendaUren}
           />
         ) : view === 'week' ? (
           <WeekView
+            agendaUren={agendaUren}
             selectedDate={selectedDate}
             today={today}
             byDay={byDay}
@@ -594,6 +625,12 @@ export default function PlanningScreen() {
           placeholder="Bijv. Inmeten bij Jansen"
           autoFocus={!afspraak?.id}
         />
+        <SelectField
+          label="Type"
+          value={afspraak?.type ?? 'event'}
+          options={AFSPRAAK_TYPES.map((x) => ({ id: x.id, label: x.label }))}
+          onChange={(id) => setAfspraak((c) => (c ? { ...c, type: (id as AfspraakType) ?? 'event' } : c))}
+        />
         <DateField
           label="Datum"
           value={afspraak?.date ?? null}
@@ -607,11 +644,9 @@ export default function PlanningScreen() {
               onChange={(v) =>
                 setAfspraak((c) => {
                   if (!c) return c;
-                  // Eindtijd vóór de begintijd bestaat niet: schuif hem mee in
-                  // plaats van de gebruiker een foutmelding te geven voor iets
-                  // wat hij niet zelf heeft ingesteld.
-                  const eind =
-                    c.end && minutenVanTijd(c.end) <= minutenVanTijd(v) ? '' : c.end;
+                  // Zoals het dashboard: het eind schuift mee naar een uur later.
+                  const [u, m] = v.split(':').map(Number);
+                  const eind = Number.isNaN(u) ? c.end : `${String(((u ?? 0) + 1) % 24).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`;
                   return { ...c, time: v, end: eind };
                 })
               }
@@ -624,7 +659,7 @@ export default function PlanningScreen() {
               value={afspraak?.end || null}
               onChange={(v) => setAfspraak((c) => (c ? { ...c, end: v } : c))}
               placeholder="Kies"
-              hint="Optioneel"
+              hint="Leeg = een uur"
             />
           </View>
         </View>
@@ -643,6 +678,46 @@ export default function PlanningScreen() {
           emptyLabel="Geen klant"
           placeholder="Geen klant"
         />
+        <SelectField
+          label="Project"
+          value={afspraak?.dealId ?? null}
+          options={projectOpties}
+          onChange={(id) => setAfspraak((c) => (c ? { ...c, dealId: id } : c))}
+          allowEmpty
+          emptyLabel="Geen project"
+          placeholder="Geen project"
+          searchable
+        />
+        {afspraak?.id && (afspraak.customerId || afspraak.dealId) ? (
+          <View style={styles.afspraakLinks}>
+            {afspraak.customerId ? (
+              <Pressable
+                accessibilityRole="link"
+                hitSlop={8}
+                onPress={() => {
+                  const id = afspraak.customerId;
+                  setAfspraak(null);
+                  router.push(`/customers/${id}`);
+                }}
+              >
+                <Text style={styles.afspraakLink}>Klant openen ›</Text>
+              </Pressable>
+            ) : null}
+            {afspraak.dealId ? (
+              <Pressable
+                accessibilityRole="link"
+                hitSlop={8}
+                onPress={() => {
+                  const id = afspraak.dealId;
+                  setAfspraak(null);
+                  router.push(`/deal/${id}`);
+                }}
+              >
+                <Text style={styles.afspraakLink}>Project openen ›</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         <AdresZoeker
           label="Locatie"
           volledigAdres
@@ -676,7 +751,9 @@ function DagView({
   onCall,
   onRoute,
   onOpen,
+  agendaUren,
 }: {
+  agendaUren: AgendaUren;
   selectedDate: Date;
   today: Date;
   items: PlanningItem[];
@@ -734,7 +811,12 @@ function DagView({
       {/* Het uurrooster uit het ontwerp: de dag als kalender, met de rode
           lijn op het huidige tijdstip. Items zonder tijd kunnen er niet in —
           die staan in de lijst eronder, net als alle andere. */}
-      <UurRooster items={items} isVandaag={isSameLocalDay(selectedDate, today)} onOpen={onOpen} />
+      <UurRooster
+        items={items}
+        isVandaag={isSameLocalDay(selectedDate, today)}
+        onOpen={onOpen}
+        agendaUren={agendaUren}
+      />
 
       <AppSection title="Tijdlijn" count={items.length} />
       {items.length === 0 ? (
@@ -783,7 +865,9 @@ function UurRooster({
   items,
   isVandaag,
   onOpen,
+  agendaUren,
 }: {
+  agendaUren: AgendaUren;
   items: PlanningItem[];
   isVandaag: boolean;
   onOpen: (p: PlanningItem) => void;
@@ -802,8 +886,9 @@ function UurRooster({
 
   const starts = metTijd.map((i) => urenVan(i.startAt!));
   const eindes = metTijd.map((i) => (i.endAt ? urenVan(i.endAt) : urenVan(i.startAt!) + 1));
-  const vanUur = Math.max(0, Math.min(7, Math.floor(Math.min(...starts))));
-  const totUur = Math.min(24, Math.max(18, Math.ceil(Math.max(...eindes))));
+  // Het ingestelde uurvenster (Instellingen), verbreed als er iets buiten valt.
+  const vanUur = Math.max(0, Math.min(agendaUren.van, Math.floor(Math.min(...starts))));
+  const totUur = Math.min(24, Math.max(agendaUren.tot, Math.ceil(Math.max(...eindes))));
   const uren = Array.from({ length: totUur - vanUur }, (_, i) => vanUur + i);
 
   const nu = new Date();
@@ -908,21 +993,22 @@ function UurRooster({
 // Week view
 // ---------------------------------------------------------------------------
 
+/** Het zichtbare uurvenster van de agenda (`agenda_start_uur`/`agenda_eind_uur`). */
+type AgendaUren = { van: number; tot: number };
+
 /**
  * De weekweergave uit het ontwerp: zeven kolommen naast een uuras, waarin elke
  * afspraak een gekleurd blokje op zijn eigen tijd is.
  *
- * De as loopt van 08:00 tot 17:00 — precies zoals in het ontwerp. Dat is een
- * keuze met gevolgen: werk buiten die uren wordt aan de rand vastgeklemd in
+ * De as volgt het uurvenster uit Instellingen, zoals het dashboard
+ * (standaard 07:00–20:00). Werk buiten die uren wordt aan de rand vastgeklemd in
  * plaats van weggelaten, zodat een klus van 06:00 zichtbaar blijft (bovenaan)
  * en niet stilletjes verdwijnt. Items zonder tijd kunnen niet op een tijdas —
  * die krijgen een streepje bovenin de kolom, en staan (net als alles) in de
  * lijst onder het rooster zodra je hun dag kiest.
  */
-const WEEK_VAN = 8;
-const WEEK_TOT = 17;
-
 function WeekView({
+  agendaUren,
   selectedDate,
   today,
   byDay,
@@ -933,6 +1019,7 @@ function WeekView({
   onRoute,
   onOpen,
 }: {
+  agendaUren: AgendaUren;
   selectedDate: Date;
   today: Date;
   byDay: Map<string, PlanningItem[]>;
@@ -948,8 +1035,12 @@ function WeekView({
   const { colors: th } = useTheme();
   const days = useMemo(() => weekDays(selectedDate), [selectedDate]);
 
+  const VAN = agendaUren.van;
+  const TOT = Math.max(agendaUren.tot, VAN + 1);
+  // Vier labels langs de as, gelijk verdeeld over het venster.
+  const asUren = [0, 1, 2, 3].map((i) => Math.round(VAN + ((TOT - VAN) * i) / 3));
   const pct = (uur: number) =>
-    ((Math.min(Math.max(uur, WEEK_VAN), WEEK_TOT) - WEEK_VAN) / (WEEK_TOT - WEEK_VAN)) * 100;
+    ((Math.min(Math.max(uur, VAN), TOT) - VAN) / (TOT - VAN)) * 100;
   const uurVan = (iso: string) => {
     const d = new Date(iso);
     return d.getHours() + d.getMinutes() / 60;
@@ -967,7 +1058,7 @@ function WeekView({
 
       <View style={styles.weekRooster}>
         <View style={styles.weekAs}>
-          {[8, 11, 14, 17].map((u) => (
+          {asUren.map((u) => (
             <Text key={u} style={[styles.weekAsUur, { top: `${pct(u)}%` }]}>
               {String(u).padStart(2, '0')}
             </Text>
@@ -1655,6 +1746,8 @@ const makeStyles = (t: ThemeColors) => StyleSheet.create({
     fontWeight: '600',
     paddingTop: 18,
   },
+  afspraakLinks: { flexDirection: 'row', gap: 20, minHeight: 32, alignItems: 'center' },
+  afspraakLink: { fontSize: 13.5, fontWeight: '700', color: t.green700 },
 });
 
 /**

@@ -592,12 +592,39 @@ export type AfspraakInput = {
   date: string;
   /** HH:mm; leeg = hele dag vanaf 09:00, net als het dashboard. */
   time?: string | null;
-  /** HH:mm eindtijd; leeg = geen eindtijd. */
+  /** HH:mm eindtijd; leeg = een uur na de begintijd, net als het dashboard. */
   end?: string | null;
   location?: string | null;
   notes?: string | null;
   customer_id?: string | null;
+  /** Project/aanvraag waar de afspraak bij hoort. */
+  deal_id?: string | null;
+  /** `event` (Afspraak), `job` (Klus), `visit` (Opname) of `activity`. */
+  type?: AfspraakType | null;
 };
+
+export const AFSPRAAK_TYPES = [
+  { id: 'event', label: 'Afspraak' },
+  { id: 'job', label: 'Klus' },
+  { id: 'visit', label: 'Opname' },
+  { id: 'activity', label: 'Activiteit' },
+] as const;
+export type AfspraakType = (typeof AFSPRAAK_TYPES)[number]['id'];
+
+/**
+ * Begin en eind van een afspraak — `buildEventTimes` van het dashboard: zonder
+ * begintijd 09:00, zonder eindtijd een uur later.
+ */
+export function afspraakTijden(
+  date: string,
+  time?: string | null,
+  end?: string | null,
+): { start_at: string | null; end_at: string | null } {
+  const start = buildDueAt(date, time ?? '');
+  if (!start) return { start_at: null, end_at: null };
+  const eind = end ? buildDueAt(date, end) : null;
+  return { start_at: start, end_at: eind ?? new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() };
+}
 
 function mapAfspraak(input: Partial<AfspraakInput>): Record<string, unknown> {
   const p: Record<string, unknown> = {};
@@ -605,11 +632,13 @@ function mapAfspraak(input: Partial<AfspraakInput>): Record<string, unknown> {
   if (input.location !== undefined) p.location = input.location?.trim() || null;
   if (input.notes !== undefined) p.notes = input.notes?.trim() || null;
   if (input.customer_id !== undefined) p.customer_id = input.customer_id || null;
+  if (input.deal_id !== undefined) p.deal_id = input.deal_id || null;
+  if (input.type !== undefined) p.type = input.type || null;
 
   if (input.date !== undefined) {
-    p.start_at = buildDueAt(input.date, input.time ?? '');
-    // Eindtijd hoort bij dezelfde dag; leeg laten mag.
-    p.end_at = input.end ? buildDueAt(input.date, input.end) : null;
+    const t = afspraakTijden(input.date, input.time, input.end);
+    p.start_at = t.start_at;
+    p.end_at = t.end_at;
   }
   return p;
 }
@@ -646,10 +675,46 @@ export async function createAfspraak(
     return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
   }
 
-  return schrijf<CalendarEvent>(
+  const res = await schrijf<CalendarEvent>(
     () => supabase.from('calendar_events').insert(payload).select(CALENDAR_COLUMNS),
     { context: 'activityService.createAfspraak', bedrijfReadonly: isReadonly() },
   );
+  // Op de tijdlijn van de klant, zoals het dashboard (logTijdlijnSafe):
+  // "Afspraak ingepland: Inmeten op 3 nov". Mislukt dat, dan blijft de afspraak staan.
+  if (res.ok && res.data?.customer_id) {
+    const startAt = res.data.start_at;
+    const op = startAt
+      ? ` op ${new Date(startAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', timeZone: 'Europe/Amsterdam' })}`
+      : '';
+    void logKlantTijdlijn(res.data.customer_id, 'afspraak_ingepland', `Afspraak ingepland: ${res.data.title ?? ''}${op}`, {
+      title: res.data.title,
+      startAt,
+    });
+  }
+  return res;
+}
+
+/** Een regel op de tijdlijn van een klant (`klant_tijdlijn`), zoals `logTijdlijnSafe`. Faalt stil. */
+async function logKlantTijdlijn(
+  customerId: string,
+  type: string,
+  omschrijving: string,
+  meta: Record<string, unknown> | null = null,
+): Promise<void> {
+  try {
+    const payload = withCompanyId({
+      customer_id: customerId,
+      type,
+      omschrijving,
+      aangemaakt_op: new Date().toISOString(),
+      ...(meta ? { meta } : {}),
+      ...(getUserId() ? { created_by: getUserId() } : {}),
+    });
+    if (!payload) return;
+    await supabase.from('klant_tijdlijn').insert(payload);
+  } catch {
+    // Stil: de tijdlijn is een extra, geen voorwaarde.
+  }
 }
 
 export async function updateAfspraak(

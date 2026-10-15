@@ -31,9 +31,11 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Widget "Nieuwe aanvragen": nieuwste 6 uit de eerste fase (zoals de dashboardtegel), rij → projectkaart, kop en voet → pipeline; de KPI-tegel "Nieuwe aanvragen" onder Overzicht is vervallen (dubbel)
 
 ### 6. Agenda
-- [ ] Inhoud (afspraken, werkbonnen, ingeplande activiteiten) gelijk aan dashboard
-- [ ] Weergaven gelijk
-- [ ] Afspraak aanmaken/wijzigen met alle velden van het dashboard
+- [x] Inhoud (afspraken, werkbonnen per geplande dag met jouw tijd, ingeplande activiteiten via hun agenda-item) gelijk aan dashboard; persoonlijk, met gedeelde werkruimte alles. Een ingeplande activiteit opent nu de activiteit (was het afspraakformulier, alleen-lezen)
+- [x] Weergaven: dag/week/maand zoals het dashboard; uurvenster nu uit Instellingen (`agenda_start_uur`/`agenda_eind_uur`, standaard 07–20) i.p.v. vast 08–17. Bewust anders gelaten (ontwerp app): maandweergave met stippen i.p.v. titels, weekblokjes niet los aantikbaar (tik op de dag toont de lijst)
+- [x] Afspraak aanmaken/wijzigen met de velden van het dashboard: titel, type (Afspraak/Klus/Opname/Activiteit — werd niet opgeslagen), datum, van/tot (nieuw 09:00–10:00, eind schuift mee, leeg = een uur; bewerken wiste de eindtijd), klant, project (nieuw), locatie (adres zoeken), notities; "Klant openen" / "Project openen"; klanttijdlijn "Afspraak ingepland: … op 15 okt" zoals het dashboard. Getest: aangemaakt, gecontroleerd in de database, verwijderd. Het dashboard kent geen deelnemers, herinnering of herhaling bij een afspraak
+- [ ] Notitielog met @vermeldingen bij een afspraak (dashboard: `comments` + meldingen)
+- [ ] Werkbon maken vanuit een afspraak, en "Werkbon inplannen" zonder planningsmodule
 
 ### 7. Planning
 - [ ] Kalender in de stijl van de agenda (dag/week, per medewerker en per voertuig)
