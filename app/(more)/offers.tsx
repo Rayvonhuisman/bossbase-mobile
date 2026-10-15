@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FileText, Lock, Plus, Trash2 } from 'lucide-react-native';
@@ -47,6 +47,7 @@ import { listCustomers } from '@/services/customerService';
 import { getCompanySettings } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import { listDeals } from '@/services/dealService';
+import { updateProject } from '@/services/projectService';
 import {
   berekenTotalen,
   legeRegel,
@@ -147,7 +148,27 @@ function regelMeta(r: OfferteItem, standaardPct: number): string {
 
 function OffersScreenInhoud() {
   const router = useRouter();
-  const { id: openId } = useLocalSearchParams<{ id?: string }>();
+  // `?nieuw=1&klant=&deal=` opent meteen een nieuwe offerte, voorgevuld — de
+  // plusknop op de projectkaart (`prefillCustomerId`/`prefillDealId` van de
+  // dashboardmodal). Met `project=` gaat het na opslaan terug naar dat project;
+  // `koppel=1` hangt de nieuwe offerte er dan ook aan (`projects.offerte_id`),
+  // zoals de Offertes-tab van de projectkaart in het dashboard doet.
+  const {
+    id: openId,
+    nieuw: nieuwParam,
+    klant: klantParam,
+    deal: dealParam,
+    project: projectParam,
+    koppel: koppelParam,
+  } = useLocalSearchParams<{
+    id?: string;
+    nieuw?: string;
+    klant?: string;
+    deal?: string;
+    project?: string;
+    koppel?: string;
+  }>();
+  const terugNaarProject = useRef<{ projectId: string; koppel: boolean } | null>(null);
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
@@ -230,14 +251,12 @@ function OffersScreenInhoud() {
     }
   }, []);
 
-
   /**
    * Eerste load, stille verversing bij focus en pull-to-refresh zijn hier
    * drie verschillende dingen. Alleen de laatste zet `refreshing`, dus het
    * scherm hangt niet meer omlaag bij een automatische verversing.
    */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
-
 
 
   /**
@@ -283,7 +302,7 @@ function OffersScreenInhoud() {
       opgeslagenEerst: getekend,
     });
 
-  const openNieuw = () => {
+  const openNieuw = (vooraf?: { customerId?: string | null; dealId?: string | null }) => {
     setSaveError(null);
     // Geldig tot = vandaag + het aantal dagen uit de bedrijfsinstellingen,
     // precies zoals de offertemodal van het dashboard hem voorinvult.
@@ -292,8 +311,8 @@ function OffersScreenInhoud() {
     setNieuweRegels([legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })]);
     setConcept({
       id: null,
-      customerId: null,
-      dealId: null,
+      customerId: vooraf?.customerId ?? null,
+      dealId: vooraf?.dealId ?? null,
       omschrijving: '',
       geldigTot: isoVanDatum(geldig),
       btwPct: standaardBtw,
@@ -302,6 +321,19 @@ function OffersScreenInhoud() {
       opSlot: false,
     });
   };
+
+  // Nieuw vanaf de projectkaart: pas openen als de instellingen er zijn, anders
+  // klopt de voorinvulling (geldig tot, btw, uurtarief) niet.
+  useEffect(() => {
+    if (nieuwParam !== '1' || loading || !rechtenGeladen) return;
+    terugNaarProject.current = projectParam ? { projectId: projectParam, koppel: koppelParam === '1' } : null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (magMaken) openNieuw({ customerId: klantParam || null, dealId: dealParam || null });
+    router.setParams({ nieuw: undefined, klant: undefined, deal: undefined, project: undefined, koppel: undefined });
+    // openNieuw leest alleen de net geladen instellingen; hem als afhankelijkheid
+    // nemen zou bij elke render opnieuw openen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nieuwParam, loading, rechtenGeladen]);
 
   const openBewerk = (o: OfferteRow) => {
     if (!magWijzigen) return;
@@ -364,9 +396,19 @@ function OffersScreenInhoud() {
         );
       },
       {
-        onSuccess: async () => {
+        onSuccess: async (res) => {
           setConcept(null);
           setNieuweRegels([]);
+          const naar = terugNaarProject.current;
+          if (!concept.id && naar) {
+            terugNaarProject.current = null;
+            const nieuwId =
+              (res as { offerte?: { id: string } } | null)?.offerte?.id ?? (res as { id?: string } | null)?.id;
+            // Koppelen is best-effort, net als `handleCreated` in het dashboard.
+            if (naar.koppel && nieuwId) await updateProject(naar.projectId, { offerte_id: nieuwId });
+            terugOfNaar(router, `/project/${naar.projectId}`);
+            return;
+          }
           await herlaad();
         },
       },
@@ -498,7 +540,7 @@ function OffersScreenInhoud() {
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe offerte" onPress={openNieuw} />
+                <HeaderIconButton icon={Plus} label="Nieuwe offerte" onPress={() => openNieuw()} />
               ) : undefined
             }
           />
@@ -704,7 +746,15 @@ function OffersScreenInhoud() {
           !concept?.id && (!concept?.customerId || (magRegels && nieuweRegels.length === 0))
         }
         onSubmit={opslaan}
-        onClose={() => setConcept(null)}
+        onClose={() => {
+          setConcept(null);
+          // Geopend vanaf de projectkaart en geannuleerd: terug naar het project.
+          const naar = terugNaarProject.current;
+          if (naar) {
+            terugNaarProject.current = null;
+            terugOfNaar(router, `/project/${naar.projectId}`);
+          }
+        }}
         destructive={
           concept?.id && magVerwijderen
             ? { label: 'Offerte verwijderen', onPress: verwijderen }

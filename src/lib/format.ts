@@ -82,7 +82,6 @@ const NL_EUR_FMT = new Intl.NumberFormat('nl-NL', {
   maximumFractionDigits: 0,
 });
 
-/** Format a number as euros, e.g. 2480 → "€ 2.480". Null/NaN → "—". */
 const NL_EUR_CENT_FMT = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
   currency: 'EUR',
@@ -90,16 +89,13 @@ const NL_EUR_CENT_FMT = new Intl.NumberFormat('nl-NL', {
   maximumFractionDigits: 2,
 });
 
-/**
- * Bedrag mét centen: "€ 3.062,50" — `fmt` van het dashboard. Voor regels en
- * totalen van offertes, facturen en kostenposten; tegels en overzichten tonen
- * hele euro's (`formatEUR`), net als de dashboardwidgets.
- */
+/** Euro's met centen, zoals `fmt` in het dashboard: 2480.5 → "€ 2.480,50". Null/NaN → "—". */
 export function formatEURCent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return NL_EUR_CENT_FMT.format(value);
 }
 
+/** Format a number as euros, e.g. 2480 → "€ 2.480". Null/NaN → "—". */
 export function formatEUR(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return NL_EUR_FMT.format(value);

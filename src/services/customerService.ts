@@ -25,7 +25,7 @@ import { metProjectBedragen } from './projectService';
  * Using `select('*')` would also work but pulls every extension column.
  */
 const SAFE_COLUMNS = `
-  id, company_id, name, email, phone, address, postcode, city,
+  id, company_id, name, contactpersoon, email, phone, address, postcode, city,
   kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at, type,
   source, betaaltermijn_dagen
 `;
@@ -99,6 +99,8 @@ export async function listCustomers(): Promise<{
 export type CreateCustomerInput = {
   company_id: string;
   name: string;
+  /** Alleen bij wijzigen (de klantgegevens op de projectkaart); aanmaken laat hem leeg. */
+  contactpersoon?: string | null;
   email?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -237,6 +239,7 @@ export async function updateCustomer(
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name.trim();
   for (const veld of [
+    'contactpersoon',
     'email',
     'phone',
     'address',

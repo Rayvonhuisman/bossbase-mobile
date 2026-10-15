@@ -75,12 +75,15 @@ type Project = { id: string; name: string | null; customer_id: string | null };
 export function WerkbonFormulier({
   werkbon,
   klantVooraf,
+  projectVooraf,
   onKlaar,
 }: {
   /** Meegegeven = bewerken. */
   werkbon?: Werkbon | null;
   /** Nieuw vanaf een klantkaart (`?customerId=`): klant en adres vooraf invullen. */
   klantVooraf?: string | null;
+  /** Nieuw vanaf de projectkaart (`?projectId=`): dit project vooraf gekozen. */
+  projectVooraf?: string | null;
   onKlaar: (id: string) => void;
 }) {
   const bewerken = !!werkbon;
@@ -109,7 +112,9 @@ export function WerkbonFormulier({
   const [status, setStatus] = useState<WerkbonStatusKey>(normaliseerStatus(werkbon?.status));
   const [titel, setTitel] = useState(werkbon?.titel ?? '');
   const [klantId, setKlantId] = useState<string | null>(werkbon ? (werkbon.customer_id ?? null) : (klantVooraf ?? null));
-  const [projectId, setProjectId] = useState<string | null>(werkbon?.project_id ?? null);
+  const [projectId, setProjectId] = useState<string | null>(
+    werkbon ? (werkbon.project_id ?? null) : (projectVooraf ?? null),
+  );
   const [locatie, setLocatie] = useState(werkbon?.locatie ?? '');
   const [planning, setPlanning] = useState<Planning>(() =>
     werkbon ? planningUitWerkbon(werkbon) : legePlanning(''),

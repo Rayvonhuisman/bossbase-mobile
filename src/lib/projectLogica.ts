@@ -225,3 +225,56 @@ export function waardeBronUitleg(bron: string | null | undefined): string {
   if (bron === 'handmatig') return 'Met de hand ingesteld';
   return 'Geschat in de aanvraag';
 }
+
+// ── Tabs van de projectkaart ───────────────────────────────────────────────
+
+export type ProjectTab = 'overzicht' | 'offertes' | 'facturen' | 'uren' | 'kosten' | 'werkbonnen' | 'notities';
+
+export const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
+  { id: 'overzicht', label: 'Overzicht' },
+  { id: 'offertes', label: 'Offertes' },
+  { id: 'facturen', label: 'Facturen' },
+  { id: 'uren', label: 'Uren' },
+  { id: 'kosten', label: 'Kosten' },
+  { id: 'werkbonnen', label: 'Werkbonnen' },
+  { id: 'notities', label: 'Notities' },
+];
+
+/**
+ * `zichtbareTabs` uit `ProjectDetailDrawer.jsx`: dezelfde rechten en
+ * pakket-eisen als de losse pagina's, anders is de projectkaart een achterdeur
+ * naar offertes, facturen, kosten en werkbonnen.
+ */
+export function zichtbareProjectTabs(
+  can: (recht: string) => boolean,
+  hasFeature: (feature: string) => boolean,
+): { id: ProjectTab; label: string }[] {
+  const mag: Record<ProjectTab, boolean> = {
+    overzicht: true,
+    notities: true,
+    uren: true,
+    offertes: can('offertes'),
+    facturen: can('facturen'),
+    kosten: can('kosten') && hasFeature('kosten_nacalculatie'),
+    werkbonnen: hasFeature('werkbonnen'),
+  };
+  return PROJECT_TABS.filter((t) => mag[t.id]);
+}
+
+/** Begroot, geregistreerd en resterend, zoals de Uren-tab van het dashboard. */
+export function urenOverzicht(quoted: number | null | undefined, gebruikt: number) {
+  const begroot = Number(quoted || 0);
+  return {
+    begroot: rond(begroot),
+    gebruikt: rond(gebruikt),
+    resterend: rond(Math.max(0, begroot - gebruikt)),
+    percentage: begroot > 0 ? gebruikt / begroot : 0,
+  };
+}
+
+/** Takenvoortgang van een werkbon; meerwerk telt niet mee (getAllWerkbonTakenCounts). */
+export function takenVoortgang(taken: { afgerond: boolean | null; is_meerwerk?: boolean | null }[] | null | undefined) {
+  const tellend = (taken ?? []).filter((t) => !t.is_meerwerk);
+  const klaar = tellend.filter((t) => t.afgerond).length;
+  return { klaar, totaal: tellend.length, pct: tellend.length ? Math.round((klaar / tellend.length) * 100) : 0 };
+}
