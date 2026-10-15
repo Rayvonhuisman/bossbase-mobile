@@ -21,7 +21,7 @@ const DAG_KOLOMMEN =
 
 const WERKBON_KOLOMMEN = `
   id, company_id, nummer, titel, status, gepland_op, starttijd, eindtijd, locatie,
-  customer_id, project_id, assigned_to, assigned_to_ids, voertuig_ids, ondertekend_op,
+  customer_id, project_id, assigned_to, assigned_to_ids, verantwoordelijke_ids, voertuig_ids, ondertekend_op,
   customer:customers ( id, name, phone, address, postcode, city ),
   project:projects ( id, name ),
   dagen:werkbon_dagen ( ${DAG_KOLOMMEN} )
@@ -37,6 +37,7 @@ export type PlanWerkbon = WerkbonPlanbaar & {
   customer_id: string | null;
   project_id: string | null;
   ondertekend_op: string | null;
+  verantwoordelijke_ids?: string[] | null;
   customer: {
     id: string;
     name: string | null;

@@ -391,13 +391,16 @@ export function dagenUitPlanning(p: Planning, ploegIds: string[] | null = null, 
  * díé datum.
  */
 export function verzetTijd(
-  werkbon: WerkbonPlanbaar & { dagen?: WerkbonDag[] | null },
+  werkbon: WerkbonPlanbaar & { dagen?: readonly object[] | null },
   datum: string,
   pid: string | null,
   nieuw: { starttijd: string; eindtijd: string },
 ): { dagen: DagPayload[]; standaard: { starttijd: string; eindtijd: string } } {
   // De planning levert de dagen als `dagen`, de werkbon zelf als `werkbon_dagen`.
-  const w: WerkbonPlanbaar = { ...werkbon, werkbon_dagen: werkbon.werkbon_dagen ?? werkbon.dagen ?? null };
+  const w: WerkbonPlanbaar = {
+    ...werkbon,
+    werkbon_dagen: werkbon.werkbon_dagen ?? ((werkbon.dagen as WerkbonDag[] | null | undefined) ?? null),
+  };
   const p = planningUitWerkbon(w);
   if (!p.dagen.includes(datum)) throw new Error('Deze dag staat niet (meer) op de werkbon. Ververs de planning.');
   const t = { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };

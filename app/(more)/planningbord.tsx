@@ -41,11 +41,12 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { BlokPaneel, InplannenPaneel } from '@/components/planning/PlanningPanelen';
 
 /**
  * Planning — de planningpagina van het dashboard (`PlanningPage.jsx`), om te
- * bekijken: wie werkt wanneer waar, welke bus rijdt, en wat nog niet is
- * ingepland.
+ * bekijken en plannen: wie werkt wanneer waar, welk voertuig rijdt, en wat nog
+ * niet is ingepland.
  *
  * Toegang: recht `planning` + feature `planning` (pakket Team of module bij
  * Groei), zoals de NAV-gate van het dashboard. Voertuigweergave alleen met de
@@ -56,13 +57,14 @@ import { useOnthouden } from '@/lib/useOnthouden';
  *   Een dag zonder ploeg staat onder "Niet toegewezen".
  * - Voertuigen: één blok per bus met de voertuigtijd en de inzittenden.
  * - Dubbel ingepland krijgt een oranje driehoek (waarschuwing, geen blokkade).
- * - Tik op een blok of een niet-ingeplande werkbon → de werkbon.
+ * - Tik op een blok: details en de tijd aanpassen (per persoon of per dag,
+ *   `verzetTijd` van het dashboard); dagen, ploeg, verantwoordelijke en
+ *   voertuig via het werkbonformulier. Tik op een niet-ingeplande werkbon:
+ *   inplannen (dag, tijd, ploeg). Met dezelfde meldingen, `planning_wijzigingen`
+ *   en agenda-items als het dashboard; zie components/planning/PlanningPanelen.
  *
  * Op een iPad (tabletbreedte) een breed rooster: resources als rijen, dagen als
- * kolommen. Op een telefoon per medewerker/dag.
- *
- * Slepen, rekken en inplannen (met meldingen, `planning_wijzigingen` en de
- * agenda-synchronisatie) blijven in het dashboard.
+ * kolommen. Op een telefoon een weekstrip zoals de agenda, per medewerker/dag.
  */
 export default function PlanningbordRoute() {
   return (
@@ -87,7 +89,9 @@ function periodeLabel(zicht: Zicht, anker: string, dagen: string[]): string {
   const a = datum(dagen[0]!);
   const b = datum(dagen[6]!);
   const links = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${MAAND_KORT[a.getMonth()]}`;
-  return `${links}–${b.getDate()} ${MAAND_KORT[b.getMonth()]} ${b.getFullYear()} · wk ${isoWeek(dagen[0]!)}`;
+  // Het jaar alleen als het niet dit jaar is: anders past het op een telefoon niet.
+  const jaar = b.getFullYear() === new Date().getFullYear() ? '' : ` ${b.getFullYear()}`;
+  return `${links}–${b.getDate()} ${MAAND_KORT[b.getMonth()]}${jaar} · wk ${isoWeek(dagen[0]!)}`;
 }
 
 function dagKort(iso: string): string {
@@ -97,7 +101,12 @@ function dagKort(iso: string): string {
 
 function PlanningbordScreen() {
   const router = useRouter();
-  const { hasFeature } = usePermissions();
+  const { hasFeature, can, readonly } = usePermissions();
+  // Plannen zoals het dashboard: recht `planning` én de module planning (magSlepen).
+  const magPlannen = can('planning') && hasFeature('planning') && !readonly;
+  const waaromNiet = readonly
+    ? 'Je abonnement staat op alleen-lezen; plannen kan pas weer met een lopend abonnement.'
+    : 'Plannen vraagt het recht Planning.';
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { klasse } = useSchermklasse();
@@ -151,7 +160,9 @@ function PlanningbordScreen() {
     );
   }, [van, tot, metVoertuigen]);
 
-  const { loading, refreshing, onRefresh, opnieuw } = useLaden(load, { onFout: setError });
+  const { loading, refreshing, onRefresh, opnieuw, herlaad } = useLaden(load, { onFout: setError });
+  const [blokOpen, setBlokOpen] = useState<RoosterBlok<PlanWerkbon> | null>(null);
+  const [inplannen, setInplannen] = useState<PlanWerkbon | null>(null);
 
   const actieveModus: Modus = metVoertuigen ? modus : 'medewerker';
   const blokken = useMemo(
@@ -194,7 +205,6 @@ function PlanningbordScreen() {
   );
 
   const stap = (richting: -1 | 1) => setAnker((a) => plusDagen(a, richting * (zicht === 'dag' ? 1 : 7)));
-  const openWerkbon = (id: string) => router.push(`/work-orders/${id}`);
 
   const blokTekst = (b: RoosterBlok<PlanWerkbon>) => {
     const w = b.werkbon;
@@ -222,7 +232,7 @@ function PlanningbordScreen() {
     return (
       <Pressable
         key={b.sleutel}
-        onPress={() => openWerkbon(b.werkbon.id)}
+        onPress={() => setBlokOpen(b)}
         accessibilityRole="button"
         accessibilityLabel={`${tekst.titel}, ${tekst.tijd}${isDubbel ? ', dubbel ingepland' : ''}`}
         style={({ pressed }) => [styles.blok, compact && styles.blokCompact, pressed && { opacity: 0.85 }]}
@@ -230,7 +240,7 @@ function PlanningbordScreen() {
         <View style={[styles.blokStreep, { backgroundColor: kleur }]} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.blokKop}>
-            <Text style={styles.blokTijd} numberOfLines={1}>
+            <Text style={[styles.blokTijd, compact && styles.blokTijdCompact]} numberOfLines={1}>
               {tekst.tijd}
             </Text>
             {isDubbel ? <AlertTriangle size={13} color={t.statusWarnFg} strokeWidth={2.4} /> : null}
@@ -348,21 +358,30 @@ function PlanningbordScreen() {
           </View>
         ) : null}
 
-        {/* Dagstrip bij dagweergave op een telefoon: snel naar een andere dag van de week. */}
-        {zicht === 'dag' && !breed ? (
+        {/* Weekstrip zoals in de agenda: dag, datum en een stip als er werk is.
+            In de weekweergave opent een tik die dag. */}
+        {!breed ? (
           <View style={styles.dagStrip}>
             {weekDatums.map((d) => {
-              const aan = d === anker;
+              const aan = zicht === 'dag' && d === anker;
+              const werk = blokken.some((b) => b.datum === d);
+              const dt = datum(d);
               return (
                 <Pressable
                   key={d}
-                  onPress={() => setAnker(d)}
+                  onPress={() => {
+                    setAnker(d);
+                    if (zicht !== 'dag') setZicht('dag');
+                  }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: aan }}
                   aria-pressed={aan}
+                  accessibilityLabel={`${dagKort(d)}${werk ? ', heeft werk' : ''}`}
                   style={[styles.dagKnop, aan && styles.dagKnopAan, d === vandaag && !aan && styles.dagKnopVandaag]}
                 >
-                  <Text style={[styles.dagKnopTekst, aan && styles.dagKnopTekstAan]}>{dagKort(d)}</Text>
+                  <Text style={[styles.dagKnopDag, aan && styles.dagKnopTekstAan]}>{DAG_KORT[dt.getDay()]}</Text>
+                  <Text style={[styles.dagKnopTekst, aan && styles.dagKnopTekstAan]}>{dt.getDate()}</Text>
+                  <View style={[styles.dagKnopStip, { backgroundColor: werk ? ds.green : 'transparent' }]} />
                 </Pressable>
               );
             })}
@@ -522,8 +541,9 @@ function PlanningbordScreen() {
                 {los.map((w) => (
                   <Pressable
                     key={w.id}
-                    onPress={() => openWerkbon(w.id)}
+                    onPress={() => setInplannen(w)}
                     accessibilityRole="button"
+                    accessibilityHint={magPlannen ? 'Inplannen' : 'Werkbon openen'}
                     style={({ pressed }) => [styles.losKaart, breed && styles.losKaartBreed, pressed && { opacity: 0.85 }]}
                   >
                     <Text style={styles.losKaartTitel} numberOfLines={1}>
@@ -544,9 +564,33 @@ function PlanningbordScreen() {
               </View>
             )
           ) : null}
-          <Text style={styles.voetnoot}>Inplannen en verschuiven doe je in het dashboard of op de werkbon.</Text>
+          <Text style={styles.voetnoot}>
+            {magPlannen
+              ? 'Tik op een blok om de tijd aan te passen, of op een werkbon hierboven om hem in te plannen.'
+              : 'Tik op een blok of werkbon voor de details.'}
+          </Text>
         </View>
       </AppScreen>
+
+      <BlokPaneel
+        blok={blokOpen}
+        modus={actieveModus}
+        naamVan={(id) => naamVan.get(id) ?? 'Medewerker'}
+        voertuigNaam={(id) => voertuigVan.get(id)?.naam ?? 'Voertuig'}
+        magPlannen={magPlannen}
+        waaromNiet={waaromNiet}
+        onSluit={() => setBlokOpen(null)}
+        onGewijzigd={() => void herlaad()}
+      />
+      <InplannenPaneel
+        werkbon={inplannen}
+        team={team.map((m) => ({ id: m.id, full_name: m.naam }))}
+        standaardDatum={zicht === 'dag' ? anker : anker < vandaag ? vandaag : anker}
+        magPlannen={magPlannen}
+        waaromNiet={waaromNiet}
+        onSluit={() => setInplannen(null)}
+        onGewijzigd={() => void herlaad()}
+      />
     </View>
   );
 }
@@ -621,7 +665,8 @@ const makeStyles = (t: ThemeColors) =>
     dagStrip: { flexDirection: 'row', gap: 4, paddingHorizontal: 16, paddingBottom: 10 },
     dagKnop: {
       flex: 1,
-      minHeight: 44,
+      minHeight: 58,
+      paddingVertical: 6,
       borderRadius: 12,
       backgroundColor: t.card,
       borderWidth: 1,
@@ -631,7 +676,9 @@ const makeStyles = (t: ThemeColors) =>
     },
     dagKnopAan: { backgroundColor: t.ink, borderColor: t.ink },
     dagKnopVandaag: { borderColor: ds.green, borderWidth: 1.5 },
-    dagKnopTekst: { fontSize: 12, fontWeight: '700', color: t.ink },
+    dagKnopTekst: { fontSize: 16, fontWeight: '700', color: t.ink },
+    dagKnopDag: { fontSize: 11, fontWeight: '600', color: t.muted, textTransform: 'capitalize' },
+    dagKnopStip: { width: 5, height: 5, borderRadius: 3, marginTop: 3 },
     dagKnopTekstAan: { color: t.bg },
 
     dot: { width: 10, height: 10, borderRadius: 5 },
@@ -656,6 +703,8 @@ const makeStyles = (t: ThemeColors) =>
     blokStreep: { width: 4, borderRadius: 2, alignSelf: 'stretch' },
     blokKop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     blokTijd: { fontSize: 11.5, fontWeight: '700', color: t.muted, flexShrink: 1 },
+    // Weekrooster op een iPad: smalle kolommen, dus kleiner, zodat "07:30–16:00" heel blijft.
+    blokTijdCompact: { fontSize: 10, letterSpacing: -0.2 },
     blokTitel: { fontSize: 13.5, fontWeight: '600', color: t.ink, marginTop: 1 },
     blokMeta: { fontSize: 11.5, color: t.muted, marginTop: 1 },
 

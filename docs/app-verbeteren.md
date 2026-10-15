@@ -38,11 +38,11 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [ ] Werkbon maken vanuit een afspraak, en "Werkbon inplannen" zonder planningsmodule
 
 ### 7. Planning
-- [ ] Kalender in de stijl van de agenda (dag/week, per medewerker en per voertuig)
-- [ ] Niet-ingeplande werkbonnen
-- [ ] Werkbon aantikken: dag, tijden, ploeg, verantwoordelijke, voertuig wijzigen
-- [ ] iPad-indeling dichter bij het dashboard
-- [ ] Zelfde rechten, module en meldingen als het dashboard
+- [x] Kalender in de stijl van de agenda: weekstrip met dag, datum en stip (tik = die dag), dag/week, per medewerker en per voertuig; periodelabel past op de telefoon
+- [x] Niet-ingeplande werkbonnen: tik = inplannen (dag, tijd, ploeg met verantwoordelijke, ook per e-mail) zoals QuickPlanModal. Getest: WB-166 ingepland op 20-10 09:00–12:00 (dag, agenda-item en melding gecontroleerd; blijft ingepland in het testbedrijf)
+- [x] Blok aantikken: details, tijd aanpassen per persoon (medewerkersweergave) of per dag (`verzetTijd` van het dashboard), en "Dagen, ploeg en voertuig aanpassen" via het werkbonformulier (zoals de DetailModal). Getest: Daan op WB-161 12-10 naar 08:00 (eigen tijd, melding, planning_wijzigingen, agenda-item) en terug
+- [x] iPad-indeling zoals het dashboard: rooster met medewerkers/voertuigen als rijen en dagen als kolommen (bestond al; tijd in smalle kolommen past nu). Slepen en rekken zoals in het dashboard zit er niet in: op een touchscherm via tikken + tijd kiezen
+- [x] Zelfde rechten, module en meldingen: pagina recht `planning` + module planning; wijzigen = recht planning + module (`magSlepen`), niet bij alleen-lezen of een ondertekende werkbon; meldingen "verzet"/"ingepland"/"afgehaald" + `planning_wijzigingen` (dagelijkse samenvatting) + toewijzing (optioneel per mail, nieuw ook vanuit het werkbonformulier) + agenda-items; per-dag meldingen bij meerdaagse klussen (ontbrak in de app)
 
 ### 8. Werkbon
 - [x] Kaartje bovenaan strak en uitgelijnd (knoppen behouden): kop alleen nummer + status (titel liep af en klant stond dubbel), project + Bewerken op één regel, volledige titel, klant als link, feiten in rijen met vaste icoonkolom (locatie, planning, verantwoordelijk, medewerkers, voertuigen), minder witruimte boven
@@ -99,6 +99,10 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] iPad in de app: `supportsTablet` aan, iPad alle standen (staand en liggend), iPhone blijft staand, Android-telefoons staand (vergrendeld bij starten), tablets draaien mee. De tabletindeling werkt nu ook in de app (was alleen web), met dezelfde gecentreerde kolom als de webapp (`MobielKader`). Werkt pas na een nieuwe build — niet zelf gebouwd of gepubliceerd
 - [x] Weergave "Zoals het apparaat" volgde in de app nooit donker: `userInterfaceStyle` stond op `light`; nu `automatic`
 
+## Testomgeving (tijdelijk)
+
+- [ ] TEST Stamvol Bouw BV staat sinds 15-10 tijdelijk op **Team** (was Groei) om planning, meerdaagse klussen en voertuigen te testen — akkoord gebruiker 15-10. **Terugzetten naar Groei** als het testen klaar is (`subscriptions.plan`, notitie op de rij).
+
 ## Database en edge functions
 
 Niets veranderd. Wat een wijziging zou vragen staat hier, met reden, en wacht op
@@ -135,5 +139,6 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 15-10 — Planning: bewerken (tijd, inplannen), agenda-look, meldingen per dag, mail bij toewijzen.
 - 15-10 — Branch aangemaakt. Homepage: thema naar Instellingen, Boss-hoofd,
   widgets vergeleken en gefixt (commit 8a87a4d). Onderzoek per onderdeel gestart.
