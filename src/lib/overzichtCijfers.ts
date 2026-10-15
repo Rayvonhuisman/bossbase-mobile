@@ -22,6 +22,11 @@ export type DealKern = {
   final_revenue: number | null;
   /** Voltooid project: staat niet meer op het bord en telt niet als open. */
   afgerond_op?: string | null;
+  /** Alleen voor de lijst "Nieuwe aanvragen". */
+  id?: string;
+  title?: string | null;
+  created_at?: string | null;
+  customer?: { name: string | null; city: string | null } | null;
 };
 
 export type FaseKern = { id: string; position: number | null };
@@ -80,6 +85,19 @@ export function nieuweAanvragen(
   if (!eerste) return { aantal: 0, waarde: 0 };
   const rijen = deals.filter((d) => d.stage_id === eerste);
   return { aantal: rijen.length, waarde: rijen.reduce((s, d) => s + dealWaarde(d), 0) };
+}
+
+/**
+ * De lijst van de tegel "Nieuwe aanvragen" (`new_leads`): de deals in de eerste
+ * fase, nieuwste eerst, hooguit `max`.
+ */
+export function nieuwsteAanvragen<D extends DealKern>(deals: D[], fases: FaseKern[], max = 6): D[] {
+  const eerste = eersteFaseId(fases);
+  if (!eerste) return [];
+  return deals
+    .filter((d) => d.stage_id === eerste)
+    .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+    .slice(0, max);
 }
 
 export function openOffertes(offertes: OfferteKern[]): { aantal: number; waarde: number } {

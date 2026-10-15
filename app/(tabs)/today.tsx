@@ -9,7 +9,15 @@ import {
   Phone,
   Users,
 } from 'lucide-react-native';
-import { AppCard, AppScreen, AppTopBar, NoticeBanner, StatusBadge, statusKey } from '@/components';
+import {
+  AppCard,
+  AppListItem,
+  AppScreen,
+  AppTopBar,
+  NoticeBanner,
+  StatusBadge,
+  statusKey,
+} from '@/components';
 import { ActiviteitRij } from '@/components/ActiviteitRij';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canCreateWorkOrder } from '@/services/workOrderService';
@@ -30,6 +38,7 @@ import {
 } from '@/services/overzichtService';
 import {
   nieuweAanvragen,
+  nieuwsteAanvragen,
   omzetDezeMaand,
   openFacturen,
   openOffertes,
@@ -47,6 +56,7 @@ import { getDayRange } from '@/lib/dateRange';
 import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
 import { formatEUR, formatPlanningTime } from '@/lib/format';
+import { avatarKleuren, initialen } from '@/lib/avatar';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
@@ -80,6 +90,9 @@ const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 /** Zoveel activiteiten toont de homepage, net als `FEED_LIMIET` in het dashboard. */
 const ACTIVITEITEN_MAX = 8;
+
+/** Zoveel aanvragen toont de lijst, net als de tegel `new_leads` in het dashboard. */
+const AANVRAGEN_MAX = 6;
 
 const dagVan = (iso: string) => lokaleDatum(iso);
 
@@ -133,6 +146,17 @@ function formatUrenLang(hours: number): string {
   return `${formatUren(hours)} u`;
 }
 
+/** "zojuist", "5u", "3d" — hoe lang geleden, zoals de tegel in het dashboard (`relAgo`). */
+function geledenKort(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return null;
+  const uur = Math.floor(ms / 36e5);
+  if (uur < 1) return 'zojuist';
+  if (uur < 24) return `${uur}u`;
+  return `${Math.floor(uur / 24)}d`;
+}
+
 /** Afgeronde werkbon? Eén bron voor de statusvertaling: `statusKey`. */
 function isAfgerond(status: string | null): boolean {
   return statusKey(status) === 'completed';
@@ -151,7 +175,7 @@ function isVervallen(status: string | null): boolean {
 export default function TodayScreen() {
   const router = useRouter();
   const { user, profile, role } = useAuth();
-  const { colors: c } = useTheme();
+  const { colors: c, colorMode } = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
   const { loaded: rechtenGeladen, can, mag, allowsRoute, hasFeature, readonly } = usePermissions();
   // Zelfde regel als de knop op Werkbonnen (policy `werkbonnen_insert`).
@@ -315,6 +339,15 @@ export default function TodayScreen() {
       onSuccess: async () => herlaad(),
     });
   };
+
+  // Nieuwe aanvragen: eerste pipelinefase, nieuwste eerst (tegel `new_leads`).
+  const aanvragen = useMemo(() => {
+    if (!overzicht.deals || !overzicht.fases) return null;
+    return {
+      ...nieuweAanvragen(overzicht.deals, overzicht.fases),
+      lijst: nieuwsteAanvragen(overzicht.deals, overzicht.fases, AANVRAGEN_MAX),
+    };
+  }, [overzicht.deals, overzicht.fases]);
 
   // De norm (8 uur per dag) gaat over werkdaguren; werkbonuren staan ernaast.
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
@@ -716,6 +749,65 @@ export default function TodayScreen() {
               </Pressable>
             </View>
 
+            {/* ── Nieuwe aanvragen (tegel `new_leads`) ─────────────────────── */}
+            {zieVerkoop ? (
+              <View style={styles.block}>
+                <View style={styles.blockHead}>
+                  <Text style={styles.blockTitle}>Nieuwe aanvragen</Text>
+                  {allowsRoute('/pipeline') ? (
+                    <Pressable accessibilityRole="link" onPress={() => router.push('/pipeline')} hitSlop={8}>
+                      <Text style={styles.blockLink}>Pipeline ›</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                {!aanvragen ? (
+                  <AppCard padding={18} style={{ alignItems: 'center' }}>
+                    <Text style={styles.emptyText}>{loading ? 'Laden…' : 'Aanvragen konden niet worden geladen.'}</Text>
+                  </AppCard>
+                ) : aanvragen.lijst.length === 0 ? (
+                  <AppCard padding={18} style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>Geen nieuwe aanvragen</Text>
+                    <Text style={styles.emptyText}>Tijd om je netwerk aan te spreken.</Text>
+                  </AppCard>
+                ) : (
+                  <View style={styles.lijstKaart}>
+                    {aanvragen.lijst.map((d, i) => {
+                      const naam = d.customer?.name || 'Onbekende klant';
+                      const kleur = avatarKleuren(naam, colorMode === 'dark');
+                      return (
+                        <AppListItem
+                          key={d.id ?? i}
+                          first={i === 0}
+                          title={naam}
+                          subtitle={[d.title, d.customer?.city].filter(Boolean).join(' · ') || undefined}
+                          leading={
+                            <View style={[styles.aanvraagAvatar, { backgroundColor: kleur.bg }]}>
+                              <Text style={[styles.aanvraagInitialen, { color: kleur.fg }]}>{initialen(naam, '?')}</Text>
+                            </View>
+                          }
+                          trailing={<Text style={styles.aanvraagLeeftijd}>{geledenKort(d.created_at) ?? ''}</Text>}
+                          onPress={d.id ? () => router.push(`/deal/${d.id}`) : undefined}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
+                {aanvragen && aanvragen.aantal > 0 ? (
+                  <Pressable
+                    onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
+                    accessibilityRole="link"
+                    style={({ pressed }) => [styles.voetLink, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.blockLink}>
+                      {`${aanvragen.aantal} ${aanvragen.aantal === 1 ? 'aanvraag' : 'aanvragen'}`}
+                      {zieFinancien ? ` · ${formatEUR(aanvragen.waarde)} potentieel` : ''}
+                      {allowsRoute('/pipeline') ? ' ›' : ''}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
             {tablet ? null : dezeWeek}
           </View>
         </View>
@@ -759,24 +851,6 @@ export default function TodayScreen() {
                   waarde={overzicht.facturen ? formatEUR(omzetDezeMaand(overzicht.facturen, vandaag)) : '—'}
                   sub="excl. btw"
                   onPress={allowsRoute('/invoices') ? () => router.push('/invoices') : undefined}
-                />
-              ) : null}
-              {zieVerkoop ? (
-                <KpiTegel
-                  styles={styles}
-                  tablet={tablet}
-                  label="Nieuwe aanvragen"
-                  waarde={
-                    overzicht.deals && overzicht.fases
-                      ? String(nieuweAanvragen(overzicht.deals, overzicht.fases).aantal)
-                      : '—'
-                  }
-                  sub={
-                    overzicht.deals && overzicht.fases && zieFinancien
-                      ? `${formatEUR(nieuweAanvragen(overzicht.deals, overzicht.fases).waarde)} potentieel`
-                      : undefined
-                  }
-                  onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}
               {zieOffertes ? (
@@ -1208,6 +1282,9 @@ const makeStyles = (c: ThemeColors) =>
       overflow: 'hidden',
     },
     voetLink: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+    aanvraagAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    aanvraagInitialen: { fontSize: 13, fontWeight: '800' },
+    aanvraagLeeftijd: { fontSize: 12, fontWeight: '600', color: c.muted },
 
     // ── Overzichtstegels ───────────────────────────────────────────────
     tegels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

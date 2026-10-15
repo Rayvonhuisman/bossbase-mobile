@@ -113,6 +113,19 @@ test('overzicht: pipelinewaarden op deals.status', () => {
   assert.deepEqual(O.nieuweAanvragen(deals, []), { aantal: 0, waarde: 0 });
 });
 
+test('overzicht: nieuwste aanvragen uit de eerste fase, nieuwste eerst', () => {
+  const fases = [{ id: 'f2', position: 2 }, { id: 'f1', position: 1 }];
+  const deals = [
+    { id: 'a', stage_id: 'f1', created_at: '2026-10-01T10:00:00Z' },
+    { id: 'b', stage_id: 'f2', created_at: '2026-10-14T10:00:00Z' },
+    { id: 'c', stage_id: 'f1', created_at: '2026-10-12T10:00:00Z' },
+    { id: 'd', stage_id: 'f1', created_at: null },
+  ];
+  assert.deepEqual(O.nieuwsteAanvragen(deals, fases).map((d) => d.id), ['c', 'a', 'd']);
+  assert.deepEqual(O.nieuwsteAanvragen(deals, fases, 1).map((d) => d.id), ['c']);
+  assert.deepEqual(O.nieuwsteAanvragen(deals, []), []);
+});
+
 test('overzicht: open offertes, openstaande facturen, omzet deze maand', () => {
   assert.deepEqual(
     O.openOffertes([
