@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { pushNotificaties } from './collegaMeldingService';
 import { metTijdslimiet } from '@/lib/queryTijdslimiet';
 import type {
   Role,
@@ -1305,30 +1306,6 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
 // Collega-meldingen lopen via de bestaande Edge Function `create-notification`
 // (de RLS op `notifications` staat alleen self-insert toe). Alleen in-app: de
 // HTML-mail die het dashboard optioneel meestuurt bouwt de app (nog) niet.
-
-type NotificatieRij = {
-  user_id: string;
-  type: string;
-  title: string;
-  body?: string | null;
-  link?: string | null;
-  related_type?: string | null;
-  related_id?: string | null;
-  /** Ook mailen; de Edge Function bouwt de mail en zoekt het adres zelf op. */
-  email?: boolean;
-};
-
-async function pushNotificaties(rijen: NotificatieRij[]): Promise<void> {
-  if (!rijen.length) return;
-  try {
-    const { error } = await supabase.functions.invoke('create-notification', {
-      body: { notifications: rijen },
-    });
-    if (error && __DEV__) console.log('[werkbon] create-notification mislukt', error.message);
-  } catch (e) {
-    if (__DEV__) console.log('[werkbon] create-notification mislukt', e);
-  }
-}
 
 /**
  * Na opslaan: wie nieuw gekoppeld is krijgt "Je bent toegewezen aan …", wie

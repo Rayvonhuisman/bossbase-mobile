@@ -115,6 +115,7 @@ export type Customer = {
   id: string;
   company_id: string;
   name: string | null;
+  contactpersoon?: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;

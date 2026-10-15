@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -166,7 +166,16 @@ function regelMeta(r: FactuurRegel): string {
 
 function InvoicesScreenInhoud() {
   const router = useRouter();
-  const { id: openId } = useLocalSearchParams<{ id?: string }>();
+  // `?nieuw=1&klant=&project=` opent meteen een nieuwe factuur voor dat
+  // project — de plusknop op de projectkaart (`prefill` van de dashboardmodal).
+  // Na opslaan of annuleren gaat het terug naar het project.
+  const {
+    id: openId,
+    nieuw: nieuwParam,
+    klant: klantParam,
+    project: projectParam,
+  } = useLocalSearchParams<{ id?: string; nieuw?: string; klant?: string; project?: string }>();
+  const terugNaarProject = useRef<string | null>(null);
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
@@ -251,14 +260,12 @@ function InvoicesScreenInhoud() {
     if (!eenheidRes.error) setEenheden(eenheidRes.data);
   }, []);
 
-
   /**
    * Eerste load, stille verversing bij focus en pull-to-refresh zijn hier
    * drie verschillende dingen. Alleen de laatste zet `refreshing`, dus het
    * scherm hangt niet meer omlaag bij een automatische verversing.
    */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
-
 
 
   /**
@@ -323,7 +330,7 @@ function InvoicesScreenInhoud() {
     );
   };
 
-  const openNieuw = () => {
+  const openNieuw = (vooraf?: { customerId?: string | null; projectId?: string | null }) => {
     setSaveError(null);
     // Vervaldatum = factuurdatum + de betaaltermijn uit de bedrijfsinstellingen,
     // net als de factuurmodal van het dashboard hem voorinvult.
@@ -332,8 +339,8 @@ function InvoicesScreenInhoud() {
     setNieuweRegels([legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })]);
     setConcept({
       id: null,
-      customerId: null,
-      projectId: null,
+      customerId: vooraf?.customerId ?? null,
+      projectId: vooraf?.projectId ?? null,
       factuurdatum: vandaagIso(),
       betaaltermijn: String(instellingen.geldigDagen),
       vervaldatum: isoVanDatum(verval),
@@ -343,6 +350,19 @@ function InvoicesScreenInhoud() {
       geimporteerd: false,
     });
   };
+
+  // Nieuw vanaf de projectkaart: pas openen als de instellingen er zijn, anders
+  // klopt de voorinvulling (vervaldatum, btw, uurtarief) niet.
+  useEffect(() => {
+    if (nieuwParam !== '1' || loading || !rechtenGeladen) return;
+    terugNaarProject.current = projectParam || null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (magMaken) openNieuw({ customerId: klantParam || null, projectId: projectParam || null });
+    router.setParams({ nieuw: undefined, klant: undefined, project: undefined });
+    // openNieuw leest alleen de net geladen instellingen; hem als afhankelijkheid
+    // nemen zou bij elke render opnieuw openen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nieuwParam, loading, rechtenGeladen]);
 
   const openBewerk = (f: FactuurRow) => {
     if (!magWijzigen) return;
@@ -405,6 +425,12 @@ function InvoicesScreenInhoud() {
         onSuccess: async () => {
           setConcept(null);
           setNieuweRegels([]);
+          const naar = terugNaarProject.current;
+          if (!concept.id && naar) {
+            terugNaarProject.current = null;
+            terugOfNaar(router, `/project/${naar}`);
+            return;
+          }
           await herlaad();
         },
       },
@@ -561,7 +587,7 @@ function InvoicesScreenInhoud() {
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={openNieuw} />
+                <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={() => openNieuw()} />
               ) : undefined
             }
           />
@@ -808,7 +834,15 @@ function InvoicesScreenInhoud() {
           !concept?.id && (!concept?.customerId || (magRegels && nieuweRegels.length === 0))
         }
         onSubmit={opslaan}
-        onClose={() => setConcept(null)}
+        onClose={() => {
+          setConcept(null);
+          // Geopend vanaf de projectkaart en geannuleerd: terug naar het project.
+          const naar = terugNaarProject.current;
+          if (naar) {
+            terugNaarProject.current = null;
+            terugOfNaar(router, `/project/${naar}`);
+          }
+        }}
         destructive={
           concept?.id && magVerwijderen
             ? { label: 'Factuur verwijderen', onPress: verwijderen }
