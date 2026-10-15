@@ -3,7 +3,14 @@ import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { haalInStukken } from '@/lib/inStukken';
-import { btwPctVoorOpslag, volgendNummer } from '@/lib/documentLogica';
+import {
+  btwPctVoorOpslag,
+  magOfferteVerwijderen,
+  versieBasis,
+  volgendNummer,
+  volgendVersieNummer,
+} from '@/lib/documentLogica';
+import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -32,7 +39,7 @@ const OFFERTE_COLUMNS = `
   id, company_id, customer_id, deal_id, nummer, omschrijving, status,
   arbeidsuren, uurtarief, materiaalkosten, reiskosten, marge_pct, btw_pct,
   totaal_excl, totaal_incl, geldig_tot, verzonden_op, geaccepteerd_op,
-  signed_at, notes, created_at,
+  signed_at, notes, created_at, vervangen_op, vervangen_door_nummer,
   customer:customers ( id, name )
 `;
 
@@ -63,6 +70,9 @@ export type OfferteRow = {
   signed_at: string | null;
   notes: string | null;
   created_at: string;
+  /** Gezet zodra een nieuwere versie deze offerte vervangt (versiebeheer). */
+  vervangen_op: string | null;
+  vervangen_door_nummer: string | null;
   customer: { id: string; name: string | null } | null;
 };
 
@@ -141,6 +151,9 @@ export const DOCUMENT_KLANT_KOLOMMEN =
  * een oudere database ontbreekt mag de lijst niet laten mislukken.
  */
 export type OfferteDetail = Omit<OfferteRow, 'customer'> & {
+  /** De ondertekenlink van de klant: `${appUrl}/offerte/${sign_token}`. */
+  sign_token?: string | null;
+  signed_pdf_url?: string | null;
   signed_by_name?: string | null;
   signed_by_email?: string | null;
   sent_to_email?: string | null;
@@ -349,6 +362,13 @@ export type OfferteInput = {
    */
   totaal_excl?: number;
   totaal_incl?: number;
+  /**
+   * Een vast nummer in plaats van het volgende uit de reeks: een nieuwe versie
+   * (`BB-005-v2`) houdt het basisnummer van zijn voorganger.
+   */
+  nummer?: string;
+  /** Vervallen veld; alleen een kopie neemt de waarde van de bron mee. */
+  marge_pct?: number;
 };
 
 function valideerOfferte(input: Partial<OfferteInput>): string | null {
@@ -377,7 +397,10 @@ export async function createOfferte(input: OfferteInput): Promise<WriteResult<Of
   const fout = valideerOfferte(input);
   if (fout) return writeFout('validatie', fout);
 
-  const nummerRes = await volgendOfferteNummer();
+  const vastNummer = input.nummer?.trim() || null;
+  const nummerRes = vastNummer
+    ? ({ ok: true, nummer: vastNummer } as const)
+    : await volgendOfferteNummer();
   if (!nummerRes.ok) return writeFout('onbekend', nummerRes.melding);
 
   const totalen = berekenOfferteTotalen(input);
@@ -393,7 +416,7 @@ export async function createOfferte(input: OfferteInput): Promise<WriteResult<Of
     reiskosten: Number(input.reiskosten ?? 0),
     // Vervallen veld; de kolom blijft omdat de onderteken-RPC's hem in hun
     // signatuur hebben. `??` en niet `||`: 0 is falsy en werd stilzwijgend 25.
-    marge_pct: 0,
+    marge_pct: Number(input.marge_pct ?? 0),
     btw_pct: Number(input.btw_pct ?? 21),
     ...totalen,
     geldig_tot: input.geldig_tot || null,
@@ -418,10 +441,21 @@ export async function createOfferte(input: OfferteInput): Promise<WriteResult<Of
   );
   if (!res.ok) return res;
 
+  // Op de tijdlijn van de klant, zoals `createOfferte` in het dashboard.
+  if (res.data.customer_id) {
+    void logTijdlijn(
+      res.data.customer_id,
+      'offerte_aangemaakt',
+      `Offerte ${res.data.nummer} aangemaakt (€${tijdlijnBedrag(res.data.totaal_incl)})`,
+      { nummer: res.data.nummer, totaalIncl: Number(res.data.totaal_incl ?? 0) },
+    );
+  }
+
   // Zonder unique index kan een gelijktijdige aanmaak hetzelfde nummer
   // opleveren. Eén keer terugkijken en zo nodig ophogen is goedkoop, en het
-  // alternatief is twee offertes BB-007 die pas bij de klant opvallen.
-  if (res.data.nummer && (await nummerAlInGebruik(res.data.nummer, res.data.id))) {
+  // alternatief is twee offertes BB-007 die pas bij de klant opvallen. Niet bij
+  // een versienummer: dat hoort bij zijn voorganger en is uniek per opbouw.
+  if (!vastNummer && res.data.nummer && (await nummerAlInGebruik(res.data.nummer, res.data.id))) {
     const opnieuw = await volgendOfferteNummer();
     if (opnieuw.ok) {
       const herstel = await schrijf<OfferteRow>(
@@ -506,7 +540,7 @@ export async function updateOfferte(
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
 
-  return schrijf<OfferteRow>(
+  const res = await schrijf<OfferteRow>(
     () => supabase.from('offertes').update(updates).eq('id', id).select(OFFERTE_COLUMNS),
     {
       context: 'offerteService.updateOfferte',
@@ -514,9 +548,33 @@ export async function updateOfferte(
       leegMelding: 'Er is niets gewijzigd. Je hebt het recht Offertes nodig.',
     },
   );
+  if (res.ok && input.status) logStatusOpTijdlijn(res.data, input.status);
+  return res;
+}
+
+/** De statusregels op de klanttijdlijn, zoals `updateOfferte` in het dashboard. */
+function logStatusOpTijdlijn(o: Pick<OfferteRow, 'customer_id' | 'nummer'>, status: string): void {
+  const regels: Record<string, [string, string]> = {
+    verzonden: ['offerte_verzonden', `Offerte ${o.nummer} verzonden naar klant`],
+    geaccepteerd: ['offerte_geaccepteerd', `Offerte ${o.nummer} geaccepteerd`],
+    afgewezen: ['offerte_afgewezen', `Offerte ${o.nummer} afgewezen`],
+  };
+  const regel = regels[status];
+  if (regel && o.customer_id) void logTijdlijn(o.customer_id, regel[0], regel[1], { nummer: o.nummer });
 }
 
 export async function deleteOfferte(id: string): Promise<WriteStatus> {
+  // Een ondertekende of geaccepteerde offerte is het akkoord van de klant en
+  // blijft bewaard (`magOfferteVerwijderen` in het dashboard).
+  const { data: cur } = await supabase
+    .from('offertes')
+    .select('status, signed_at')
+    .eq('id', id)
+    .maybeSingle();
+  const huidig = cur as { status: string | null; signed_at: string | null } | null;
+  if (huidig && !magOfferteVerwijderen(huidig)) {
+    return writeFout('op-slot', 'Een ondertekende of geaccepteerde offerte kun je niet verwijderen.');
+  }
   const res = await schrijf<{ id: string }>(
     () => supabase.from('offertes').delete().eq('id', id).select('id'),
     {
@@ -753,4 +811,275 @@ export async function createOfferteMetRegels(
   }
 
   return { ok: true, data: { offerte: kop.data, regels: terug.data } };
+}
+
+// ── Versies en kopieën ─────────────────────────────────────────────────────
+
+/** `nextOfferteVersionNumber`: BB-005 → BB-005-v2 → BB-005-v3. */
+export async function volgendOfferteVersieNummer(
+  nummer: string | null,
+): Promise<{ ok: true; nummer: string } | { ok: false; melding: string }> {
+  const basis = versieBasis(nummer);
+  const { data, error } = await supabase.from('offertes').select('nummer').ilike('nummer', `${basis}%`);
+  if (error) {
+    console.warn('[offerteService.volgendOfferteVersieNummer]', error.message);
+    return { ok: false, melding: 'Het versienummer kon niet worden bepaald. Probeer het opnieuw.' };
+  }
+  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
+  return { ok: true, nummer: volgendVersieNummer(nummer, nummers) };
+}
+
+/**
+ * `markOfferteVervangen`: de oude versie krijgt `vervangen_op` en het nummer
+ * van zijn opvolger. Het sign_token blijft, zodat de oude ondertekenlink een
+ * nette "niet meer geldig" toont. Geen inhoudelijk veld, dus dit mag ook op een
+ * verstuurde offerte.
+ */
+export async function markeerOfferteVervangen(
+  id: string,
+  vervangenDoorNummer: string,
+): Promise<WriteResult<OfferteRow>> {
+  const res = await schrijf<OfferteRow>(
+    () =>
+      supabase
+        .from('offertes')
+        .update({ vervangen_op: new Date().toISOString(), vervangen_door_nummer: vervangenDoorNummer || null })
+        .eq('id', id)
+        .select(OFFERTE_COLUMNS),
+    { context: 'offerteService.markeerOfferteVervangen', bedrijfReadonly: isReadonly() },
+  );
+  if (res.ok && res.data.customer_id) {
+    void logTijdlijn(
+      res.data.customer_id,
+      'offerte_verzonden',
+      `Offerte ${res.data.nummer} vervangen door nieuwe versie ${vervangenDoorNummer || ''}`.trim(),
+      { nummer: res.data.nummer, vervangenDoor: vervangenDoorNummer },
+    );
+  }
+  return res;
+}
+
+/**
+ * De regels van een concept vervangen, zoals "Opslaan" in de bewerkmodal van
+ * het dashboard: alle regels weg en opnieuw opbouwen. Daarna de totalen
+ * opnieuw laten rekenen (de databasetrigger zet ze uit de regels) en
+ * teruglezen: alleen wat er echt staat telt.
+ */
+export async function vervangOfferteRegels(
+  offerteId: string,
+  regels: NieuweRegelInvoer[],
+): Promise<WriteResult<OfferteItem[]>> {
+  if (regels.length === 0) return writeFout('validatie', 'Voeg minimaal één regel toe.');
+  const weg = await schrijfLeegVerwijderen(offerteId);
+  if (!weg.ok) return weg;
+
+  const mislukt: string[] = [];
+  for (let i = 0; i < regels.length; i++) {
+    const r = regels[i]!;
+    const res = await createOfferteItem({
+      offerte_id: offerteId,
+      omschrijving: r.omschrijving,
+      type: r.type,
+      aantal: r.aantal,
+      prijs_per: r.prijs_per,
+      btw_pct: r.btw_pct,
+      btw_regime: r.btw_regime,
+      volgorde: i,
+    });
+    if (!res.ok) mislukt.push(`regel ${i + 1}: ${res.melding}`);
+  }
+  await herberekenOfferteTotalen(offerteId);
+
+  const terug = await getOfferteItems(offerteId);
+  if (terug.error) return writeFout('onbekend', 'De regels konden niet worden gecontroleerd. Open de offerte opnieuw.');
+  if (mislukt.length > 0 || terug.data.length !== regels.length) {
+    return writeFout(
+      'onbekend',
+      `${terug.data.length} van de ${regels.length} regels zijn opgeslagen. ${mislukt[0] ?? ''}`.trim(),
+    );
+  }
+  return { ok: true, data: terug.data };
+}
+
+async function schrijfLeegVerwijderen(offerteId: string): Promise<WriteStatus> {
+  const { error } = await supabase.from('offerte_items').delete().eq('offerte_id', offerteId);
+  if (error) {
+    console.warn('[offerteService.vervangOfferteRegels]', error.message);
+    return writeFout(
+      /row-level|permission|42501/i.test(`${error.code} ${error.message}`) ? 'geen-rechten' : 'onbekend',
+      'De oude regels konden niet worden verwijderd. Er is niets gewijzigd aan de regels.',
+    );
+  }
+  return { ok: true, data: null };
+}
+
+/**
+ * Herzien als nieuwe versie (bewerkmodal van het dashboard bij een verstuurde,
+ * nog niet getekende offerte): een nieuwe conceptofferte met het volgende
+ * versienummer, dezelfde klant-aanvraag (deal) en de aangepaste regels; de
+ * oude krijgt `vervangen_op`, waarmee zijn ondertekenlink vervalt. De oude
+ * blijft bewaard.
+ */
+export async function herzieOfferte(
+  bron: Pick<OfferteRow, 'id' | 'nummer' | 'deal_id' | 'btw_pct'>,
+  kop: { customer_id: string | null; omschrijving: string; geldig_tot: string | null; notes: string },
+  regels: NieuweRegelInvoer[],
+  totalen: { totaal_excl: number; totaal_incl: number },
+): Promise<WriteResult<{ offerte: OfferteRow; regels: OfferteItem[] }>> {
+  const versie = await volgendOfferteVersieNummer(bron.nummer);
+  if (!versie.ok) return writeFout('onbekend', versie.melding);
+  const nieuw = await createOfferteMetRegels(
+    {
+      customer_id: kop.customer_id,
+      omschrijving: kop.omschrijving,
+      geldig_tot: kop.geldig_tot || null,
+      notes: kop.notes,
+      marge_pct: 0,
+      btw_pct: Number(bron.btw_pct || 21),
+      ...totalen,
+      nummer: versie.nummer,
+      // Zonder deal_id schoof de deal niet naar Akkoord als de klant de nieuwe
+      // versie tekende (zelfde opmerking als in het dashboard).
+      deal_id: bron.deal_id || null,
+    },
+    regels,
+  );
+  if (!nieuw.ok) return nieuw;
+  const vervangen = await markeerOfferteVervangen(bron.id, versie.nummer);
+  if (!vervangen.ok) {
+    return writeFout(
+      'onbekend',
+      `Versie ${versie.nummer} is aangemaakt, maar ${bron.nummer} kon niet als vervangen worden gemarkeerd: ` +
+        `${vervangen.melding} De oude ondertekenlink werkt daardoor nog.`,
+    );
+  }
+  return nieuw;
+}
+
+/**
+ * `copyOfferte`: een bewerkbare conceptkopie met dezelfde regels.
+ * - als versie (zelfde klant): versienummer, zelfde deal; telt niet mee voor
+ *   de offertelimiet (`bb_offerte_telt_mee`);
+ * - anders: een nieuw nummer uit de reeks, voor een andere klant, zonder deal.
+ * Verstuur-, onderteken- en snapshotgegevens gaan niet mee.
+ */
+export async function kopieerOfferte(
+  bronId: string,
+  { customerId, alsVersie }: { customerId: string | null; alsVersie: boolean },
+): Promise<WriteResult<OfferteRow>> {
+  const { data: bronRij, error } = await supabase.from('offertes').select('*').eq('id', bronId).maybeSingle();
+  if (error) return writeFout('onbekend', 'De offerte kon niet worden geladen.');
+  const bron = bronRij as (OfferteRow & Record<string, unknown>) | null;
+  if (!bron) return writeFout('niet-gevonden');
+  const items = await getOfferteItems(bronId);
+  if (items.error) return writeFout('onbekend', items.error);
+
+  let nummer: string | undefined;
+  if (alsVersie) {
+    const v = await volgendOfferteVersieNummer(bron.nummer);
+    if (!v.ok) return writeFout('onbekend', v.melding);
+    nummer = v.nummer;
+  }
+
+  const kop = await createOfferte({
+    customer_id: customerId || bron.customer_id,
+    deal_id: alsVersie ? bron.deal_id || null : null,
+    nummer,
+    omschrijving: bron.omschrijving,
+    arbeidsuren: Number(bron.arbeidsuren || 0),
+    uurtarief: Number(bron.uurtarief || 55),
+    materiaalkosten: Number(bron.materiaalkosten || 0),
+    reiskosten: Number(bron.reiskosten || 0),
+    marge_pct: Number(bron.marge_pct ?? 25),
+    btw_pct: Number(bron.btw_pct || 21),
+    totaal_excl: Number(bron.totaal_excl || 0),
+    totaal_incl: Number(bron.totaal_incl || 0),
+    geldig_tot: bron.geldig_tot,
+    notes: bron.notes,
+  });
+  if (!kop.ok) return kop;
+
+  const mislukt: string[] = [];
+  for (const it of items.data) {
+    const res = await createOfferteItem({
+      offerte_id: kop.data.id,
+      omschrijving: it.omschrijving,
+      eenheid: it.eenheid,
+      type: it.type,
+      btw_pct: it.btw_pct,
+      btw_regime: it.btw_regime || regimeVanPct(it.btw_pct),
+      aantal: Number(it.aantal || 1),
+      prijs_per: Number(it.prijs_per || 0),
+      volgorde: Number(it.volgorde || 0),
+    });
+    if (!res.ok) mislukt.push(res.melding);
+  }
+  if (mislukt.length > 0) {
+    return writeFout(
+      'onbekend',
+      `Offerte ${kop.data.nummer ?? ''} is aangemaakt, maar ${mislukt.length} van de ${items.data.length} ` +
+        `regels zijn niet gekopieerd. ${mislukt[0]}`,
+    );
+  }
+  return kop;
+}
+
+/**
+ * Na het mailen (`handleSend` van de offertemail): altijd het adres vastleggen
+ * (`sent_to_email`); bij een concept ook status verzonden, `verzonden_op` en
+ * de bevroren bedrijfsgegevens, zodat een later ander logo deze offerte niet
+ * meer verandert.
+ */
+export async function markeerOfferteVerstuurd(
+  o: Pick<OfferteRow, 'id' | 'status' | 'customer_id' | 'nummer'>,
+  aan: string,
+  snapshot: Record<string, string | null>,
+): Promise<WriteResult<OfferteRow>> {
+  const eerste = o.status === 'concept';
+  const res = await schrijf<OfferteRow>(
+    () =>
+      supabase
+        .from('offertes')
+        .update({
+          sent_to_email: aan,
+          ...(eerste ? { status: 'verzonden', verzonden_op: new Date().toISOString(), ...snapshot } : {}),
+        })
+        .eq('id', o.id)
+        .select(OFFERTE_COLUMNS),
+    { context: 'offerteService.markeerOfferteVerstuurd', bedrijfReadonly: isReadonly() },
+  );
+  if (res.ok && eerste) logStatusOpTijdlijn(res.data, 'verzonden');
+  return res;
+}
+
+/**
+ * Vangnet voor een getekende offerte zonder PDF (`stuurGetekendePdfNa` in het
+ * dashboard): de server maakt het ondertekende exemplaar alsnog, bewaart het
+ * en stuurt de bijlage na. Openen twee mensen hem tegelijk, dan wint er één
+ * (`nagezonden: false` voor de ander). Wordt alleen aangeroepen als
+ * `signed_at` er is en `signed_pdf_url` ontbreekt.
+ */
+export async function stuurGetekendePdfNa(
+  offerteId: string,
+): Promise<{ ok: true; nagezonden: boolean } | { ok: false; melding: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('getekende-pdf-nazenden', {
+      body: { soort: 'offerte', id: offerteId },
+    });
+    if (error) {
+      let melding = 'De ontbrekende PDF kon niet worden nagestuurd.';
+      try {
+        const b = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.();
+        if (b?.error) melding = b.error;
+      } catch {
+        /* geen json */
+      }
+      return { ok: false, melding };
+    }
+    const res = data as { nagezonden?: boolean; error?: string } | null;
+    if (res?.error) return { ok: false, melding: res.error };
+    return { ok: true, nagezonden: res?.nagezonden === true };
+  } catch {
+    return { ok: false, melding: 'De ontbrekende PDF kon niet worden nagestuurd.' };
+  }
 }

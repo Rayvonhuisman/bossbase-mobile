@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,8 +25,10 @@ import {
   NoticeBanner,
   RegelEditor,
 } from '@/components';
-import { usePermissions, useTheme } from '@/providers';
+import { usePermissions, useTheme, useToast } from '@/providers';
 import {
+  berekenVervaldatum,
+  bewaarFactuurPdf,
   createFactuurRegel,
   deleteFactuur,
   deleteFactuurRegel,
@@ -34,7 +36,10 @@ import {
   createCreditFactuur,
   getFactuurDetail,
   getFactuurRegels,
+  kopieerFactuur,
   listFacturenMetDocument,
+  markeerFactuurVerstuurd,
+  standaardBetaaltermijn,
   type FactuurDetail,
   herberekenFactuurTotalen,
   inhoudLigtVast,
@@ -42,47 +47,71 @@ import {
   listFacturen,
   markeerBetaald,
   updateFactuur,
+  uploadFactuurPdf,
+  zetHerinneringVerstuurd,
   type FactuurInput,
   type FactuurRegel,
   type FactuurRow,
   createFactuur,
   createFactuurMetRegels,
 } from '@/services/factuurService';
+import { getOfferteDetail, getOfferteItems } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
-import { listProjects } from '@/services/projectService';
+import { listProjects, type ProjectRow } from '@/services/projectService';
 import { getCompanySettings } from '@/services/settingsService';
 import { listEigenEenheden } from '@/services/eigenEenheidService';
 import {
-  berekenTotalen,
-  legeRegel,
-  omschrijvingVoorOpslag,
-  veldNaarNummer,
-  type EigenEenheid,
-  type Regel,
-} from '@/lib/regels';
-import { isoVanDatum } from '@/lib/datum';
+  getBedrijfVoorDocument,
+  getMailSjabloon,
+  logVerstuurdeMail,
+  maakBetaallink,
+  stripeActief,
+  verstuurMail,
+} from '@/services/documentMailService';
+import { logTijdlijn } from '@/services/klantTijdlijnService';
+import { berekenTotalen, legeRegel, type EigenEenheid, type Regel } from '@/lib/regels';
+import { factuurRegelVoorOpslag, regelUitOfferteItem } from '@/lib/regelOmzetting';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
+import { writeFout, type WriteResult } from '@/lib/writeResult';
 import { vandaagIso } from '@/lib/nlTijd';
-import { formatDateNL, formatEUR } from '@/lib/format';
+import { formatDateNL, formatEUR, formatEURCent } from '@/lib/format';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
 import { useSchermklasse } from '@/lib/schermklasse';
 import {
+  binnenLimiet,
   documentTotalen,
   FACTUUR_FILTERS,
+  factuurHerinneringen,
   factuurKpis,
   factuurStatusInfo,
+  factuurStatusWeigering,
   factuurWeergaveStatus,
   filterFacturen,
+  gedeeltelijkeCreditRegels,
   isFactuurVerlopen,
   magCrediteren,
+  magFactuurVerwijderen,
   telFactuurFilters,
+  wordtDefinitief,
   type FactuurFilter,
 } from '@/lib/documentLogica';
+import {
+  bedrijfSnapshot,
+  FACTUUR_MAIL_TITEL,
+  factuurMailConcept,
+  factuurMailHtml,
+  type FactuurMailSoort,
+} from '@/lib/documentMail';
+import { maakFactuurPdf } from '@/lib/pdf';
+import { bedrijfVoorDocument, naarFactuur, type PdfBedrijf } from '@/lib/pdf/pdfData';
+import type { Customer } from '@/types/domain';
 import { Paneel } from '@/components/Paneel';
 import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
+import { DocumentMailSheet, type MailConcept } from '@/components/DocumentMailSheet';
+import { Keuze, Schakel } from '@/components/instellingen/Bouwstenen';
 import {
   DetailRij,
   DocumentStatusBadge,
@@ -99,20 +128,25 @@ import { useOnthouden } from '@/lib/useOnthouden';
  * Betaald deze maand, Verlopen), filtertabs (Alle/Concept/Verzonden/Betaald/
  * Verlopen/Gecrediteerd), zoeken op nummer en klant, "Te laat" als de
  * vervaldatum verstreken is, CF-badge voor creditfacturen en "Gecrediteerd".
- * De detailweergave opent de bewaarde PDF uit `factuur-pdfs` (tijdelijke
- * link); zonder bewaard bestand is er een afdrukbare weergave. Volledig
- * crediteren (`BB-CF…`) kan hier; versturen, herinneringen en gedeeltelijk
- * crediteren gaan via het dashboard.
+ * De detailweergave heeft de acties van het dashboard, met dezelfde
+ * voorwaarden:
+ *
+ * - **Versturen per mail** (`SendFactuurMailModal`): sjabloon `factuur`, de PDF
+ *   als bijlage (en bewaard in `factuur-pdfs`), met de feature
+ *   `stripe_betaallink` een iDEAL-betaalknop, archief, tijdlijn, en bij een
+ *   concept status verzonden + bevroren bedrijfsgegevens met IBAN.
+ * - **Herinnering 1 en 2** bij een te late factuur (feature
+ *   `betaalherinneringen`): sjabloon `herinnering_1/2`, zet
+ *   `herinnering_N_verstuurd_at` en een tijdlijnregel.
+ * - **Crediteren**, volledig of per regel (aantal en prijs aanpasbaar).
+ * - **Kopiëren naar nieuwe factuur**: een losse conceptfactuur.
+ * - **Verwijderen** alleen bij een concept of een factuur uit de boekhouding.
+ * - Wordt een factuur definitief (verzonden of betaald, of gemaild), dan
+ *   wordt de PDF bewaard voor de Stripe-webhook en de boekhoudkoppeling.
  *
  * Betaald zetten loopt via de RPC `mark_factuur_betaald`, precies de route die
  * de Stripe-webhook ook gebruikt. Die is idempotent en geeft terug óf er iets
- * veranderd is: twee keer tikken levert dus geen tweede boeking naar de
- * boekhouding op, en de app zegt eerlijk "stond al op betaald" in plaats van
- * een succesmelding te tonen voor iets wat niet gebeurd is.
- *
- * Let op de gates: de factuur zelf hangt op het recht `facturen`, de REGELS op
- * de rol (admin/planner voor toevoegen, admin voor verwijderen). Een verstuurde
- * factuur ligt inhoudelijk vast; een geïmporteerde factuur helemaal.
+ * veranderd is; alleen dan gaat de factuur naar de boekhouding.
  */
 
 export default function InvoicesScreen() {
@@ -130,15 +164,37 @@ type Concept = {
   factuurdatum: string;
   betaaltermijn: string;
   vervaldatum: string;
+  /** Zelf gekozen vervaldatum: blijft staan als datum of termijn verandert. */
+  vervalHandmatig: boolean;
+  betalingskenmerk: string;
   notities: string;
   status: string;
+  /** De status zoals hij geopend werd; voor de PDF bij een overgang. */
+  oudeStatus: string;
   opSlot: boolean;
   geimporteerd: boolean;
+  regels: Regel[];
 };
 
 type RegelConcept = { omschrijving: string; aantal: string; prijs: string; btw: string };
 
 const LEGE_REGEL: RegelConcept = { omschrijving: '', aantal: '1', prijs: '', btw: '21' };
+
+type MailStand = {
+  factuur: FactuurRow;
+  soort: FactuurMailSoort;
+  laden: boolean;
+  concept: MailConcept;
+  bedrijf: PdfBedrijf | null;
+};
+
+type CreditKeuze = { regel: FactuurRegel; gekozen: boolean; aantal: string; prijs: string };
+type CreditStand = {
+  factuur: FactuurRow;
+  regels: FactuurRegel[];
+  modus: 'kies' | 'volledig' | 'gedeeltelijk';
+  keuzes: CreditKeuze[];
+};
 
 function subtitleFor(f: FactuurRow, vandaag: string): string {
   const delen: string[] = [];
@@ -161,15 +217,24 @@ function regelMeta(r: FactuurRegel): string {
       : r.btw_regime === 'vrijgesteld'
         ? 'geen btw'
         : `${Number(r.btw_pct ?? 21)}% btw`;
-  return `${String(r.aantal).replace('.', ',')} × ${formatEUR(r.eenheidsprijs)} · ${btw}`;
+  return `${String(r.aantal).replace('.', ',')} × ${formatEURCent(r.eenheidsprijs)} · ${btw}`;
+}
+
+/** Ontbrekende klantgegevens voor een factuur (`missingFields` in NewFactuurModal). */
+function ontbrekendeKlantgegevens(k: Customer | undefined): string[] {
+  if (!k) return [];
+  return [!k.address && 'adres', !k.city && 'plaats', !k.email && 'e-mailadres'].filter(
+    (x): x is string => Boolean(x),
+  );
 }
 
 function InvoicesScreenInhoud() {
   const router = useRouter();
-  const { id: openId } = useLocalSearchParams<{ id?: string }>();
+  const { id: openId, vanOfferte } = useLocalSearchParams<{ id?: string; vanOfferte?: string }>();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { loaded: rechtenGeladen, mag, waaromNiet } = usePermissions();
+  const { loaded: rechtenGeladen, mag, waaromNiet, hasFeature, planStatus } = usePermissions();
+  const { toonResultaat } = useToast();
   const { klasse } = useSchermklasse();
   const breed = klasse === 'tablet';
   const vandaag = vandaagIso();
@@ -189,26 +254,27 @@ function InvoicesScreenInhoud() {
   const [detailRegels, setDetailRegels] = useState<FactuurRegel[]>([]);
   const [detailLaden, setDetailLaden] = useState(false);
   const [detailFout, setDetailFout] = useState<string | null>(null);
-  const [klanten, setKlanten] = useState<SelectOption[]>([]);
-  const [projecten, setProjecten] = useState<SelectOption[]>([]);
+  const [klantenLijst, setKlantenLijst] = useState<Customer[]>([]);
+  const [projectenLijst, setProjectenLijst] = useState<ProjectRow[]>([]);
   const [instellingen, setInstellingen] = useState({
     uurtarief: 55,
     reiskostenPerKm: 0.23,
     btwPct: 21,
-    geldigDagen: 14,
   });
   const [eenheden, setEenheden] = useState<EigenEenheid[]>([]);
-  /** De regels van een NIEUWE factuur; bestaande facturen bewerken hun regels apart. */
-  const [nieuweRegels, setNieuweRegels] = useState<Regel[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [concept, setConcept] = useState<Concept | null>(null);
   const [regelsVoor, setRegelsVoor] = useState<FactuurRow | null>(null);
   const [regels, setRegels] = useState<FactuurRegel[]>([]);
   const [nieuweRegel, setNieuweRegel] = useState<RegelConcept>(LEGE_REGEL);
+  const [mail, setMail] = useState<MailStand | null>(null);
+  const [credit, setCredit] = useState<CreditStand | null>(null);
 
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
   const { save: saveRegel, saving: regelBezig, error: regelFout } = useSave<unknown>();
+  const { save: saveMail, saving: mailBezig, error: mailFout, setError: setMailFout } = useSave<unknown>();
+  const { save: saveCredit, saving: creditBezig, error: creditFout, setError: setCreditFout } = useSave<unknown>();
 
   const magMaken = mag('facturen', 'maken');
   const magWijzigen = mag('facturen', 'wijzigen');
@@ -216,6 +282,8 @@ function InvoicesScreenInhoud() {
   const magBetaald = mag('facturen', 'betaaldZetten');
   const magRegels = mag('factuurRegels', 'maken');
   const magRegelWeg = mag('factuurRegels', 'verwijderen');
+  const kanHerinneren = hasFeature('betaalherinneringen');
+  const kanBetaallink = hasFeature('stripe_betaallink');
 
   const load = useCallback(async () => {
     setError(null);
@@ -232,12 +300,8 @@ function InvoicesScreenInhoud() {
 
     if (factRes.error) setError(factRes.error);
     else setItems(factRes.data);
-    if (!klantRes.error) {
-      setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
-    }
-    if (!projRes.error) {
-      setProjecten(projRes.data.map((p) => ({ id: p.id, label: p.name ?? 'Project' })));
-    }
+    if (!klantRes.error) setKlantenLijst(klantRes.data);
+    if (!projRes.error) setProjectenLijst(projRes.data);
     // Standaardtarieven en eigen eenheden: dezelfde bron als de factuurmodal
     // van het dashboard gebruikt om een nieuwe regel voor te vullen.
     if (!instRes.error) {
@@ -245,12 +309,10 @@ function InvoicesScreenInhoud() {
         uurtarief: instRes.data.uurtarief,
         reiskostenPerKm: instRes.data.reiskosten_per_km,
         btwPct: instRes.data.btw_pct,
-        geldigDagen: instRes.data.offerte_geldig_dagen,
       });
     }
     if (!eenheidRes.error) setEenheden(eenheidRes.data);
   }, []);
-
 
   /**
    * Eerste load, stille verversing bij focus en pull-to-refresh zijn hier
@@ -259,13 +321,17 @@ function InvoicesScreenInhoud() {
    */
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
-
+  const klanten: SelectOption[] = useMemo(
+    () =>
+      klantenLijst
+        .map((k) => ({ id: k.id, label: k.name ?? 'Klant' }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'nl')),
+    [klantenLijst],
+  );
 
   /**
    * Detailweergave (`ViewFactuurModal`). Regels, klant- en bedrijfsgegevens en
-   * — als er een bewaard bestand is — de tijdelijke PDF-link worden bij het
-   * openen opgehaald, zodat de knoppen daarna synchroon een venster openen
-   * (Safari blokkeert vensters die pas na een netwerkverzoek komen).
+   * herinneringen worden bij het openen opgehaald.
    */
   const openDetail = async (f: FactuurRow) => {
     setDetail(f);
@@ -298,51 +364,82 @@ function InvoicesScreenInhoud() {
   const bekijkPdf = (f: FactuurRow) =>
     setPdfDoc({ soort: 'factuur', id: f.id, titel: `Factuur ${f.nummer ?? ''}`.trim(), opgeslagenEerst: true });
 
-  const crediteren = (f: FactuurRow) => {
+  // ── Nieuw / bewerken ──────────────────────────────────────────────────────
+
+  /** `guardLimiet('facturen', …)`: binnen de factuurlimiet van deze periode? */
+  const limietBereikt = () => {
+    if (binnenLimiet(planStatus?.limits, 'facturen')) return false;
     Dialog.alert(
-      'Factuur crediteren?',
-      `Er komt een creditfactuur (BB-CF…) voor het volledige bedrag van ${f.nummer}. ` +
-        'Gedeeltelijk crediteren kan in het dashboard.',
-      [
-        { text: 'Annuleren', style: 'cancel' },
-        {
-          text: 'Crediteren',
-          style: 'destructive',
-          onPress: () => {
-            save(() => createCreditFactuur(f.id), {
-              onSuccess: async (res) => {
-                setDetail(null);
-                const credit = res as FactuurRow;
-                Dialog.alert('Creditfactuur aangemaakt', `${credit.nummer} staat in de lijst.`);
-                await herlaad();
-              },
-            });
-          },
-        },
-      ],
+      'Factuurlimiet bereikt',
+      'Je factuurlimiet voor deze periode is bereikt. Je abonnement bekijk je bij Instellingen → Abonnement.',
+    );
+    return true;
+  };
+
+  /**
+   * Een nieuwe factuur, eventueel met klant en regels vooraf ingevuld (vanuit
+   * een geaccepteerde offerte). De betaaltermijn is die van de klant, anders
+   * die uit Instellingen, anders 14 dagen; de vervaldatum volgt daaruit.
+   */
+  const openNieuw = (prefill?: { customerId: string | null; regels?: Regel[] }) => {
+    if (limietBereikt()) return;
+    setSaveError(null);
+    const factuurdatum = vandaagIso();
+    setConcept({
+      id: null,
+      customerId: prefill?.customerId ?? null,
+      projectId: null,
+      factuurdatum,
+      betaaltermijn: '14',
+      vervaldatum: berekenVervaldatum(factuurdatum, 14),
+      vervalHandmatig: false,
+      betalingskenmerk: '',
+      notities: '',
+      status: 'concept',
+      oudeStatus: 'concept',
+      opSlot: false,
+      geimporteerd: false,
+      regels: prefill?.regels?.length
+        ? prefill.regels
+        : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+    });
+    void zetTermijn(prefill?.customerId ?? null);
+  };
+
+  /** Termijn van de klant (of het bedrijf) ophalen en de vervaldatum bijwerken. */
+  const zetTermijn = async (customerId: string | null) => {
+    const termijn = await standaardBetaaltermijn(customerId);
+    setConcept((c) =>
+      c && !c.id && c.customerId === customerId
+        ? {
+            ...c,
+            betaaltermijn: String(termijn),
+            vervaldatum: c.vervalHandmatig ? c.vervaldatum : berekenVervaldatum(c.factuurdatum, termijn),
+          }
+        : c,
     );
   };
 
-  const openNieuw = () => {
-    setSaveError(null);
-    // Vervaldatum = factuurdatum + de betaaltermijn uit de bedrijfsinstellingen,
-    // net als de factuurmodal van het dashboard hem voorinvult.
-    const verval = new Date();
-    verval.setDate(verval.getDate() + instellingen.geldigDagen);
-    setNieuweRegels([legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })]);
-    setConcept({
-      id: null,
-      customerId: null,
-      projectId: null,
-      factuurdatum: vandaagIso(),
-      betaaltermijn: String(instellingen.geldigDagen),
-      vervaldatum: isoVanDatum(verval),
-      notities: '',
-      status: 'concept',
-      opSlot: false,
-      geimporteerd: false,
-    });
-  };
+  // "Maak factuur" vanuit een geaccepteerde offerte: /invoices?vanOfferte=<id>
+  const offerteVerwerkt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!vanOfferte || loading || !rechtenGeladen || offerteVerwerkt.current === vanOfferte) return;
+    offerteVerwerkt.current = vanOfferte;
+    router.setParams({ vanOfferte: undefined });
+    void (async () => {
+      const [o, r] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte)]);
+      if (!o.data) {
+        Dialog.alert('Offerte niet gevonden', o.error ?? 'De offerte kon niet worden geladen.');
+        return;
+      }
+      openNieuw({
+        customerId: o.data.customer_id,
+        regels: r.data.map((it) => regelUitOfferteItem(it, o.data!)),
+      });
+    })();
+    // openNieuw hangt af van state die hier niet hoort te herstarten.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vanOfferte, loading, rechtenGeladen, router]);
 
   const openBewerk = (f: FactuurRow) => {
     if (!magWijzigen) return;
@@ -354,86 +451,117 @@ function InvoicesScreenInhoud() {
       factuurdatum: f.factuurdatum,
       betaaltermijn: String(f.betaaltermijn_dagen ?? 14),
       vervaldatum: f.vervaldatum ?? '',
+      vervalHandmatig: true,
+      betalingskenmerk: f.betalingskenmerk ?? '',
       notities: f.notities ?? '',
       status: f.status,
+      oudeStatus: f.status,
       opSlot: inhoudLigtVast(f),
       geimporteerd: isGeimporteerd(f),
+      regels: [],
     });
   };
 
-  const opslaan = () => {
+  const opslaan = (enVersturen = false) => {
     if (!concept) return;
-    const invoer: Partial<FactuurInput> & { status?: string } =
-      concept.opSlot || concept.geimporteerd
-        ? { status: concept.status === 'betaald' ? undefined : concept.status }
-        : {
-            customer_id: concept.customerId,
-            project_id: concept.projectId,
-            factuurdatum: concept.factuurdatum,
-            betaaltermijn_dagen: Number(concept.betaaltermijn || 14),
-            vervaldatum: concept.vervaldatum || null,
-            notities: concept.notities,
-            ...(concept.id && concept.status !== 'betaald' ? { status: concept.status } : {}),
-          };
-
+    const c = concept;
+    const termijn = Number(c.betaaltermijn || 14);
     save(
-      () => {
-        if (concept.id) return updateFactuur(concept.id, invoer);
-        // Nieuwe factuur: kop én regels in één handeling, met de totalen uit de
-        // regels — zelfde volgorde en zelfde bedragen als het dashboard.
-        if (!magRegels) {
-          return createFactuur(invoer as FactuurInput);
+      async (): Promise<WriteResult<FactuurRow>> => {
+        if (c.id) {
+          const invoer: Partial<FactuurInput> & { status?: string } =
+            c.opSlot || c.geimporteerd
+              ? { status: c.status === 'betaald' ? undefined : c.status }
+              : {
+                  customer_id: c.customerId,
+                  project_id: c.projectId,
+                  factuurdatum: c.factuurdatum,
+                  betaaltermijn_dagen: termijn,
+                  vervaldatum: c.vervaldatum || null,
+                  betalingskenmerk: c.betalingskenmerk,
+                  notities: c.notities,
+                  ...(c.status !== 'betaald' ? { status: c.status } : {}),
+                };
+          const res = await updateFactuur(c.id, invoer);
+          // Handmatig op verzonden zetten maakt de factuur net zo definitief
+          // als mailen: dan de PDF bewaren (EditFactuurModal).
+          if (res.ok && wordtDefinitief(c.oudeStatus, res.data.status)) await bewaarFactuurPdf(res.data.id);
+          return res;
         }
-        const totalen = berekenTotalen(nieuweRegels);
-        return createFactuurMetRegels(
-          {
-            ...(invoer as FactuurInput),
-            totaal_excl: totalen.excl,
-            totaal_incl: totalen.incl,
-          },
-          nieuweRegels.map((r) => ({
-            omschrijving: omschrijvingVoorOpslag(r, eenheden),
-            type: r.type,
-            aantal: veldNaarNummer(r.aantal),
-            eenheidsprijs: veldNaarNummer(r.prijs),
-            btw_pct: r.btwPct,
-            btw_regime: r.btwRegime,
-          })),
+        // Onvolledige klant: het dashboard maakt de factuur dan niet aan.
+        const ontbreekt = ontbrekendeKlantgegevens(klantenLijst.find((k) => k.id === c.customerId));
+        if (ontbreekt.length > 0) {
+          return writeFout('validatie', 'Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.');
+        }
+        const invoer: FactuurInput = {
+          customer_id: c.customerId,
+          project_id: c.projectId,
+          factuurdatum: c.factuurdatum,
+          betaaltermijn_dagen: termijn,
+          vervaldatum: c.vervaldatum || null,
+          notities: c.notities,
+        };
+        // Nieuwe factuur: kop én regels in één transactie, zoals het dashboard.
+        if (!magRegels) return createFactuur(invoer);
+        const totalen = berekenTotalen(c.regels);
+        const res = await createFactuurMetRegels(
+          { ...invoer, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
+          c.regels.map((r) => factuurRegelVoorOpslag(r, eenheden)),
         );
+        return res.ok ? { ok: true, data: res.data.factuur } : res;
       },
       {
-        onSuccess: async () => {
+        onSuccess: async (data) => {
+          const f = data as FactuurRow;
           setConcept(null);
-          setNieuweRegels([]);
           await herlaad();
+          if (enVersturen) void openMail(f, 'factuur');
         },
+        succesMelding: c.id ? 'Factuur opgeslagen' : 'Factuur aangemaakt',
       },
     );
   };
 
   /**
    * Betaald zetten. De RPC vertelt of er echt iets veranderd is; stond de
-   * factuur al op betaald, dan zeggen we dat en doen we niet alsof.
+   * factuur al op betaald, dan zeggen we dat en doen we niet alsof. Een
+   * concept zonder regels mag niet op betaald (statusWeigering).
    */
-  const betaaldZetten = (f: FactuurRow) => {
+  const betaaldZetten = async (f: FactuurRow) => {
     if (!magBetaald) return;
+    const { data: r } = await getFactuurRegels(f.id);
+    const weigering = factuurStatusWeigering(f, 'betaald', r.length);
+    if (weigering) {
+      Dialog.alert('Niet op betaald gezet', weigering);
+      return;
+    }
     Dialog.alert(
       'Factuur op betaald zetten?',
-      `${f.nummer} · ${formatEUR(Number(f.totaal_incl ?? 0))}`,
+      `${f.nummer} · ${formatEURCent(Number(f.totaal_incl ?? 0))}`,
       [
         { text: 'Annuleren', style: 'cancel' },
         {
           text: 'Betaald',
           onPress: () => {
-            save(() => markeerBetaald(f.id), {
-              onSuccess: async (res) => {
-                const uitkomst = res as { gewijzigd: boolean };
-                if (!uitkomst.gewijzigd) {
-                  Dialog.alert('Geen wijziging', 'Deze factuur stond al op betaald.');
+            save(
+              async () => {
+                const res = await markeerBetaald(f.id);
+                if (res.ok && res.data.gewijzigd && wordtDefinitief(f.status, 'betaald')) {
+                  await bewaarFactuurPdf(f.id);
                 }
-                await herlaad();
+                return res;
               },
-            });
+              {
+                onSuccess: async (res) => {
+                  const uitkomst = res as { gewijzigd: boolean };
+                  if (!uitkomst.gewijzigd) {
+                    Dialog.alert('Geen wijziging', 'Deze factuur stond al op betaald.');
+                  }
+                  await herlaad();
+                },
+                succesMelding: 'Factuur op betaald gezet',
+              },
+            );
           },
         },
       ],
@@ -455,6 +583,7 @@ function InvoicesScreenInhoud() {
             if (typeof extra?.waarschuwing === 'string') Dialog.alert('Let op', extra.waarschuwing);
             await herlaad();
           },
+          succesMelding: 'Factuur verwijderd',
         });
       },
       uitBoekhouding
@@ -462,6 +591,8 @@ function InvoicesScreenInhoud() {
         : 'Dit kan niet ongedaan worden gemaakt.',
     );
   };
+
+  // ── Regels van een concept ────────────────────────────────────────────────
 
   const openRegels = async (f: FactuurRow) => {
     setRegelsVoor(f);
@@ -508,6 +639,191 @@ function InvoicesScreenInhoud() {
     });
   };
 
+  // ── Versturen per mail en herinneringen ───────────────────────────────────
+
+  /**
+   * Het mailvenster openen, zoals `SendFactuurMailModal`: het sjabloon van
+   * deze soort, het adres van de klant, het rekeningnummer van de factuur
+   * (bevroren, anders dat van het bedrijf) en met een actieve Stripe-koppeling
+   * de betaalinstructie voor online betalen.
+   */
+  const openMail = async (f: FactuurRow, soort: FactuurMailSoort) => {
+    setMailFout(null);
+    setMail({ factuur: f, soort, laden: true, concept: { aan: '', onderwerp: '', tekst: '' }, bedrijf: null });
+    const [d, sjabloon, bedrijf, stripe] = await Promise.all([
+      getFactuurDetail(f.id),
+      getMailSjabloon(soort),
+      getBedrijfVoorDocument(),
+      kanBetaallink ? stripeActief() : Promise.resolve(false),
+    ]);
+    const doc = d.data;
+    const docBedrijf = doc ? bedrijfVoorDocument(naarFactuur(doc as unknown as Record<string, unknown>), bedrijf) : bedrijf;
+    const tekst = factuurMailConcept({
+      sjabloon: sjabloon.error ? null : sjabloon.data,
+      klantNaam: doc?.customer?.name ?? f.customer?.name,
+      bedrijfsnaam: bedrijf?.name,
+      nummer: f.nummer,
+      totaalIncl: doc?.totaal_incl ?? f.totaal_incl,
+      vervaldatum: doc?.vervaldatum ?? f.vervaldatum,
+      betalingskenmerk: doc?.betalingskenmerk ?? f.betalingskenmerk,
+      isCredit: Boolean(f.is_credit),
+      iban: docBedrijf?.iban,
+      ibanTnv: docBedrijf?.ibanTnv,
+      documentBedrijfsnaam: docBedrijf?.name,
+      stripeActief: stripe,
+    });
+    setMail((m) =>
+      m && m.factuur.id === f.id
+        ? {
+            ...m,
+            factuur: doc ? { ...f, status: doc.status } : f,
+            laden: false,
+            concept: { aan: doc?.customer?.email ?? '', onderwerp: tekst.onderwerp, tekst: tekst.tekst },
+            bedrijf,
+          }
+        : m,
+    );
+    if (d.error) setMailFout(d.error);
+  };
+
+  /** Herinnering 1 vraagt de feature; zonder: uitleg in plaats van het venster (guardFeature). */
+  const openHerinnering = (f: FactuurRow, nr: 1 | 2) => {
+    if (!kanHerinneren) {
+      Dialog.alert(
+        'Betaalherinneringen',
+        'Betaalherinneringen versturen zit niet in je huidige abonnement. Je abonnement wijzig je op het dashboard.',
+      );
+      return;
+    }
+    void openMail(f, nr === 1 ? 'herinnering_1' : 'herinnering_2');
+  };
+
+  const verstuurFactuur = () => {
+    if (!mail) return;
+    const m = mail;
+    const f = m.factuur;
+    const aan = m.concept.aan.trim();
+    saveMail(
+      async (): Promise<WriteResult<null>> => {
+        if (!aan) return writeFout('validatie', 'E-mailadres is verplicht.');
+        // De PDF als bijlage, en dezelfde PDF bewaren vóór het op verzonden
+        // zetten: de boekhoudsync die daarop volgt moet hem kunnen vinden.
+        let bijlagen: { filename: string; content: string }[] = [];
+        try {
+          const pdf = await maakFactuurPdf(f.id);
+          bijlagen = [{ filename: `Factuur-${f.nummer}.pdf`, content: pdf.base64 }];
+          await uploadFactuurPdf(f.id, f.company_id, pdf.bytes);
+        } catch (e) {
+          console.warn('[invoices] PDF-bijlage maken mislukt', e);
+        }
+        // Betaallink alleen met de feature; de Edge Function beslist verder
+        // zelf (koppeling actief, bedrag > 0). Geen link = mail zonder knop.
+        const betaalUrl = kanBetaallink ? await maakBetaallink(f.id) : null;
+        const html = factuurMailHtml({
+          onderwerp: m.concept.onderwerp,
+          tekst: m.concept.tekst,
+          betaalUrl,
+          bedrijfsnaam: m.bedrijf?.name,
+          logoUrl: m.bedrijf?.logoUrl,
+          merkkleur: m.bedrijf?.brandingColor,
+        });
+        const verstuurd = await verstuurMail({ to: aan, subject: m.concept.onderwerp, html, attachments: bijlagen });
+        if (!verstuurd.ok) return writeFout('onbekend', verstuurd.melding);
+
+        await logVerstuurdeMail({
+          toEmail: aan,
+          subject: m.concept.onderwerp,
+          bodyHtml: html,
+          relatedType: 'factuur',
+          relatedId: f.id,
+          customerId: f.customer_id,
+        });
+
+        let bijwerken: WriteResult<FactuurRow> | null = null;
+        if (m.soort === 'factuur' && (f.status === 'concept' || f.status === 'aangemaakt')) {
+          bijwerken = await markeerFactuurVerstuurd(f.id, bedrijfSnapshot(m.bedrijf, { metIban: true }));
+        }
+        if (m.soort === 'herinnering_1') bijwerken = await zetHerinneringVerstuurd(f, 1);
+        if (m.soort === 'herinnering_2') bijwerken = await zetHerinneringVerstuurd(f, 2);
+        if (m.soort === 'factuur') {
+          void logTijdlijn(f.customer_id, 'email_verstuurd', `E-mail verstuurd: ${m.concept.onderwerp}`, {
+            to: aan,
+            subject: m.concept.onderwerp,
+          });
+        }
+        if (bijwerken && !bijwerken.ok) {
+          return writeFout('onbekend', `De e-mail is verstuurd, maar de factuur is niet bijgewerkt: ${bijwerken.melding}`);
+        }
+        return { ok: true, data: null };
+      },
+      {
+        onSuccess: async () => {
+          setMail(null);
+          await herlaad();
+        },
+        succesMelding: 'E-mail verstuurd',
+      },
+    );
+  };
+
+  // ── Kopiëren ──────────────────────────────────────────────────────────────
+
+  /** `handleKopieer`: een nieuwe conceptfactuur, daarna meteen bewerken. */
+  const kopieren = (f: FactuurRow) => {
+    save(() => kopieerFactuur(f.id), {
+      onSuccess: async (data) => {
+        const nieuw = data as FactuurRow;
+        setDetail(null);
+        toonResultaat({ ok: true, data: null }, `Factuur ${nieuw.nummer} aangemaakt als concept`);
+        await herlaad();
+        openBewerk(nieuw);
+      },
+    });
+  };
+
+  // ── Crediteren ────────────────────────────────────────────────────────────
+
+  const openCredit = async (f: FactuurRow) => {
+    setCreditFout(null);
+    const { data, error: fout } = await getFactuurRegels(f.id);
+    if (fout) {
+      Dialog.alert('Regelitems laden mislukt', fout);
+      return;
+    }
+    setCredit({
+      factuur: f,
+      regels: data,
+      modus: 'kies',
+      keuzes: data.map((r) => ({
+        regel: r,
+        gekozen: true,
+        aantal: String(r.aantal).replace('.', ','),
+        prijs: String(Math.abs(Number(r.eenheidsprijs))).replace('.', ','),
+      })),
+    });
+  };
+
+  const crediteren = () => {
+    if (!credit || credit.modus === 'kies') return;
+    const c = credit;
+    saveCredit(
+      async () => {
+        if (c.modus === 'volledig') return createCreditFactuur(c.factuur.id);
+        const keuze = gedeeltelijkeCreditRegels(c.keuzes);
+        if (!keuze.ok) return writeFout('validatie', keuze.melding);
+        return createCreditFactuur(c.factuur.id, keuze.regels);
+      },
+      {
+        onSuccess: async (res) => {
+          const cf = res as FactuurRow;
+          setCredit(null);
+          toonResultaat({ ok: true, data: null }, `Creditfactuur ${cf.nummer} aangemaakt`);
+          await herlaad();
+        },
+      },
+    );
+  };
+
   if (loading || !rechtenGeladen) return <LoadingScreen label="Facturen laden..." />;
 
   if (error) {
@@ -547,7 +863,94 @@ function InvoicesScreenInhoud() {
   const detailVerlopen = detail ? isFactuurVerlopen(detail, vandaag) : false;
   const detailGeimporteerd = detail ? isGeimporteerd(detail) || detail.status === 'geboekt' : false;
 
+  // De acties van de detailweergave, met de voorwaarden van het dashboard.
+  // Eén primaire actie die de status volgt; de rest daaronder.
+  type Actie = { id: string; label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'ghost' };
+  const acties: Actie[] = [];
+  if (detail) {
+    const f = detail;
+    const sluitEn = (doe: () => void) => () => {
+      setDetail(null);
+      doe();
+    };
+    const magMailen = magWijzigen && !detailGeimporteerd;
+    const herinnering = factuurHerinneringen(
+      {
+        ...f,
+        herinnering_1_verstuurd_at: detailData?.herinnering_1_verstuurd_at ?? f.herinnering_1_verstuurd_at,
+        herinnering_2_verstuurd_at: detailData?.herinnering_2_verstuurd_at ?? f.herinnering_2_verstuurd_at,
+      },
+      vandaag,
+      kanHerinneren,
+    );
+    const isConcept = ['concept', 'aangemaakt'].includes(f.status);
+    const mailActie: Actie = { id: 'mail', label: 'Verstuur per mail', onPress: sluitEn(() => void openMail(f, 'factuur')) };
+    const h1: Actie = { id: 'h1', label: 'Herinnering sturen', onPress: sluitEn(() => openHerinnering(f, 1)) };
+    const h2: Actie = { id: 'h2', label: 'Tweede herinnering', onPress: sluitEn(() => openHerinnering(f, 2)) };
+    const betaald: Actie = { id: 'betaald', label: 'Markeer als betaald', onPress: sluitEn(() => void betaaldZetten(f)) };
+    const magBetaaldHier = magBetaald && !detailGeimporteerd && f.status !== 'betaald';
+
+    let primair: Actie | null = null;
+    if (!detailGeimporteerd) {
+      if (magMailen && herinnering.eerste) primair = h1;
+      else if (magMailen && herinnering.tweede) primair = h2;
+      else if (magMailen && isConcept) primair = mailActie;
+      else if (magBetaaldHier && f.status === 'verzonden') primair = betaald;
+      else if (magMailen) primair = mailActie;
+    }
+    if (primair) acties.push({ ...primair, variant: 'primary' });
+    if (metDocument.has(f.id) || !detailGeimporteerd) {
+      acties.push({
+        id: 'pdf',
+        label: detailGeimporteerd ? 'Origineel document' : 'PDF bekijken',
+        onPress: () => bekijkPdf(f),
+        variant: detailGeimporteerd ? 'primary' : 'secondary',
+      });
+    }
+    if (magMailen && primair?.id !== 'mail') acties.push({ ...mailActie, variant: 'secondary' });
+    if (magMailen && herinnering.eerste && primair?.id !== 'h1') acties.push({ ...h1, label: 'Herinnering 1 sturen', variant: 'secondary' });
+    if (magMailen && herinnering.tweede && primair?.id !== 'h2') acties.push({ ...h2, label: 'Herinnering 2 sturen', variant: 'secondary' });
+    if (magBetaaldHier && primair?.id !== 'betaald') acties.push({ ...betaald, variant: 'secondary' });
+    if (magWijzigen) {
+      acties.push({
+        id: 'bewerk',
+        label: inhoudLigtVast(f) || detailGeimporteerd ? 'Status wijzigen' : 'Bewerken',
+        onPress: sluitEn(() => openBewerk(f)),
+        variant: 'secondary',
+      });
+    }
+    if (!detailGeimporteerd && !inhoudLigtVast(f)) {
+      acties.push({ id: 'regels', label: 'Regels', onPress: sluitEn(() => void openRegels(f)), variant: 'ghost' });
+    }
+    if (magMaken && !detailGeimporteerd) {
+      acties.push({ id: 'kopie', label: 'Kopiëren naar nieuwe factuur', onPress: () => kopieren(f), variant: 'ghost' });
+    }
+    if (magCreditMaken && magCrediteren(f)) {
+      acties.push({ id: 'credit', label: 'Crediteer factuur', onPress: sluitEn(() => void openCredit(f)), variant: 'ghost' });
+    }
+  }
+
   const regelsOpSlot = regelsVoor ? inhoudLigtVast(regelsVoor) : false;
+  const conceptKlant = concept ? klantenLijst.find((k) => k.id === concept.customerId) : undefined;
+  const ontbreekt = concept && !concept.id ? ontbrekendeKlantgegevens(conceptKlant) : [];
+  const projectOpties: SelectOption[] = projectenLijst
+    .filter((p) => !concept?.customerId || p.customer_id === concept.customerId)
+    .map((p) => ({ id: p.id, label: p.name ?? 'Project' }));
+  const conceptBron = concept?.id ? items.find((x) => x.id === concept.id) : undefined;
+  const conceptMagWeg = Boolean(concept?.id) && magVerwijderen && (conceptBron ? magFactuurVerwijderen(conceptBron) : false);
+  const nieuwOngeldig =
+    !concept?.id && (!concept?.customerId || (magRegels && (concept?.regels.length ?? 0) === 0) || ontbreekt.length > 0);
+
+  const creditTotaal =
+    credit?.modus === 'gedeeltelijk'
+      ? credit.keuzes
+          .filter((k) => k.gekozen)
+          .reduce(
+            (s, k) =>
+              s + Number(k.aantal.replace(',', '.') || 0) * Math.abs(Number(k.prijs.replace(',', '.') || 0)),
+            0,
+          )
+      : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -561,7 +964,7 @@ function InvoicesScreenInhoud() {
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={openNieuw} />
+                <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={() => openNieuw()} />
               ) : undefined
             }
           />
@@ -569,7 +972,7 @@ function InvoicesScreenInhoud() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
-        {saveError ? (
+        {saveError && !concept ? (
           <View style={styles.foutBanner}>
             <Text style={styles.foutTekst}>{saveError}</Text>
           </View>
@@ -632,7 +1035,7 @@ function InvoicesScreenInhoud() {
                     onPress={() => void openDetail(f)}
                     trailing={
                       <View style={styles.trailing}>
-                        <Text style={styles.bedrag}>{formatEUR(Number(f.totaal_incl ?? 0))}</Text>
+                        <Text style={styles.bedrag}>{formatEURCent(Number(f.totaal_incl ?? 0))}</Text>
                         <DocumentStatusBadge toon={st.toon} label={st.label} />
                       </View>
                     }
@@ -653,59 +1056,16 @@ function InvoicesScreenInhoud() {
         voet={
           detail ? (
             <View style={styles.knoppen}>
-              {metDocument.has(detail.id) || !detailGeimporteerd ? (
+              {acties.map((a) => (
                 <Button
-                  label={detailGeimporteerd ? 'Origineel document' : 'PDF bekijken'}
-                  onPress={() => bekijkPdf(detail)}
-                  style={styles.knop}
-                />
-              ) : null}
-              {magBetaald && !detailGeimporteerd && detail.status !== 'betaald' ? (
-                <Button
-                  label="Markeer als betaald"
-                  variant="secondary"
+                  key={a.id}
+                  label={a.label}
+                  variant={a.variant}
                   disabled={saving}
-                  onPress={() => {
-                    const f = detail;
-                    setDetail(null);
-                    betaaldZetten(f);
-                  }}
+                  onPress={a.onPress}
                   style={styles.knop}
                 />
-              ) : null}
-              {magWijzigen ? (
-                <Button
-                  label="Bewerken"
-                  variant="secondary"
-                  onPress={() => {
-                    const f = detail;
-                    setDetail(null);
-                    openBewerk(f);
-                  }}
-                  style={styles.knop}
-                />
-              ) : null}
-              {!detailGeimporteerd ? (
-                <Button
-                  label="Regels"
-                  variant="ghost"
-                  onPress={() => {
-                    const f = detail;
-                    setDetail(null);
-                    void openRegels(f);
-                  }}
-                  style={styles.knop}
-                />
-              ) : null}
-              {magCreditMaken && magCrediteren(detail) ? (
-                <Button
-                  label="Crediteer factuur"
-                  variant="ghost"
-                  disabled={saving}
-                  onPress={() => crediteren(detail)}
-                  style={styles.knop}
-                />
-              ) : null}
+              ))}
             </View>
           ) : null
         }
@@ -730,7 +1090,7 @@ function InvoicesScreenInhoud() {
               />
               <DetailRij label="Factuurdatum" waarde={formatDateNL(detail.factuurdatum)} />
               <DetailRij
-                label="Betaaltermijn"
+                label="Vervaldatum"
                 waarde={
                   detail.vervaldatum
                     ? `${formatDateNL(detail.vervaldatum)}${detailVerlopen ? ' · Te laat' : ''}`
@@ -763,7 +1123,7 @@ function InvoicesScreenInhoud() {
                 toon="info"
                 message={
                   metDocument.has(detail.id)
-                    ? 'Deze factuur komt uit je boekhouding; het originele document staat hierboven.'
+                    ? 'Deze factuur komt uit je boekhouding; het originele document staat hieronder.'
                     : 'Deze factuur komt uit je boekhouding. Er is geen document meegekomen.'
                 }
               />
@@ -787,10 +1147,6 @@ function InvoicesScreenInhoud() {
                 <Text style={styles.uitleg}>{alsTekst(detail.notities)}</Text>
               </View>
             ) : null}
-
-            <Text style={styles.uitleg}>
-              Versturen per mail en herinneringen sturen doe je in het dashboard.
-            </Text>
           </ScrollView>
         ) : null}
         {/* In het paneel, zodat hij op iOS bovenop het paneel opent. */}
@@ -801,19 +1157,13 @@ function InvoicesScreenInhoud() {
       <FormSheet
         visible={concept !== null}
         title={concept?.id ? 'Factuur bewerken' : 'Nieuwe factuur'}
-        subtitle={concept?.id ? undefined : 'Het nummer wordt automatisch toegekend'}
+        subtitle={concept?.id ? (conceptBron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
         error={saveError}
         saving={saving}
-        submitDisabled={
-          !concept?.id && (!concept?.customerId || (magRegels && nieuweRegels.length === 0))
-        }
-        onSubmit={opslaan}
+        submitDisabled={nieuwOngeldig}
+        onSubmit={() => opslaan(false)}
         onClose={() => setConcept(null)}
-        destructive={
-          concept?.id && magVerwijderen
-            ? { label: 'Factuur verwijderen', onPress: verwijderen }
-            : undefined
-        }
+        destructive={conceptMagWeg ? { label: 'Factuur verwijderen', onPress: verwijderen } : undefined}
       >
         {concept?.geimporteerd ? (
           <View style={styles.slotBanner}>
@@ -826,11 +1176,12 @@ function InvoicesScreenInhoud() {
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               Deze factuur is verstuurd. De inhoud ligt vast; de betaalstand bijwerken kan wel.
+              Klopt er iets niet, crediteer hem dan en maak een nieuwe.
             </Text>
           </View>
         ) : null}
 
-        {concept?.id && concept.status !== 'betaald' && magBetaald ? (
+        {concept?.id && concept.status !== 'betaald' && magBetaald && !concept.geimporteerd ? (
           <Button
             label="Op betaald zetten"
             variant="secondary"
@@ -839,7 +1190,7 @@ function InvoicesScreenInhoud() {
               const f = items.find((x) => x.id === concept.id);
               if (f) {
                 setConcept(null);
-                betaaldZetten(f);
+                void betaaldZetten(f);
               }
             }}
           />
@@ -878,28 +1229,52 @@ function InvoicesScreenInhoud() {
           label="Klant"
           value={concept?.customerId ?? null}
           options={klanten}
-          onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
+          onChange={(id) => {
+            setConcept((c) => (c ? { ...c, customerId: id, projectId: null } : c));
+            if (concept && !concept.id) void zetTermijn(id);
+          }}
           allowEmpty
           emptyLabel="Geen klant"
-          placeholder="Geen klant"
+          placeholder="Selecteer klant"
           disabled={concept?.opSlot || concept?.geimporteerd}
         />
-        <SelectField
-          label="Project"
-          value={concept?.projectId ?? null}
-          options={projecten}
-          onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
-          allowEmpty
-          emptyLabel="Geen project"
-          placeholder="Geen project"
-          disabled={concept?.opSlot || concept?.geimporteerd}
-        />
+        {ontbreekt.length > 0 ? (
+          <NoticeBanner
+            toon="waarschuwing"
+            title="Klantgegevens onvolledig"
+            message={`Ontbrekend: ${ontbreekt.join(', ')}. Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.`}
+          />
+        ) : null}
+        {projectOpties.length > 0 || concept?.projectId ? (
+          <SelectField
+            label="Project (optioneel)"
+            value={concept?.projectId ?? null}
+            options={projectOpties}
+            onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
+            allowEmpty
+            emptyLabel="Geen project"
+            placeholder="Geen project"
+            disabled={concept?.opSlot || concept?.geimporteerd}
+          />
+        ) : null}
         <View style={styles.rij}>
           <View style={{ flex: 1.4 }}>
             <DateField
               label="Factuurdatum"
               value={concept?.factuurdatum || null}
-              onChange={(v) => setConcept((c) => (c ? { ...c, factuurdatum: v } : c))}
+              onChange={(v) =>
+                setConcept((c) =>
+                  c
+                    ? {
+                        ...c,
+                        factuurdatum: v,
+                        vervaldatum: c.vervalHandmatig
+                          ? c.vervaldatum
+                          : berekenVervaldatum(v, Number(c.betaaltermijn || 14)),
+                      }
+                    : c,
+                )
+              }
               placeholder="Kies"
               disabled={concept?.opSlot || concept?.geimporteerd}
             />
@@ -908,7 +1283,20 @@ function InvoicesScreenInhoud() {
             <FormField
               label="Termijn"
               value={concept?.betaaltermijn ?? ''}
-              onChangeText={(v) => setConcept((c) => (c ? { ...c, betaaltermijn: v } : c))}
+              onChangeText={(v) =>
+                setConcept((c) =>
+                  c
+                    ? {
+                        ...c,
+                        betaaltermijn: v,
+                        vervaldatum:
+                          c.vervalHandmatig || !c.factuurdatum
+                            ? c.vervaldatum
+                            : berekenVervaldatum(c.factuurdatum, Number(v || 14)),
+                      }
+                    : c,
+                )
+              }
               placeholder="14"
               keyboardType="number-pad"
               hint="dagen"
@@ -916,6 +1304,22 @@ function InvoicesScreenInhoud() {
             />
           </View>
         </View>
+        <DateField
+          label="Vervaldatum"
+          value={concept?.vervaldatum || null}
+          onChange={(v) => setConcept((c) => (c ? { ...c, vervaldatum: v, vervalHandmatig: true } : c))}
+          placeholder="Kies"
+          disabled={concept?.opSlot || concept?.geimporteerd}
+        />
+        {concept?.id ? (
+          <FormField
+            label="Betalingskenmerk"
+            value={concept.betalingskenmerk}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, betalingskenmerk: v } : c))}
+            placeholder={conceptBron?.nummer ?? ''}
+            editable={!concept.opSlot && !concept.geimporteerd}
+          />
+        ) : null}
         {/* Regels horen bij het aanmaken: één handeling, één set totalen — net
             als in het dashboard. Bij een bestaande factuur blijven de regels in
             hun eigen blad staan. */}
@@ -924,15 +1328,15 @@ function InvoicesScreenInhoud() {
             toon="waarschuwing"
             message={
               waaromNiet('factuurRegels', 'maken') ??
-              'Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder of planner om de regels te zetten.'
+              'Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder om het recht Facturen.'
             }
           />
         ) : null}
 
         {concept && !concept.id && magRegels ? (
           <RegelEditor
-            regels={nieuweRegels}
-            onChange={setNieuweRegels}
+            regels={concept.regels}
+            onChange={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
             standaard={{
               uurtarief: instellingen.uurtarief,
               reiskostenPerKm: instellingen.reiskostenPerKm,
@@ -943,13 +1347,24 @@ function InvoicesScreenInhoud() {
         ) : null}
 
         <FormField
-          label="Notities"
+          label="Notities / betalingsinstructies"
           value={concept?.notities ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, notities: v } : c))}
-          placeholder="Optioneel"
+          placeholder="Betalingsinstructies, interne notities..."
           multiline
           editable={!concept?.opSlot && !concept?.geimporteerd}
         />
+
+        {/* "Opslaan en versturen", zoals de factuurmodal: niet bij een
+            verstuurde of geïmporteerde factuur. */}
+        {concept && !concept.opSlot && !concept.geimporteerd && magWijzigen ? (
+          <Button
+            label="Opslaan en versturen"
+            variant="secondary"
+            disabled={saving || nieuwOngeldig}
+            onPress={() => opslaan(true)}
+          />
+        ) : null}
       </FormSheet>
 
       {/* Factuurregels */}
@@ -979,7 +1394,7 @@ function InvoicesScreenInhoud() {
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               {waaromNiet('factuurRegels', 'maken') ??
-                'Factuurregels wijzigen kan alleen als beheerder of planner.'}
+                'Factuurregels wijzigen vraagt het recht Facturen.'}
             </Text>
           </View>
         ) : (
@@ -1031,10 +1446,10 @@ function InvoicesScreenInhoud() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.regelTitel}>{r.omschrijving}</Text>
                   <Text style={styles.regelMeta}>
-                    {r.aantal} × {formatEUR(r.eenheidsprijs)} · {r.btw_pct}% btw
+                    {r.aantal} × {formatEURCent(r.eenheidsprijs)} · {r.btw_pct}% btw
                   </Text>
                 </View>
-                <Text style={styles.bedrag}>{formatEUR(r.regelprijs)}</Text>
+                <Text style={styles.bedrag}>{formatEURCent(r.regelprijs)}</Text>
                 {magRegelWeg && !regelsOpSlot ? (
                   <Pressable
                     onPress={() => regelVerwijderen(r)}
@@ -1050,6 +1465,116 @@ function InvoicesScreenInhoud() {
           </View>
         )}
       </FormSheet>
+
+      {/* Versturen per mail / herinnering */}
+      <DocumentMailSheet
+        visible={mail !== null}
+        titel={mail ? FACTUUR_MAIL_TITEL[mail.soort] : 'E-mail versturen'}
+        nummer={mail?.factuur.nummer}
+        laden={mail?.laden ?? false}
+        concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
+        onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
+        melding={
+          mail
+            ? `De factuur gaat als PDF mee${kanBetaallink ? '; met een actieve Stripe-koppeling staat er een knop "Factuur betalen" in de mail' : ''}.`
+            : null
+        }
+        saving={mailBezig}
+        error={mailFout}
+        onVerstuur={verstuurFactuur}
+        onSluit={() => setMail(null)}
+      />
+
+      {/* Crediteren */}
+      <FormSheet
+        visible={credit !== null}
+        title="Crediteer factuur"
+        subtitle={credit?.factuur.nummer}
+        error={creditFout}
+        saving={creditBezig}
+        submitLabel={
+          creditBezig
+            ? 'Aanmaken...'
+            : credit?.modus === 'volledig'
+              ? 'Volledig crediteren'
+              : 'Creditfactuur aanmaken'
+        }
+        submitDisabled={!credit || credit.modus === 'kies'}
+        onSubmit={crediteren}
+        onClose={() => setCredit(null)}
+      >
+        <Keuze
+          label="Kies hoe je deze factuur wilt crediteren"
+          opties={[
+            { id: 'volledig', label: 'Volledig crediteren' },
+            { id: 'gedeeltelijk', label: 'Gedeeltelijk crediteren' },
+          ]}
+          waarde={credit && credit.modus !== 'kies' ? credit.modus : null}
+          onKies={(id) => setCredit((c) => (c ? { ...c, modus: id as CreditStand['modus'] } : c))}
+          hint={
+            credit?.modus === 'gedeeltelijk'
+              ? 'Kies welke regelitems en voor welk bedrag je wilt crediteren.'
+              : 'Crediteer alle regelitems voor het volledige bedrag.'
+          }
+        />
+        {credit?.modus === 'volledig' ? (
+          <NoticeBanner
+            toon="fout"
+            message={`Een creditfactuur wordt aangemaakt voor alle ${credit.regels.length} regelitem${
+              credit.regels.length !== 1 ? 's' : ''
+            } van factuur ${credit.factuur.nummer}. Totaal te crediteren: ${formatEURCent(
+              Number(credit.factuur.totaal_incl ?? 0),
+            )}.`}
+          />
+        ) : null}
+        {credit?.modus === 'gedeeltelijk'
+          ? credit.keuzes.map((k, i) => (
+              <View key={k.regel.id} style={[styles.regel, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <Schakel
+                  titel={k.regel.omschrijving}
+                  uitleg={`${String(k.regel.aantal).replace('.', ',')} × ${formatEURCent(k.regel.eenheidsprijs)}`}
+                  waarde={k.gekozen}
+                  onWissel={(v) =>
+                    setCredit((c) =>
+                      c ? { ...c, keuzes: c.keuzes.map((x, j) => (j === i ? { ...x, gekozen: v } : x)) } : c,
+                    )
+                  }
+                />
+                {k.gekozen ? (
+                  <View style={styles.rij}>
+                    <View style={{ flex: 1 }}>
+                      <FormField
+                        label="Aantal"
+                        value={k.aantal}
+                        onChangeText={(v) =>
+                          setCredit((c) =>
+                            c ? { ...c, keuzes: c.keuzes.map((x, j) => (j === i ? { ...x, aantal: v } : x)) } : c,
+                          )
+                        }
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <FormField
+                        label="Prijs"
+                        value={k.prijs}
+                        onChangeText={(v) =>
+                          setCredit((c) =>
+                            c ? { ...c, keuzes: c.keuzes.map((x, j) => (j === i ? { ...x, prijs: v } : x)) } : c,
+                          )
+                        }
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ))
+          : null}
+        {creditTotaal !== null ? (
+          <Text style={styles.uitleg}>{`Te crediteren excl. btw: ${formatEURCent(creditTotaal)}`}</Text>
+        ) : null}
+      </FormSheet>
     </View>
   );
 }
@@ -1064,14 +1589,6 @@ const makeStyles = (t: ThemeColors) =>
     knop: { flexGrow: 1, minWidth: 140, minHeight: 44 },
     badgeRij: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink2 },
-    regelKnop: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: t.bgAlt,
-    },
     label: { ...typography.label, color: t.ink2 },
     hint: { fontSize: 12.5, lineHeight: 18, color: t.muted },
     rij: { flexDirection: 'row', gap: spacing.md },
@@ -1110,11 +1627,4 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.statusRejectBg,
     },
     foutTekst: { fontSize: 13, fontWeight: '600', color: t.statusRejectFg },
-    voetnoot: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
-      fontSize: 12.5,
-      lineHeight: 18,
-      color: t.muted,
-    },
   });

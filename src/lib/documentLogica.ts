@@ -418,3 +418,195 @@ export function magCrediteren(f: {
   );
 }
 
+
+// ── Offertes: versies, slot en verwijderen ─────────────────────────────────
+
+type OfferteSlotVelden = {
+  status: string | null;
+  signed_at: string | null;
+  vervangen_op?: string | null;
+};
+
+/**
+ * `isOfferteFullyLocked` (utils/documentSnapshot.js): ondertekend of
+ * geaccepteerd = het akkoord van de klant. Dan mag ook de status niet meer.
+ */
+export function offerteVolledigVast(o: OfferteSlotVelden): boolean {
+  return Boolean(o.signed_at) || o.status === 'geaccepteerd';
+}
+
+/**
+ * `isOfferteRevisable`: verzonden, nog niet getekend en nog niet vervangen.
+ * Herzien maakt dan een NIEUWE VERSIE; de oude ondertekenlink vervalt.
+ */
+export function offerteHerzienbaar(o: OfferteSlotVelden): boolean {
+  return !o.signed_at && !o.vervangen_op && o.status === 'verzonden';
+}
+
+/** `magOfferteVerwijderen` (OffertesPage): niet meer na akkoord van de klant. */
+export function magOfferteVerwijderen(o: OfferteSlotVelden): boolean {
+  return !o.signed_at && o.status !== 'geaccepteerd';
+}
+
+/**
+ * `nextOfferteVersionNumber`: het basisnummer zonder `-vN`, de nieuwe versie
+ * is de hoogste bestaande + 1 (het origineel telt als v1).
+ * BB-005 → BB-005-v2 → BB-005-v3.
+ *
+ * `bestaande` zijn de nummers die met het basisnummer beginnen (het dashboard
+ * haalt ze op met `ilike '<basis>%'`).
+ */
+export function volgendVersieNummer(nummer: string | null | undefined, bestaande: (string | null)[]): string {
+  const basis = String(nummer || '').replace(/-v\d+$/i, '') || 'BB';
+  const esc = basis.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^${esc}(?:-v(\\d+))?$`, 'i');
+  let max = 1;
+  for (const n of bestaande) {
+    const m = re.exec(n || '');
+    if (!m) continue;
+    const v = m[1] ? parseInt(m[1], 10) : 1;
+    if (v > max) max = v;
+  }
+  return `${basis}-v${max + 1}`;
+}
+
+/** Het basisnummer waarop het dashboard zijn `ilike` doet. */
+export function versieBasis(nummer: string | null | undefined): string {
+  return String(nummer || '').replace(/-v\d+$/i, '') || 'BB';
+}
+
+/**
+ * Een offerteregel terug naar de velden van het regelformulier —
+ * `reconstructRegel` (lib/regelTypes.js). Regels van vóór de migratie hebben
+ * geen type of percentage: dan het percentage uit de kop (afgerond op 9 of 21
+ * als het daar dichtbij ligt) en het type uit het aantal.
+ */
+export function regelVeldenUitOfferteItem(
+  item: {
+    omschrijving: string | null;
+    type: string | null;
+    aantal: number | null;
+    prijs_per: number | null;
+    btw_pct: number | null;
+    btw_regime: string | null;
+  },
+  kop: { totaal_excl: number | null; totaal_incl: number | null },
+): { omschrijving: string; type: string; aantal: number; prijs: number; btwPct: number; btwRegime: string } {
+  const excl = Number(kop.totaal_excl || 0);
+  const incl = Number(kop.totaal_incl || 0);
+  const terugval = excl > 0 ? Math.round((incl / excl - 1) * 1000) / 10 : 21;
+  const snap = (pct: number) => [9, 21].find((s) => Math.abs(s - pct) < 1.5) ?? pct;
+  const pct = item.btw_pct != null ? Number(item.btw_pct) : snap(terugval);
+  const aantal = Number(item.aantal ?? 1);
+  return {
+    omschrijving: item.omschrijving || '',
+    type: item.type || (aantal > 1 ? 'uren' : 'vast'),
+    aantal,
+    prijs: Number(item.prijs_per ?? 0),
+    btwPct: pct,
+    btwRegime: item.btw_regime || regimeVanPct(pct),
+  };
+}
+
+// ── Facturen: verwijderen, status en herinneringen ─────────────────────────
+
+/**
+ * `magFactuurVerwijderen` (FacturenPage): alleen een concept, of een factuur
+ * uit de boekhouding. Een verstuurde factuur is een boekstuk: crediteren.
+ */
+export function magFactuurVerwijderen(f: { status: string; externe_referentie: string | null }): boolean {
+  return ['concept', 'aangemaakt'].includes(f.status) || Boolean(f.externe_referentie) || f.status === 'geboekt';
+}
+
+/**
+ * `statusWeigering`: een concept zonder regels op betaald zetten zou een
+ * "betaalde" factuur van € 0 opleveren die nooit verstuurd is.
+ */
+export function factuurStatusWeigering(
+  f: { status: string },
+  nieuweStatus: string,
+  aantalRegels: number | null,
+): string | null {
+  if (nieuweStatus === 'betaald' && ['concept', 'aangemaakt'].includes(f.status) && aantalRegels === 0) {
+    return 'Deze factuur heeft nog geen regels. Voeg eerst regels toe en verstuur hem, daarna kun je hem op betaald zetten.';
+  }
+  return null;
+}
+
+/** `PDF_STATUSSEN` (utils/bewaarFactuurPdf.js): vanaf hier is de factuur definitief. */
+export const PDF_STATUSSEN = ['verzonden', 'betaald'];
+
+/** Wordt de factuur met deze statuswissel definitief? Dan de PDF bewaren. */
+export function wordtDefinitief(oud: string, nieuw: string): boolean {
+  return PDF_STATUSSEN.includes(nieuw) && !PDF_STATUSSEN.includes(oud);
+}
+
+/**
+ * Welke herinnering kan nu? Zoals de detailweergave van het dashboard:
+ * alleen een te late factuur; eerst herinnering 1, daarna 2. Herinnering 2
+ * verschijnt alleen met de feature; herinnering 1 wel, en vraagt dan bij het
+ * aantikken om het abonnement (guardFeature).
+ */
+export function factuurHerinneringen(
+  f: Pick<FactuurLijstItem, 'status' | 'vervaldatum' | 'is_credit' | 'gecrediteerd'> & {
+    herinnering_1_verstuurd_at?: string | null;
+    herinnering_2_verstuurd_at?: string | null;
+  },
+  vandaag: string,
+  kanHerinneren: boolean,
+): { eerste: boolean; tweede: boolean } {
+  const teLaat = isFactuurVerlopen(f, vandaag);
+  return {
+    eerste: teLaat && !f.herinnering_1_verstuurd_at,
+    tweede: teLaat && kanHerinneren && Boolean(f.herinnering_1_verstuurd_at) && !f.herinnering_2_verstuurd_at,
+  };
+}
+
+/**
+ * Gedeeltelijk crediteren (`CrediteerModal`): alleen de aangevinkte regels,
+ * met het aantal en de prijs uit het venster. De prijs telt als bedrag (de
+ * creditnota maakt hem zelf negatief), het aantal blijft positief.
+ *
+ * Eén verschil met het dashboard: daar wordt een aantal van 0 stilzwijgend 1
+ * (`Number(aantal || 1)`), waardoor je een regel crediteert die je juist op 0
+ * had gezet. Hier is dat een melding.
+ */
+export function gedeeltelijkeCreditRegels<R extends CreditBronRegel>(
+  keuzes: { regel: R; gekozen: boolean; aantal: string; prijs: string }[],
+): { ok: true; regels: CreditBronRegel[] } | { ok: false; melding: string } {
+  const gekozen = keuzes.filter((k) => k.gekozen);
+  if (gekozen.length === 0) return { ok: false, melding: 'Selecteer minimaal één regel.' };
+  const regels: CreditBronRegel[] = [];
+  for (const k of gekozen) {
+    const aantal = Number(String(k.aantal).replace(',', '.'));
+    const prijs = Math.abs(Number(String(k.prijs).replace(',', '.')));
+    if (!Number.isFinite(aantal) || aantal <= 0) {
+      return { ok: false, melding: `Vul bij "${k.regel.omschrijving}" een aantal groter dan 0 in.` };
+    }
+    if (!Number.isFinite(prijs)) {
+      return { ok: false, melding: `Vul bij "${k.regel.omschrijving}" een geldige prijs in.` };
+    }
+    regels.push({
+      ...k.regel,
+      aantal,
+      eenheidsprijs: prijs,
+      regelprijs: rond2(aantal * prijs),
+    });
+  }
+  return { ok: true, regels };
+}
+
+// ── Abonnement ─────────────────────────────────────────────────────────────
+
+/**
+ * `plan.within(key)` uit usePlan.js: is er nog ruimte binnen de limiet van
+ * deze periode? Geen limiet bekend of `max` leeg = onbeperkt.
+ */
+export function binnenLimiet(
+  limieten: Record<string, { max: number | null; gebruikt: number } | undefined> | null | undefined,
+  key: string,
+): boolean {
+  const l = limieten?.[key];
+  if (!l || l.max == null) return true;
+  return Number(l.gebruikt || 0) < l.max;
+}

@@ -14,9 +14,13 @@ import {
   bouwCreditFactuur,
   btwPctVoorOpslag,
   magCrediteren,
+  magFactuurVerwijderen,
   volgendNummer,
+  type CreditBronRegel,
 } from '@/lib/documentLogica';
+import { maakFactuurPdf } from '@/lib/pdf';
 import { DOCUMENT_KLANT_KOLOMMEN, type DocumentKlant } from './offerteService';
+import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
 
 /**
  * Facturen (`facturen`) en factuurregels (`factuur_regels`).
@@ -57,6 +61,7 @@ const FACTUUR_COLUMNS = `
   betaaltermijn_dagen, betalingskenmerk, status, notities,
   totaal_excl, totaal_incl, betaald_op, is_credit, gecrediteerd,
   credit_van_factuur_id, externe_referentie, created_at,
+  herinnering_1_verstuurd_at, herinnering_2_verstuurd_at,
   customer:customers ( id, name )
 `;
 
@@ -86,6 +91,8 @@ export type FactuurRow = {
   /** Gevuld bij import uit de boekhouding: die factuur hoort daar thuis. */
   externe_referentie: string | null;
   created_at: string;
+  herinnering_1_verstuurd_at: string | null;
+  herinnering_2_verstuurd_at: string | null;
   customer: { id: string; name: string | null } | null;
 };
 
@@ -329,6 +336,8 @@ export type FactuurInput = {
   betaaltermijn_dagen?: number;
   vervaldatum?: string | null;
   notities?: string | null;
+  /** Standaard het factuurnummer; alleen bij een concept te wijzigen. */
+  betalingskenmerk?: string | null;
   /** Totalen uit de regels; het dashboard geeft ze bij het aanmaken ook mee. */
   totaal_excl?: number;
   totaal_incl?: number;
@@ -395,6 +404,7 @@ export async function createFactuur(input: FactuurInput): Promise<WriteResult<Fa
     },
   );
   if (!res.ok) return res;
+  logAangemaakt(res.data);
 
   if (res.data.nummer && (await nummerAlInGebruik(res.data.nummer, res.data.id))) {
     const opnieuw = await volgendFactuurNummer();
@@ -431,6 +441,7 @@ export async function updateFactuur(
   const inhoudsVelden: (keyof FactuurInput)[] = [
     'vervaldatum',
     'notities',
+    'betalingskenmerk',
     'customer_id',
     'project_id',
     'factuurdatum',
@@ -468,12 +479,13 @@ export async function updateFactuur(
     updates.betaaltermijn_dagen = input.betaaltermijn_dagen;
   }
   if (input.notities !== undefined) updates.notities = input.notities?.trim() || null;
+  if (input.betalingskenmerk !== undefined) updates.betalingskenmerk = input.betalingskenmerk?.trim() || null;
   if (input.status !== undefined) updates.status = input.status;
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
   updates.updated_at = new Date().toISOString();
 
-  return schrijf<FactuurRow>(
+  const res = await schrijf<FactuurRow>(
     () => supabase.from('facturen').update(updates).eq('id', id).select(FACTUUR_COLUMNS),
     {
       context: 'factuurService.updateFactuur',
@@ -481,6 +493,32 @@ export async function updateFactuur(
       leegMelding: 'Er is niets gewijzigd. Je hebt het recht Facturen nodig.',
     },
   );
+  if (res.ok && input.status === 'verzonden') logVerzonden(res.data);
+  return res;
+}
+
+/** Tijdlijnregels zoals factuurService.js van het dashboard ze schrijft. */
+function logAangemaakt(f: FactuurRow): void {
+  if (!f.customer_id) return;
+  if (f.is_credit) {
+    void logTijdlijn(f.customer_id, 'creditfactuur_aangemaakt', `Creditfactuur ${f.nummer} aangemaakt`, {
+      nummer: f.nummer,
+    });
+  } else {
+    void logTijdlijn(
+      f.customer_id,
+      'factuur_aangemaakt',
+      `Factuur ${f.nummer} aangemaakt (€${tijdlijnBedrag(f.totaal_incl)})`,
+      { nummer: f.nummer, totaalIncl: Number(f.totaal_incl ?? 0) },
+    );
+  }
+}
+
+function logVerzonden(f: FactuurRow): void {
+  if (!f.customer_id) return;
+  void logTijdlijn(f.customer_id, 'factuur_verzonden', `Factuur ${f.nummer} verzonden naar klant`, {
+    nummer: f.nummer,
+  });
 }
 
 /**
@@ -517,11 +555,48 @@ export async function markeerBetaald(
     .maybeSingle();
   if (leesFout) return classificeerFout(leesFout, 'factuurService.markeerBetaald.lees');
   if (!vers) return writeFout('niet-gevonden');
+  const factuur = vers as unknown as FactuurRow;
 
-  return {
-    ok: true,
-    data: { factuur: vers as unknown as FactuurRow, gewijzigd: res?.changed === true },
-  };
+  // Alleen bij een echte overgang naar betaald, net als `updateFactuur` in het
+  // dashboard: één keer naar de boekhouding en één tijdlijnregel.
+  if (res?.changed === true) {
+    void syncFactuurNaarBoekhouding(id);
+    if (factuur.customer_id) {
+      void logTijdlijn(
+        factuur.customer_id,
+        'factuur_betaald',
+        `Factuur ${factuur.nummer} betaald (€${tijdlijnBedrag(factuur.totaal_incl)})`,
+        { nummer: factuur.nummer },
+      );
+    }
+  }
+
+  return { ok: true, data: { factuur, gewijzigd: res?.changed === true } };
+}
+
+/**
+ * `syncFactuurNaarBoekhouding`: best-effort naar de gekoppelde boekhouding
+ * (Moneybird en/of SnelStart), via dezelfde Edge Functions als het dashboard.
+ * Welke gekoppeld zijn komt uit `get_accounting_status` (alleen een
+ * `connected`-vlag, nooit tokens). Faalt stil.
+ */
+export async function syncFactuurNaarBoekhouding(factuurId: string): Promise<void> {
+  try {
+    const { data, error } = await supabase.rpc('get_accounting_status');
+    if (error) return;
+    const rijen = (data as { provider: string; connected?: boolean }[] | null) ?? [];
+    const gekoppeld = (p: string) => rijen.some((r) => r.provider === p && r.connected);
+    const taken: Promise<unknown>[] = [];
+    if (gekoppeld('moneybird')) {
+      taken.push(supabase.functions.invoke('moneybird-sync-factuur', { body: { factuur_id: factuurId } }));
+    }
+    if (gekoppeld('snelstart')) {
+      taken.push(supabase.functions.invoke('snelstart-sync-factuur', { body: { factuur_id: factuurId } }));
+    }
+    await Promise.allSettled(taken);
+  } catch {
+    /* best-effort */
+  }
 }
 
 export async function deleteFactuur(
@@ -529,10 +604,22 @@ export async function deleteFactuur(
 ): Promise<WriteStatus & { waarschuwing?: string }> {
   const { data: cur } = await supabase
     .from('facturen')
-    .select('externe_referentie, gecrediteerd')
+    .select('status, externe_referentie, gecrediteerd')
     .eq('id', id)
     .maybeSingle();
-  const huidig = cur as { externe_referentie: string | null; gecrediteerd: boolean | null } | null;
+  const huidig = cur as {
+    status: string;
+    externe_referentie: string | null;
+    gecrediteerd: boolean | null;
+  } | null;
+  // Zelfde regel als het dashboard (`magFactuurVerwijderen`): alleen een
+  // concept, of een factuur uit de boekhouding.
+  if (huidig && !magFactuurVerwijderen(huidig)) {
+    return writeFout(
+      'op-slot',
+      'Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.',
+    );
+  }
 
   const res = await schrijf<{ id: string }>(
     () => supabase.from('facturen').delete().eq('id', id).select('id'),
@@ -801,6 +888,7 @@ export async function createFactuurMetRegels(
     }
   }
 
+  logAangemaakt(factuur);
   const terug = await getFactuurRegels(factuur.id);
   return { ok: true, data: { factuur, regels: terug.data } };
 }
@@ -834,11 +922,15 @@ const SNAPSHOT_VELDEN = [
  * creditnota met een verbruikt BB-CF-nummer achter die niet meer te
  * verwijderen is.
  *
- * Gedeeltelijk crediteren (regels kiezen, aantallen aanpassen) kan alleen in
- * het dashboard.
+ * Gedeeltelijk crediteren geeft de gekozen regels mee; verder dezelfde route.
  */
 export async function createCreditFactuur(
   origineelId: string,
+  /**
+   * Gedeeltelijk crediteren (`CrediteerModal` → "Gedeeltelijk"): alleen deze
+   * regels, met hun aangepaste aantal en prijs. Weglaten = volledig.
+   */
+  gekozenRegels?: CreditBronRegel[],
 ): Promise<WriteResult<FactuurRow>> {
   const { data: org, error: orgFout } = await supabase
     .from('facturen')
@@ -867,7 +959,10 @@ export async function createCreditFactuur(
 
   // Kop, regels en `gecrediteerd = true` op het origineel in één transactie,
   // zoals het dashboard. De totalen rekent de databasetrigger uit de regels.
-  const credit = bouwCreditFactuur(regelRes.data);
+  if (gekozenRegels && gekozenRegels.length === 0) {
+    return writeFout('validatie', 'Selecteer minimaal één regel.');
+  }
+  const credit = bouwCreditFactuur(gekozenRegels ?? regelRes.data);
   const kop: Record<string, unknown> = {
     customer_id: origineel.customer_id,
     project_id: origineel.project_id,
@@ -879,9 +974,190 @@ export async function createCreditFactuur(
   };
   for (const veld of SNAPSHOT_VELDEN) kop[veld] = origineel[veld] ?? null;
 
-  return maakViaRpc(
+  const res = await maakViaRpc(
     kop,
     credit.regels.map(({ regelprijs: _r, ...r }) => r),
     'factuurService.createCreditFactuur',
   );
+  if (res.ok) logAangemaakt(res.data);
+  return res;
+}
+
+// ── PDF bewaren (utils/bewaarFactuurPdf.js) ────────────────────────────────
+
+/**
+ * `uploadFactuurPdf`: de PDF in de privébucket `factuur-pdfs`, pad
+ * `{company_id}/{factuur_id}.pdf`, upsert. Server-side flows zonder browser
+ * lezen deze kopie: de Stripe-webhook (bijlage bij de betaalbevestiging) en de
+ * boekhoudkoppeling (brondocument bij de verkoopboeking). Daarna de
+ * bijlagevlaggen terug op "nog te sturen", zodat een al geboekte factuur zijn
+ * document alsnog krijgt. Best-effort: geeft false bij een fout.
+ */
+export async function uploadFactuurPdf(factuurId: string, companyId: string, bytes: Uint8Array): Promise<boolean> {
+  if (!factuurId || !companyId || !bytes?.length) return false;
+  try {
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const { error } = await supabase.storage
+      .from('factuur-pdfs')
+      .upload(`${companyId}/${factuurId}.pdf`, buffer, { contentType: 'application/pdf', upsert: true });
+    if (error) {
+      console.warn('[factuurService.uploadFactuurPdf]', error.message);
+      return false;
+    }
+    await supabase
+      .from('facturen')
+      .update({ snelstart_bijlage_gesynct: false })
+      .eq('id', factuurId)
+      .eq('snelstart_bijlage_gesynct', true);
+    await supabase
+      .from('facturen')
+      .update({ moneybird_bijlage_gesynct: false })
+      .eq('id', factuurId)
+      .eq('moneybird_bijlage_gesynct', true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `bewaarFactuurPdf`: de factuur-PDF maken (dezelfde opmaak als het
+ * dashboard, met de bevroren bedrijfsgegevens als die er zijn) en bewaren.
+ * Aanroepen zodra een factuur definitief wordt: versturen per mail, of op
+ * verzonden/betaald zetten. Best-effort: een mislukte PDF blokkeert niets.
+ */
+export async function bewaarFactuurPdf(factuurId: string): Promise<boolean> {
+  const companyId = getCompanyId();
+  if (!factuurId || !companyId) return false;
+  try {
+    const pdf = await maakFactuurPdf(factuurId);
+    return await uploadFactuurPdf(factuurId, companyId, pdf.bytes);
+  } catch (e) {
+    console.warn('[factuurService.bewaarFactuurPdf]', e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+// ── Versturen en herinneren ────────────────────────────────────────────────
+
+/**
+ * Na het mailen van een concept: status verzonden en de bedrijfsgegevens
+ * (met IBAN) bevriezen — `updateFactuur(id, { status: 'verzonden',
+ * ...buildCompanySnapshot(company, { metIban: true }) })` in het dashboard.
+ */
+export async function markeerFactuurVerstuurd(
+  id: string,
+  snapshot: Record<string, string | null>,
+): Promise<WriteResult<FactuurRow>> {
+  const res = await schrijf<FactuurRow>(
+    () =>
+      supabase
+        .from('facturen')
+        .update({ status: 'verzonden', ...snapshot, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select(FACTUUR_COLUMNS),
+    { context: 'factuurService.markeerFactuurVerstuurd', bedrijfReadonly: isReadonly() },
+  );
+  if (res.ok) logVerzonden(res.data);
+  return res;
+}
+
+/**
+ * Herinnering 1 of 2 vastleggen (`herinnering_N_verstuurd_at`) met de regel op
+ * de klanttijdlijn. Zonder de feature `betaalherinneringen` weigert een
+ * trigger op `facturen` dit; die melding komt dan gewoon terug.
+ */
+export async function zetHerinneringVerstuurd(
+  f: Pick<FactuurRow, 'id' | 'nummer' | 'customer_id'>,
+  nr: 1 | 2,
+): Promise<WriteResult<FactuurRow>> {
+  const kolom = nr === 1 ? 'herinnering_1_verstuurd_at' : 'herinnering_2_verstuurd_at';
+  const res = await schrijf<FactuurRow>(
+    () =>
+      supabase
+        .from('facturen')
+        .update({ [kolom]: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', f.id)
+        .select(FACTUUR_COLUMNS),
+    { context: 'factuurService.zetHerinneringVerstuurd', bedrijfReadonly: isReadonly() },
+  );
+  if (res.ok && f.customer_id) {
+    void logTijdlijn(
+      f.customer_id,
+      'herinnering_verstuurd',
+      `Betaalherinnering ${nr} verstuurd voor factuur ${f.nummer}`,
+      { nummer: f.nummer },
+    );
+  }
+  return res;
+}
+
+// ── Kopiëren ───────────────────────────────────────────────────────────────
+
+/**
+ * `kopieerFactuur`: een NIEUWE, losse conceptfactuur met dezelfde klant,
+ * project, betaaltermijn, notities en regels. Geen versie: een verstuurde
+ * factuur is een boekstuk en blijft onaangeroerd. Status, betaaldatum,
+ * herkomst, creditverwijzing, snapshot en herinneringen gaan niet mee.
+ */
+export async function kopieerFactuur(bronId: string): Promise<WriteResult<FactuurRow>> {
+  const { data: bronRij, error } = await supabase.from('facturen').select('*').eq('id', bronId).maybeSingle();
+  if (error) return classificeerFout(error, 'factuurService.kopieerFactuur.lees');
+  const bron = bronRij as FactuurRow | null;
+  if (!bron) return writeFout('niet-gevonden');
+  const regels = await getFactuurRegels(bronId);
+  if (regels.error) return writeFout('onbekend', regels.error);
+  const nummerRes = await volgendFactuurNummer();
+  if (!nummerRes.ok) return writeFout('onbekend', nummerRes.melding);
+
+  const res = await maakViaRpc(
+    {
+      customer_id: bron.customer_id,
+      project_id: bron.project_id,
+      nummer: nummerRes.nummer,
+      factuurdatum: vandaagIso(),
+      betaaltermijn_dagen: bron.betaaltermijn_dagen,
+      notities: bron.notities,
+    },
+    regels.data.map((r) => ({
+      type: r.type || 'stuks',
+      omschrijving: r.omschrijving,
+      aantal: Number(r.aantal),
+      eenheidsprijs: Number(r.eenheidsprijs),
+      btw_pct: Number(r.btw_pct ?? 21),
+      btw_regime: r.btw_regime || (Number(r.btw_pct) === 0 ? 'vrijgesteld' : 'normaal'),
+      volgorde: Number(r.volgorde ?? 0),
+    })),
+    'factuurService.kopieerFactuur',
+  );
+  if (res.ok) logAangemaakt(res.data);
+  return res;
+}
+
+// ── Betaaltermijn ──────────────────────────────────────────────────────────
+
+/**
+ * De betaaltermijn voor een nieuwe factuur, zoals `NewFactuurModal`: die van
+ * de klant als hij er een heeft (0 = direct betalen telt ook), anders die uit
+ * Instellingen → Algemeen (`bedrijfsinstellingen.betaaltermijn_dagen`), anders
+ * 14 dagen. Vers opgehaald: een termijn die net op de klantkaart is gezet telt.
+ */
+export async function standaardBetaaltermijn(customerId: string | null): Promise<number> {
+  if (customerId) {
+    const { data } = await supabase
+      .from('customers')
+      .select('betaaltermijn_dagen')
+      .eq('id', customerId)
+      .maybeSingle();
+    const v = (data as { betaaltermijn_dagen?: number | string | null } | null)?.betaaltermijn_dagen;
+    if (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))) return Number(v);
+  }
+  const { data: inst } = await supabase
+    .from('bedrijfsinstellingen')
+    .select('betaaltermijn_dagen')
+    .limit(1)
+    .maybeSingle();
+  const b = (inst as { betaaltermijn_dagen?: number | null } | null)?.betaaltermijn_dagen;
+  if (b !== null && b !== undefined && Number.isFinite(Number(b))) return Number(b);
+  return 14;
 }
