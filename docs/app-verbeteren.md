@@ -65,7 +65,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 12. Uren
 - [ ] Werking gecontroleerd tegen dashboard
-- [ ] Melding werkbonuren vs werkdaguren alleen als het bedrijf uren bijhoudt + uitleg
+- [x] Melding werkbonuren vs werkdaguren alleen als het bedrijf uren bijhoudt + uitleg. Voorstel en gebouwd: de oranje meldingen ("Werkdaguren ontbreken", "Uren kloppen niet", "!" in de weekbalk) zijn weg; daarvoor in de plaats de herinnering van het dashboard als kaart "Vul je werkdag in" (homepage en Uren): alleen als de urenherinnering aan staat (Instellingen › Standaardwaarden), niet voor de eigenaar/admin, niet zonder personeel, niet voor uitgesloten medewerkers, alleen op herinneringsdagen; dagen waarop je ingepland stond (werkbondag in je ploeg of activiteit) zonder werkdaguren, laatste 14 dagen; met uitleg werkdag- vs werkbonuren, "Invullen" opent Uren schrijven op die dag, "Later" verbergt hem voor het ingestelde interval. Getest: Pieter (medewerker) 12 open dagen, gelijk aan het dashboard; Niels (admin) geen kaart
 - [ ] Wat ontbreekt t.o.v. dashboard
 
 ### 13. Materialen

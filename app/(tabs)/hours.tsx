@@ -33,7 +33,6 @@ import { listCompanyProfiles } from '@/services/workOrderService';
 import { todayISO, formatHours } from '@/lib/format';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { UrenRegel } from '@/types/domain';
-import type { DagUren } from '@/lib/urenTotalen';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, urenVanDag } from '@/lib/urenTotalen';
@@ -53,6 +52,7 @@ import {
   magTeamWerkdagen,
 } from '@/lib/urenRegels';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { UrenHerinneringKaart } from '@/components/UrenHerinneringKaart';
 
 const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -347,7 +347,10 @@ export default function HoursScreen() {
             </AppCard>
           </View>
         ) : null}
-        {isDezeWeek ? <UrenSignaal dag={vandaagUren} wie={team ? 'team' : 'ik'} styles={styles} /> : null}
+        {/* "Vul je werkdag in", alleen als het bedrijf uren bijhoudt. Geen
+            waarschuwing meer als werkbonuren de werkdag overstijgen: het
+            dashboard zegt daar bewust niets van (UrenPageV2). */}
+        {!team ? <UrenHerinneringKaart /> : null}
 
         {/* Weekoverzicht */}
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
@@ -362,23 +365,20 @@ export default function HoursScreen() {
               {NL_DAYS_SHORT.map((label, idx) => {
                 const dag = weekDagen[idx];
                 const hours = dag?.werkdag ?? 0;
-                const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                 const on = idx === todayWeekIdx;
                 const norm = team ? Math.max(8, ...weekDagen.map((d) => d.werkdag)) : 8;
-                const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / norm) * 52));
+                const height = Math.max(hours ? 6 : 4, Math.min(52, (hours / norm) * 52));
                 return (
                   <View key={label} style={styles.weekItem}>
-                    <Text style={[styles.weekHours, on && { color: t.ink }, signaal && styles.weekHoursLet]}>
-                      {hours ? formatHM(hours) : signaal ? '!' : ''}
+                    <Text style={[styles.weekHours, on && { color: t.ink }]}>
+                      {hours ? formatHM(hours) : ''}
                     </Text>
                     <View style={styles.weekBarFrame}>
                       <View
                         style={[
                           styles.weekBar,
                           { height },
-                          signaal
-                            ? styles.weekBarLet
-                            : on
+                          on
                               ? styles.weekBarOn
                               : hours >= 8
                                 ? styles.weekBarVol
@@ -403,20 +403,6 @@ export default function HoursScreen() {
                 {kpiWerkdag.medewerkers} {kpiWerkdag.medewerkers === 1 ? 'medewerker' : 'medewerkers'} · gem.{' '}
                 {formatHM(kpiWerkdag.gemPerDag)} per dag over {kpiWerkdag.dagen}{' '}
                 {kpiWerkdag.dagen === 1 ? 'dag' : 'dagen'}
-              </Text>
-            ) : null}
-            {week.dagenZonderWerkdag > 0 || week.dagenKlusGroter > 0 ? (
-              <Text style={styles.weekLetTekst}>
-                {[
-                  week.dagenZonderWerkdag > 0
-                    ? `${week.dagenZonderWerkdag} ${week.dagenZonderWerkdag === 1 ? 'dag' : 'dagen'} met werkbonuren maar zonder werkdag`
-                    : null,
-                  week.dagenKlusGroter > 0
-                    ? `${week.dagenKlusGroter} ${week.dagenKlusGroter === 1 ? 'dag' : 'dagen'} met meer werkbon- dan werkdaguren`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
               </Text>
             ) : null}
           </AppCard>
@@ -630,48 +616,6 @@ function UrenStat({
       <Text style={styles.summaryStatL} numberOfLines={1}>
         {label}
       </Text>
-    </View>
-  );
-}
-
-/**
- * De twee situaties die niet kloppen, als waarschuwing onder de samenvatting:
- * werkbonuren zonder werkdag, en meer werkbon- dan werkdaguren. Geen
- * wegrekenen, gewoon zeggen wat er ontbreekt.
- */
-function UrenSignaal({
-  dag,
-  wie,
-  styles,
-}: {
-  dag: DagUren;
-  wie: 'ik' | 'team';
-  styles: ReturnType<typeof makeStyles>;
-}) {
-  let tekst: string | null = null;
-  if (wie === 'team') {
-    const delen = [
-      dag.zonderWerkdag > 0
-        ? `${dag.zonderWerkdag} ${dag.zonderWerkdag === 1 ? 'medewerker heeft' : 'medewerkers hebben'} vandaag werkbonuren maar geen werkdag geschreven.`
-        : null,
-      dag.klusGroter > 0
-        ? `Bij ${dag.klusGroter} ${dag.klusGroter === 1 ? 'medewerker zijn' : 'medewerkers zijn'} de werkbonuren hoger dan de werkdaguren.`
-        : null,
-    ].filter(Boolean);
-    tekst = delen.length ? delen.join(' ') : null;
-  } else if (dag.zonderWerkdag > 0) {
-    tekst = `Je hebt vandaag ${formatHM(dag.werkbon)} op werkbonnen geboekt, maar nog geen werkdaguren geschreven. Vul je werkdag aan via "Uren toevoegen" → Overig.`;
-  } else if (dag.klusGroter > 0) {
-    tekst = `Je werkbonuren (${formatHM(dag.werkbon)}) zijn hoger dan je werkdaguren (${formatHM(dag.werkdag)}). Controleer je werkdag of de uren op de werkbonnen.`;
-  }
-  if (!tekst) return null;
-  return (
-    <View style={styles.signaalWrap}>
-      <NoticeBanner
-        toon="waarschuwing"
-        title={dag.zonderWerkdag > 0 && wie === 'ik' ? 'Werkdaguren ontbreken' : 'Uren kloppen niet'}
-        message={tekst}
-      />
     </View>
   );
 }
@@ -1079,23 +1023,6 @@ const makeStyles = (t: ThemeColors) =>
   },
   weekBarIdle: {
     backgroundColor: t.bgAlt,
-  },
-  // Een dag die niet klopt: zelfde amber als de waarschuwingen elders.
-  weekBarLet: {
-    backgroundColor: t.statusWarnStripe,
-  },
-  weekHoursLet: {
-    color: t.statusWarnFg,
-  },
-  weekLetTekst: {
-    marginTop: 10,
-    fontSize: 12,
-    fontWeight: '600',
-    color: t.statusWarnFg,
-  },
-  signaalWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
   },
   weekLabel: {
     fontSize: 11,

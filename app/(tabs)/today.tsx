@@ -19,6 +19,7 @@ import {
   statusKey,
 } from '@/components';
 import { ActiviteitRij } from '@/components/ActiviteitRij';
+import { UrenHerinneringKaart } from '@/components/UrenHerinneringKaart';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canCreateWorkOrder } from '@/services/workOrderService';
 import { listUrenForProfile } from '@/services/timeEntryService';
@@ -353,8 +354,6 @@ export default function TodayScreen() {
   const week = useMemo(() => telDagenOp(weekDagen), [weekDagen]);
   const vandaagUren = weekDagen[todayWeekIdx];
   const loggedToday = vandaagUren?.werkdag ?? 0;
-  const werkdagOntbreekt = (vandaagUren?.zonderWerkdag ?? 0) > 0;
-  const klusGroter = (vandaagUren?.klusGroter ?? 0) > 0;
 
   // ─── Afgeleiden voor de herokaart ───────────────────────────────────────
   const werkbonnen = useMemo(
@@ -395,11 +394,7 @@ export default function TodayScreen() {
     : werkbonnen.length > 0
       ? 'Alles afgerond voor vandaag'
       : 'Niets gepland voor vandaag';
-  const heroRechts = werkdagOntbreekt
-    ? 'werkdag ontbreekt'
-    : urenOver > 0
-      ? `nog ${formatUrenLang(urenOver)}`
-      : 'dag compleet';
+  const heroRechts = urenOver > 0 ? `nog ${formatUrenLang(urenOver)}` : 'dag compleet';
 
   // Kort gehouden: de bovenbalk geeft één regel, en "geschreven" erachter
   // viel er in de simulator al af op een iPhone 17.
@@ -441,22 +436,19 @@ export default function TodayScreen() {
                   {NL_DAYS_SHORT.map((label, idx) => {
                     const dag = weekDagen[idx];
                     const hours = dag?.werkdag ?? 0;
-                    const signaal = !!dag && (dag.zonderWerkdag > 0 || dag.klusGroter > 0);
                     const on = idx === todayWeekIdx;
-                    const height = Math.max(hours || signaal ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
+                    const height = Math.max(hours ? 6 : 4, Math.min(52, (hours / NORM_UREN) * 52));
                     return (
                       <View key={label + idx} style={styles.weekItem}>
-                        <Text style={[styles.weekHours, on && { color: c.ink }, signaal && styles.weekHoursLet]}>
-                          {hours ? formatUren(hours) : signaal ? '!' : ''}
+                        <Text style={[styles.weekHours, on && { color: c.ink }]}>
+                          {hours ? formatUren(hours) : ''}
                         </Text>
                         <View style={[styles.weekBarFrame, tablet && styles.weekBarFrameBreed]}>
                           <View
                             style={[
                               styles.weekBar,
                               { height },
-                              signaal
-                                ? styles.weekBarLet
-                                : on
+                              on
                                   ? styles.weekBarOn
                                   : hours >= NORM_UREN
                                     ? styles.weekBarVol
@@ -544,21 +536,8 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* Uren die niet kloppen: zeggen, niet wegrekenen (lib/urenTotalen). */}
-        {!loading && (werkdagOntbreekt || klusGroter) && vandaagUren ? (
-          <View style={styles.signaalWrap}>
-            <NoticeBanner
-              toon="waarschuwing"
-              title={werkdagOntbreekt ? 'Werkdaguren ontbreken' : 'Uren kloppen niet'}
-              message={
-                werkdagOntbreekt
-                  ? `Je hebt vandaag ${formatUrenLang(vandaagUren.werkbon)} op werkbonnen geboekt, maar nog geen werkdaguren geschreven.`
-                  : `Je werkbonuren (${formatUrenLang(vandaagUren.werkbon)}) zijn hoger dan je werkdaguren (${formatUrenLang(vandaagUren.werkdag)}).`
-              }
-              onPress={() => router.push('/(tabs)/hours')}
-            />
-          </View>
-        ) : null}
+        {/* "Vul je werkdag in" — alleen als het bedrijf uren bijhoudt (urenherinnering). */}
+        <UrenHerinneringKaart />
 
         {/* ── Snelle acties ───────────────────────────────────────────── */}
         <View style={styles.quickRow}>
@@ -1261,9 +1240,6 @@ const makeStyles = (c: ThemeColors) =>
     weekLabelOn: { color: c.green700, fontWeight: '700' },
     weekBarIdle: { backgroundColor: c.bgAlt },
     weekLabel: { fontSize: 11, fontWeight: '600', color: c.muted },
-    // Een dag die niet klopt: zelfde amber als de waarschuwingen elders.
-    weekBarLet: { backgroundColor: c.statusWarnStripe },
-    weekHoursLet: { color: c.statusWarnFg },
     weekKlus: { marginTop: 12, fontSize: 12, fontWeight: '600', color: c.muted },
     signaalWrap: { paddingHorizontal: 16, paddingTop: 12 },
 
