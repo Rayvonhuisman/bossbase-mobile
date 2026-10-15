@@ -49,3 +49,15 @@ test('PWA-only onderdelen niet in de native app', () => {
 test('scrollen sluit het toetsenbord niet in formulieren', () => {
   assert.doesNotMatch(lees('src/components/FormSheet.tsx'), /on-drag/);
 });
+
+test('Info.plist: gebruiksteksten dekken werkbon, kostenbon en project; Google Maps-query; geen oriëntatielock-module', () => {
+  const cfg = lees('app.config.ts');
+  const tekst = (sleutel) => cfg.match(new RegExp(`${sleutel}:\\s*'((?:[^'\\\\]|\\\\.)*)'`))?.[1] ?? '';
+  for (const sleutel of ['photosPermission', 'cameraPermission']) {
+    const t = tekst(sleutel);
+    for (const woord of ['werkbonnen', 'kostenbonnen', 'projecten']) assert.ok(t.includes(woord), `${sleutel}: ${woord}`);
+  }
+  assert.match(cfg, /LSApplicationQueriesSchemes: \['comgooglemaps'\]/);
+  const pkg = JSON.parse(lees('package.json'));
+  assert.equal(pkg.dependencies['expo-screen-orientation'], undefined);
+});

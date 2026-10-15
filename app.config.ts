@@ -121,9 +121,9 @@ const config: ExpoConfig = {
       'expo-image-picker',
       {
         photosPermission:
-          'BossBase gebruikt je fotobibliotheek om foto\'s aan een werkbon toe te voegen.',
+          'BossBase gebruikt je fotobibliotheek om foto\'s bij werkbonnen, kostenbonnen en projecten toe te voegen.',
         cameraPermission:
-          'BossBase gebruikt je camera om foto\'s bij een werkbon vast te leggen.',
+          'BossBase gebruikt je camera om foto\'s bij werkbonnen, kostenbonnen en projecten vast te leggen.',
       },
     ],
     [
