@@ -103,11 +103,12 @@ import {
   verstuurdeMailSub,
   type TijdlijnIcoon,
 } from '@/lib/klantkaart';
-import { mentionMeldingen, mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
+import { mentionMeldingen } from '@/lib/mentions';
+import { MentionInvoer, naarHtml, type Getagd } from '@/components/NotitieLog';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
 import type { PdfBedrijf } from '@/lib/pdf/pdfData';
 import { formatDateNL, formatEUR } from '@/lib/format';
-import { ds, radius, spacing, type ThemeColors } from '@/theme';
+import { ds, type ThemeColors } from '@/theme';
 import type { Customer, WorkOrderStatus } from '@/types/domain';
 import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { useLaden } from '@/lib/useLaden';
@@ -198,9 +199,8 @@ export default function CustomerDetailScreen() {
   const [alleNotities, setAlleNotities] = useState(false);
   const [allePlanning, setAllePlanning] = useState(false);
   const [nieuweNotitie, setNieuweNotitie] = useState('');
-  // @-vermeldingen: de gekozen collega's en de cursor (zoals NotitiesTab).
-  const [gekozen, setGekozen] = useState<{ id: string; naam: string }[]>([]);
-  const [cursor, setCursor] = useState(0);
+  // @-vermeldingen: de gekozen collega's (MentionInvoer).
+  const [gekozen, setGekozen] = useState<Getagd[]>([]);
   const [tijdlijn, setTijdlijn] = useState<TijdlijnRegel[]>([]);
   const [alleTijdlijn, setAlleTijdlijn] = useState(false);
   const [mails, setMails] = useState<VerstuurdeMail[]>([]);
@@ -392,34 +392,16 @@ export default function CustomerDetailScreen() {
   };
 
   // ── Notitie met @-vermeldingen (addNotitieLog + createMentionNotifications) ──
-  const tagZoek = mentionZoekterm(nieuweNotitie, cursor);
-  const tagKeuzes =
-    tagZoek === null
-      ? []
-      : medewerkers
-          .filter((m) => m.label && m.label.toLowerCase().includes(tagZoek.term.trim().toLowerCase()))
-          .slice(0, 6);
-
-  const kiesTag = (m: SelectOption) => {
-    if (!tagZoek) return;
-    const invoeg = `@${m.label} `;
-    setNieuweNotitie((v) => `${v.slice(0, tagZoek.start)}${invoeg}${v.slice(cursor)}`);
-    setCursor(tagZoek.start + invoeg.length);
-    setGekozen((g) => (g.some((x) => x.id === m.id) ? g : [...g, { id: m.id, naam: m.label }]));
-  };
-
   const notitieToevoegen = () => {
     if (!id) return;
-    const schoon = nieuweNotitie.trim();
     // Alleen met een tag HTML met mention-span, zoals het dashboard; anders
     // platte tekst zoals altijd.
-    const metTag = gekozen.filter((g) => g.naam && schoon.includes(`@${g.naam}`));
-    const html = metTag.length ? tekstMetVermeldingen(schoon, metTag) : undefined;
+    const notitie = naarHtml(nieuweNotitie, gekozen);
+    const html = notitie.getagd ? notitie.html : undefined;
     saveNotitie(() => createNote({ body: nieuweNotitie, customer_id: id, html }), {
       onSuccess: async () => {
         setNieuweNotitie('');
         setGekozen([]);
-        setCursor(0);
         // De getagde collega krijgt een melding en mail; mislukt dat, dan
         // blijft de notitie gewoon staan.
         if (html) {
@@ -566,29 +548,15 @@ export default function CustomerDetailScreen() {
       >
         {magNotitie ? (
           <View style={styles.notitieInvoer}>
-            <FormField
+            <MentionInvoer
               label="Nieuwe notitie"
               value={nieuweNotitie}
               onChangeText={setNieuweNotitie}
-              onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+              gekozen={gekozen}
+              onGekozen={setGekozen}
+              leden={medewerkers.map((m) => ({ id: m.id, full_name: m.label }))}
               placeholder="Wat moet er bewaard blijven? Typ @ om iemand te taggen"
-              multiline
             />
-            {tagKeuzes.length ? (
-              <View style={styles.chipRij} accessibilityLabel="Collega taggen">
-                {tagKeuzes.map((l) => (
-                  <Pressable
-                    key={l.id}
-                    onPress={() => kiesTag(l)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${l.label} taggen`}
-                    style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.chipTekst}>@{l.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
             {notitieFout ? <Text style={styles.notitieFout}>{notitieFout}</Text> : null}
             <Button
               label={notitieBezig ? 'Opslaan…' : 'Toevoegen'}
@@ -1353,17 +1321,6 @@ const makeStyles = (t: ThemeColors) =>
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink },
     notitieInvoer: { padding: 14, gap: 10 },
     notitieFout: { fontSize: 12.5, fontWeight: '600', color: t.statusRejectFg },
-    chipRij: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    chip: {
-      minHeight: 44,
-      justifyContent: 'center',
-      paddingHorizontal: 14,
-      borderRadius: radius.pill,
-      backgroundColor: t.card,
-      borderWidth: 1,
-      borderColor: t.line,
-    },
-    chipTekst: { fontSize: 13.5, fontWeight: '600', color: t.ink2 },
     tijdlijnBol: {
       width: 28,
       height: 28,
