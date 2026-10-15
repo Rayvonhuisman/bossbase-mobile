@@ -5,7 +5,10 @@ const config: ExpoConfig = {
   slug: 'bossbase',
   owner: 'bossbase',
   scheme: 'bossbase',
-  version: '0.1.0',
+  // 0.2.0: nieuwe native modules (webview, print, sharing, file-system) en de
+  // echte iPad-app. Met runtimeVersion-policy 'appVersion' krijgt deze build zo
+  // een eigen runtime; een OTA-update kan build 0.1.0 (5) nooit bereiken.
+  version: '0.2.0',
 
   updates: {
     url: 'https://u.expo.dev/4e4f5d3e-9633-441a-a520-a32df9cc05e2',

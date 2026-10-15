@@ -17,7 +17,7 @@ export default function SupportScreen() {
   const router = useRouter();
   const { colors: t } = useTheme();
   const { openBoss, openMelden } = useHulp();
-  const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+  const appVersion = Constants.expoConfig?.version ?? '0.2.0';
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>

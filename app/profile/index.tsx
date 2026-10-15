@@ -47,7 +47,7 @@ export default function ProfileScreen() {
   const initials = computeInitials(profile?.full_name ?? user?.email ?? '?');
   const roleLabel = role ? ROLE_LABELS[role] : 'Onbekende rol';
   const companyName = company?.name ?? '—';
-  const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+  const appVersion = Constants.expoConfig?.version ?? '0.2.0';
 
   const [naamConcept, setNaamConcept] = useState<string | null>(null);
   const [wachtwoord, setWachtwoord] = useState<{ nieuw: string; herhaal: string } | null>(null);
