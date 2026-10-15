@@ -122,10 +122,22 @@ export function WerkbonFormulier({
   // Zonder planningsmodule: één tijd voor de klus.
   const [enkelStart, setEnkelStart] = useState(hhmm(werkbon?.starttijd) || '');
   const [enkelEind, setEnkelEind] = useState(hhmm(werkbon?.eindtijd) || '');
+  // Zoals WerkbonPageV2: een nieuwe bon staat op naam van de maker (uitvoerder
+  // én verantwoordelijke); een oude bon zonder verantwoordelijken valt terug op
+  // de oude enkele toewijzing.
   const [uitvoerders, setUitvoerders] = useState<string[]>(
-    werkbon?.assigned_to_ids?.length ? werkbon.assigned_to_ids : werkbon?.assigned_to ? [werkbon.assigned_to] : [],
+    werkbon?.assigned_to_ids?.length
+      ? werkbon.assigned_to_ids
+      : werkbon?.assigned_to
+        ? [werkbon.assigned_to]
+        : !werkbon && user?.id
+          ? [user.id]
+          : [],
   );
-  const [verantwoordelijken, setVerantwoordelijken] = useState<string[]>(werkbon?.verantwoordelijke_ids ?? []);
+  const [verantwoordelijken, setVerantwoordelijken] = useState<string[]>(
+    werkbon?.verantwoordelijke_ids ??
+      (werkbon?.assigned_to ? [werkbon.assigned_to] : !werkbon && user?.id ? [user.id] : []),
+  );
   // Zoals "Stuur e-mail" in het dashboard: standaard aan.
   const [stuurMail, setStuurMail] = useState(true);
   const [voertuigIds, setVoertuigIds] = useState<string[]>(werkbon?.voertuig_ids ?? []);
