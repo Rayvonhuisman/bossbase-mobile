@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronRight, Mail, MapPin, Pencil, Phone, Plus, Trash2 } from 'lucide-react-native';
 import {
   AppFilterChips,
   AppScreen,
@@ -29,6 +29,8 @@ import { getUserId } from '@/lib/sessionContext';
 import { alsTekst } from '@/lib/notitieTekst';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { callPhone, openMaps, sendMail } from '@/lib/linking';
+import { notAvailableAlert } from '@/lib/notAvailable';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { writeFout } from '@/lib/writeResult';
 import { faseKeuzes, heropenFase, isAfgerond, verlorenFase, behandelaarIds } from '@/lib/pipelineLogica';
@@ -77,6 +79,7 @@ import {
   type ProjectRow,
   type ProjectUur,
   type ProjectWerkbon,
+  type AanvraagBron,
 } from '@/services/projectService';
 import { getCustomer, listCustomers } from '@/services/customerService';
 import { listCompanyProfiles } from '@/services/teamService';
@@ -116,7 +119,7 @@ type Data = {
   notities: ProjectNote[];
   fotos: ProjectFoto[];
   activiteiten: DealActiviteit[];
-  bron: { bron: string | null; binnenOp: string | null } | null;
+  bron: AanvraagBron | null;
 };
 
 const LEEG: Data = {
@@ -441,11 +444,63 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     urenToon(cijfers.hoursPercentage)
   ];
 
+  const bronLabel = !deal
+    ? null
+    : data.bron?.bron === 'bossbase_website'
+      ? 'Via het websiteformulier'
+      : data.bron?.bron === 'website'
+        ? 'Via de website'
+        : data.bron?.bron
+          ? `Via ${data.bron.bron}`
+          : magVerkoop
+            ? 'Handmatig aangemaakt'
+            : null;
+  const binnenOp = deal ? data.bron?.binnenOp || deal.created_at : null;
+  // De omschrijving staat al bovenaan; alleen een aangepaste tekst laat het origineel zien.
+  const websiteVelden = (data.bron?.velden ?? []).filter(
+    (v) => v.key !== 'omschrijving' || v.waarde.trim() !== aanvraagTekst.trim(),
+  );
+  const klantAdres = [klant?.address, [klant?.postcode, klant?.city].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ');
+  const aanvraagBewerken =
+    project && magProject
+      ? () => {
+          setSaveError(null);
+          setBewerk({ soort: 'aanvraag', tekst: aanvraagTekst });
+        }
+      : !project && deal && magVerkoop
+        ? () => {
+            setSaveError(null);
+            setBewerk({
+              soort: 'deal',
+              titel: deal.title ?? '',
+              waarde: deal.expected_revenue != null ? String(deal.expected_revenue) : '',
+              tekst: alsTekst(deal.description),
+            });
+          }
+        : null;
+
   // ── Overzicht ────────────────────────────────────────────────────────────
   const overzicht = (
     <>
+      {/* ── Status: compact, zoals de statusstrook van het dashboard ─────── */}
       {deal ? (
-        <Blok titel="Status">
+        <View style={styles.blok}>
+          <View style={styles.blokKop}>
+            <Text style={styles.blokTitel}>Status</Text>
+            {magVerkoop && !dealVerloren && !dealAfgerond ? (
+              <Pressable
+                onPress={() => setVerlorenOpen(true)}
+                accessibilityRole="button"
+                hitSlop={10}
+                style={({ pressed }) => [styles.stilLink, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.stilLinkTekst}>Verloren</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
           {dealVerloren ? (
             <View style={styles.rijMidden}>
               <StatusBadge status="Verloren" />
@@ -466,78 +521,70 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           ) : (
             <Text style={styles.waarde}>Loopt</Text>
           )}
-          {huidigeFase && magVerkoop && !dealVerloren && !dealAfgerond ? (
-            <FaseBadge label={huidigeFase.name ?? 'Fase'} colorClass={huidigeFase.color_class} positie={huidigeFase.position} />
-          ) : null}
 
           {magVerkoop ? (
-            <View style={styles.knoppen}>
-              {dealVerloren ? (
-                <Button label="Heropenen" variant="secondary" onPress={heropenVerloren} />
-              ) : (
-                <>
+            toewijzen && !dealAfgerond ? (
+              <View style={styles.veldKolom}>
+                <Text style={styles.veldLabel}>Behandeld door</Text>
+                <LedenKeuze label="" leden={data.leden} waarde={behandelaarIds(deal)} onChange={wijzigBehandelaars} />
+              </View>
+            ) : (
+              <View style={styles.statusRij}>
+                <Pressable
+                  onPress={() => setToewijzen(true)}
+                  disabled={dealAfgerond}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Behandeld door: ${behandelaars.length ? behandelaars.join(', ') : 'niemand'}`}
+                  style={({ pressed }) => [styles.behandelaarKnop, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.veldLabel}>Behandeld door</Text>
+                  <View style={styles.rijMidden}>
+                    <Text style={[styles.waarde, { flexShrink: 1 }]} numberOfLines={1}>
+                      {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'}
+                    </Text>
+                    {!dealAfgerond ? <Pencil size={13} color={t.muted} /> : null}
+                  </View>
+                </Pressable>
+                {dealVerloren ? (
+                  <Button label="Heropenen" variant="secondary" onPress={heropenVerloren} />
+                ) : (
                   <Button
-                    label={dealAfgerond ? 'Heropenen' : 'Project voltooien'}
+                    label={dealAfgerond ? 'Heropenen' : 'Voltooien'}
                     variant={dealAfgerond ? 'secondary' : 'primary'}
                     onPress={() => zetAfgerond(!dealAfgerond)}
                   />
-                  {!dealAfgerond ? (
-                    <Button label="Verloren" variant="ghost" onPress={() => setVerlorenOpen(true)} />
-                  ) : null}
-                </>
-              )}
-            </View>
+                )}
+              </View>
+            )
           ) : null}
 
-          {magVerkoop ? (
-            <>
-              <Veld label="Behandeld door">
-                {toewijzen && !dealAfgerond ? (
-                  <LedenKeuze
-                    label=""
-                    leden={data.leden}
-                    waarde={behandelaarIds(deal)}
-                    onChange={wijzigBehandelaars}
-                  />
-                ) : (
-                  <Pressable
-                    onPress={() => setToewijzen(true)}
-                    disabled={dealAfgerond}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.toewijsKnop, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.waarde} numberOfLines={2}>
-                      {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'}
-                    </Text>
-                    {!dealAfgerond ? <Pencil size={14} color={t.muted} /> : null}
-                  </Pressable>
-                )}
-              </Veld>
-              <Veld label="Prioriteit">
-                <View style={styles.chipRij}>
-                  {DEAL_PRIORITEITEN.map((p) => {
-                    const aan = (deal.priority || 'med') === p.id;
-                    return (
-                      <Pressable
-                        key={String(p.id)}
-                        onPress={() => wijzigPrio(String(p.id))}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: aan }}
-                        aria-checked={aan}
-                        style={[styles.chip, aan && styles.chipAan]}
-                      >
-                        <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Veld>
-            </>
+          {magVerkoop && !dealVerloren && !dealAfgerond ? (
+            <View style={styles.prioRij}>
+              <Text style={styles.veldLabel}>Prioriteit</Text>
+              <View style={styles.prioChips}>
+                {DEAL_PRIORITEITEN.map((p) => {
+                  const aan = (deal.priority || 'med') === p.id;
+                  return (
+                    <Pressable
+                      key={String(p.id)}
+                      onPress={() => wijzigPrio(String(p.id))}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: aan }}
+                      aria-checked={aan}
+                      hitSlop={6}
+                      style={[styles.prioChip, aan && styles.chipAan]}
+                    >
+                      <Text style={[styles.prioChipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           ) : null}
           {!project && magVerkoop ? (
             <Text style={styles.klein}>Bij deze aanvraag hoort nog geen project.</Text>
           ) : null}
-        </Blok>
+        </View>
       ) : project ? (
         <Blok titel="Status">
           <StatusBadge status={project.status ?? 'gepland'} />
@@ -547,76 +594,107 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         </Blok>
       ) : null}
 
-      <Blok
-        titel="De aanvraag"
-        actie={
-          project && magProject ? (
-            <KleineKnop
-              label="Bewerken"
-              onPress={() => {
-                setSaveError(null);
-                setBewerk({ soort: 'aanvraag', tekst: aanvraagTekst });
-              }}
-            />
-          ) : !project && deal && magVerkoop ? (
-            <KleineKnop
-              label="Bewerken"
-              onPress={() => {
-                setSaveError(null);
-                setBewerk({
-                  soort: 'deal',
-                  titel: deal.title ?? '',
-                  waarde: deal.expected_revenue != null ? String(deal.expected_revenue) : '',
-                  tekst: alsTekst(deal.description),
-                });
-              }}
-            />
-          ) : undefined
-        }
-      >
-        <Text style={[styles.tekst, !aanvraagTekst && { color: t.muted }]}>
+      {/* ── De aanvraag: het belangrijkste blok, en zo ziet het er ook uit ── */}
+      <View style={[styles.blok, styles.aanvraagBlok]}>
+        <View style={styles.blokKop}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.aanvraagEyebrow}>De aanvraag</Text>
+            <Text style={styles.klein} numberOfLines={2}>
+              {[bronLabel, binnenOp ? `binnen op ${formatDateNL(lokaleDatum(binnenOp))}` : null].filter(Boolean).join(' · ') || ' '}
+            </Text>
+          </View>
+          {aanvraagBewerken ? <KleineKnop label="Bewerken" onPress={aanvraagBewerken} /> : null}
+        </View>
+
+        <Text style={[styles.aanvraagTekst, !aanvraagTekst && { color: t.muted, fontWeight: '400' }]}>
           {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
         </Text>
+
+        {websiteVelden.length || data.bron?.fotos ? (
+          <View style={styles.websiteVak}>
+            <Text style={styles.veldLabel}>
+              Ingevuld op de website{data.bron?.isTest ? ' (testaanvraag)' : ''}
+            </Text>
+            {websiteVelden.map((v) => (
+              <View key={v.key} style={styles.websiteRij}>
+                <Text style={styles.websiteLabel}>{v.label}</Text>
+                <Text
+                  style={[styles.websiteWaarde, (v.key === 'email' || v.key === 'telefoon') && styles.websiteLink]}
+                  onPress={
+                    v.key === 'email'
+                      ? () => sendMail(v.waarde)
+                      : v.key === 'telefoon'
+                        ? () => callPhone(v.waarde)
+                        : undefined
+                  }
+                >
+                  {(v.key === 'gewensteDatum' || v.eigen) && /^\d{4}-\d{2}-\d{2}$/.test(v.waarde)
+                    ? formatDateNL(v.waarde)
+                    : v.waarde}
+                </Text>
+              </View>
+            ))}
+            {data.bron?.fotos ? (
+              <View style={styles.websiteRij}>
+                <Text style={styles.websiteLabel}>Foto&apos;s</Text>
+                <Text style={styles.websiteWaarde}>
+                  {data.bron.fotos === 1 ? '1 foto, hieronder' : `${data.bron.fotos} foto's, hieronder`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.raster}>
-          <Veld label="Waar">
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Waar</Text>
             <Text style={styles.waarde}>{klant?.address || '—'}</Text>
             {klant?.postcode || klant?.city ? (
               <Text style={styles.klein}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</Text>
             ) : null}
-          </Veld>
-          <Veld label="Wanneer">
+          </View>
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Wanneer</Text>
             <Text style={styles.waarde}>{wanneerLabel(regels, project?.start_date ?? null, vandaag)}</Text>
             {project?.deadline ? <Text style={styles.klein}>deadline {formatDateNL(project.deadline)}</Text> : null}
-          </Veld>
-          {deal ? (
-            <Veld label="Via">
-              <Text style={styles.waarde}>
-                {data.bron?.bron === 'bossbase_website'
-                  ? 'Websiteformulier'
-                  : data.bron?.bron
-                    ? data.bron.bron
-                    : magVerkoop
-                      ? 'Handmatig aangemaakt'
-                      : '—'}
-              </Text>
-              {data.bron?.binnenOp || deal.created_at ? (
-                <Text style={styles.klein}>
-                  binnen op {formatDateNL(lokaleDatum(data.bron?.binnenOp || deal.created_at))}
-                </Text>
-              ) : null}
-            </Veld>
-          ) : null}
-          <Veld label="Contact">
-            <Text style={styles.waarde}>{klant?.phone || klant?.email || '—'}</Text>
-          </Veld>
+          </View>
+          <View style={styles.rasterVeld}>
+            <Text style={styles.veldLabel}>Contact</Text>
+            <Text style={styles.waarde} numberOfLines={1}>{klant?.phone || klant?.email || '—'}</Text>
+          </View>
           {!project && deal ? (
-            <Veld label="Verwachte omzet">
+            <View style={styles.rasterVeld}>
+              <Text style={styles.veldLabel}>Verwachte omzet</Text>
               <Text style={styles.waarde}>{formatEUR(Number(deal.expected_revenue ?? 0))}</Text>
-            </Veld>
+            </View>
           ) : null}
         </View>
+
+        {/* Bel, mail en route: dezelfde tegels als op de werkbon. */}
+        <View style={styles.actieRij}>
+          <ActieTegel
+            icon={<Phone size={18} color={t.green700} />}
+            label="Bel"
+            uit={!klant?.phone}
+            onPress={() => callPhone(klant?.phone) || notAvailableAlert('Bellen', 'Geen telefoonnummer bekend.')}
+          />
+          <ActieTegel
+            icon={<Mail size={18} color={t.green700} />}
+            label="Mail"
+            uit={!klant?.email}
+            onPress={() => sendMail(klant?.email) || notAvailableAlert('Mailen', 'Geen e-mailadres bekend.')}
+          />
+          <ActieTegel
+            icon={<MapPin size={18} color={t.green700} />}
+            label="Route"
+            uit={!klantAdres}
+            onPress={() => openMaps(klantAdres) || notAvailableAlert('Navigeren', 'Geen adres bekend.')}
+          />
+        </View>
+
         {data.fotos.length ? (
-          <Veld label="Foto's">
+          <View style={styles.veldKolom}>
+            <Text style={styles.veldLabel}>Foto&apos;s</Text>
             <View style={styles.fotos}>
               {data.fotos.map((f) => (
                 <Pressable
@@ -629,9 +707,9 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 </Pressable>
               ))}
             </View>
-          </Veld>
+          </View>
         ) : null}
-      </Blok>
+      </View>
 
       {project ? (
         <Blok
@@ -1184,10 +1262,11 @@ function Blok({ titel, actie, children }: { titel: string; actie?: ReactNode; ch
   );
 }
 
+/** Een veld in een `raster` (rij die omslaat). Niet in een kolom zetten: zie `rasterVeld`. */
 function Veld({ label, children }: { label: string; children: ReactNode }) {
   const { styles } = useStijl();
   return (
-    <View style={styles.veld}>
+    <View style={styles.rasterVeld}>
       {label ? <Text style={styles.veldLabel}>{label}</Text> : null}
       {children}
     </View>
@@ -1206,6 +1285,32 @@ function KleineKnop({ label, onPress, icon }: { label: string; onPress: () => vo
     >
       {icon === 'plus' ? <Plus size={16} color={t.ink2} /> : <Pencil size={14} color={t.ink2} />}
       <Text style={styles.kleineKnopTekst}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ActieTegel({
+  icon,
+  label,
+  uit,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  uit?: boolean;
+  onPress: () => void;
+}) {
+  const { styles } = useStijl();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!uit }}
+      style={({ pressed }) => [styles.actieTegel, uit && styles.uit, pressed && { opacity: 0.8 }]}
+    >
+      {icon}
+      <Text style={styles.actieTegelTekst}>{label}</Text>
     </Pressable>
   );
 }
@@ -1258,7 +1363,57 @@ const makeStyles = (t: ThemeColors) =>
     },
     blokKop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
     blokTitel: { fontSize: 15, fontWeight: '700', color: t.ink },
-    veld: { gap: 2, flexBasis: 140, flexGrow: 1 },
+    // `veld` staat in kolommen; `rasterVeld` in de rij die omslaat. Eén stijl
+    // voor beide gaf elk veld in een kolom 140px hoogte (flexBasis) en daarmee
+    // een groot leeg vlak onder "Behandeld door" en "Prioriteit".
+    veldKolom: { gap: 6 },
+    rasterVeld: { gap: 2, flexBasis: 140, flexGrow: 1 },
+    statusRij: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    behandelaarKnop: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center', gap: 2 },
+    stilLink: { minHeight: 32, justifyContent: 'center' },
+    stilLinkTekst: { fontSize: 13, fontWeight: '600', color: t.muted },
+    prioRij: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' },
+    prioChips: { flexDirection: 'row', gap: 6 },
+    prioChip: {
+      minHeight: 32,
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+      borderRadius: radius.pill,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    prioChipTekst: { fontSize: 12.5, fontWeight: '600', color: t.ink2 },
+    // Groene rand links; de opvulling ernaast 4 minder, zodat de tekst gelijk loopt met de andere kaarten.
+    aanvraagBlok: { borderLeftWidth: 4, borderLeftColor: t.green, paddingLeft: spacing.lg - 4 + StyleSheet.hairlineWidth },
+    aanvraagEyebrow: { fontSize: 18, fontWeight: '800', color: t.ink, letterSpacing: -0.2 },
+    aanvraagTekst: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: t.ink },
+    websiteVak: {
+      gap: 6,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: t.bgAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.line,
+    },
+    websiteRij: { flexDirection: 'row', gap: spacing.md },
+    websiteLabel: { width: 118, fontSize: 13, color: t.muted },
+    websiteWaarde: { flex: 1, fontSize: 13, fontWeight: '600', color: t.ink },
+    websiteLink: { color: t.green700, textDecorationLine: 'underline' },
+    actieRij: { flexDirection: 'row', gap: 10 },
+    actieTegel: {
+      flex: 1,
+      minHeight: 56,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    actieTegelTekst: { fontSize: 12.5, fontWeight: '700', color: t.green700 },
+    uit: { opacity: 0.45 },
     veldLabel: { ...typography.eyebrow, color: t.muted2 },
     waarde: { fontSize: 14, fontWeight: '600', color: t.ink },
     klein: { fontSize: 12.5, color: t.muted },

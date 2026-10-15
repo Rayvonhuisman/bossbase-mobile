@@ -477,19 +477,62 @@ export async function listProjectFotos(projectId: string): Promise<ProjectFoto[]
     .filter((f) => f.url);
 }
 
-/** Waar de aanvraag vandaan kwam (`inquiries.source`); null zonder rij of zonder recht. */
-export async function getAanvraagBron(
-  dealId: string,
-): Promise<{ bron: string | null; binnenOp: string | null } | null> {
+export type AanvraagVeld = { key: string; label: string; waarde: string; eigen?: boolean };
+
+export type AanvraagBron = {
+  bron: string | null;
+  binnenOp: string | null;
+  isTest: boolean;
+  /** Wat er op het websiteformulier is ingevuld; lege velden vallen weg. */
+  velden: AanvraagVeld[];
+  fotos: number;
+};
+
+/**
+ * Waar de aanvraag vandaan kwam en wat er op het websiteformulier stond
+ * (`inquiries`) — `getAanvraagBron` uit het dashboard (`projectsService.js`).
+ * Null zonder rij of zonder recht (`verkoop`).
+ */
+export async function getAanvraagBron(dealId: string): Promise<AanvraagBron | null> {
   const { data, error } = await supabase
     .from('inquiries')
-    .select('source, created_at')
+    .select(
+      'source, created_at, is_test, name, email, phone, address, postcode, city, gewenste_datum, message, metadata, eigen_velden',
+    )
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
     .limit(1);
   if (error || !data?.length) return null;
-  const r = data[0] as { source: string | null; created_at: string | null };
-  return { bron: r.source, binnenOp: r.created_at };
+  const r = data[0] as Record<string, unknown> & {
+    metadata?: { fotos?: unknown } | null;
+    eigen_velden?: { naam?: string; waarde?: unknown }[] | null;
+  };
+  const vast: [string, string, unknown][] = [
+    ['naam', 'Naam', r.name],
+    ['email', 'E-mailadres', r.email],
+    ['telefoon', 'Telefoonnummer', r.phone],
+    ['adres', 'Adres', r.address],
+    ['postcode', 'Postcode', r.postcode],
+    ['plaats', 'Plaats', r.city],
+    ['gewensteDatum', 'Gewenste datum', r.gewenste_datum],
+    ['omschrijving', 'Omschrijving', r.message],
+  ];
+  const velden: AanvraagVeld[] = vast
+    .filter(([, , w]) => w != null && String(w).trim() !== '')
+    .map(([key, label, waarde]) => ({ key, label, waarde: String(waarde) }));
+  // De eigen velden van het bedrijf ("Soort dak"), onder de vaste.
+  (Array.isArray(r.eigen_velden) ? r.eigen_velden : []).forEach((e, i) => {
+    if (e?.naam && String(e.waarde ?? '').trim()) {
+      velden.push({ key: `eigen-${i}`, label: e.naam, waarde: String(e.waarde), eigen: true });
+    }
+  });
+  return {
+    bron: (r.source as string | null) || null,
+    binnenOp: (r.created_at as string | null) || null,
+    isTest: !!r.is_test,
+    velden,
+    fotos: Number(r.metadata?.fotos || 0),
+  };
 }
 
 // ── Projectnotities ────────────────────────────────────────────────────────
