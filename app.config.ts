@@ -21,8 +21,18 @@ const config: ExpoConfig = {
     },
   },
 
+  /**
+   * Oriëntatie: telefoons blijven staand (zo is de telefoonindeling ontworpen).
+   * De iPad mag alle kanten op — liggend, staand en in Split View/Stage
+   * Manager, wat op iPad alle vier de oriëntaties vraagt. Dat regelt
+   * `ios.infoPlist` hieronder (UISupportedInterfaceOrientations~ipad).
+   */
   orientation: 'portrait',
-  userInterfaceStyle: 'light',
+  /**
+   * 'automatic': zonder eigen keuze volgt de app het systeem (licht/donker).
+   * De keuze in de app (zon/maan-knop) wint altijd; zie ThemeProvider.
+   */
+  userInterfaceStyle: 'automatic',
 
   /**
    * Het appicoon komt uit `assets/bossbase-logo-source.jpeg`, het goedgekeurde
@@ -35,7 +45,9 @@ const config: ExpoConfig = {
 
   ios: {
     bundleIdentifier: 'nl.bossbase.app',
-    supportsTablet: false,
+    // Een echte iPad-app (geen vergrote iPhone-weergave): de layout schakelt
+    // vanaf 700 punten naar de tabletindeling, net als de webapp.
+    supportsTablet: true,
     associatedDomains: ['applinks:app.bossbase.nl'],
     config: {
       // Exportcompliance. BossBase gebruikt uitsluitend standaard- en daarmee
@@ -47,6 +59,15 @@ const config: ExpoConfig = {
       // Zonder deze verklaring vraagt App Store Connect er bij elke build
       // opnieuw naar, en blijft de build zolang bij de testers vandaan.
       usesNonExemptEncryption: false,
+    },
+    infoPlist: {
+      UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
     },
   },
 
