@@ -33,7 +33,8 @@ export function UrenHerinneringKaart({ marge = 16 }: { marge?: number }) {
   const uid = user?.id ?? null;
   const [dagen, setDagen] = useState<OpenWerkdag[]>([]);
   const [intervalMin, setIntervalMin] = useState(0);
-  const [verborgenTot, setVerborgenTot] = useState<number | null>(null);
+  // null = nog niet gelezen; true = "Later" loopt nog.
+  const [verborgen, setVerborgen] = useState<boolean | null>(null);
   const sluimerSleutel = uid ? `bb.urenHerinnering.later.${uid}` : null;
 
   const laad = useCallback(() => {
@@ -55,17 +56,17 @@ export function UrenHerinneringKaart({ marge = 16 }: { marge?: number }) {
   useEffect(() => {
     if (!sluimerSleutel) return;
     AsyncStorage.getItem(sluimerSleutel)
-      .then((v) => setVerborgenTot(Number(v) || 0))
-      .catch(() => setVerborgenTot(0));
+      .then((v) => setVerborgen((Number(v) || 0) > Date.now()))
+      .catch(() => setVerborgen(false));
   }, [sluimerSleutel]);
 
   const later = () => {
     const tot = Date.now() + Math.max(1, intervalMin) * 60 * 1000;
-    setVerborgenTot(tot);
+    setVerborgen(true);
     if (sluimerSleutel) AsyncStorage.setItem(sluimerSleutel, String(tot)).catch(() => {});
   };
 
-  if (!dagen.length || verborgenTot === null || verborgenTot > Date.now()) return null;
+  if (!dagen.length || verborgen !== false) return null;
 
   const invullen = (d: OpenWerkdag) =>
     router.push({ pathname: '/hours/new', params: { soort: 'overig', datum: d.datum } });
