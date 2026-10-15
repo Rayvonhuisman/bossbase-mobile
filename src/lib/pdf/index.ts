@@ -3,6 +3,8 @@ import { getOndertekendeOffertePdfUrl } from '@/services/offerteService';
 import { bouwPdf, type PdfBestand } from './bouwPdf';
 import { laadJsPDF } from './jspdf';
 import { pdfOmgeving } from './omgeving';
+import { maakDocumentUrl } from './omgevingBasis';
+import { bouwWerkbonPdf, laadWerkbonInvoer, werkbonBestandsnaam } from './werkbonPdf';
 import {
   bestandsnaamVoor,
   isGeimporteerdeFactuur,
@@ -27,6 +29,9 @@ export { PdfFout } from './pdfData';
 export type { PdfBestand } from './bouwPdf';
 export type { PdfSoort } from './pdfData';
 
+/** De documenten die de app als PDF kan tonen. */
+export type DocumentSoort = PdfSoort | 'werkbon';
+
 /** Nieuw opgebouwde offerte-PDF (wat het dashboard bij "Voorbeeld" toont). */
 export async function maakOffertePdf(offerteId: string): Promise<PdfBestand> {
   const [invoer, JsPDF] = await Promise.all([laadOfferteInvoer(supabase, offerteId), laadJsPDF()]);
@@ -39,6 +44,29 @@ export async function maakFactuurPdf(factuurId: string): Promise<PdfBestand> {
   const [invoer, JsPDF] = await Promise.all([laadFactuurInvoer(supabase, factuurId), laadJsPDF()]);
   const { doc: _doc, ...bestand } = await bouwPdf(invoer, pdfOmgeving(), JsPDF);
   return bestand;
+}
+
+/**
+ * Nieuw opgebouwde werkbon-PDF ("Werkbon als PDF" in het dashboard): zonder
+ * bedragen, interne notities of open taken. Is hij getekend, dan staan naam en
+ * handtekening erop; anders een leeg tekenvak om met pen af te tekenen.
+ */
+export async function maakWerkbonPdf(
+  werkbonId: string,
+  opties: { metUitvoerders?: boolean } = {},
+): Promise<PdfBestand> {
+  const [invoer, JsPDF] = await Promise.all([laadWerkbonInvoer(supabase, werkbonId, opties), laadJsPDF()]);
+  const { doc: _doc, ...bestand } = await bouwWerkbonPdf(invoer, pdfOmgeving(), JsPDF);
+  return bestand;
+}
+
+/**
+ * Het ondertekende exemplaar van een werkbon: een korte link (10 minuten) via
+ * de Edge Function `document-url` (soort `werkbon_pdf`), met de opgeslagen
+ * link als terugval — zoals de knop "Ondertekende bon" in het dashboard.
+ */
+export async function ondertekendeWerkbonUrl(werkbonId: string, opgeslagen?: string | null): Promise<string | null> {
+  return maakDocumentUrl(supabase)({ soort: 'werkbon_pdf', id: werkbonId, opgeslagen: opgeslagen ?? null });
 }
 
 export type DocumentPdf =
@@ -68,10 +96,25 @@ export async function haalDocumentPdf({
   id,
   opgeslagenEerst = true,
 }: {
-  soort: PdfSoort;
+  soort: DocumentSoort;
   id: string;
   opgeslagenEerst?: boolean;
 }): Promise<DocumentPdf> {
+  if (soort === 'werkbon') {
+    // Werkbon: `opgeslagenEerst` = het ondertekende exemplaar (geen terugval op
+    // een nieuw opgebouwde: dat is niet wat de klant tekende). Anders altijd
+    // opbouwen, zoals "Werkbon als PDF".
+    if (!opgeslagenEerst) return { bron: 'gemaakt', ...(await maakWerkbonPdf(id)) };
+    const { data: w } = await supabase
+      .from('werkbonnen')
+      .select('nummer, ondertekende_pdf_url')
+      .eq('id', id)
+      .maybeSingle();
+    const url = await ondertekendeWerkbonUrl(id, (w as { ondertekende_pdf_url?: string | null } | null)?.ondertekende_pdf_url);
+    if (!url) throw new PdfFout('De ondertekende bon kon niet worden geopend.');
+    const nummer = (w as { nummer?: string | null } | null)?.nummer;
+    return { bron: 'opgeslagen', url, bestandsnaam: werkbonBestandsnaam(nummer).replace(/\.pdf$/, '-ondertekend.pdf') };
+  }
   if (soort === 'factuur') {
     const { data: f, error } = await supabase
       .from('facturen')

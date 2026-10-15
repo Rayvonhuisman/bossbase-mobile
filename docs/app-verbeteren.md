@@ -46,10 +46,10 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 
 ### 8. Werkbon
 - [x] Kaartje bovenaan strak en uitgelijnd (knoppen behouden): kop alleen nummer + status (titel liep af en klant stond dubbel), project + Bewerken op één regel, volledige titel, klant als link, feiten in rijen met vaste icoonkolom (locatie, planning, verantwoordelijk, medewerkers, voertuigen), minder witruimte boven
-- [ ] Planning in de werkbon gecontroleerd tegen dashboard
-- [ ] Taken en uren gecontroleerd
+- [x] Planning in de werkbon gecontroleerd tegen dashboard: regels zoals `PlanningRegels` (venster per dag, eigen tijd alleen als die afwijkt, "niemand toegewezen", "geen tijd", voorbije dagen doffer, voertuigregel met inzittenden en bezetting)
+- [x] Taken en uren gecontroleerd: taken en meerwerk met een invoerregel onderaan (TakenSection) i.p.v. een venster, tellers in de kop zoals het dashboard; uren-kop "· 23,5u", km ook bij 0
 - [x] Foto's: drie knoppen naast elkaar (Voor/Tijdens/Na, met teller), per soort een rij voorbeelden; tik = schermvullend in de app (`FotoViewer`: vegen, pijlen, sluiten, verwijderen) i.p.v. een browsertab. Getest met upload + verwijderen als testgebruiker
-- [ ] Rest van de werkbon gecontroleerd
+- [x] Rest van de werkbon gelijk aan het dashboard (WerkbonPageV2 + WerkbonAfrondenModal): afronden met drie uitkomsten (klant tekent op het toestel via `sign-werkbon`, link per mail met de PDF als bijlage, zonder handtekening) en "Laten ondertekenen"; "Werkbon als PDF" (byte-gelijk aan het dashboard, `npm run pdf:vergelijk-werkbon`); ondertekende bon via `document-url` + vangnet `getekende-pdf-nazenden`; Kosten (inkopen) met recht `kosten` + module; Wkb-waarschuwing; @-vermeldingen in notities; materiaalregels inline bewerken; foto verwijderen: eerst het bestand, dan de rij. Screenshots: `docs/screenshots/werkbon/`
 
 ### 9. Pipeline en projectkaart
 - [x] Aanvraag prominent: eigen kaart met groene rand, tekst in een groen vak "Wat de klant vraagt" (na feedback 15-10), websitevelden zoals het dashboard, Bel/Mail/Route

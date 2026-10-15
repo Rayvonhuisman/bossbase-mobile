@@ -2,25 +2,28 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Printer, Share2, X } from 'lucide-react-native';
-import { haalDocumentPdf, PdfFout, type PdfSoort } from '@/lib/pdf';
+import { haalDocumentPdf, PdfFout, type DocumentSoort } from '@/lib/pdf';
 import { bytesNaarBase64 } from '@/lib/pdf/afbeelding';
 import { deelPdf, kanPrintenViaDelen, printPdf } from '@/lib/pdfDelen';
 import { Dialog } from '@/lib/dialog';
 import { PdfFrame, type PdfBericht } from './PdfFrame';
 
 export type PdfDocument = {
-  soort: PdfSoort;
+  soort: DocumentSoort;
   id: string;
   /** Kop in de knoppenlaag, bijv. "Offerte BB-149". */
   titel: string;
-  /** false = altijd opnieuw opbouwen (zoals de voorbeeldknop van het dashboard). */
+  /**
+   * false = altijd opnieuw opbouwen (zoals de voorbeeldknop van het dashboard).
+   * Werkbon: true = het ondertekende exemplaar, false = "Werkbon als PDF".
+   */
   opgeslagenEerst?: boolean;
 };
 
 type Geladen = { base64: string; bestandsnaam: string };
 
 /**
- * Een offerte of factuur bekijken, precies zoals het dashboard hem maakt: de
+ * Een offerte, factuur of werkbon bekijken, precies zoals het dashboard hem maakt: de
  * PDF schermvullend op A4, scrollen door de pagina's, knijpen om te zoomen.
  *
  * Tik op het scherm: de knoppenlaag verschijnt of verdwijnt — kruisje om te
@@ -63,6 +66,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
         const bytes = new Uint8Array(await antwoord.arrayBuffer());
         if (actief) setPdf({ base64: bytesNaarBase64(bytes), bestandsnaam: r.bestandsnaam });
       } catch (e) {
+        if (__DEV__) console.log('[PdfWeergave] PDF maken mislukt', e);
         if (actief) setFout(e instanceof PdfFout ? e.message : 'De PDF kon niet worden gemaakt. Probeer het opnieuw.');
       }
     })();

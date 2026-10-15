@@ -15,6 +15,7 @@ import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
 import { hhmm, type DagPayload, type WerkbonDag } from '@/lib/werkbonLogica';
 import { idBatches, MATERIAAL_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
 import { magWerkbonRegelsBeheren } from '@/lib/werkbonRechten';
+import { mentionMeldingen } from '@/lib/mentions';
 
 /**
  * Een werkbonrij zoals WORK_ORDER_COLUMNS hem levert: de basisvorm uit
@@ -25,6 +26,10 @@ export type Werkbon = WorkOrderWithRelations & {
   ondertekende_pdf_url?: string | null;
   verstuurd_naar_email?: string | null;
   verstuurd_op?: string | null;
+  /** Publieke ondertekenlink (/werkbon/<token>); ook ter plekke tekenen loopt hierlangs. */
+  sign_token?: string | null;
+  handtekening_url?: string | null;
+  ondertekend_door_email?: string | null;
 };
 
 /**
@@ -62,8 +67,8 @@ const WORK_ORDER_COLUMNS = `
   activity_id, nummer, assigned_to, assigned_to_ids, verantwoordelijke_ids,
   titel, omschrijving, status, gepland_op, starttijd, eindtijd, locatie,
   notes, werkbon_notities, gestart_op, afgerond_op,
-  ondertekend_op, ondertekend_door_naam, ondertekende_pdf_url,
-  verstuurd_naar_email, verstuurd_op, created_at, updated_at,
+  ondertekend_op, ondertekend_door_naam, ondertekend_door_email, ondertekende_pdf_url,
+  handtekening_url, sign_token, verstuurd_naar_email, verstuurd_op, created_at, updated_at,
   werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
     voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
@@ -214,20 +219,25 @@ export async function getWorkOrder(
  */
 export async function listVoertuigen(
   ids: string[],
-): Promise<{ data: Record<string, { naam: string; kleur: string | null }>; error: string | null }> {
+): Promise<{
+  data: Record<string, { naam: string; kleur: string | null; zitplaatsen: number | null }>;
+  error: string | null;
+}> {
   const uniek = Array.from(new Set(ids.filter(Boolean)));
   if (uniek.length === 0) return { data: {}, error: null };
 
+  // `*`: `zitplaatsen` kwam later (dashboard voertuigService); zonder die kolom
+  // blijft de bezetting gewoon weg.
   const { data, error } = await metTijdslimiet((signal) =>
-    supabase.from('voertuigen').select('id, naam, kleur').in('id', uniek).abortSignal(signal),
+    supabase.from('voertuigen').select('*').in('id', uniek).abortSignal(signal),
   );
 
   if (error) {
     return { data: {}, error: describeError('listVoertuigen', error) };
   }
-  const map: Record<string, { naam: string; kleur: string | null }> = {};
-  for (const row of (data as { id: string; naam: string | null; kleur: string | null }[]) ?? []) {
-    map[row.id] = { naam: row.naam ?? 'Voertuig', kleur: row.kleur };
+  const map: Record<string, { naam: string; kleur: string | null; zitplaatsen: number | null }> = {};
+  for (const row of (data as { id: string; naam: string | null; kleur: string | null; zitplaatsen?: number | null }[]) ?? []) {
+    map[row.id] = { naam: row.naam ?? 'Voertuig', kleur: row.kleur, zitplaatsen: row.zitplaatsen ?? null };
   }
   return { data: map, error: null };
 }
@@ -416,31 +426,30 @@ export async function uploadWorkOrderPhoto(input: {
 }
 
 /**
- * Een foto verwijderen: eerst de rij, dan het bestand.
+ * Een foto verwijderen: eerst het bestand, dan de rij — de volgorde van het
+ * dashboard (deleteWerkbonFoto). Mislukt het opruimen van het bestand, dan
+ * gaat het verwijderen van de rij gewoon door (het dashboard negeert die fout
+ * ook).
  *
- * Bewust in deze volgorde. De rij kent een slot (trigger
- * `bb_werkbon_kind_op_slot` op een ondertekende bon) naast RLS; de
- * storage-policy van `werkbon-fotos` kent dat slot niet. Ging het bestand
- * eerst, dan bleef bij een geweigerde rij-delete een rij achter die naar een
- * verdwenen bestand wijst. Nu blijft bij een weigering alles staan; mislukt
- * alleen het opruimen van het bestand, dan resteert een los bestand zonder rij.
+ * Let op: de storage-policy van `werkbon-fotos` kent het slot van een
+ * ondertekende bon niet (de rij wel, trigger `bb_werkbon_kind_op_slot`). Het
+ * scherm biedt verwijderen daarom alleen aan zolang de bon open is.
  */
 export async function deleteWorkOrderPhoto(
   id: string,
   bewaardeUrl: string,
 ): Promise<{ error: string | null }> {
-  const { data, error } = await supabase.from('werkbon_fotos').delete().eq('id', id).select('id');
-  if (error) return { error: describeError('deleteWorkOrderPhoto', error) };
-  if (!((data as { id: string }[]) ?? []).length) {
-    return { error: 'De foto is niet verwijderd — je hebt hier geen rechten voor.' };
-  }
-
   const pad = opslagpad(bewaardeUrl);
   if (pad) {
     const { error: opslagFout } = await supabase.storage.from(FOTO_BUCKET).remove([pad]);
     if (opslagFout && __DEV__) {
-      console.log('[workOrderService.deleteWorkOrderPhoto] bestand bleef staan', opslagFout.message);
+      console.log('[workOrderService.deleteWorkOrderPhoto] bestand niet verwijderd', opslagFout.message);
     }
+  }
+  const { data, error } = await supabase.from('werkbon_fotos').delete().eq('id', id).select('id');
+  if (error) return { error: describeError('deleteWorkOrderPhoto', error) };
+  if (!((data as { id: string }[]) ?? []).length) {
+    return { error: 'De foto is niet verwijderd — je hebt hier geen rechten voor.' };
   }
   return { error: null };
 }
@@ -990,6 +999,50 @@ export async function updateMaterialAmount(
   return { data: naarRegel(metPrijs ?? row), error: null };
 }
 
+/** De velden van een materiaalregel die je op de werkbon kunt wijzigen. */
+export type MateriaalWijziging = Partial<{
+  naam: string;
+  eenheid: string | null;
+  aantal: number;
+  prijs_per: number;
+  leverancier_id: string | null;
+  /** Alleen met het recht `inkoopprijzen`; zonder weigert RLS het stil. */
+  inkoopprijs_per: number | null;
+}>;
+
+/**
+ * Eén of meer velden van een materiaalregel bijwerken (updateWerkbonMateriaal
+ * in het dashboard). De inkoopprijs staat in `werkbon_materiaal_inkoop` met
+ * eigen RLS en gaat apart; het subtotaal rekent de database (a1_wm_subtotaal).
+ */
+export async function updateWorkOrderMaterial(
+  id: string,
+  patch: MateriaalWijziging,
+): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
+  const { inkoopprijs_per, ...velden } = patch;
+  const heeftInkoop = 'inkoopprijs_per' in patch;
+  if ('naam' in velden && !String(velden.naam ?? '').trim()) return { data: null, error: 'Vul een naam in.' };
+  if ('aantal' in velden && (!Number.isFinite(velden.aantal) || (velden.aantal ?? 0) < 0)) {
+    return { data: null, error: 'Vul een geldig aantal in.' };
+  }
+  if (Object.keys(velden).length) {
+    const { data, error } = await supabase.from('werkbon_materialen').update(velden).eq('id', id).select('id');
+    if (error) return { data: null, error: describeError('updateWorkOrderMaterial', error) };
+    if (!((data as { id: string }[]) ?? []).length) {
+      return { data: null, error: 'Niet opgeslagen — je hebt hier geen rechten voor.' };
+    }
+  }
+  if (heeftInkoop) {
+    await supabase
+      .from('werkbon_materiaal_inkoop')
+      .update({ inkoopprijs_per: inkoopprijs_per ?? null, updated_at: new Date().toISOString() })
+      .eq('werkbon_materiaal_id', id);
+  }
+  const regel = await leesRegel(id);
+  if (!regel) return { data: null, error: 'De regel kon niet opnieuw worden geladen.' };
+  return { data: regel, error: null };
+}
+
 export async function deleteWorkOrderMaterial(id: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase
     .from('werkbon_materialen')
@@ -1306,6 +1359,29 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
 // Collega-meldingen lopen via de bestaande Edge Function `create-notification`
 // (de RLS op `notifications` staat alleen self-insert toe). Alleen in-app: de
 // HTML-mail die het dashboard optioneel meestuurt bouwt de app (nog) niet.
+
+/**
+ * @-vermeldingen in een nieuwe notitie (createMentionNotifications): elke
+ * getagde collega krijgt een melding in de app en een mail. Ook wie zichzelf
+ * tagt, zoals in het dashboard.
+ */
+export async function meldVermeldingen(opts: {
+  html: string;
+  werkbonId: string;
+  maakerNaam: string | null;
+  context: string;
+}): Promise<void> {
+  await pushNotificaties(
+    mentionMeldingen({
+      text: opts.html,
+      relatedType: 'werkbon',
+      relatedId: opts.werkbonId,
+      link: 'werkbonnen',
+      creatorName: opts.maakerNaam,
+      contextName: opts.context,
+    }),
+  );
+}
 
 /**
  * Na opslaan: wie nieuw gekoppeld is krijgt "Je bent toegewezen aan …", wie
