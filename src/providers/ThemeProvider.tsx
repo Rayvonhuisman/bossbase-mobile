@@ -8,13 +8,25 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Appearance } from 'react-native';
+import { Appearance, Platform } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { darkTheme, lightTheme, type ThemeColors } from '@/theme';
 import { bepaalThema, leesOpgeslagenThemaDirect, THEMA_SLEUTEL } from '@/lib/themaKeuze';
 
 export type ColorMode = 'light' | 'dark';
 
 const STORAGE_KEY = THEMA_SLEUTEL;
+
+/**
+ * Native (iOS/Android): de opgeslagen keuze is pas asynchroon bekend. Het
+ * opstartscherm (#0D0D0D) blijft staan tot die gelezen is, zodat het eerste
+ * frame van de app meteen in het goede thema staat — geen licht→donker-flits.
+ * Op web regelt `public/thema-start.js` dit vóór de bundel.
+ */
+const NATIVE = Platform.OS !== 'web';
+/** Na deze tijd gaat de app hoe dan ook door (opslag die niet antwoordt). */
+const THEMA_WACHT_MS = 1500;
+if (NATIVE) SplashScreen.preventAutoHideAsync().catch(() => {});
 
 type ThemeContextValue = {
   colorMode: ColorMode;
@@ -39,8 +51,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 
   // Native: de opgeslagen keuze komt asynchroon binnen en wint van het systeem.
+  // Tot dan tekent de app niets (het opstartscherm staat nog).
+  const [klaar, setKlaar] = useState(!NATIVE);
   useEffect(() => {
     let mounted = true;
+    const nood = setTimeout(() => {
+      if (mounted) setKlaar(true);
+    }, THEMA_WACHT_MS);
     AsyncStorage.getItem(STORAGE_KEY)
       .then((saved) => {
         if (mounted && (saved === 'light' || saved === 'dark')) {
@@ -48,12 +65,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        // Ignore read failures — fall back to the light default.
+        // Lezen mislukt: systeemvoorkeur (al ingesteld) blijft staan.
+      })
+      .finally(() => {
+        if (mounted) setKlaar(true);
       });
     return () => {
       mounted = false;
+      clearTimeout(nood);
     };
   }, []);
+
+  useEffect(() => {
+    if (klaar && NATIVE) SplashScreen.hideAsync().catch(() => {});
+  }, [klaar]);
 
   const setColorMode = useCallback((mode: ColorMode) => {
     setColorModeState(mode);
@@ -80,7 +105,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [colorMode, toggleColorMode, setColorMode],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}>{klaar ? children : null}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
