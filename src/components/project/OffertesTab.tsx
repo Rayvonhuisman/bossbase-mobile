@@ -151,7 +151,8 @@ export function OffertesTab({
             label="PDF bekijken"
             variant="secondary"
             onPress={() =>
-              setPdf({ soort: 'offerte', id: gekoppeld.id, titel: `Offerte ${gekoppeld.nummer ?? ''}`.trim(), opgeslagenEerst: false })
+              // Getekend: het ondertekende exemplaar, zoals "Bekijken" bij Offertes.
+              setPdf({ soort: 'offerte', id: gekoppeld.id, titel: `Offerte ${gekoppeld.nummer ?? ''}`.trim(), opgeslagenEerst: true })
             }
           />
           {magFactuurMaken ? <Button label="Factuur maken" variant="secondary" onPress={factuurMaken} /> : null}

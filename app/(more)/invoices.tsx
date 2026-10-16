@@ -366,7 +366,7 @@ function InvoicesScreenInhoud() {
   }, [openId, loading, items, router]);
 
   /**
-   * PDF bekijken (`PdfWeergave`), zoals de paperclip in het dashboard: het
+   * Bekijken (`PdfWeergave`), zoals de paperclip in het dashboard: het
    * bewaarde bestand als dat er is (wat de klant kreeg, of het origineel uit
    * de boekhouding), anders dezelfde PDF die het dashboard opbouwt.
    */
@@ -931,7 +931,7 @@ function InvoicesScreenInhoud() {
     if (metDocument.has(f.id) || !detailGeimporteerd) {
       acties.push({
         id: 'pdf',
-        label: detailGeimporteerd ? 'Origineel document' : 'PDF bekijken',
+        label: detailGeimporteerd ? 'Origineel document' : 'Bekijken',
         onPress: () => bekijkPdf(f),
         variant: detailGeimporteerd ? 'primary' : 'secondary',
       });
