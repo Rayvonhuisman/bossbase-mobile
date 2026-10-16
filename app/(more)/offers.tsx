@@ -344,18 +344,19 @@ function OffersScreenInhoud() {
   }, [openId, loading, items, openDetail, router]);
 
   /**
-   * PDF bekijken: precies de PDF van het dashboard, schermvullend
-   * (`PdfWeergave`). "PDF bekijken" bouwt hem opnieuw op, zoals de
-   * voorbeeldknop van het dashboard; "Getekende offerte" toont het
-   * ondertekende exemplaar.
+   * Bekijken: één knop, schermvullend (`PdfWeergave`), zoals de paperclip in
+   * het dashboard. Getekend: het bewaarde ondertekende exemplaar met
+   * handtekening (bucket `signed-offertes`, via `offerte-pdf-url`), wat de
+   * klant ook kreeg; lukt dat niet, dan opgebouwd (ook met het
+   * ondertekeningsblok). Niet getekend: dezelfde PDF die het dashboard opbouwt.
    */
   const [pdfDoc, setPdfDoc] = useState<PdfDocument | null>(null);
-  const bekijkPdf = (o: OfferteRow, getekend: boolean) =>
+  const bekijkPdf = (o: OfferteRow) =>
     setPdfDoc({
       soort: 'offerte',
       id: o.id,
-      titel: `${getekend ? 'Getekende offerte' : 'Offerte'} ${o.nummer ?? ''}`.trim(),
-      opgeslagenEerst: getekend,
+      titel: `${o.signed_at ? 'Getekende offerte' : 'Offerte'} ${o.nummer ?? ''}`.trim(),
+      opgeslagenEerst: Boolean(o.signed_at),
     });
 
   /** `guardLimiet('offertes', …)`: binnen de offertelimiet van deze periode? */
@@ -889,20 +890,7 @@ function OffersScreenInhoud() {
                   style={styles.knop}
                 />
               ) : null}
-              <Button
-                label="PDF bekijken"
-                variant="secondary"
-                onPress={() => bekijkPdf(detail, false)}
-                style={styles.knop}
-              />
-              {detail.signed_at ? (
-                <Button
-                  label="Getekende offerte"
-                  variant="secondary"
-                  onPress={() => bekijkPdf(detail, true)}
-                  style={styles.knop}
-                />
-              ) : null}
+              <Button label="Bekijken" variant="secondary" onPress={() => bekijkPdf(detail)} style={styles.knop} />
               {magWijzigen && !detailVast ? (
                 <Button
                   label={bewerkLabel}

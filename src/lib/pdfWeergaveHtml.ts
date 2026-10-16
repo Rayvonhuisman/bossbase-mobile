@@ -1,8 +1,12 @@
 /**
  * De pagina die een PDF schermvullend tekent, voor de PDF-weergave van
- * offertes en facturen (`components/PdfWeergave`). Eén pagina voor web
- * (iframe) én app (WebView), zodat het overal hetzelfde werkt — ook op iOS,
- * waar een ingesloten PDF anders alleen zijn eerste pagina laat zien.
+ * offertes, facturen en werkbonnen (`components/PdfWeergave`), in de app
+ * (WebView, `PdfFrame.tsx`) — ook op iOS, waar een ingesloten PDF anders alleen
+ * zijn eerste pagina laat zien.
+ *
+ * Niet op web: daar erft een iframe de CSP van de app en mag dit ingebouwde
+ * script en pdf.js van de CDN niet draaien. Web tekent zelf in de pagina met
+ * pdf.js van het eigen domein (`PdfFrame.web.tsx`), op dezelfde manier.
  *
  * pdf.js tekent elke pagina op A4-verhouding in een canvas, scherp op het
  * scherm (devicePixelRatio), onder elkaar en scrollbaar. Knijpen om te zoomen
@@ -17,7 +21,15 @@
  */
 
 export const PDFJS_VERSIE = '4.10.38';
-const CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSIE}`;
+/**
+ * De legacy-build: de gewone build gebruikt o.a. `Promise.withResolvers` en
+ * draait daardoor niet op iOS vóór 17.4 (en oudere Android-WebViews). cdnjs
+ * heeft geen legacy-build, jsDelivr wel; hetzelfde bestand als web gebruikt
+ * (`public/pdfjs/`). De WebView krijgt dit domein als `baseUrl` (PdfFrame.tsx),
+ * zodat de worker van hetzelfde domein komt.
+ */
+export const PDFJS_BASIS = 'https://cdn.jsdelivr.net';
+const CDN = `${PDFJS_BASIS}/npm/pdfjs-dist@${PDFJS_VERSIE}/legacy/build`;
 
 export function pdfWeergaveHtml(): string {
   return `<!doctype html>

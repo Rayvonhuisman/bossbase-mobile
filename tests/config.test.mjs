@@ -34,6 +34,19 @@ test('beveiligingsheaders op elke pagina', () => {
   assert.equal(header('/(.*)', 'X-Frame-Options'), 'DENY');
 });
 
+test('PDF-weergave op web past binnen de CSP: geen iframe, pdf.js van het eigen domein', async () => {
+  // Een srcdoc-iframe erft de CSP (script-src 'self'): het ingebouwde script en
+  // pdf.js van een CDN werden geblokkeerd en het scherm bleef op "PDF laden…".
+  const bron = await readFile(new URL('../src/components/PdfFrame.web.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(bron, /<iframe|srcDoc|https?:\/\//);
+  const map = bron.match(/PDFJS_MAP = '([^']+)'/)?.[1];
+  assert.ok(map, 'PDFJS_MAP niet gevonden');
+  for (const f of ['pdf.min.js', 'pdf.worker.min.js']) {
+    const inhoud = await readFile(new URL(`../public${map}/${f}`, import.meta.url), 'utf8');
+    assert.ok(inhoud.length > 100_000, `${f} lijkt leeg`);
+  }
+});
+
 test('sw.js wordt nooit door de browser gecachet', () => {
   assert.match(header('/sw.js', 'Cache-Control'), /no-store/);
 });

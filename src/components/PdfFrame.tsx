@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { pdfWeergaveHtml } from '@/lib/pdfWeergaveHtml';
+import { PDFJS_BASIS, pdfWeergaveHtml } from '@/lib/pdfWeergaveHtml';
 
 export type PdfBericht = { type: 'gereed' | 'klaar' | 'fout' | 'tik'; paginas?: number; melding?: string };
 
@@ -26,7 +26,7 @@ export function PdfFrame({ base64, onBericht }: { base64: string; onBericht: (b:
     <WebView
       ref={ref}
       originWhitelist={['*']}
-      source={{ html, baseUrl: 'https://cdnjs.cloudflare.com' }}
+      source={{ html, baseUrl: PDFJS_BASIS }}
       onMessage={ontvang}
       style={{ flex: 1, backgroundColor: '#2b2b2b' }}
       // Knijpen om te zoomen; geen tekstselectie-menu bij lang drukken.
