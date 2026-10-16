@@ -167,6 +167,13 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 16-10 — Eindtest op de preview (productiebuild met de echte Vercel-headers), als Claude Eigenaar in Test Account Claude, telefoon 390×844 en iPad 820×1180 / 1180×820:
+  - Totaal-overzicht met dubbelboekingen.
+  - WB-004 ingepland op twee dagen, met een dagploeg en Bus 2 alleen op de eerste dag.
+  - Zonder ster wordt de eerste uitvoerder verantwoordelijk, zoals de planning van het dashboard; dat is hier gecorrigeerd.
+  - "Bekijken" bij BB-001, BB-002 (getekend, met handtekening) en BB-F002.
+  - Geen mail verstuurd.
+  - Daarna naar `main`.
 - 16-10 — PDF bekijken bij offertes en facturen opgelost (branch `app-pdf`). Oorzaak op de PWA: de PDF-iframe erfde de CSP en mocht zijn eigen script en pdf.js van cdnjs niet draaien; nu pdf.js van het eigen domein, zonder iframe, CSP ongewijzigd. Eén knop "Bekijken" (getekend = ondertekend exemplaar). Werkt op de PWA na deploy. Native: de enige iOS-build (20-09) is van vóór `react-native-webview` (15-10), en er is geen Android-build — de PDF-weergave werkt daar pas na een nieuwe native build; geen OTA-update op runtime 0.1.0 publiceren zonder die build.
 - 16-10 — Planning: Totaal (iedereen, met activiteiten), Activiteit inplannen zonder werkbon, en meerdere dagen, dagploeg en voertuigen per dag direct in de planning, alles zoals het dashboard (dat kon het al; daar niets veranderd). Getest als Claude Planner in Test Account Claude op telefoon en iPad staand/liggend; testdata opgeruimd. Branch `app-planning`.
 - 16-10 — Werkbon uit een afspraak krijgt de deelnemer van de afspraak (anders de maker) als uitvoerder en verantwoordelijke, zodat de klus in de agenda blijft; ook in het dashboard (main, c4047e7) en in de kennisbank van Boss. Getest in de preview: WB-222 uit Pieters afspraak, aangemaakt door Sandra, kreeg Pieter als uitvoerder en verantwoordelijke en bleef in de agenda staan. Het dashboard kon niet meer live getest worden, omdat TEST Stamvol tijdens de test door een andere sessie is verwijderd (zoals gepland). Preview van deze branch: https://bossbase-app-preview.vercel.app, een apart Vercel-project; de live app is niet geraakt.
