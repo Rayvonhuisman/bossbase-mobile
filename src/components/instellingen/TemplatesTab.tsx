@@ -25,6 +25,7 @@ import {
   type EmailTemplate,
 } from '@/services/instellingenService';
 import { Kaart, Schakel, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { aankoopTekst, toonAankoopInfo } from '@/lib/aankoopInfo';
 
 type Form = {
   onderwerp: string;
@@ -180,11 +181,17 @@ export function TemplatesTab({ magWijzigen }: { magWijzigen: boolean }) {
     if (!hasFeature('eigen_email_templates')) {
       Dialog.alert(
         'Eigen e-mailtemplates',
-        'Zelf nieuwe e-mailtemplates aanmaken zit in Groei en Team. Je abonnement wijzig je op het dashboard.',
-        [
-          { text: 'Sluiten', style: 'cancel' },
-          { text: 'Naar het dashboard', onPress: () => void openDashboard('abonnement') },
-        ],
+        aankoopTekst(
+          'Zelf nieuwe e-mailtemplates aanmaken zit in Groei en Team. Je abonnement wijzig je op het dashboard.',
+          'Zelf nieuwe e-mailtemplates aanmaken zit niet in je huidige abonnement.',
+        ),
+        // iOS (App Store 3.1.1): geen knop naar abonnementsbeheer buiten de app.
+        toonAankoopInfo()
+          ? [
+              { text: 'Sluiten', style: 'cancel' },
+              { text: 'Naar het dashboard', onPress: () => void openDashboard('abonnement') },
+            ]
+          : [{ text: 'Sluiten', style: 'cancel' }],
       );
       return;
     }

@@ -50,6 +50,7 @@ import { useSave } from '@/lib/useSave';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { aankoopTekst } from '@/lib/aankoopInfo';
 
 /**
  * Team — gelijk aan `TeamPage.jsx` van het dashboard.
@@ -138,7 +139,10 @@ function TeamScreenInhoud() {
       Dialog.alert(
         'Uitnodigen niet mogelijk',
         waaromNiet('team', 'maken') ??
-          'Je abonnement heeft geen ruimte voor een extra gebruiker. Pas je abonnement aan op het dashboard.',
+          aankoopTekst(
+            'Je abonnement heeft geen ruimte voor een extra gebruiker. Pas je abonnement aan op het dashboard.',
+            'Je abonnement heeft geen ruimte voor een extra gebruiker.',
+          ),
       );
       return;
     }
@@ -289,7 +293,10 @@ function TeamScreenInhoud() {
       Dialog.alert(
         'Rollen & rechten',
         waaromNiet('team', 'rechtenWijzigen') ??
-          'Rollen & rechten zit niet in je abonnement. Dat zit in Groei en Team.',
+          aankoopTekst(
+            'Rollen & rechten zit niet in je abonnement. Dat zit in Groei en Team.',
+            'Rollen & rechten zit niet in je huidige abonnement.',
+          ),
       );
       return;
     }

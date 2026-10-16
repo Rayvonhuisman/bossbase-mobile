@@ -120,6 +120,7 @@ import {
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { aankoopTekst } from '@/lib/aankoopInfo';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
@@ -720,7 +721,10 @@ function InvoicesScreenInhoud() {
     if (!kanHerinneren) {
       Dialog.alert(
         'Betaalherinneringen',
-        'Betaalherinneringen versturen zit niet in je huidige abonnement. Je abonnement wijzig je op het dashboard.',
+        aankoopTekst(
+          'Betaalherinneringen versturen zit niet in je huidige abonnement. Je abonnement wijzig je op het dashboard.',
+          'Betaalherinneringen versturen zit niet in je huidige abonnement.',
+        ),
       );
       return;
     }

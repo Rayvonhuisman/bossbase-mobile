@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 import { openExtern } from '@/lib/linking';
 import { useRouter } from 'expo-router';
 import {
@@ -198,7 +198,7 @@ export default function MenuScreen() {
 
         {readonly ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            <NoticeBanner title={readonlyTekst(readonlyReden).titel} message={readonlyTekst(readonlyReden).uitleg} />
+            <NoticeBanner title={readonlyTekst(readonlyReden, Platform.OS).titel} message={readonlyTekst(readonlyReden, Platform.OS).uitleg} />
           </View>
         ) : null}
 
