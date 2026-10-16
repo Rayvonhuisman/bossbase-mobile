@@ -11,8 +11,7 @@
       "*": false,
       "**": false,
       "main": true,
-      "feature/pwa-web": true,
-      "app-verbeteren": true
+      "feature/pwa-web": true
     }
   },
   "rewrites": [

@@ -162,7 +162,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
-- 16-10 — Werkbon uit een afspraak krijgt de deelnemer van de afspraak (anders de maker) als uitvoerder en verantwoordelijke, zodat de klus in de agenda blijft; ook in het dashboard (main, c4047e7) en in de kennisbank van Boss. Vercel bouwt deze branch nu als preview (alleen preview, `main` blijft de live app).
+- 16-10 — Werkbon uit een afspraak krijgt de deelnemer van de afspraak (anders de maker) als uitvoerder en verantwoordelijke, zodat de klus in de agenda blijft; ook in het dashboard (main, c4047e7) en in de kennisbank van Boss. Getest in de preview: WB-222 uit Pieters afspraak, aangemaakt door Sandra, kreeg Pieter als uitvoerder en verantwoordelijke en bleef in de agenda staan. Het dashboard kon niet meer live getest worden, omdat TEST Stamvol tijdens de test door een andere sessie is verwijderd (zoals gepland). Preview van deze branch: https://bossbase-app-preview.vercel.app, een apart Vercel-project; de live app is niet geraakt.
 - 15-10 — Klantkaart en Financiën samengevoegd, screenshots op alle formaten nagelopen (KPI-tegels Projecten op tablet opgelost), testbedrijf terug op Groei. Klaar: alles afgevinkt behalve twee punten die bewust open staan (websiteformulier, database-exports).
 - 15-10 — Registratie samengevoegd; agenda (werkbon uit afspraak, notitielog), nieuwe werkbon en nieuwe aanvraag gelijk aan het dashboard.
 - 15-10 — Documenten- en werkbon-branches samengevoegd; klantkaart "+", wachtwoord vergeten, afspraakbevestiging. Financiën en registratie uitbesteed aan agents.
