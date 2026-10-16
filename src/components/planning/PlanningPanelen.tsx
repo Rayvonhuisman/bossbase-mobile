@@ -414,7 +414,9 @@ function WerkbonPlannen({
 
   const opslaan = async () => {
     setFout(null);
-    if (uitvoerders.length && !verantwoordelijken.length) return setFout('Wijs minimaal één verantwoordelijke aan.');
+    // Niemand met een ster: de eerste uitvoerder wordt verantwoordelijk, zoals
+    // de planning van het dashboard (normalizeVerantwoordelijken).
+    const verantw = verantwoordelijken.length ? verantwoordelijken : uitvoerders.slice(0, 1);
     const planFout = controleerPlanning(planning, standaard);
     if (planFout) return setFout(planFout);
     if (metVoertuigen) {
@@ -429,7 +431,7 @@ function WerkbonPlannen({
       starttijd: standaard.starttijd || null,
       eindtijd: standaard.eindtijd || null,
       assigned_to_ids: uitvoerders,
-      verantwoordelijke_ids: verantwoordelijken,
+      verantwoordelijke_ids: verantw,
       ...(metVoertuigen ? { voertuig_ids: gekozenVoertuigen.map((v) => v.id) } : {}),
     });
     if (r.error || !r.data) {
@@ -450,7 +452,7 @@ function WerkbonPlannen({
       werkbonId: w.id,
       titel: w.titel ?? 'Werkbon',
       uitvoerders,
-      verantwoordelijken,
+      verantwoordelijken: verantw,
       vorigeUitvoerders: vorigePloeg,
       vorigeVerantwoordelijken: w.verantwoordelijke_ids ?? [],
       maker,
