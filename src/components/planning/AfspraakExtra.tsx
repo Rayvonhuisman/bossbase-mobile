@@ -25,6 +25,8 @@ const nieuwId = () =>
  * dashboard: de gekoppelde werkbon (of er een maken uit de afspraak), en het
  * notitielog met @-vermeldingen.
  *
+ * De nieuwe werkbon krijgt de deelnemer van de afspraak (of wie hem maakt)
+ * als uitvoerder en verantwoordelijke, zodat de klus in de agenda blijft.
  * Werkbon maken mag wie de afspraak mag bewerken (de database vraagt daarnaast
  * het recht werkbonnen bewerken of planning). Het log staat in
  * `calendar_events.comments`.
@@ -54,6 +56,7 @@ export function AfspraakExtra({
   const { toon } = useToast();
   const router = useRouter();
   const [werkbonId, setWerkbonId] = useState<string | null>(null);
+  const [deelnemerId, setDeelnemerId] = useState<string | null>(null);
   const [notities, setNotities] = useState<AfspraakNotitie[]>([]);
   const [laadFout, setLaadFout] = useState<string | null>(null);
   const [leden, setLeden] = useState<Lid[]>([]);
@@ -65,6 +68,7 @@ export function AfspraakExtra({
     void Promise.all([getAfspraakExtra(afspraakId), listCompanyProfiles()]).then(([extra, team]) => {
       if (!actief) return;
       setWerkbonId(extra.werkbonId);
+      setDeelnemerId(extra.deelnemerId);
       setNotities(extra.notities);
       setLaadFout(extra.error);
       if (!team.error) setLeden(team.data.filter((l) => l.actief).map((l) => ({ id: l.id, full_name: l.full_name })));
@@ -78,6 +82,9 @@ export function AfspraakExtra({
     const companyId = getCompanyId();
     if (!companyId || maken) return;
     setMaken(true);
+    // De deelnemer van de afspraak (anders wie de werkbon maakt) wordt
+    // uitvoerder én verantwoordelijke: zonder ploeg valt de klus uit de agenda.
+    const wie = deelnemerId ?? user?.id ?? null;
     try {
       const wb = await createWorkOrder({
         company_id: companyId,
@@ -88,6 +95,8 @@ export function AfspraakExtra({
         starttijd: vorm.time || null,
         eindtijd: vorm.end || null,
         locatie: vorm.location || null,
+        assigned_to_ids: wie ? [wie] : [],
+        verantwoordelijke_ids: wie ? [wie] : [],
       });
       if (wb.error || !wb.data) {
         toon(wb.error ?? 'Werkbon aanmaken mislukt.', 'fout');

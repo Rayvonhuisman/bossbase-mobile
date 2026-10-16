@@ -859,15 +859,25 @@ export async function koppelWerkbonAanAfspraak(id: string, werkbonId: string): P
 /** De werkbon en het notitielog van één afspraak, bij het openen. */
 export async function getAfspraakExtra(
   id: string,
-): Promise<{ werkbonId: string | null; notities: AfspraakNotitie[]; error: string | null }> {
+): Promise<{
+  werkbonId: string | null;
+  deelnemerId: string | null;
+  notities: AfspraakNotitie[];
+  error: string | null;
+}> {
   const { data, error } = await supabase
     .from('calendar_events')
-    .select('werkbon_id, comments')
+    .select('werkbon_id, assigned_to, comments')
     .eq('id', id)
     .maybeSingle();
-  if (error) return { werkbonId: null, notities: [], error: 'De notities konden niet worden geladen.' };
-  const rij = data as { werkbon_id?: string | null; comments?: unknown } | null;
-  return { werkbonId: rij?.werkbon_id ?? null, notities: leesAfspraakNotities(rij?.comments), error: null };
+  if (error) return { werkbonId: null, deelnemerId: null, notities: [], error: 'De notities konden niet worden geladen.' };
+  const rij = data as { werkbon_id?: string | null; assigned_to?: string | null; comments?: unknown } | null;
+  return {
+    werkbonId: rij?.werkbon_id ?? null,
+    deelnemerId: rij?.assigned_to ?? null,
+    notities: leesAfspraakNotities(rij?.comments),
+    error: null,
+  };
 }
 
 /**

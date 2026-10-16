@@ -35,7 +35,7 @@ iPad staand en liggend. Screenshots in `docs/screenshots/`.
 - [x] Weergaven: dag/week/maand zoals het dashboard; uurvenster nu uit Instellingen (`agenda_start_uur`/`agenda_eind_uur`, standaard 07–20) i.p.v. vast 08–17. Bewust anders gelaten (ontwerp app): maandweergave met stippen i.p.v. titels, weekblokjes niet los aantikbaar (tik op de dag toont de lijst)
 - [x] Afspraak aanmaken/wijzigen met de velden van het dashboard: titel, type (Afspraak/Klus/Opname/Activiteit — werd niet opgeslagen), datum, van/tot (nieuw 09:00–10:00, eind schuift mee, leeg = een uur; bewerken wiste de eindtijd), klant, project (nieuw), locatie (adres zoeken), notities; "Klant openen" / "Project openen"; klanttijdlijn "Afspraak ingepland: … op 15 okt" zoals het dashboard. Getest: aangemaakt, gecontroleerd in de database, verwijderd. Het dashboard kent geen deelnemers, herinnering of herhaling bij een afspraak
 - [x] Notitielog met @vermeldingen bij een afspraak (`calendar_events.comments`, zelfde vorm als het dashboard; melding met link naar de agenda). Getest met één notitie zonder tag op "Sollicitatiegesprek" (blijft staan: een notitie verwijderen kan ook in het dashboard niet) (e2554e5)
-- [x] Werkbon maken vanuit een afspraak ("Werkbon aanmaken": titel, klant, project, datum, tijden, locatie; daarna gekoppeld) of "Werkbon openen". Getest: WB-221 uit "Sollicitatiegesprek" — blijft staan, want werkbonnen verwijderen kan in app en dashboard niet. Eigen afspraken zonder klant waren in de weekweergave niet aan te tikken; opgelost (e2554e5)
+- [x] Werkbon maken vanuit een afspraak ("Werkbon aanmaken": titel, klant, project, datum, tijden, locatie; daarna gekoppeld, met de deelnemer van de afspraak of anders de maker als uitvoerder en verantwoordelijke) of "Werkbon openen". Getest: WB-221 uit "Sollicitatiegesprek" — blijft staan, want werkbonnen verwijderen kan in app en dashboard niet. Eigen afspraken zonder klant waren in de weekweergave niet aan te tikken; opgelost (e2554e5)
 
 ### 7. Planning
 - [x] Kalender in de stijl van de agenda: weekstrip met dag, datum en stip (tik = die dag), dag/week, per medewerker en per voertuig; periodelabel past op de telefoon
@@ -162,6 +162,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 16-10 — Werkbon uit een afspraak krijgt de deelnemer van de afspraak (anders de maker) als uitvoerder en verantwoordelijke, zodat de klus in de agenda blijft; ook in het dashboard (main, c4047e7) en in de kennisbank van Boss. Vercel bouwt deze branch nu als preview (alleen preview, `main` blijft de live app).
 - 15-10 — Klantkaart en Financiën samengevoegd, screenshots op alle formaten nagelopen (KPI-tegels Projecten op tablet opgelost), testbedrijf terug op Groei. Klaar: alles afgevinkt behalve twee punten die bewust open staan (websiteformulier, database-exports).
 - 15-10 — Registratie samengevoegd; agenda (werkbon uit afspraak, notitielog), nieuwe werkbon en nieuwe aanvraag gelijk aan het dashboard.
 - 15-10 — Documenten- en werkbon-branches samengevoegd; klantkaart "+", wachtwoord vergeten, afspraakbevestiging. Financiën en registratie uitbesteed aan agents.
