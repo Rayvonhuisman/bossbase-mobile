@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, Text, View, Platform } from 'react-native';
 import { openExtern } from '@/lib/linking';
 import { Check, X } from 'lucide-react-native';
 import { Button } from '@/components/Button';
@@ -186,31 +186,42 @@ export function ProfielTab() {
         />
       </Kaart>
 
-      <Kaart titel="Gevarenzone">
+      {/* Account verwijderen — vindbaar onder Instellingen › Mijn profiel (Apple 5.1.1(v)).
+          Eerlijk over wat er nu gebeurt: de backend kent nog geen definitieve
+          verwijdering van één account (zie docs/testflight-gelijktrekken.md). */}
+      <Kaart titel="Account verwijderen">
         <Text style={s.hint}>
           {zegtBedrijfOp
-            ? 'Je bent de eigenaar. Bedrijf sluiten beëindigt direct de toegang van jou en je hele team, en zegt het abonnement op. Wil je alleen stoppen met betalen, zeg dan je abonnement op. Beide doe je op het dashboard.'
-            : 'Hiermee deactiveer je alleen je eigen account. Je verliest direct toegang; het bedrijf en de gegevens van het team blijven bestaan.'}
+            ? 'Je bent de eigenaar. Je account hoort bij het hele bedrijf: sluit je het bedrijf, dan verliezen jij en je hele team direct de toegang en wordt het abonnement opgezegd. Dit kan niet ongedaan worden gemaakt. Facturen en btw-gegevens moet je zelf 7 jaar bewaren; exporteer ze eerst.'
+            : 'Je verliest direct de toegang tot BossBase. Het bedrijf en het werk dat je voor het bedrijf hebt vastgelegd (uren, werkbonnen, notities) blijven bij het bedrijf voor zijn administratie.'}
+        </Text>
+        <Text style={s.hint}>
+          {zegtBedrijfOp
+            ? 'Vraag hieronder de verwijdering van je bedrijf en alle accounts aan; wij bevestigen per e-mail.'
+            : 'Deactiveren stopt je toegang meteen. Vraag daarna de definitieve verwijdering van je naam, e-mailadres en profielfoto aan; wij bevestigen per e-mail.'}
         </Text>
         <View style={s.knoppen}>
           {zegtBedrijfOp ? (
-            <Button
-              label="Bedrijf sluiten op het dashboard"
-              variant="secondary"
-              onPress={() => openDashboard('instellingen', 'profiel')}
-            />
+            // Op een telefoon opent het dashboard niet (alleen op computer/tablet).
+            Platform.OS === 'web' ? (
+              <Button
+                label="Bedrijf sluiten op het dashboard"
+                variant="secondary"
+                onPress={() => openDashboard('instellingen', 'profiel')}
+              />
+            ) : null
           ) : eigenaarId !== undefined ? (
             <Button label="Account deactiveren" variant="secondary" onPress={() => setVerwijder('')} />
           ) : null}
           <Button
-            label="Verwijdering aanvragen"
+            label={zegtBedrijfOp ? 'Verwijdering van bedrijf aanvragen' : 'Definitieve verwijdering aanvragen'}
             variant="ghost"
             onPress={() =>
               openExtern(
                 `mailto:info@bossbase.nl?subject=${encodeURIComponent(
                   zegtBedrijfOp
-                    ? 'Verzoek: gegevens van mijn bedrijf verwijderen'
-                    : 'Verzoek: mijn gegevens verwijderen',
+                    ? 'Verzoek: mijn account en de gegevens van mijn bedrijf verwijderen'
+                    : 'Verzoek: mijn account en gegevens verwijderen',
                 )}`,
               )
             }
