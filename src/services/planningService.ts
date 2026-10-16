@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { haalInStukken } from '@/lib/inStukken';
-import type { WerkbonDag, WerkbonPlanbaar } from '@/lib/planningRegels';
+import type { PlanActiviteit, WerkbonDag, WerkbonPlanbaar } from '@/lib/planningRegels';
+import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
+import { plusDagen } from '@/lib/werkbonLogica';
 
 /**
  * Lezen voor de Agenda (tab `/planning`) en de Planning (`/planningbord`).
@@ -8,12 +10,13 @@ import type { WerkbonDag, WerkbonPlanbaar } from '@/lib/planningRegels';
  * Gelijk aan het dashboard:
  * - werkbonnen komen met hun geplande dagen (`werkbon_dagen`): dagploeg,
  *   tijden per persoon en voertuigen per dag;
- * - de agenda leest `calendar_events` (géén activiteiten);
+ * - de agenda leest `calendar_events` (géén activiteiten); de planning toont
+ *   ook de activiteiten zelf, zoals de tijdlijn van het dashboard;
  * - RLS bepaalt wat je mag zien; de persoonlijke filter doet het scherm
  *   (zie `lib/planningRegels`).
  *
- * Alleen lezen. Inplannen, slepen en de meldingen die daarbij horen
- * (`planning_wijzigingen`, `syncWerkbonEvents`) blijven in het dashboard.
+ * Lezen. Het schrijven (inplannen, meldingen, agenda) zit in workOrderService
+ * en activityService.
  */
 
 const DAG_KOLOMMEN =
@@ -22,6 +25,7 @@ const DAG_KOLOMMEN =
 const WERKBON_KOLOMMEN = `
   id, company_id, nummer, titel, status, gepland_op, starttijd, eindtijd, locatie,
   customer_id, project_id, assigned_to, assigned_to_ids, verantwoordelijke_ids, voertuig_ids, ondertekend_op,
+  activity_id,
   customer:customers ( id, name, phone, address, postcode, city ),
   project:projects ( id, name ),
   dagen:werkbon_dagen ( ${DAG_KOLOMMEN} )
@@ -38,6 +42,8 @@ export type PlanWerkbon = WerkbonPlanbaar & {
   project_id: string | null;
   ondertekend_op: string | null;
   verantwoordelijke_ids?: string[] | null;
+  /** De activiteit waar deze werkbon aan hangt (telt niet als dubbel). */
+  activity_id?: string | null;
   customer: {
     id: string;
     name: string | null;
@@ -196,4 +202,74 @@ export async function listAlleVoertuigen(): Promise<{ data: Voertuig[]; error: s
     data: ((data ?? []) as Voertuig[]).map((v) => ({ ...v, actief: v.actief !== false })),
     error: null,
   };
+}
+
+/** Een activiteit op de planning, met de klantnaam erbij. */
+export type PlanningActiviteit = PlanActiviteit & {
+  type: string | null;
+  customer_id: string | null;
+  location: string | null;
+  customer: { id: string; name: string | null } | null;
+};
+
+/**
+ * Activiteiten met `due_at` op een dag in `[van, tot]` (Nederlandse tijd) —
+ * de activiteiten die de tijdlijn van het dashboard in die week toont.
+ */
+export async function listActiviteitenInBereik(
+  van: string,
+  tot: string,
+): Promise<{ data: PlanningActiviteit[]; error: string | null }> {
+  const begin = lokaalNaarUtc(van, '00:00');
+  const eind = lokaalNaarUtc(plusDagen(tot, 1), '00:00');
+  if (!begin || !eind) return { data: [], error: null };
+  type Rij = Omit<PlanningActiviteit, 'datum' | 'tijd'> & { due_at: string | null };
+  const res = await haalInStukken<Rij, { code?: string; message?: string }>((a, b) =>
+    supabase
+      .from('activities')
+      .select('id, title, type, due_at, end_time, completed, assigned_to, assigned_to_ids, customer_id, location, customer:customers ( id, name )')
+      .gte('due_at', begin.toISOString())
+      .lt('due_at', eind.toISOString())
+      .order('due_at')
+      .order('id')
+      .range(a, b) as unknown as PromiseLike<{ data: Rij[] | null; error: { code?: string; message?: string } | null }>,
+  );
+  if (res.error) return { data: [], error: melding('listActiviteitenInBereik', res.error) };
+  return {
+    data: res.data.map((r) => {
+      const { date, time } = splitsLokaal(r.due_at);
+      return { ...r, completed: !!r.completed, datum: date, tijd: time || null };
+    }),
+    error: null,
+  };
+}
+
+/**
+ * Werkbonnen van een klant die nog niet aan een activiteit hangen — de keuze
+ * "Werkbon koppelen" bij Activiteit inplannen (werkbonnenVoorKlant).
+ */
+export async function listWerkbonnenZonderActiviteit(
+  customerId: string,
+): Promise<{ data: { id: string; nummer: string | null; titel: string | null }[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .select('id, nummer, titel')
+    .eq('customer_id', customerId)
+    .is('activity_id', null)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return { data: [], error: melding('listWerkbonnenZonderActiviteit', error) };
+  return { data: (data ?? []) as { id: string; nummer: string | null; titel: string | null }[], error: null };
+}
+
+/** Een werkbon aan een activiteit hangen (`werkbonnen.activity_id`), zoals het dashboard. */
+export async function koppelWerkbonAanActiviteit(werkbonId: string, activityId: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .update({ activity_id: activityId })
+    .eq('id', werkbonId)
+    .select('id');
+  if (error) return { error: melding('koppelWerkbonAanActiviteit', error) };
+  if (!data?.length) return { error: 'De werkbon kon niet worden gekoppeld: je hebt geen rechten op deze werkbon.' };
+  return { error: null };
 }

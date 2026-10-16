@@ -101,8 +101,11 @@ type Props = {
    */
   magBewerken?: boolean;
   onClose: () => void;
-  /** Na een geslaagde opslag of verwijdering. */
-  onSaved: () => void | Promise<void>;
+  /**
+   * Na een geslaagde opslag of verwijdering. Bij opslaan komt de opgeslagen rij
+   * mee (de planning houdt daarmee het agenda-item bij); bij verwijderen niets.
+   */
+  onSaved: (rij?: ActivityRow | null) => void | Promise<void>;
 };
 
 /**
@@ -271,7 +274,7 @@ export function ActivityFormSheet({
           });
         }
         onClose();
-        await onSaved();
+        await onSaved(rij);
       },
     });
   };

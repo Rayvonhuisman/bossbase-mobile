@@ -85,9 +85,12 @@ test('checkbox/radio met accessibilityState.checked heeft ook aria-checked (RN-w
 
 test('WerkbonFormulier: maandnavigatie is een knop, kalenderdagen hebben aria-checked', () => {
   const bron = lees('src/components/WerkbonFormulier.tsx');
-  assert.match(bron, /accessibilityRole="button" onPress=\{\(\) => schuif\(-1\)\} accessibilityLabel="Vorige maand"/);
-  assert.match(bron, /accessibilityRole="button" onPress=\{\(\) => schuif\(1\)\} accessibilityLabel="Volgende maand"/);
-  assert.match(bron, /aria-checked=\{gekozen\.includes\(iso\)\}/);
+  // De kalender en de dagkaarten staan sinds de planning in een eigen onderdeel.
+  assert.match(bron, /<WerkbonKalender/);
+  const kalender = lees('src/components/WerkbonDagenVelden.tsx');
+  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(-1\)\} accessibilityLabel="Vorige maand"/);
+  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(1\)\} accessibilityLabel="Volgende maand"/);
+  assert.match(kalender, /aria-checked=\{gekozen\.includes\(iso\)\}/);
   // De ploegkeuze (vinkjes + ster) staat sinds de planning in een eigen onderdeel.
   assert.match(bron, /<PloegKeuze/);
   assert.match(lees('src/components/PloegKeuze.tsx'), /aria-checked=\{verantw\}/);

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { AdresZoeker } from '@/components/AdresZoeker';
 import { FormField } from '@/components/FormField';
 import { FormFooter } from '@/components/FormFooter';
@@ -26,26 +25,18 @@ import {
   type WerkbonRechten,
 } from '@/services/workOrderService';
 import { listCustomers } from '@/services/customerService';
-import { vandaagIso } from '@/lib/nlTijd';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import {
   controleerPlanning,
   dagenUitPlanning,
   geplandeDatums,
   hhmm,
-  korteDatum,
   legePlanning,
-  maandNaam,
-  maandRaster,
-  ploegInFormulier,
   planningUitWerkbon,
-  tijdenVerschillen,
   tijdVanDag,
-  tijdVoorAlleDagen,
   verplaatsNaar,
   dagMeldingen,
   wisselDag,
-  wisselPersoonOpDag,
   WERKBON_STATUS_STIJL,
   WERKBON_STATUSSEN,
   normaliseerStatus,
@@ -57,6 +48,7 @@ import { ds, spacing, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import type { Customer } from '@/types/domain';
 import { PloegKeuze } from './PloegKeuze';
+import { DagKaarten, WerkbonKalender } from './WerkbonDagenVelden';
 import { Schakel } from './instellingen/Bouwstenen';
 
 type Collega = { id: string; full_name: string | null; role: string | null };
@@ -224,12 +216,6 @@ export function WerkbonFormulier({
     if (meerdaags) setPlanning((p) => wisselDag(p, iso, STANDAARD_TIJD));
     else setPlanning((p) => (geplandeDatums(p)[0] === iso && geplandeDatums(p).length === 1 ? legePlanning('') : verplaatsNaar(p, iso)));
   };
-
-  const zetDagTijd = (iso: string, veld: 'starttijd' | 'eindtijd', waarde: string) =>
-    setPlanning((p) => ({
-      ...p,
-      tijden: { ...p.tijden, [iso]: { ...tijdVanDag(p, iso, standaard), [veld]: waarde } },
-    }));
 
   // ── Opslaan ───────────────────────────────────────────────────────────────
   const opslaanBon = async () => {
@@ -473,83 +459,15 @@ export function WerkbonFormulier({
                   : 'Tik op de dag van de klus.'}
             </Text>
           )}
-          <Kalender
-            styles={styles}
-            t={t}
-            gekozen={datums}
-            onTik={tikDag}
-            uit={!planningBewerkbaar}
-          />
+          <WerkbonKalender gekozen={datums} onTik={tikDag} uit={!planningBewerkbaar} />
           {meerdaags ? (
-            datums.length ? (
-              <View style={{ gap: spacing.md }}>
-                {tijdenVerschillen(planning) && planningBewerkbaar ? (
-                  <Pressable
-                    onPress={() => setPlanning((p) => tijdVoorAlleDagen(p))}
-                    accessibilityRole="button"
-                    style={styles.linkKnop}
-                  >
-                    <Text style={styles.linkTekst}>
-                      Tijd van {korteDatum(datums[0])} voor alle dagen
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {datums.map((iso) => {
-                  const tijd = tijdVanDag(planning, iso);
-                  const dagploeg = ploegInFormulier(planning, iso, uitvoerders);
-                  return (
-                    <View key={iso} style={styles.dagKaart}>
-                      <Text style={styles.dagTitel}>{korteDatum(iso)}</Text>
-                      <View style={styles.tijdRij}>
-                        <View style={{ flex: 1 }}>
-                          <TimeField
-                            label="Begin"
-                            value={tijd.starttijd || null}
-                            onChange={(v) => zetDagTijd(iso, 'starttijd', v)}
-                            disabled={!planningBewerkbaar}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <TimeField
-                            label="Eind"
-                            value={tijd.eindtijd || null}
-                            onChange={(v) => zetDagTijd(iso, 'eindtijd', v)}
-                            disabled={!planningBewerkbaar}
-                          />
-                        </View>
-                      </View>
-                      {uitvoerders.length > 1 ? (
-                        <View style={styles.chipRij}>
-                          {uitvoerders.map((pid) => {
-                            const aan = dagploeg.includes(pid);
-                            const eigen = planning.persoonTijden?.[iso]?.[pid];
-                            return (
-                              <Pressable
-                                key={pid}
-                                disabled={!planningBewerkbaar}
-                                onPress={() => setPlanning((p) => wisselPersoonOpDag(p, iso, pid, uitvoerders))}
-                                accessibilityRole="checkbox"
-                                accessibilityState={{ checked: aan }}
-                                aria-checked={aan}
-                                accessibilityLabel={`${naam(pid)} op ${korteDatum(iso)}`}
-                                style={[styles.chip, aan ? styles.chipAan : styles.chipUit]}
-                              >
-                                <Text style={[styles.chipTekst, aan && { color: t.green700 }, !aan && styles.doorgestreept]}>
-                                  {naam(pid)}
-                                  {aan && eigen?.starttijd ? ` · ${eigen.starttijd}–${eigen.eindtijd}` : ''}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.hint}>Geen dagen gekozen: de werkbon staat nog niet ingepland.</Text>
-            )
+            <DagKaarten
+              planning={planning}
+              onChange={setPlanning}
+              uitvoerders={uitvoerders}
+              naam={naam}
+              bewerkbaar={planningBewerkbaar}
+            />
           ) : datums.length ? (
             <View style={styles.tijdRij}>
               <View style={{ flex: 1 }}>
@@ -598,7 +516,7 @@ export function WerkbonFormulier({
             ) : (
               <>
                 <Text style={styles.hint}>
-                  Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je op het dashboard.
+                  Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je in de Planning: tik op een blok en kies Dagen, ploeg en voertuig aanpassen.
                 </Text>
                 <View style={styles.chipRij}>
                   {zichtbareVoertuigen.map((v) => {
@@ -663,79 +581,6 @@ export function WerkbonFormulier({
   );
 }
 
-/** Maandkalender, maandag eerst. Tik = dag aan/uit (of verplaatsen). */
-function Kalender({
-  styles,
-  t,
-  gekozen,
-  onTik,
-  uit,
-}: {
-  styles: ReturnType<typeof makeStyles>;
-  t: ThemeColors;
-  gekozen: string[];
-  onTik: (iso: string) => void;
-  uit: boolean;
-}) {
-  const start = gekozen[0] ?? vandaagIso();
-  const [maand, setMaand] = useState(() => ({ jaar: Number(start.slice(0, 4)), maand: Number(start.slice(5, 7)) - 1 }));
-  const vandaag = vandaagIso();
-  const vakjes = maandRaster(maand.jaar, maand.maand);
-  const schuif = (n: number) =>
-    setMaand((m) => {
-      const d = new Date(m.jaar, m.maand + n, 1);
-      return { jaar: d.getFullYear(), maand: d.getMonth() };
-    });
-  return (
-    <View style={styles.kalender}>
-      <View style={styles.kalKop}>
-        <Pressable accessibilityRole="button" onPress={() => schuif(-1)} accessibilityLabel="Vorige maand" style={styles.kalNav}>
-          <ChevronLeft size={20} color={t.ink2} />
-        </Pressable>
-        <Text style={styles.kalTitel}>{maandNaam(maand.jaar, maand.maand)}</Text>
-        <Pressable accessibilityRole="button" onPress={() => schuif(1)} accessibilityLabel="Volgende maand" style={styles.kalNav}>
-          <ChevronRight size={20} color={t.ink2} />
-        </Pressable>
-      </View>
-      <View style={styles.kalRaster}>
-        {['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => (
-          <Text key={d} style={styles.kalDagnaam}>
-            {d}
-          </Text>
-        ))}
-        {vakjes.map((iso, i) =>
-          iso ? (
-            <Pressable
-              key={iso}
-              onPress={() => onTik(iso)}
-              disabled={uit}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: gekozen.includes(iso), disabled: uit }}
-              aria-checked={gekozen.includes(iso)}
-              accessibilityLabel={korteDatum(iso)}
-              style={styles.kalVak}
-            >
-              <View
-                style={[
-                  styles.kalCirkel,
-                  iso === vandaag && styles.kalVandaag,
-                  gekozen.includes(iso) && styles.kalGekozen,
-                ]}
-              >
-                <Text style={[styles.kalCijfer, gekozen.includes(iso) && { color: ds.greenInk, fontWeight: '800' }]}>
-                  {Number(iso.slice(8, 10))}
-                </Text>
-              </View>
-            </Pressable>
-          ) : (
-            <View key={`leeg-${i}`} style={styles.kalVak} />
-          ),
-        )}
-      </View>
-    </View>
-  );
-}
-
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     content: { ...leesbreedte, padding: spacing.lg, paddingBottom: 64, gap: spacing.lg },
@@ -756,44 +601,7 @@ const makeStyles = (t: ThemeColors) =>
       backgroundColor: t.card,
     },
     chipAan: { backgroundColor: t.green50, borderColor: ds.green },
-    chipUit: { opacity: 0.7 },
     chipTekst: { fontSize: 13, fontWeight: '600', color: t.ink2 },
-    doorgestreept: { textDecorationLine: 'line-through' },
     dot: { width: 8, height: 8, borderRadius: 4 },
-    linkKnop: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-    linkTekst: { fontSize: 13, fontWeight: '700', color: ds.green700 },
-    dagKaart: {
-      backgroundColor: t.card,
-      borderRadius: t.rMd,
-      borderWidth: 1,
-      borderColor: t.line,
-      padding: spacing.md,
-      gap: spacing.sm,
-    },
-    dagTitel: { fontSize: 14, fontWeight: '700', color: t.ink },
     tijdRij: { flexDirection: 'row', gap: spacing.md },
-    kalender: {
-      backgroundColor: t.card,
-      borderRadius: t.rMd,
-      borderWidth: 1,
-      borderColor: t.line,
-      padding: spacing.sm,
-    },
-    kalKop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    kalNav: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    kalTitel: { fontSize: 14.5, fontWeight: '700', color: t.ink, textTransform: 'capitalize' },
-    kalRaster: { flexDirection: 'row', flexWrap: 'wrap' },
-    kalDagnaam: {
-      width: `${100 / 7}%`,
-      textAlign: 'center',
-      fontSize: 11,
-      fontWeight: '700',
-      color: t.muted2,
-      paddingVertical: 4,
-    },
-    kalVak: { width: `${100 / 7}%`, height: 44, alignItems: 'center', justifyContent: 'center' },
-    kalCirkel: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-    kalVandaag: { borderWidth: 1.5, borderColor: ds.green },
-    kalGekozen: { backgroundColor: ds.green },
-    kalCijfer: { fontSize: 14, color: t.ink, fontVariant: ['tabular-nums'] },
   });

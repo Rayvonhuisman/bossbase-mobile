@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -8,32 +8,51 @@ import {
   ChevronRight,
   ChevronUp,
   Lock,
+  Plus,
 } from 'lucide-react-native';
 import {
+  ActivityFormSheet,
   AppCard,
   AppScreen,
   AppTopBar,
+  conceptVanActiviteit,
   ErrorState,
+  HeaderIconButton,
   LoadingScreen,
   NoticeBanner,
   PermissionGate,
+  type ActivityConcept,
+  type SelectOption,
 } from '@/components';
 import { usePermissions, useTheme } from '@/providers';
 import {
+  listActiviteitenInBereik,
   listAlleVoertuigen,
   listNietIngeplandeKandidaten,
   listWerkbonnenInBereik,
+  type PlanningActiviteit,
   type PlanWerkbon,
   type Voertuig,
 } from '@/services/planningService';
 import { listCompanyProfiles } from '@/services/workOrderService';
 import {
+  getActivity,
+  upsertActiviteitAgendaItem,
+  verwijderActiviteitAgendaItem,
+  type ActivityRow,
+} from '@/services/activityService';
+import { listCustomers } from '@/services/customerService';
+import {
+  activiteitBlokken,
+  dubbelMetActiviteiten,
   dubbeleBlokken,
   medewerkerKleur,
   nietIngepland,
   roosterBlokken,
+  type ActiviteitBlok,
   type RoosterBlok,
 } from '@/lib/planningRegels';
+import { splitsLokaal } from '@/lib/nlTijd';
 import { dagenVanWeek, isoWeek, maandagVan, plusDagen } from '@/lib/urenRegels';
 import { todayISO } from '@/lib/format';
 import { useLaden } from '@/lib/useLaden';
@@ -41,7 +60,12 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { useOnthouden } from '@/lib/useOnthouden';
-import { BlokPaneel, InplannenPaneel } from '@/components/planning/PlanningPanelen';
+import {
+  ActiviteitInplannenPaneel,
+  BlokPaneel,
+  InplannenPaneel,
+  type PlanBronnen,
+} from '@/components/planning/PlanningPanelen';
 
 /**
  * Planning — de planningpagina van het dashboard (`PlanningPage.jsx`), om te
@@ -53,15 +77,21 @@ import { BlokPaneel, InplannenPaneel } from '@/components/planning/PlanningPanel
  * module `voertuigen`.
  *
  * - Dag of week (ma t/m zo); vorige / Vandaag / volgende.
- * - Medewerkers: één blok per persoon in de dagploeg, met diens eigen tijd.
- *   Een dag zonder ploeg staat onder "Niet toegewezen".
- * - Voertuigen: één blok per bus met de voertuigtijd en de inzittenden.
- * - Dubbel ingepland krijgt een oranje driehoek (waarschuwing, geen blokkade).
+ * - Totaal (standaard, zoals het dashboard): iedereen tegelijk, per dag op
+ *   tijd — één blok per persoon in de dagploeg in diens kleur, "niet
+ *   toegewezen" grijs, plus de activiteiten met een toewijzing.
+ * - Medewerkers: één blok per persoon in de dagploeg, met diens eigen tijd,
+ *   en zijn activiteiten. Een dag zonder ploeg staat onder "Niet toegewezen".
+ * - Voertuigen: één blok per voertuig met de voertuigtijd en de inzittenden.
+ * - Dubbel ingepland krijgt een oranje driehoek (waarschuwing, geen blokkade),
+ *   ook als een activiteit botst met een werkbon of een andere activiteit.
  * - Tik op een blok: details en de tijd aanpassen (per persoon of per dag,
- *   `verzetTijd` van het dashboard); dagen, ploeg, verantwoordelijke en
- *   voertuig via het werkbonformulier. Tik op een niet-ingeplande werkbon:
- *   inplannen (dag, tijd, ploeg). Met dezelfde meldingen, `planning_wijzigingen`
- *   en agenda-items als het dashboard; zie components/planning/PlanningPanelen.
+ *   `verzetTijd` van het dashboard), en dagen, dagploeg, verantwoordelijke en
+ *   voertuigen per dag plannen (de DetailModal). Tik op een niet-ingeplande
+ *   werkbon: inplannen, met dezelfde velden. "+" plant een activiteit los van
+ *   een werkbon (PlanActivityModal). Met dezelfde meldingen,
+ *   `planning_wijzigingen` en agenda-items als het dashboard; zie
+ *   components/planning/PlanningPanelen.
  *
  * Op een iPad (tabletbreedte) een breed rooster: resources als rijen, dagen als
  * kolommen. Op een telefoon een weekstrip zoals de agenda, per medewerker/dag.
@@ -75,7 +105,21 @@ export default function PlanningbordRoute() {
 }
 
 type Zicht = 'dag' | 'week';
-type Modus = 'medewerker' | 'voertuig';
+type Modus = 'totaal' | 'medewerker' | 'voertuig';
+
+/** Eén regel in het rooster: een werkbonblok of een activiteit. */
+type Item =
+  | { soort: 'werkbon'; sleutel: string; datum: string; resource: string | null; starttijd: string; blok: RoosterBlok<PlanWerkbon> }
+  | {
+      soort: 'activiteit';
+      sleutel: string;
+      datum: string;
+      resource: string | null;
+      starttijd: string;
+      blok: ActiviteitBlok<PlanningActiviteit>;
+    };
+
+const ACTIVITEIT_KLEUR = ds.green;
 
 type Resource = { id: string | null; naam: string; kleur: string; sub?: string };
 
@@ -117,8 +161,8 @@ function PlanningbordScreen() {
   // Een ?zicht= in de link wint; anders de laatst gekozen weergave.
   const [bewaardZicht, setZicht] = useOnthouden<Zicht>('planning.zicht', 'week', ['dag', 'week']);
   const zicht: Zicht = zichtParam === 'dag' || zichtParam === 'week' ? zichtParam : bewaardZicht;
-  const [bewaardeModus, setModus] = useOnthouden<Modus>('planning.modus', 'medewerker', ['medewerker', 'voertuig']);
-  const modus: Modus = bewaardeModus === 'voertuig' && !metVoertuigen ? 'medewerker' : bewaardeModus;
+  const [bewaardeModus, setModus] = useOnthouden<Modus>('planning.modus', 'totaal', ['totaal', 'medewerker', 'voertuig']);
+  const modus: Modus = bewaardeModus === 'voertuig' && !metVoertuigen ? 'totaal' : bewaardeModus;
   const vandaag = todayISO();
   const [anker, setAnker] = useState(vandaag);
   const weekDatums = useMemo(() => dagenVanWeek(maandagVan(anker)), [anker]);
@@ -127,6 +171,7 @@ function PlanningbordScreen() {
   const tot = dagen[dagen.length - 1]!;
 
   const [werkbonnen, setWerkbonnen] = useState<PlanWerkbon[]>([]);
+  const [activiteiten, setActiviteiten] = useState<PlanningActiviteit[]>([]);
   const [los, setLos] = useState<PlanWerkbon[]>([]);
   const [team, setTeam] = useState<{ id: string; naam: string }[]>([]);
   const [voertuigen, setVoertuigen] = useState<Voertuig[]>([]);
@@ -137,11 +182,12 @@ function PlanningbordScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [wb, nl, tm, vt] = await Promise.all([
+    const [wb, nl, tm, vt, ac] = await Promise.all([
       listWerkbonnenInBereik(van, tot),
       listNietIngeplandeKandidaten(),
       listCompanyProfiles(),
       metVoertuigen ? listAlleVoertuigen() : Promise.resolve({ data: [] as Voertuig[], error: null }),
+      listActiviteitenInBereik(van, tot),
     ]);
     if (wb.error) {
       setError(wb.error);
@@ -151,32 +197,59 @@ function PlanningbordScreen() {
     setLos(nietIngepland(nl.data));
     setTeam(tm.data.map((p) => ({ id: p.id, naam: p.full_name ?? 'Medewerker' })));
     setVoertuigen(vt.data);
+    setActiviteiten(ac.data);
     setDeelFout(
       nl.error
         ? 'De niet-ingeplande werkbonnen konden niet worden geladen.'
-        : tm.error || vt.error
-          ? 'Niet alle namen konden worden geladen.'
-          : null,
+        : ac.error
+          ? 'De activiteiten konden niet worden geladen.'
+          : tm.error || vt.error
+            ? 'Niet alle namen konden worden geladen.'
+            : null,
     );
   }, [van, tot, metVoertuigen]);
 
   const { loading, refreshing, onRefresh, opnieuw, herlaad } = useLaden(load, { onFout: setError });
   const [blokOpen, setBlokOpen] = useState<RoosterBlok<PlanWerkbon> | null>(null);
   const [inplannen, setInplannen] = useState<PlanWerkbon | null>(null);
+  const [nieuweActiviteit, setNieuweActiviteit] = useState(false);
+  const [activiteitOpen, setActiviteitOpen] = useState<ActivityConcept | null>(null);
+  const [klantOpties, setKlantOpties] = useState<SelectOption[]>([]);
 
-  const actieveModus: Modus = metVoertuigen ? modus : 'medewerker';
+  const actieveModus: Modus = modus;
   const blokken = useMemo(
-    () => roosterBlokken(werkbonnen, { van, tot, modus: actieveModus }),
+    () => roosterBlokken(werkbonnen, { van, tot, modus: actieveModus === 'voertuig' ? 'voertuig' : 'medewerker' }),
     [werkbonnen, van, tot, actieveModus],
   );
-  const dubbel = useMemo(() => dubbeleBlokken(blokken), [blokken]);
+  const actBlokken = useMemo(
+    () => activiteitBlokken(activiteiten, { van, tot, modus: actieveModus, metTeam: team.length > 0 }),
+    [activiteiten, van, tot, actieveModus, team.length],
+  );
+  const dubbel = useMemo(
+    () =>
+      new Set([
+        ...dubbeleBlokken(blokken),
+        ...(actieveModus === 'voertuig' ? [] : dubbelMetActiviteiten(blokken, actBlokken)),
+      ]),
+    [blokken, actBlokken, actieveModus],
+  );
+
+  /** Werkbonblokken en activiteiten samen, op dag en tijd. */
+  const items: Item[] = useMemo(
+    () =>
+      [
+        ...blokken.map((b) => ({ soort: 'werkbon' as const, sleutel: b.sleutel, datum: b.datum, resource: b.resource, starttijd: b.starttijd, blok: b })),
+        ...actBlokken.map((b) => ({ soort: 'activiteit' as const, sleutel: b.sleutel, datum: b.datum, resource: b.resource, starttijd: b.starttijd, blok: b })),
+      ].sort((a, b) => (a.datum === b.datum ? a.starttijd.localeCompare(b.starttijd) : a.datum.localeCompare(b.datum))),
+    [blokken, actBlokken],
+  );
 
   const naamVan = useMemo(() => new Map(team.map((m) => [m.id, m.naam])), [team]);
   const voertuigVan = useMemo(() => new Map(voertuigen.map((v) => [v.id, v])), [voertuigen]);
 
   /** Rijen van het rooster: het team (of de actieve bussen), plus wie er verder in voorkomt. */
   const resources: Resource[] = useMemo(() => {
-    const inBlokken = new Set(blokken.map((b) => b.resource));
+    const inBlokken = new Set(items.map((b) => b.resource));
     if (actieveModus === 'voertuig') {
       const lijst = voertuigen.filter((v) => v.actief || inBlokken.has(v.id));
       const rijen: Resource[] = lijst.map((v) => ({
@@ -196,18 +269,55 @@ function PlanningbordScreen() {
     }
     if (inBlokken.has(null)) rijen.push({ id: null, naam: 'Niet toegewezen', kleur: medewerkerKleur(-1) });
     return rijen;
-  }, [actieveModus, blokken, team, voertuigen, naamVan, voertuigVan]);
+  }, [actieveModus, items, team, voertuigen, naamVan, voertuigVan]);
 
-  const blokkenVan = useCallback(
-    (resource: string | null, dag: string) =>
-      blokken.filter((b) => b.resource === resource && b.datum === dag),
-    [blokken],
+  const itemsVan = useCallback(
+    (resource: string | null, dag: string) => items.filter((b) => b.resource === resource && b.datum === dag),
+    [items],
   );
+
+  /** Kleur van een medewerker, op volgorde van het team; grijs voor niemand of onbekend. */
+  const kleurIndex = useMemo(() => new Map(team.map((m, i) => [m.id, medewerkerKleur(i)])), [team]);
+  const kleurVan = (pid: string | null) => (pid ? (kleurIndex.get(pid) ?? medewerkerKleur(-1)) : medewerkerKleur(-1));
+
+  /** Een activiteit aantikken: het activiteitenvenster, zoals ActivityEditModal. */
+  const openActiviteit = async (a: PlanningActiviteit) => {
+    const [r, k] = await Promise.all([
+      getActivity(a.id),
+      klantOpties.length ? Promise.resolve(null) : listCustomers(),
+    ]);
+    if (k) setKlantOpties(k.data.map((c) => ({ id: c.id, label: c.name ?? '—' })));
+    if (r.data) setActiviteitOpen(conceptVanActiviteit(r.data));
+    else setDeelFout(r.error ?? 'De activiteit kon niet worden geopend.');
+  };
+
+  /** Na het activiteitenvenster: het agenda-item bestaat of komt er; zonder datum weg. */
+  const naActiviteit = async (rij?: ActivityRow | null) => {
+    if (rij) {
+      const { date, time } = splitsLokaal(rij.due_at);
+      if (date && time) {
+        await upsertActiviteitAgendaItem({
+          activiteitId: rij.id,
+          titel: rij.title,
+          datum: date,
+          tijd: time,
+          eind: rij.end_time ? String(rij.end_time).slice(0, 5) : '',
+          customerId: rij.customer_id,
+          locatie: rij.location ?? null,
+        });
+      } else {
+        await verwijderActiviteitAgendaItem(rij.id);
+      }
+    }
+    void herlaad();
+  };
 
   const stap = (richting: -1 | 1) => setAnker((a) => plusDagen(a, richting * (zicht === 'dag' ? 1 : 7)));
 
   const blokTekst = (b: RoosterBlok<PlanWerkbon>) => {
     const w = b.werkbon;
+    const persoon =
+      actieveModus === 'totaal' ? (b.resource ? (naamVan.get(b.resource) ?? 'Oud-medewerker') : 'Niet toegewezen') : null;
     const wie =
       actieveModus === 'voertuig'
         ? b.inzittenden.map((p) => naamVan.get(p) ?? 'Medewerker').join(', ')
@@ -221,9 +331,55 @@ function PlanningbordScreen() {
     return {
       titel: w.titel || w.nummer || 'Werkbon',
       tijd: `${b.starttijd}${b.eindtijd ? `–${b.eindtijd}` : ''}${b.dagenTotaal > 1 ? ` · dag ${b.dagNr}/${b.dagenTotaal}` : ''}`,
-      meta: [w.customer?.name, wie, bezet].filter(Boolean).join(' · '),
+      meta: [persoon, w.customer?.name, wie, bezet].filter(Boolean).join(' · '),
     };
   };
+
+  const activiteitBlok = (b: ActiviteitBlok<PlanningActiviteit>, compact?: boolean) => {
+    const a = b.activiteit;
+    const isDubbel = dubbel.has(b.sleutel);
+    const titel = a.title || 'Activiteit';
+    const tijd = `${b.starttijd}–${b.eindtijd}`;
+    const meta = [
+      actieveModus === 'totaal' ? b.personen.map((p) => naamVan.get(p) ?? 'Medewerker').join(', ') : null,
+      a.customer?.name,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return (
+      <Pressable
+        key={b.sleutel}
+        onPress={() => void openActiviteit(a)}
+        accessibilityRole="button"
+        accessibilityLabel={`Activiteit ${titel}, ${tijd}${a.completed ? ', afgerond' : ''}${isDubbel ? ', dubbel ingepland' : ''}`}
+        style={({ pressed }) => [styles.blok, styles.blokActiviteit, compact && styles.blokCompact, pressed && { opacity: 0.85 }]}
+      >
+        <View style={[styles.blokStreep, { backgroundColor: ACTIVITEIT_KLEUR }]} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={styles.blokKop}>
+            <Text style={[styles.blokTijd, compact && styles.blokTijdCompact]} numberOfLines={1}>
+              {tijd}
+            </Text>
+            {isDubbel ? <AlertTriangle size={13} color={t.statusWarnFg} strokeWidth={2.4} /> : null}
+          </View>
+          <Text style={[styles.blokTitel, a.completed && styles.afgerond]} numberOfLines={compact ? 2 : 1}>
+            {titel}
+          </Text>
+          {meta ? (
+            <Text style={styles.blokMeta} numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  };
+
+  /** Een regel tekenen: werkbonblok in `kleur` (of de kleur van de persoon in Totaal), of een activiteit. */
+  const item = (i: Item, kleur: string | null, compact?: boolean) =>
+    i.soort === 'activiteit'
+      ? activiteitBlok(i.blok, compact)
+      : blok(i.blok, kleur ?? kleurVan(i.blok.resource), compact);
 
   const blok = (b: RoosterBlok<PlanWerkbon>, kleur: string, compact?: boolean) => {
     const tekst = blokTekst(b);
@@ -267,6 +423,11 @@ function PlanningbordScreen() {
       title="Planning"
       subtitle="Weekplanning per medewerker en voertuig"
       onBack={() => terugOfNaar(router, '/menu')}
+      rightAction={
+        magPlannen ? (
+          <HeaderIconButton icon={Plus} label="Activiteit inplannen" onPress={() => setNieuweActiviteit(true)} />
+        ) : undefined
+      }
     />
   );
 
@@ -279,6 +440,13 @@ function PlanningbordScreen() {
       </View>
     );
   }
+
+  const standaardDatum = zicht === 'dag' ? anker : anker < vandaag ? vandaag : anker;
+  const bronnen: PlanBronnen = {
+    team: team.map((m) => ({ id: m.id, full_name: m.naam })),
+    voertuigen,
+    metVoertuigen,
+  };
 
   // Telefoon, week: één medewerker of voertuig tegelijk.
   const gekozenResource =
@@ -298,20 +466,19 @@ function PlanningbordScreen() {
             onChange={(v) => setZicht(v as Zicht)}
             styles={styles}
           />
-          {metVoertuigen ? (
-            <Schakel
-              opties={[
-                ['medewerker', 'Medewerkers'],
-                ['voertuig', 'Voertuigen'],
-              ]}
-              waarde={actieveModus}
-              onChange={(v) => {
-                setModus(v as Modus);
-                setGekozen(undefined);
-              }}
-              styles={styles}
-            />
-          ) : null}
+          <Schakel
+            opties={[
+              ['totaal', 'Totaal'],
+              ['medewerker', 'Medewerkers'],
+              ...(metVoertuigen ? ([['voertuig', 'Voertuigen']] as [string, string][]) : []),
+            ]}
+            waarde={actieveModus}
+            onChange={(v) => {
+              setModus(v as Modus);
+              setGekozen(undefined);
+            }}
+            styles={styles}
+          />
         </View>
 
         <View style={styles.navRow}>
@@ -353,7 +520,7 @@ function PlanningbordScreen() {
           <View style={styles.pad}>
             <NoticeBanner
               toon="waarschuwing"
-              message="Blokken met een oranje driehoek zijn dubbel ingepland: dezelfde persoon of hetzelfde voertuig staat op dat moment op twee werkbonnen."
+              message="Blokken met een oranje driehoek zijn dubbel ingepland: dezelfde persoon of hetzelfde voertuig staat op dat moment op twee werkbonnen of activiteiten."
             />
           </View>
         ) : null}
@@ -364,7 +531,7 @@ function PlanningbordScreen() {
           <View style={styles.dagStrip}>
             {weekDatums.map((d) => {
               const aan = zicht === 'dag' && d === anker;
-              const werk = blokken.some((b) => b.datum === d);
+              const werk = items.some((b) => b.datum === d);
               const dt = datum(d);
               return (
                 <Pressable
@@ -388,7 +555,18 @@ function PlanningbordScreen() {
           </View>
         ) : null}
 
-        {resources.length === 0 ? (
+        {actieveModus === 'totaal' ? (
+          <TotaalRooster
+            dagen={dagen}
+            items={items}
+            zicht={zicht}
+            breed={breed}
+            vandaag={vandaag}
+            regel={item}
+            styles={styles}
+            t={t}
+          />
+        ) : resources.length === 0 ? (
           <View style={styles.pad}>
             <AppCard padding={20}>
               <Text style={styles.leeg}>
@@ -441,9 +619,9 @@ function PlanningbordScreen() {
                         zicht === 'dag' && styles.roosterDagWrap,
                       ]}
                     >
-                      {blokkenVan(r.id, d).map((b) => (
+                      {itemsVan(r.id, d).map((b) => (
                         <View key={b.sleutel} style={zicht === 'dag' ? { width: 200 } : undefined}>
-                          {blok(b, r.kleur, zicht === 'week')}
+                          {item(b, r.kleur, zicht === 'week')}
                         </View>
                       ))}
                     </View>
@@ -456,7 +634,7 @@ function PlanningbordScreen() {
           /* Telefoon, dag: per medewerker (of voertuig) de blokken van die dag. */
           <View style={[styles.pad, { gap: 12 }]}>
             {resources.map((r) => {
-              const lijst = blokkenVan(r.id, anker);
+              const lijst = itemsVan(r.id, anker);
               return (
                 <View key={r.id ?? 'niemand'} style={{ gap: 6 }}>
                   <View style={styles.resKop}>
@@ -466,7 +644,7 @@ function PlanningbordScreen() {
                     </Text>
                     <Text style={styles.resAantal}>{lijst.length ? `${lijst.length}` : 'vrij'}</Text>
                   </View>
-                  {lijst.map((b) => blok(b, r.kleur))}
+                  {lijst.map((b) => item(b, r.kleur))}
                 </View>
               );
             })}
@@ -477,7 +655,7 @@ function PlanningbordScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRij}>
               {resources.map((r) => {
                 const aan = r.id === gekozenResource;
-                const aantal = blokken.filter((b) => b.resource === r.id).length;
+                const aantal = items.filter((b) => b.resource === r.id).length;
                 return (
                   <Pressable
                     key={r.id ?? 'niemand'}
@@ -499,7 +677,7 @@ function PlanningbordScreen() {
             <View style={[styles.pad, { gap: 10 }]}>
               {dagen.map((d) => {
                 const r = resources.find((x) => x.id === gekozenResource);
-                const lijst = blokkenVan(gekozenResource, d);
+                const lijst = itemsVan(gekozenResource, d);
                 return (
                   <View key={d} style={{ gap: 6 }}>
                     <Text style={[styles.dagKop, d === vandaag && { color: t.green700 }]}>
@@ -508,7 +686,7 @@ function PlanningbordScreen() {
                     {lijst.length === 0 ? (
                       <Text style={styles.vrij}>Niet ingepland</Text>
                     ) : (
-                      lijst.map((b) => blok(b, r?.kleur ?? ds.green))
+                      lijst.map((b) => item(b, r?.kleur ?? ds.green))
                     )}
                   </View>
                 );
@@ -566,7 +744,7 @@ function PlanningbordScreen() {
           ) : null}
           <Text style={styles.voetnoot}>
             {magPlannen
-              ? 'Tik op een blok om de tijd aan te passen, of op een werkbon hierboven om hem in te plannen.'
+              ? 'Tik op een blok om de tijd aan te passen of de dagen, ploeg en voertuigen te plannen, of op een werkbon hierboven om hem in te plannen. Met + plan je een activiteit zonder werkbon.'
               : 'Tik op een blok of werkbon voor de details.'}
           </Text>
         </View>
@@ -575,6 +753,7 @@ function PlanningbordScreen() {
       <BlokPaneel
         blok={blokOpen}
         modus={actieveModus}
+        bronnen={bronnen}
         naamVan={(id) => naamVan.get(id) ?? 'Medewerker'}
         voertuigNaam={(id) => voertuigVan.get(id)?.naam ?? 'Voertuig'}
         magPlannen={magPlannen}
@@ -584,13 +763,120 @@ function PlanningbordScreen() {
       />
       <InplannenPaneel
         werkbon={inplannen}
-        team={team.map((m) => ({ id: m.id, full_name: m.naam }))}
-        standaardDatum={zicht === 'dag' ? anker : anker < vandaag ? vandaag : anker}
+        bronnen={bronnen}
+        standaardDatum={standaardDatum}
         magPlannen={magPlannen}
         waaromNiet={waaromNiet}
         onSluit={() => setInplannen(null)}
         onGewijzigd={() => void herlaad()}
       />
+      <ActiviteitInplannenPaneel
+        open={nieuweActiviteit}
+        team={bronnen.team}
+        standaardDatum={standaardDatum}
+        onSluit={() => setNieuweActiviteit(false)}
+        onGewijzigd={() => void herlaad()}
+      />
+      <ActivityFormSheet
+        concept={activiteitOpen}
+        klanten={klantOpties}
+        medewerkers={team.map((m) => ({ id: m.id, label: m.naam }))}
+        magBewerken={magPlannen}
+        onClose={() => setActiviteitOpen(null)}
+        onSaved={naActiviteit}
+      />
+    </View>
+  );
+}
+
+/** Totaal: iedereen tegelijk, per dag op tijd (de Totaal-tijdlijn van het dashboard). */
+function TotaalRooster({
+  dagen,
+  items,
+  zicht,
+  breed,
+  vandaag,
+  regel,
+  styles,
+  t,
+}: {
+  dagen: string[];
+  items: Item[];
+  zicht: Zicht;
+  breed: boolean;
+  vandaag: string;
+  regel: (i: Item, kleur: string | null, compact?: boolean) => ReactNode;
+  styles: ReturnType<typeof makeStyles>;
+  t: ThemeColors;
+}) {
+  return breed ? (
+    /* iPad, Totaal: dagen als kolommen, per dag iedereen op tijd. Zonder
+       naamkolom past de week in de breedte; niets om opzij te schuiven. */
+    <View style={styles.roosterScroll}>
+      <View style={[styles.rooster, dsShadow]}>
+        <View style={styles.roosterRij}>
+          {dagen.map((d) => (
+            <View
+              key={d}
+              style={[
+                zicht === 'dag' ? styles.roosterDagCelBreed : styles.totaalDagCel,
+                styles.roosterKopCel,
+                d === vandaag && styles.roosterVandaag,
+              ]}
+            >
+              <Text style={[styles.roosterKopTekst, d === vandaag && { color: t.green700 }]}>
+                {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.roosterRij}>
+          {dagen.map((d) => {
+            const lijst = items.filter((b) => b.datum === d);
+            return (
+              <View
+                key={d}
+                style={[
+                  zicht === 'dag' ? styles.roosterDagCelBreed : styles.totaalDagCel,
+                  d === vandaag && styles.roosterVandaag,
+                  zicht === 'dag' && styles.roosterDagWrap,
+                ]}
+              >
+                {lijst.length === 0 ? (
+                  <Text style={[styles.vrij, { padding: 4 }]}>Niets</Text>
+                ) : (
+                  lijst.map((b) => (
+                    <View key={b.sleutel} style={zicht === 'dag' ? { width: 200 } : undefined}>
+                      {regel(b, null, zicht === 'week')}
+                    </View>
+                  ))
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  ) : (
+    /* Telefoon, Totaal: per dag iedereen op tijd, in de kleur van de persoon. */
+    <View style={[styles.pad, { gap: 10 }]}>
+      {dagen.map((d) => {
+        const lijst = items.filter((b) => b.datum === d);
+        return (
+          <View key={d} style={{ gap: 6 }}>
+            {zicht === 'week' ? (
+              <Text style={[styles.dagKop, d === vandaag && { color: t.green700 }]}>
+                {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+              </Text>
+            ) : null}
+            {lijst.length === 0 ? (
+              <Text style={styles.vrij}>Niets ingepland</Text>
+            ) : (
+              lijst.map((b) => regel(b, null))
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -700,6 +986,9 @@ const makeStyles = (t: ThemeColors) =>
       borderColor: t.line,
     },
     blokCompact: { padding: 6, gap: 6, borderRadius: 8 },
+    // Activiteiten zoals de tijdlijn van het dashboard: lichtgroen met een groene streep.
+    blokActiviteit: { backgroundColor: t.green50 },
+    afgerond: { textDecorationLine: 'line-through', color: t.muted },
     blokStreep: { width: 4, borderRadius: 2, alignSelf: 'stretch' },
     blokKop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     blokTijd: { fontSize: 11.5, fontWeight: '700', color: t.muted, flexShrink: 1 },
@@ -756,6 +1045,15 @@ const makeStyles = (t: ThemeColors) =>
       borderRightColor: t.line,
     },
     roosterDagCelBreed: { flex: 1, minWidth: 420, padding: 6, gap: 6 },
+    // Totaal op een iPad: geen naamkolom, dus de dagen delen de breedte.
+    totaalDagCel: {
+      flex: 1,
+      minWidth: 0,
+      padding: 4,
+      gap: 4,
+      borderRightWidth: 1,
+      borderRightColor: t.line,
+    },
     roosterDagWrap: { flexDirection: 'row', flexWrap: 'wrap' },
     roosterVandaag: { backgroundColor: t.green50 },
 
