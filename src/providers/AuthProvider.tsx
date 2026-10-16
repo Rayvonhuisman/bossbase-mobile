@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { translateAuthError } from '@/lib/authErrors';
 import { registratieMetadata, vertaalAuthFout, type RegistratieInvoer } from '@/lib/registratie';
 import { clearSessionStand, setSessionStand } from '@/lib/sessionContext';
+import { useGebruikMelden } from '@/lib/gebruikMelden';
 import { fetchProfileWithCompany, type ProfileFetchError } from '@/services/profileService';
 import { legAkkoordVast, vraagVerificatiecodeAan } from '@/services/registratieService';
 import type { Company, Profile, Role } from '@/types/domain';
@@ -217,6 +218,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     await loadProfile(userId, true);
   }, [session, loadProfile]);
+
+  // Openen en gebruiken van de app telt als activiteit (zie gebruikMelden).
+  useGebruikMelden(status === 'ready' && Boolean(session && profile?.company_id));
 
   const value: AuthContextValue = {
     status,
