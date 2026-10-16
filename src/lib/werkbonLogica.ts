@@ -200,6 +200,12 @@ export type Planning = {
   ploeg: Record<string, string[]>;
   /** Alleen wie afwijkt. */
   persoonTijden: Record<string, Record<string, Tijdvak>>;
+  /** Voertuigen per dag — alleen dagen met een eigen lijst (zie voertuigPlanningUitWerkbon). */
+  voertuigen?: Record<string, string[]>;
+  /** Eigen tijd van een voertuig op een dag: { iso: { voertuigId: tijd } }. */
+  voertuigTijden?: Record<string, Record<string, Tijdvak>>;
+  /** Wie waarin zit: { iso: { profielId: voertuigId } }. */
+  koppeling?: Record<string, Record<string, string>>;
 };
 
 export const legePlanning = (dag = ''): Planning => ({
@@ -335,6 +341,13 @@ export type DagPayload = {
   eindtijd: string | null;
   medewerker_ids: string[] | null;
   medewerker_tijden: Record<string, { starttijd: string; eindtijd: string }> | null;
+  /**
+   * Voertuigsleutels: alleen meegestuurd door `metVoertuigen`. Staan ze erbij,
+   * dan overschrijft de RPC; ontbreken ze, dan blijft staan wat er stond.
+   */
+  voertuig_ids?: string[] | null;
+  voertuig_tijden?: Record<string, { starttijd: string; eindtijd: string }> | null;
+  medewerker_voertuig?: Record<string, string> | null;
 };
 
 const zelfdeSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -669,4 +682,262 @@ export function busRegels(
       },
     ];
   });
+}
+
+// ── Voertuigen per dag (utils/voertuigDagen.js van het dashboard) ───────────
+//
+// Het formulier houdt naast dagen/tijden/ploeg bij (zie `Planning`):
+//   voertuigen      { iso: [voertuigId] }            — alleen dagen met een eigen lijst
+//   voertuigTijden  { iso: { voertuigId: tijd } }    — alleen afwijkers
+//   koppeling       { iso: { profielId: voertuigId } }
+//
+// De tijd van een voertuig op een dag: eigen tijd → tijd van de dag → werkbon.
+// Twee regels, gelijk aan de database (bb_voertuig_te_vol e.a.):
+//   * wie gekoppeld wordt, werkt binnen de tijd van het voertuig;
+//   * er zitten nooit meer mensen tegelijk in dan er plekken zijn.
+// Tijden lopen zonder eindpunt: 10:00–12:00 en 12:00–17:00 overlappen niet.
+// De database toetst alleen een NIEUWE koppeling.
+
+export type PlanVoertuig = { id: string; naam: string; zitplaatsen?: number | null };
+
+export type VoertuigCtx = {
+  p: Planning;
+  standaard: Partial<Tijdvak>;
+  ploegIds: string[];
+  /** De voertuigen van de werkbon (in het formulier: de gekozen). */
+  voertuigen: PlanVoertuig[];
+  naamVan: (pid: string) => string;
+};
+
+const heeftTijd = (t: Partial<Tijdvak> | null | undefined) => !!(hhmm(t?.starttijd) && hhmm(t?.eindtijd));
+const naarMin = (t: string | null | undefined) => {
+  const [h, m] = hhmm(t).split(':').map(Number);
+  return (h ?? 0) * 60 + (m || 0);
+};
+const naarTijdTekst = (m: number) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+
+/** Opgeslagen dagen → de voertuigvelden van het formulier. */
+export function voertuigPlanningUitWerkbon(
+  w: WerkbonPlanbaar,
+): Required<Pick<Planning, 'voertuigen' | 'voertuigTijden' | 'koppeling'>> {
+  const voertuigen: Record<string, string[]> = {};
+  const voertuigTijden: Record<string, Record<string, Tijdvak>> = {};
+  const koppeling: Record<string, Record<string, string>> = {};
+  for (const d of werkbonDagen(w)) {
+    if (Array.isArray(d.voertuig_ids)) voertuigen[d.datum] = d.voertuig_ids;
+    if (d.voertuig_tijden && Object.keys(d.voertuig_tijden).length) {
+      voertuigTijden[d.datum] = Object.fromEntries(
+        Object.entries(d.voertuig_tijden).map(([vid, t]) => [vid, { starttijd: hhmm(t?.starttijd), eindtijd: hhmm(t?.eindtijd) }]),
+      );
+    }
+    if (d.medewerker_voertuig && Object.keys(d.medewerker_voertuig).length) koppeling[d.datum] = { ...d.medewerker_voertuig };
+  }
+  return { voertuigen, voertuigTijden, koppeling };
+}
+
+const alleVoertuigIds = (ctx: VoertuigCtx) => ctx.voertuigen.map((v) => v.id);
+const dagPloegCtx = (ctx: VoertuigCtx, iso: string) =>
+  Array.isArray(ctx.p.ploeg?.[iso]) ? ctx.p.ploeg[iso]!.filter((id) => ctx.ploegIds.includes(id)) : ctx.ploegIds;
+
+/** Voertuigen op die dag, in het formulier. */
+export function voertuigenVanDag(ctx: VoertuigCtx, iso: string): string[] {
+  const eigen = ctx.p.voertuigen?.[iso];
+  return Array.isArray(eigen) ? eigen.filter((id) => alleVoertuigIds(ctx).includes(id)) : alleVoertuigIds(ctx);
+}
+
+/** Tijd van een voertuig op die dag, in het formulier. */
+export function voertuigTijd(ctx: VoertuigCtx, iso: string, vid: string): { starttijd: string; eindtijd: string } {
+  const eigen = ctx.p.voertuigTijden?.[iso]?.[vid];
+  return heeftTijd(eigen)
+    ? { starttijd: hhmm(eigen!.starttijd), eindtijd: hhmm(eigen!.eindtijd) }
+    : tijdVanDag(ctx.p, iso, ctx.standaard);
+}
+
+/** Tijd van een persoon op die dag, in het formulier. */
+export function persoonTijd(ctx: VoertuigCtx, iso: string, pid: string): { starttijd: string; eindtijd: string } {
+  const eigen = ctx.p.persoonTijden?.[iso]?.[pid];
+  return heeftTijd(eigen)
+    ? { starttijd: hhmm(eigen!.starttijd), eindtijd: hhmm(eigen!.eindtijd) }
+    : tijdVanDag(ctx.p, iso, ctx.standaard);
+}
+
+/** De koppelingen die op die dag gelden: alleen wie er werkt, in een voertuig van die dag. */
+export function koppelingVanDag(ctx: VoertuigCtx, iso: string): Record<string, string> {
+  const ploeg = dagPloegCtx(ctx, iso);
+  const voertuigen = voertuigenVanDag(ctx, iso);
+  return Object.fromEntries(
+    Object.entries(ctx.p.koppeling?.[iso] ?? {}).filter(([pid, vid]) => ploeg.includes(pid) && voertuigen.includes(vid)),
+  );
+}
+
+/** Hoeveel mensen zitten er op het drukste moment in? */
+export function hoogsteBezetting(bezetters: Partial<Tijdvak>[]): number {
+  const lijst = bezetters.filter(heeftTijd).map((b) => [naarMin(b.starttijd), naarMin(b.eindtijd)] as const);
+  return lijst.reduce((max, [s]) => Math.max(max, lijst.filter(([a, b]) => a <= s && s < b).length), 0);
+}
+
+/**
+ * Het eerste aaneengesloten stuk met meer dan `plekken` mensen tegelijk dat
+ * overlapt met van–tot (standaard de hele dag). Zelfde regel als bb_voertuig_te_vol.
+ */
+export function teVol(
+  bezetters: Partial<Tijdvak>[],
+  plekken: number | null | undefined,
+  van: string | null = null,
+  tot: string | null = null,
+): { van: string; tot: string; aantal: number } | null {
+  if (!plekken) return null;
+  const lijst = bezetters.filter(heeftTijd).map((b) => [naarMin(b.starttijd), naarMin(b.eindtijd)] as const);
+  const punten = [...new Set(lijst.flat())].sort((a, b) => a - b);
+  const binnenVan = van ? naarMin(van) : 0;
+  const binnenTot = tot ? naarMin(tot) : 24 * 60;
+  type Run = { van: number; tot: number; aantal: number };
+  let run = null as Run | null;
+  for (let i = 0; i < punten.length - 1; i++) {
+    const a = punten[i]!;
+    const b = punten[i + 1]!;
+    const n = lijst.filter(([s, e]) => s <= a && a < e).length;
+    if (n > plekken && a < binnenTot && b > binnenVan) {
+      const vorige: Run | null = run;
+      run = vorige ? { van: vorige.van, tot: b, aantal: Math.max(vorige.aantal, n) } : { van: a, tot: b, aantal: n };
+    } else if (run) {
+      break;
+    }
+  }
+  return run ? { van: naarTijdTekst(run.van), tot: naarTijdTekst(run.tot), aantal: run.aantal } : null;
+}
+
+/** Letterlijk dezelfde zinnen als de database en het dashboard. */
+export const meldingBuitenTijd = (
+  naam: string,
+  pt: { starttijd: string; eindtijd: string },
+  voertuigNaam: string,
+  vt: { starttijd: string; eindtijd: string },
+) => `${naam} werkt ${pt.starttijd}–${pt.eindtijd}, ${voertuigNaam} staat ${vt.starttijd}–${vt.eindtijd}.`;
+
+export const meldingVol = (v: PlanVoertuig, vol: { van: string; tot: string; aantal: number }) =>
+  `${v.naam} heeft ${v.zitplaatsen} ${v.zitplaatsen === 1 ? 'plek' : 'plekken'}, tussen ${vol.van} en ${vol.tot} zitten er ${vol.aantal} in.`;
+
+/** Het drukste moment in een voertuig op die dag. */
+export function bezettingVanVoertuig(ctx: VoertuigCtx, iso: string, vid: string): number {
+  const k = koppelingVanDag(ctx, iso);
+  return hoogsteBezetting(Object.keys(k).filter((pid) => k[pid] === vid).map((pid) => persoonTijd(ctx, iso, pid)));
+}
+
+/** Mag deze persoon op die dag in dit voertuig? '' = ja, anders de melding (zoals de database). */
+export function magKoppelen(ctx: VoertuigCtx, iso: string, pid: string, vid: string): string {
+  const voertuig = ctx.voertuigen.find((v) => v.id === vid);
+  if (!voertuig) return '';
+  const pt = persoonTijd(ctx, iso, pid);
+  const vt = voertuigTijd(ctx, iso, vid);
+  if (!heeftTijd(pt) || !heeftTijd(vt)) return '';
+  if (pt.starttijd < vt.starttijd || pt.eindtijd > vt.eindtijd) return meldingBuitenTijd(ctx.naamVan(pid), pt, voertuig.naam, vt);
+  if (voertuig.zitplaatsen) {
+    const k = koppelingVanDag(ctx, iso);
+    const anderen = Object.keys(k).filter((x) => x !== pid && k[x] === vid);
+    const vol = teVol([...anderen, pid].map((x) => persoonTijd(ctx, iso, x)), voertuig.zitplaatsen, pt.starttijd, pt.eindtijd);
+    if (vol) return meldingVol(voertuig, vol);
+  }
+  return '';
+}
+
+/** Wat er op die dag niet (meer) klopt: { perPersoon: { pid: [tekst] }, perVoertuig: { vid: [tekst] } }. */
+export function voertuigWaarschuwingen(
+  ctx: VoertuigCtx,
+  iso: string,
+): { perPersoon: Record<string, string[]>; perVoertuig: Record<string, string[]> } {
+  const perPersoon: Record<string, string[]> = {};
+  const perVoertuig: Record<string, string[]> = {};
+  const k = koppelingVanDag(ctx, iso);
+  for (const [pid, vid] of Object.entries(k)) {
+    const voertuig = ctx.voertuigen.find((v) => v.id === vid);
+    const pt = persoonTijd(ctx, iso, pid);
+    const vt = voertuigTijd(ctx, iso, vid);
+    if (voertuig && heeftTijd(pt) && heeftTijd(vt) && (pt.starttijd < vt.starttijd || pt.eindtijd > vt.eindtijd)) {
+      (perPersoon[pid] ??= []).push(meldingBuitenTijd(ctx.naamVan(pid), pt, voertuig.naam, vt));
+    }
+  }
+  for (const voertuig of ctx.voertuigen) {
+    if (!voertuig.zitplaatsen) continue;
+    const vol = teVol(
+      Object.keys(k).filter((pid) => k[pid] === voertuig.id).map((pid) => persoonTijd(ctx, iso, pid)),
+      voertuig.zitplaatsen,
+    );
+    if (vol) (perVoertuig[voertuig.id] ??= []).push(meldingVol(voertuig, vol));
+  }
+  return { perPersoon, perVoertuig };
+}
+
+/**
+ * Vóór het opslaan: toets elke nieuwe koppeling zoals de database.
+ * `origineel` = de koppelingen zoals ze waren opgeslagen. '' = alles in orde.
+ */
+export function controleerVoertuigen(ctx: VoertuigCtx, origineel: Record<string, Record<string, string>> = {}): string {
+  const datums = [...new Set(ctx.p.dagen ?? [])].sort();
+  for (const iso of datums) {
+    for (const [pid, vid] of Object.entries(koppelingVanDag(ctx, iso))) {
+      if (origineel?.[iso]?.[pid] === vid) continue;
+      const melding = magKoppelen(ctx, iso, pid, vid);
+      if (melding) return datums.length > 1 ? `${korteDatum(iso)}: ${melding}` : melding;
+    }
+  }
+  return '';
+}
+
+/**
+ * Voertuigvelden bij de dagen die naar de database gaan. Elke dag krijgt alle
+ * drie de sleutels mee, zodat het formulier overschrijft wat er stond.
+ */
+export function metVoertuigen(dagen: DagPayload[], ctx: VoertuigCtx): DagPayload[] {
+  return dagen.map((d) => {
+    const iso = d.datum;
+    const voertuigen = voertuigenVanDag(ctx, iso);
+    const eigenLijst = Array.isArray(ctx.p.voertuigen?.[iso]) && !zelfdeSet(voertuigen, alleVoertuigIds(ctx));
+    const dagTijd = tijdVanDag(ctx.p, iso, ctx.standaard);
+    const tijden = Object.entries(ctx.p.voertuigTijden?.[iso] ?? {})
+      .filter(
+        ([vid, t]) =>
+          voertuigen.includes(vid) &&
+          heeftTijd(t) &&
+          (hhmm(t.starttijd) !== dagTijd.starttijd || hhmm(t.eindtijd) !== dagTijd.eindtijd),
+      )
+      .map(([vid, t]) => [vid, { starttijd: hhmm(t.starttijd), eindtijd: hhmm(t.eindtijd) }] as const);
+    const koppeling = koppelingVanDag(ctx, iso);
+    return {
+      ...d,
+      voertuig_ids: eigenLijst ? voertuigen : null,
+      voertuig_tijden: tijden.length ? Object.fromEntries(tijden) : null,
+      medewerker_voertuig: Object.keys(koppeling).length ? koppeling : null,
+    };
+  });
+}
+
+/**
+ * Staat dit voertuig op dat moment al op een andere werkbon? Afgeronde
+ * werkbonnen tellen niet (voertuigDubbel van het dashboard).
+ */
+export function voertuigDubbel(o: {
+  werkbonnen: (WerkbonPlanbaar & { id: string; titel?: string | null; status?: string | null; voertuig_ids?: string[] | null })[];
+  werkbonId: string | null;
+  datum: string;
+  vid: string;
+  starttijd: string | null;
+  eindtijd: string | null;
+}): { titel: string; starttijd: string; eindtijd: string }[] {
+  if (!o.vid || !o.datum || !hhmm(o.starttijd) || !hhmm(o.eindtijd)) return [];
+  const s = naarMin(o.starttijd);
+  const e = naarMin(o.eindtijd);
+  const uit: { titel: string; starttijd: string; eindtijd: string }[] = [];
+  for (const w of o.werkbonnen) {
+    if (!w || w.id === o.werkbonId || w.status === 'afgerond') continue;
+    for (const dag of werkbonDagen(w)) {
+      if (dag.datum !== o.datum || !voertuigenOpDag(w, dag).includes(o.vid)) continue;
+      const t = tijdVanVoertuig(w, dag, o.vid);
+      if (!heeftTijd(t)) continue;
+      if (s < naarMin(t.eindtijd) && naarMin(t.starttijd) < e) {
+        uit.push({ titel: w.titel || 'Werkbon', starttijd: hhmm(t.starttijd), eindtijd: hhmm(t.eindtijd) });
+      }
+    }
+  }
+  return uit;
 }

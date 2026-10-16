@@ -574,6 +574,60 @@ async function syncGekoppeldAgendaItem(a: ActivityRow): Promise<void> {
 }
 
 /**
+ * Het agenda-item van een ingeplande activiteit aanmaken of bijwerken —
+ * `upsertActivityEvent` van het dashboard, zoals de planning dat doet na
+ * "Activiteit inplannen" en na het activiteitenvenster. Eén item per
+ * activiteit (`activiteit_id`); het erft de eigenaar van de activiteit. Een
+ * nieuw item krijgt herkomst 'planning' (alleen bij aanmaken, zodat een
+ * bestaande herkomst blijft). Zonder eindtijd een uur.
+ */
+export async function upsertActiviteitAgendaItem(o: {
+  activiteitId: string;
+  titel: string | null;
+  datum: string;
+  tijd: string | null;
+  eind: string | null;
+  customerId: string | null;
+  locatie: string | null;
+  omschrijving?: string | null;
+}): Promise<{ error: string | null }> {
+  try {
+    const t = afspraakTijden(o.datum, o.tijd, o.eind);
+    const { data: act } = await supabase.from('activities').select('assigned_to').eq('id', o.activiteitId).maybeSingle();
+    const basis = {
+      title: o.titel || 'Activiteit',
+      customer_id: o.customerId || null,
+      location: o.locatie || null,
+      notes: o.omschrijving || null,
+      assigned_to: (act as { assigned_to: string | null } | null)?.assigned_to ?? null,
+      start_at: t.start_at,
+      end_at: t.end_at,
+    };
+    const { data: bestaand } = await supabase
+      .from('calendar_events')
+      .select('id')
+      .eq('activiteit_id', o.activiteitId)
+      .maybeSingle();
+    if (bestaand) {
+      const { error } = await supabase.from('calendar_events').update(basis).eq('id', (bestaand as { id: string }).id);
+      return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+    }
+    const payload = withCompanyId({ ...basis, activiteit_id: o.activiteitId, herkomst: 'planning' });
+    if (!payload) return { error: 'De agenda is niet bijgewerkt.' };
+    const { error } = await supabase.from('calendar_events').insert(payload);
+    return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+  } catch {
+    return { error: 'De agenda is niet bijgewerkt.' };
+  }
+}
+
+/** Niet meer ingepland: het agenda-item van de activiteit weg (`deleteActivityEvent`). */
+export async function verwijderActiviteitAgendaItem(activiteitId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('calendar_events').delete().eq('activiteit_id', activiteitId);
+  return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+}
+
+/**
  * Wie nieuw aan een activiteit is toegewezen, hoort het — `notifyNewAssignees`
  * (type `toewijzing_activiteit`) van het dashboard, met optioneel een mail. De
  * Edge Function `create-notification` zoekt het adres zelf op. Jezelf niet.
@@ -586,12 +640,16 @@ export async function meldActiviteitToewijzing(o: {
   vorige?: string[];
   maker: string | null;
   stuurMail: boolean;
+  /** Vanuit de planning: link naar de planning en de tijd erbij, zoals PlanActivityModal. */
+  link?: string;
+  tijd?: string | null;
 }): Promise<void> {
   const vorig = new Set(o.vorige ?? []);
   const nieuw = [...new Set(o.toegewezen)].filter((id) => id && !vorig.has(id) && id !== o.maker);
   if (!nieuw.length) return;
   const datum = o.datum
-    ? new Date(`${o.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+    ? new Date(`${o.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) +
+      (o.tijd ? ` om ${o.tijd}` : '')
     : null;
   try {
     await supabase.functions.invoke('create-notification', {
@@ -601,7 +659,7 @@ export async function meldActiviteitToewijzing(o: {
           type: 'toewijzing_activiteit',
           title: `Je bent toegewezen aan ${o.titel}`,
           body: datum ? `Datum: ${datum}` : null,
-          link: 'activities',
+          link: o.link ?? 'activities',
           related_type: 'activiteit',
           related_id: o.activiteitId,
           ...(o.stuurMail ? { email: true } : {}),

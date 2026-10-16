@@ -351,6 +351,135 @@ export function dubbeleBlokken(blokken: RoosterBlok[]): Set<string> {
   return dubbel;
 }
 
+// ===========================================================================
+// Activiteiten op de planning (dashboard: PlanningPage, filteredActivities)
+// ===========================================================================
+
+/**
+ * Een activiteit zoals de planning hem nodig heeft. `datum` en `tijd` zijn al
+ * naar Nederlandse tijd omgerekend (de service doet dat met `splitsLokaal`).
+ */
+export type PlanActiviteit = {
+  id: string;
+  title: string | null;
+  datum: string;
+  tijd: string | null;
+  end_time: string | null;
+  completed: boolean;
+  assigned_to: string | null;
+  assigned_to_ids: string[] | null;
+};
+
+export type ActiviteitBlok<A extends PlanActiviteit = PlanActiviteit> = {
+  sleutel: string;
+  activiteit: A;
+  datum: string;
+  /** Medewerkersweergave: de persoon van deze rij. Totaal: null. */
+  resource: string | null;
+  starttijd: string;
+  eindtijd: string;
+  /** Iedereen die op de activiteit staat. */
+  personen: string[];
+};
+
+/** Toegewezenen: `assigned_to_ids`, anders de enkele `assigned_to` (toActivity). */
+export function activiteitPersonen(a: Pick<PlanActiviteit, 'assigned_to' | 'assigned_to_ids'>): string[] {
+  if (a.assigned_to_ids?.length) return a.assigned_to_ids;
+  return a.assigned_to ? [a.assigned_to] : [];
+}
+
+const plusUur = (t: string) => {
+  const m = minuten(t) + 60;
+  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+
+/**
+ * Activiteitblokken in `[van, tot]`, zoals de tijdlijn van het dashboard:
+ *
+ * - Zonder tijd 09:00, zonder eindtijd een uur (DayColumn).
+ * - `totaal`: één blok per activiteit, alleen met een toewijzing — behalve als
+ *   het bedrijf geen team heeft (zzp), dan alles.
+ * - `medewerker`: één blok per toegewezen persoon.
+ * - `voertuig`: geen activiteiten (die hebben geen voertuig).
+ *
+ * Afgeronde activiteiten blijven staan, net als in het dashboard.
+ */
+export function activiteitBlokken<A extends PlanActiviteit>(
+  activiteiten: A[],
+  opties: { van: string; tot: string; modus: 'totaal' | 'medewerker' | 'voertuig'; metTeam: boolean },
+): ActiviteitBlok<A>[] {
+  const { van, tot, modus, metTeam } = opties;
+  if (modus === 'voertuig') return [];
+  const uit: ActiviteitBlok<A>[] = [];
+  for (const a of activiteiten) {
+    if (!a.datum || a.datum < van || a.datum > tot) continue;
+    const personen = activiteitPersonen(a);
+    const starttijd = (a.tijd || '09:00').slice(0, 5);
+    const eindtijd = a.end_time ? String(a.end_time).slice(0, 5) : plusUur(starttijd);
+    const basis = { activiteit: a, datum: a.datum, starttijd, eindtijd, personen };
+    if (modus === 'totaal') {
+      if (!personen.length && metTeam) continue;
+      uit.push({ ...basis, sleutel: `act-${a.id}`, resource: null });
+      continue;
+    }
+    for (const pid of personen) uit.push({ ...basis, sleutel: `act-${a.id}-p-${pid}`, resource: pid });
+  }
+  return uit.sort((x, y) =>
+    x.datum === y.datum ? x.starttijd.localeCompare(y.starttijd) : x.datum.localeCompare(y.datum),
+  );
+}
+
+/**
+ * Dubbel ingepland met een activiteit erbij (dubbeleBoekingen van het
+ * dashboard). Een persoon die op een werkbonblok staat en op hetzelfde moment
+ * op een activiteit — of op twee activiteiten — krijgt het driehoekje.
+ *
+ * - Werkbonblok: begin tot eind, zonder eind een uur.
+ * - Activiteit: alleen open en met een tijd; zonder eindtijd een half uur
+ *   (zo rekent het dashboard bij deze toets).
+ * - De activiteit die aan de werkbon gekoppeld is (`werkbon.activity_id`)
+ *   botst niet met die werkbon; een afgeronde werkbon telt niet mee.
+ */
+export function dubbelMetActiviteiten(
+  werkbonBlokken: RoosterBlok<WerkbonPlanbaar & { activity_id?: string | null }>[],
+  activiteitBlokkenLijst: ActiviteitBlok[],
+): Set<string> {
+  const dubbel = new Set<string>();
+  const venster = (a: PlanActiviteit) => {
+    const s = minuten(a.tijd);
+    return [s, a.end_time ? minuten(a.end_time) : s + 30] as const;
+  };
+  const telt = (a: PlanActiviteit) => !a.completed && !!a.tijd && !Number.isNaN(minuten(a.tijd));
+  for (const ab of activiteitBlokkenLijst) {
+    const a = ab.activiteit;
+    if (!telt(a)) continue;
+    const [as, ae] = venster(a);
+    for (const pid of ab.resource ? [ab.resource] : ab.personen) {
+      for (const wb of werkbonBlokken) {
+        if (wb.resource !== pid || wb.datum !== ab.datum) continue;
+        if (wb.werkbon.status === 'afgerond' || wb.werkbon.activity_id === a.id) continue;
+        const ws = minuten(wb.starttijd);
+        const we = wb.eindtijd ? minuten(wb.eindtijd) : ws + 60;
+        if (as < we && ws < ae) {
+          dubbel.add(ab.sleutel);
+          dubbel.add(wb.sleutel);
+        }
+      }
+      for (const ander of activiteitBlokkenLijst) {
+        const b = ander.activiteit;
+        if (b.id === a.id || ander.datum !== ab.datum || !telt(b)) continue;
+        if (!(ander.resource ? ander.resource === pid : ander.personen.includes(pid))) continue;
+        const [bs, be] = venster(b);
+        if (as < be && bs < ae) {
+          dubbel.add(ab.sleutel);
+          dubbel.add(ander.sleutel);
+        }
+      }
+    }
+  }
+  return dubbel;
+}
+
 /** Tinten per medewerker, zelfde volgorde als het dashboard. */
 const TINTEN = [120, 200, 30, 280, 350, 60, 160, 240, 310, 170];
 
