@@ -25,9 +25,16 @@ import { metProjectBedragen } from './projectService';
  * Using `select('*')` would also work but pulls every extension column.
  */
 const SAFE_COLUMNS = `
-  id, company_id, name, email, phone, address, postcode, city,
-  kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at, type
+  id, company_id, name, contactpersoon, email, phone, address, postcode, city,
+  kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at, type,
+  source, betaaltermijn_dagen
 `;
+
+export { leesBetaaltermijn } from '@/lib/relatieValidatie';
+
+/** Klanttypes van het dashboard (customerService KLANT_TYPES; customers_type_check). */
+export const KLANT_TYPES = ['Particulier', 'Zakelijk', 'VvE', 'Aannemer'] as const;
+
 
 /** Sortable, known-to-exist columns in preference order. */
 const SORT_FALLBACKS: readonly string[] = ['created_at', 'name'];
@@ -92,6 +99,8 @@ export async function listCustomers(): Promise<{
 export type CreateCustomerInput = {
   company_id: string;
   name: string;
+  /** Alleen bij wijzigen (de klantgegevens op de projectkaart); aanmaken laat hem leeg. */
+  contactpersoon?: string | null;
   email?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -101,6 +110,12 @@ export type CreateCustomerInput = {
   btw_number?: string | null;
   iban?: string | null;
   notes?: string | null;
+  /** Een van KLANT_TYPES, of leeg. */
+  type?: string | null;
+  /** Waar de klant vandaan kwam ("Website, aanbeveling, …"). */
+  source?: string | null;
+  /** Leeg = de standaard uit Instellingen. */
+  betaaltermijn_dagen?: number | null;
 };
 
 /**
@@ -129,6 +144,10 @@ export async function createCustomer(
     iban: clean(input.iban),
     // Het dashboard bewaart notities als HTML uit zijn editor.
     notes: clean(input.notes) ? alsHtml(input.notes as string) : null,
+    // Zoals het dashboard (NewCustomerModal): een onbekend type wordt leeg.
+    type: input.type && (KLANT_TYPES as readonly string[]).includes(input.type) ? input.type : null,
+    source: clean(input.source),
+    ...(input.betaaltermijn_dagen !== undefined ? { betaaltermijn_dagen: input.betaaltermijn_dagen } : {}),
   };
 
   const { data, error } = await supabase
@@ -220,6 +239,7 @@ export async function updateCustomer(
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name.trim();
   for (const veld of [
+    'contactpersoon',
     'email',
     'phone',
     'address',
@@ -229,9 +249,14 @@ export async function updateCustomer(
     'btw_number',
     'iban',
     'notes',
+    'source',
   ] as const) {
     if (input[veld] !== undefined) updates[veld] = schoon(input[veld]);
   }
+  if (input.type !== undefined) {
+    updates.type = input.type && (KLANT_TYPES as readonly string[]).includes(input.type) ? input.type : null;
+  }
+  if (input.betaaltermijn_dagen !== undefined) updates.betaaltermijn_dagen = input.betaaltermijn_dagen;
   if (typeof updates.notes === 'string') updates.notes = alsHtml(updates.notes);
 
   if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');

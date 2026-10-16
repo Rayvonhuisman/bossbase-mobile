@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, Star } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { AdresZoeker } from '@/components/AdresZoeker';
 import { FormField } from '@/components/FormField';
 import { FormFooter } from '@/components/FormFooter';
 import { TimeField } from '@/components/DateField';
@@ -42,6 +43,7 @@ import {
   tijdVanDag,
   tijdVoorAlleDagen,
   verplaatsNaar,
+  dagMeldingen,
   wisselDag,
   wisselPersoonOpDag,
   WERKBON_STATUS_STIJL,
@@ -54,6 +56,8 @@ import {
 import { ds, spacing, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import type { Customer } from '@/types/domain';
+import { PloegKeuze } from './PloegKeuze';
+import { Schakel } from './instellingen/Bouwstenen';
 
 type Collega = { id: string; full_name: string | null; role: string | null };
 type Project = { id: string; name: string | null; customer_id: string | null };
@@ -71,12 +75,15 @@ type Project = { id: string; name: string | null; customer_id: string | null };
 export function WerkbonFormulier({
   werkbon,
   klantVooraf,
+  projectVooraf,
   onKlaar,
 }: {
   /** Meegegeven = bewerken. */
   werkbon?: Werkbon | null;
   /** Nieuw vanaf een klantkaart (`?customerId=`): klant en adres vooraf invullen. */
   klantVooraf?: string | null;
+  /** Nieuw vanaf de projectkaart (`?projectId=`): dit project vooraf gekozen. */
+  projectVooraf?: string | null;
   onKlaar: (id: string) => void;
 }) {
   const bewerken = !!werkbon;
@@ -105,7 +112,9 @@ export function WerkbonFormulier({
   const [status, setStatus] = useState<WerkbonStatusKey>(normaliseerStatus(werkbon?.status));
   const [titel, setTitel] = useState(werkbon?.titel ?? '');
   const [klantId, setKlantId] = useState<string | null>(werkbon ? (werkbon.customer_id ?? null) : (klantVooraf ?? null));
-  const [projectId, setProjectId] = useState<string | null>(werkbon?.project_id ?? null);
+  const [projectId, setProjectId] = useState<string | null>(
+    werkbon ? (werkbon.project_id ?? null) : (projectVooraf ?? null),
+  );
   const [locatie, setLocatie] = useState(werkbon?.locatie ?? '');
   const [planning, setPlanning] = useState<Planning>(() =>
     werkbon ? planningUitWerkbon(werkbon) : legePlanning(''),
@@ -113,10 +122,24 @@ export function WerkbonFormulier({
   // Zonder planningsmodule: één tijd voor de klus.
   const [enkelStart, setEnkelStart] = useState(hhmm(werkbon?.starttijd) || '');
   const [enkelEind, setEnkelEind] = useState(hhmm(werkbon?.eindtijd) || '');
+  // Zoals WerkbonPageV2: een nieuwe bon staat op naam van de maker (uitvoerder
+  // én verantwoordelijke); een oude bon zonder verantwoordelijken valt terug op
+  // de oude enkele toewijzing.
   const [uitvoerders, setUitvoerders] = useState<string[]>(
-    werkbon?.assigned_to_ids?.length ? werkbon.assigned_to_ids : werkbon?.assigned_to ? [werkbon.assigned_to] : [],
+    werkbon?.assigned_to_ids?.length
+      ? werkbon.assigned_to_ids
+      : werkbon?.assigned_to
+        ? [werkbon.assigned_to]
+        : !werkbon && user?.id
+          ? [user.id]
+          : [],
   );
-  const [verantwoordelijken, setVerantwoordelijken] = useState<string[]>(werkbon?.verantwoordelijke_ids ?? []);
+  const [verantwoordelijken, setVerantwoordelijken] = useState<string[]>(
+    werkbon?.verantwoordelijke_ids ??
+      (werkbon?.assigned_to ? [werkbon.assigned_to] : !werkbon && user?.id ? [user.id] : []),
+  );
+  // Zoals "Stuur e-mail" in het dashboard: standaard aan.
+  const [stuurMail, setStuurMail] = useState(true);
   const [voertuigIds, setVoertuigIds] = useState<string[]>(werkbon?.voertuig_ids ?? []);
   const beginOmschrijving = alsTekst(werkbon?.omschrijving);
   const [omschrijving, setOmschrijving] = useState(beginOmschrijving);
@@ -186,23 +209,6 @@ export function WerkbonFormulier({
   };
 
   // ── Ploeg ─────────────────────────────────────────────────────────────────
-  const wisselUitvoerder = (id: string) => {
-    setUitvoerders((prev) => {
-      if (prev.includes(id)) {
-        setVerantwoordelijken((v) => v.filter((x) => x !== id));
-        return prev.filter((x) => x !== id);
-      }
-      return [...prev, id];
-    });
-  };
-  const wisselVerantwoordelijke = (id: string) => {
-    if (!uitvoerders.includes(id)) {
-      setUitvoerders((p) => [...p, id]);
-      setVerantwoordelijken((v) => [...v, id]);
-      return;
-    }
-    setVerantwoordelijken((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
-  };
   const naam = (id: string) => team.find((c) => c.id === id)?.full_name ?? 'Onbekend';
 
   // ── Planning ──────────────────────────────────────────────────────────────
@@ -323,6 +329,7 @@ export function WerkbonFormulier({
       vorigeUitvoerders: vorigeU,
       vorigeVerantwoordelijken: werkbon?.verantwoordelijke_ids ?? [],
       maker,
+      stuurMail,
     });
     if (werkbon) {
       const oud = { datum: werkbon.gepland_op ?? null, start: hhmm(werkbon.starttijd), eind: hhmm(werkbon.eindtijd) };
@@ -339,6 +346,26 @@ export function WerkbonFormulier({
       const eraf = vorigeU.filter((id) => !uitvoerders.includes(id));
       if (eraf.length) {
         void meldPlanningWijziging({ companyId: werkbon.company_id, userIds: eraf, soort: 'afgehaald', werkbon: kern, oud, maker });
+      }
+      // Per dag: wie op de bon blijft, kan een dag erbij krijgen of kwijtraken
+      // (meerdaagse klus) — zoals de planning in het dashboard.
+      if (meerdaags && planningBewerkbaar) {
+        for (const m of dagMeldingen({
+          oudeDagen: werkbon.werkbon_dagen ?? [],
+          nieuweDagen: dagen,
+          oudePloeg: vorigeU,
+          nieuwePloeg: uitvoerders,
+          blijvers,
+        })) {
+          void meldPlanningWijziging({
+            companyId: werkbon.company_id,
+            userIds: [m.uid],
+            soort: m.soort,
+            werkbon: kern,
+            ...(m.soort === 'ingepland' ? { nieuw: m.dag } : { oud: m.dag }),
+            maker,
+          });
+        }
       }
     }
     void syncWerkbonEvents(opgeslagen.id, opgeslagen.company_id);
@@ -419,7 +446,14 @@ export function WerkbonFormulier({
           options={projectOpties}
         />
 
-        <FormField label="Locatie" value={locatie} onChangeText={setLocatie} placeholder="Straat + huisnummer + plaats" />
+        <AdresZoeker
+          label="Locatie"
+          volledigAdres
+          value={locatie}
+          onChangeText={setLocatie}
+          placeholder="Zoek straat + huisnummer + plaats"
+          hint="Kies een adres uit de lijst, of typ zelf een omschrijving (bijv. bouwkavel)."
+        />
 
         {/* Dagen en tijden */}
         <View style={styles.blok}>
@@ -536,61 +570,35 @@ export function WerkbonFormulier({
               Vink aan wie op de klus staat. De ster maakt iemand verantwoordelijk: die mag de bon bewerken en is
               het aanspreekpunt.
             </Text>
-            <View style={styles.picker}>
-              {team.map((c, i) => {
-                const aan = uitvoerders.includes(c.id);
-                const verantw = verantwoordelijken.includes(c.id);
-                return (
-                  <View key={c.id} style={[styles.rij, i > 0 && styles.rijRand, aan && styles.rijAan]}>
-                    <Pressable
-                      onPress={() => wisselUitvoerder(c.id)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: aan }}
-                      aria-checked={aan}
-                      accessibilityLabel={c.full_name ?? 'Medewerker'}
-                      style={styles.rijHoofd}
-                    >
-                      <View style={[styles.vink, aan && styles.vinkAan]}>
-                        {aan ? <Check size={14} color={ds.greenInk} strokeWidth={3} /> : null}
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.rijTitel} numberOfLines={1}>
-                          {c.full_name ?? 'Naamloos'}
-                          {c.id === user?.id ? ' (ikzelf)' : ''}
-                        </Text>
-                        <Text style={styles.rijSub} numberOfLines={1}>
-                          {verantw ? 'Verantwoordelijk' : aan ? 'Uitvoerder' : (c.role ?? '')}
-                        </Text>
-                      </View>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => wisselVerantwoordelijke(c.id)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: verantw }}
-                      aria-checked={verantw}
-                      accessibilityLabel={`${c.full_name ?? 'Medewerker'} verantwoordelijk`}
-                      hitSlop={6}
-                      style={styles.sterKnop}
-                    >
-                      <Star size={20} color={verantw ? '#e8a23a' : t.muted2} fill={verantw ? '#e8a23a' : 'transparent'} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
+            <PloegKeuze
+              team={team}
+              uitvoerders={uitvoerders}
+              verantwoordelijken={verantwoordelijken}
+              onChange={(v) => {
+                setUitvoerders(v.uitvoerders);
+                setVerantwoordelijken(v.verantwoordelijken);
+              }}
+              eigenId={user?.id ?? null}
+            />
+            <Schakel
+              titel="Ook per e-mail laten weten"
+              uitleg="Wie nieuw op de klus komt of verantwoordelijk wordt, krijgt naast de melding in de app een mail — zoals vanuit het dashboard."
+              waarde={stuurMail}
+              onWissel={setStuurMail}
+            />
           </View>
         ) : null}
 
         {/* Voertuigen (modules planning + voertuigen) */}
         {metVoertuigen && voertuigen ? (
           <View style={styles.blok}>
-            <Text style={styles.label}>Bussen op deze klus</Text>
+            <Text style={styles.label}>Voertuigen op deze klus</Text>
             {zichtbareVoertuigen.length === 0 ? (
               <Text style={styles.hint}>Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.</Text>
             ) : (
               <>
                 <Text style={styles.hint}>
-                  Meerdere mogelijk. Wie per dag in welke bus zit, plan je op het dashboard.
+                  Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je op het dashboard.
                 </Text>
                 <View style={styles.chipRij}>
                   {zichtbareVoertuigen.map((v) => {
@@ -764,30 +772,6 @@ const makeStyles = (t: ThemeColors) =>
     },
     dagTitel: { fontSize: 14, fontWeight: '700', color: t.ink },
     tijdRij: { flexDirection: 'row', gap: spacing.md },
-    picker: {
-      backgroundColor: t.card,
-      borderRadius: t.rMd,
-      borderWidth: 1,
-      borderColor: t.line,
-      overflow: 'hidden',
-    },
-    rij: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 6 },
-    rijHoofd: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, minHeight: 48 },
-    rijRand: { borderTopWidth: 1, borderTopColor: t.line },
-    rijAan: { backgroundColor: t.green50 },
-    rijTitel: { fontSize: 14.5, fontWeight: '600', color: t.ink },
-    rijSub: { fontSize: 12, color: t.muted, marginTop: 1 },
-    vink: {
-      width: 22,
-      height: 22,
-      borderRadius: 6,
-      borderWidth: 1.5,
-      borderColor: t.muted2,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    vinkAan: { backgroundColor: ds.green, borderColor: ds.green },
-    sterKnop: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     kalender: {
       backgroundColor: t.card,
       borderRadius: t.rMd,

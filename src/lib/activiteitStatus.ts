@@ -118,6 +118,11 @@ export function isToegewezenAan(
   return Array.isArray(a.assigned_to_ids) && a.assigned_to_ids.includes(userId);
 }
 
+/** Aan niemand toegewezen (geen primaire en een lege lijst)? */
+export function isNiemandToegewezen(a: Pick<ActiviteitKern, 'assigned_to' | 'assigned_to_ids'>): boolean {
+  return !a.assigned_to && !(Array.isArray(a.assigned_to_ids) && a.assigned_to_ids.length > 0);
+}
+
 export type ActiviteitFilterOpties = {
   filter: ActiviteitFilter;
   /** Profiel-id of null = alle medewerkers. */
@@ -165,9 +170,15 @@ export function groepeerActiviteiten<T extends ActiviteitKern>(
 }
 
 /**
- * De homepage-tegel "Activiteiten vandaag" (`actions_today`): eigen, open
+ * De homepage-tegel "Activiteiten vandaag" (`actions_today`): open
  * activiteiten van vandaag; te laat apart geteld. In de app staan de te late
- * erbovenaan in dezelfde lijst, zodat je ze ook kunt openen en afvinken.
+ * onder die van vandaag in dezelfde lijst, zodat je ze ook kunt openen en
+ * afvinken.
+ *
+ * Telt je eigen activiteiten én die aan niemand zijn toegewezen. Die laatste
+ * zag niemand op zijn homepage, terwijl de zijbalk van het dashboard ze wél als
+ * te laat telde ("1 te laat" in de app, 4 in de zijbalk). Bewuste keuze van
+ * 15-10-2026; de dashboardtegel telt (nog) alleen eigen activiteiten.
  */
 export function eigenActiviteitenVandaag<T extends ActiviteitKern>(
   rijen: T[],
@@ -175,7 +186,8 @@ export function eigenActiviteitenVandaag<T extends ActiviteitKern>(
   vandaag: string,
   dagVan: DagVan,
 ): { teLaat: T[]; vandaag: T[] } {
-  const eigen = rijen.filter((a) => isToegewezenAan(a, userId));
+  if (!userId) return { teLaat: [], vandaag: [] };
+  const eigen = rijen.filter((a) => isToegewezenAan(a, userId) || isNiemandToegewezen(a));
   return {
     teLaat: eigen.filter((a) => activiteitStatus(a, vandaag, dagVan) === 'overdue'),
     vandaag: eigen.filter((a) => activiteitStatus(a, vandaag, dagVan) === 'today'),

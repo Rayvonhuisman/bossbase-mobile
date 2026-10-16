@@ -88,6 +88,10 @@ secrets.json
 # want lokaal en in de repo mag hij gewoon bestaan.
 design-reference/
 
+# Schermafdrukken (scripts/screenshots-formaten.mjs) met gegevens van het
+# testbedrijf: nooit mee naar de buildserver (staat ook in .gitignore).
+docs/screenshots/
+
 # Interne documentatie en servervoorstellen: alleen voor mensen, niet voor de
 # bundel.
 MOBILE_*.md

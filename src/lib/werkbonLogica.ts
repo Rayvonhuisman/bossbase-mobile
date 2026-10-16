@@ -380,6 +380,81 @@ export function dagenUitPlanning(p: Planning, ploegIds: string[] | null = null, 
   });
 }
 
+/**
+ * Eén blok in de planning op een nieuwe tijd zetten — `verzetTijd` van het
+ * dashboard (utils/werkbonDagen.js). Geeft terug wat er naar de database moet:
+ * `dagen` (voor zetWerkbonDagen) en `standaard` (de tijd van de werkbon zelf,
+ * gelijk aan die van de eerste dag).
+ *
+ * Met `pid`: alleen die persoon op die dag krijgt een eigen tijd; komt die weer
+ * gelijk aan de dagtijd, dan vervalt de eigen tijd. Zonder `pid`: de tijd van
+ * díé datum.
+ */
+export function verzetTijd(
+  werkbon: WerkbonPlanbaar & { dagen?: readonly object[] | null },
+  datum: string,
+  pid: string | null,
+  nieuw: { starttijd: string; eindtijd: string },
+): { dagen: DagPayload[]; standaard: { starttijd: string; eindtijd: string } } {
+  // De planning levert de dagen als `dagen`, de werkbon zelf als `werkbon_dagen`.
+  const w: WerkbonPlanbaar = {
+    ...werkbon,
+    werkbon_dagen: werkbon.werkbon_dagen ?? ((werkbon.dagen as WerkbonDag[] | null | undefined) ?? null),
+  };
+  const p = planningUitWerkbon(w);
+  if (!p.dagen.includes(datum)) throw new Error('Deze dag staat niet (meer) op de werkbon. Ververs de planning.');
+  const t = { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };
+  if (pid) {
+    const dagTijd = tijdVanDag(p, datum);
+    const eigen = { ...(p.persoonTijden[datum] ?? {}) };
+    if (t.starttijd === dagTijd.starttijd && t.eindtijd === dagTijd.eindtijd) delete eigen[pid];
+    else eigen[pid] = t;
+    p.persoonTijden = { ...p.persoonTijden, [datum]: eigen };
+  } else {
+    p.tijden = { ...p.tijden, [datum]: t };
+  }
+  const standaard = tijdVanDag(p, geplandeDatums(p)[0]!, { starttijd: w.starttijd, eindtijd: w.eindtijd });
+  const ploeg = w.assigned_to_ids?.length ? w.assigned_to_ids : w.assigned_to ? [w.assigned_to] : [];
+  return { dagen: dagenUitPlanning(p, ploeg, standaard), standaard };
+}
+
+export type DagMelding = {
+  uid: string;
+  soort: 'ingepland' | 'afgehaald';
+  dag: { datum: string; start: string; eind: string };
+};
+
+/**
+ * Per dag: wie op de werkbon blijft, kan er bij een meerdaagse klus een dag
+ * bij krijgen of er een kwijtraken — dat valt buiten "toegewezen/afgehaald".
+ * Zelfde regel als de planning in het dashboard (DetailModal): medewerker_ids
+ * null = de hele ploeg die dag, [] = niemand.
+ */
+export function dagMeldingen(o: {
+  oudeDagen: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[];
+  nieuweDagen: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[];
+  oudePloeg: string[];
+  nieuwePloeg: string[];
+  blijvers: string[];
+}): DagMelding[] {
+  const dagenVan = (
+    lijst: Pick<WerkbonDag, 'datum' | 'starttijd' | 'eindtijd' | 'medewerker_ids'>[],
+    id: string,
+    ploeg: string[],
+  ) =>
+    lijst
+      .filter((d) => (d.medewerker_ids == null ? ploeg.includes(id) : d.medewerker_ids.includes(id)))
+      .map((d) => ({ datum: d.datum, start: hhmm(d.starttijd), eind: hhmm(d.eindtijd) }));
+  const uit: DagMelding[] = [];
+  for (const uid of o.blijvers) {
+    const oud = dagenVan(o.oudeDagen, uid, o.oudePloeg);
+    const nieuw = dagenVan(o.nieuweDagen, uid, o.nieuwePloeg);
+    for (const d of nieuw) if (!oud.some((x) => x.datum === d.datum)) uit.push({ uid, soort: 'ingepland', dag: d });
+    for (const d of oud) if (!nieuw.some((x) => x.datum === d.datum)) uit.push({ uid, soort: 'afgehaald', dag: d });
+  }
+  return uit;
+}
+
 /** Foutmelding of '' (controleerPlanning van het dashboard). */
 export function controleerPlanning(p: Planning, standaard: Partial<Tijdvak> = {}): string {
   const datums = geplandeDatums(p);
@@ -510,4 +585,88 @@ export function rondAfOpVijf(t: string): string {
   min = Math.round(min / 5) * 5;
   if (min >= 24 * 60) min = 24 * 60 - 5;
   return `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+}
+
+// ── Planningblok op de werkbon (PlanningRegels / planRegels) ─────────────────
+
+export type PlanRegel = { dag: WerkbonDag; datum: string; starttijd: string | null; eindtijd: string | null; wie: string[] };
+
+/**
+ * De regels van het Planning-blok, zoals planRegels() in het dashboard
+ * (components/PlanningBlok.jsx): per dag het venster, en wie er werkt. Een
+ * eigen tijd staat achter de naam, maar alleen als die afwijkt van het
+ * venster van de dag. Een onbekende naam valt weg.
+ */
+export function planRegels(w: WerkbonPlanbaar & { voertuig_ids?: string[] | null }, naamVan: (pid: string) => string | null | undefined): PlanRegel[] {
+  return werkbonDagen(w)
+    .map((dag) => {
+      const t = dagVenster(w, dag);
+      const wie = ploegOpDag(w, dag)
+        .map((pid) => {
+          const naam = naamVan(pid);
+          if (!naam) return null;
+          const eigen = tijdenVoorPersoon(w, dag, pid);
+          const afwijkend = eigen.starttijd !== t.starttijd || eigen.eindtijd !== t.eindtijd;
+          return afwijkend && eigen.starttijd ? `${naam} (${eigen.starttijd}${eigen.eindtijd ? `–${eigen.eindtijd}` : ''})` : naam;
+        })
+        .filter((n): n is string => !!n);
+      return { dag, datum: dag.datum, starttijd: t.starttijd, eindtijd: t.eindtijd, wie };
+    })
+    .filter((r) => r.datum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+}
+
+/** "08:00–16:30", of "geen tijd". */
+export const planTijd = (r: Pick<PlanRegel, 'starttijd' | 'eindtijd'>) =>
+  r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd';
+
+/** Voertuigen op die dag: de eigen lijst van de dag, anders die van de werkbon (voertuigenOpDag). */
+export const voertuigenOpDag = (w: { voertuig_ids?: string[] | null }, dag: WerkbonDag) =>
+  Array.isArray(dag?.voertuig_ids) ? dag.voertuig_ids : (w?.voertuig_ids ?? []);
+
+/** Tijd van een voertuig: eigen tijd → tijd van de dag → tijd van de werkbon (tijdVanVoertuig). */
+export function tijdVanVoertuig(w: WerkbonPlanbaar, dag: WerkbonDag, vid: string): Tijdvak {
+  const eigen = dag?.voertuig_tijden?.[vid];
+  if (eigen && hhmm(eigen.starttijd) && hhmm(eigen.eindtijd)) {
+    return { starttijd: hhmm(eigen.starttijd), eindtijd: hhmm(eigen.eindtijd) };
+  }
+  return tijdenOpDag(w, dag);
+}
+
+/**
+ * De regel onder een dag per voertuig (busRegels in PlanningBlok.jsx):
+ * naam · tijd · wie erin zit (alleen koppelingen die die dag gelden) · bezetting.
+ * Een voertuig dat niet (meer) bestaat valt weg.
+ */
+export function busRegels(
+  w: WerkbonPlanbaar & { voertuig_ids?: string[] | null },
+  dag: WerkbonDag,
+  voertuigen: Record<string, { naam: string; zitplaatsen?: number | null }>,
+  naamVan: (pid: string) => string | null | undefined,
+): { vid: string; tekst: string }[] {
+  const ploeg = ploegOpDag(w, dag);
+  const opDag = voertuigenOpDag(w, dag);
+  return opDag.flatMap((vid) => {
+    const v = voertuigen[vid];
+    if (!v) return [];
+    const t = tijdVanVoertuig(w, dag, vid);
+    const inzittenden = ploeg.filter((pid) => {
+      const zit = dag?.medewerker_voertuig?.[pid];
+      return !!zit && zit === vid && opDag.includes(zit);
+    });
+    const namen = inzittenden.map(naamVan).filter((n): n is string => !!n);
+    return [
+      {
+        vid,
+        tekst: [
+          v.naam,
+          t.starttijd ? `${t.starttijd}–${t.eindtijd || '?'}` : null,
+          namen.length ? namen.join(', ') : 'niemand erin',
+          v.zitplaatsen ? `${inzittenden.length}/${v.zitplaatsen}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      },
+    ];
+  });
 }

@@ -11,9 +11,25 @@ import { Dialog } from '@/lib/dialog';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mail, Navigation as NavigationIcon, Pencil, Phone } from 'lucide-react-native';
+import {
+  Calendar,
+  Download,
+  Euro,
+  FileText,
+  Folder,
+  Mail,
+  Navigation as NavigationIcon,
+  PenLine,
+  Pencil,
+  Phone,
+  RotateCcw,
+  ShoppingCart,
+  User,
+  type LucideIcon,
+} from 'lucide-react-native';
 import {
   ActivityFormSheet,
+  AdresZoeker,
   AnimatedScreen,
   AppTopBar,
   Button,
@@ -22,6 +38,7 @@ import {
   FormSheet,
   HeaderIconButton,
   LoadingScreen,
+  SelectField,
   StatusBadge,
   StatusBarScrim,
   conceptVanActiviteit,
@@ -47,6 +64,8 @@ import {
   listKlantOffertes,
   listKlantProjecten,
   listKlantWerkbonnen,
+  KLANT_TYPES,
+  leesBetaaltermijn,
   updateCustomer,
   type KlantFactuur,
   type KlantOfferte,
@@ -61,6 +80,33 @@ import { projectStatusLabel } from '@/services/projectService';
 import { callPhone, openMaps, sendMail } from '@/lib/linking';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { createNote, listNotes, type NoteRow } from '@/services/noteService';
+import { listKlantTijdlijn, logTijdlijn, type TijdlijnRegel } from '@/services/klantTijdlijnService';
+import {
+  getBedrijfVoorDocument,
+  listKlantMailSjablonen,
+  listVerstuurdeMails,
+  logVerstuurdeMail,
+  verstuurMail,
+  type KlantMailSjabloon,
+  type VerstuurdeMail,
+} from '@/services/documentMailService';
+import { pushNotificaties } from '@/services/collegaMeldingService';
+import { DocumentMailSheet, type MailConcept } from '@/components/DocumentMailSheet';
+import { MailVoorbeeld } from '@/components/werkbon/MailVoorbeeld';
+import { klantMailConcept, klantMailHtml } from '@/lib/documentMail';
+import {
+  ingekort,
+  klantMailFout,
+  tijdlijnDatum,
+  tijdlijnIcoon,
+  tijdlijnKleur,
+  verstuurdeMailSub,
+  type TijdlijnIcoon,
+} from '@/lib/klantkaart';
+import { mentionMeldingen } from '@/lib/mentions';
+import { MentionInvoer, naarHtml, type Getagd } from '@/components/NotitieLog';
+import { writeFout, type WriteResult } from '@/lib/writeResult';
+import type { PdfBedrijf } from '@/lib/pdf/pdfData';
 import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, type ThemeColors } from '@/theme';
 import type { Customer, WorkOrderStatus } from '@/types/domain';
@@ -72,8 +118,9 @@ import { klantTotalen, klantType, komendePlanRegels, lokaleDatumTijd, planRegels
 
 /**
  * Klantkaart — de blokken van `CustomerPage` in het dashboard: planning,
- * notities, activiteiten, offertes, facturen, projecten en werkbonnen, met de
- * snelle cijfers bovenaan.
+ * notities (met @-vermeldingen), e-mails, tijdlijn, activiteiten, offertes,
+ * facturen, projecten en werkbonnen, met de snelle cijfers bovenaan. Het
+ * dashboard heeft tabs; hier is het één pagina met blokken.
  *
  * Rechten (zoals het dashboard, en strakker waar het dashboard RLS laat
  * filteren): offertes alleen met `offertes`, facturen met `facturen`,
@@ -97,6 +144,10 @@ type KlantConcept = {
   btw: string;
   iban: string;
   notes: string;
+  type: string | null;
+  source: string;
+  /** Tekst in het formulier; leeg = de standaard uit Instellingen. */
+  betaaltermijn: string;
 };
 
 function initials(name: string | null | undefined): string {
@@ -132,7 +183,7 @@ export default function CustomerDetailScreen() {
   const styles = useStyles(themaStijlen);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { companyId } = useAuth();
+  const { companyId, profile } = useAuth();
   const { colors: th, colorMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { loaded: rechtenGeladen, mag, can, readonly } = usePermissions();
@@ -148,6 +199,20 @@ export default function CustomerDetailScreen() {
   const [alleNotities, setAlleNotities] = useState(false);
   const [allePlanning, setAllePlanning] = useState(false);
   const [nieuweNotitie, setNieuweNotitie] = useState('');
+  // @-vermeldingen: de gekozen collega's (MentionInvoer).
+  const [gekozen, setGekozen] = useState<Getagd[]>([]);
+  const [tijdlijn, setTijdlijn] = useState<TijdlijnRegel[]>([]);
+  const [alleTijdlijn, setAlleTijdlijn] = useState(false);
+  const [mails, setMails] = useState<VerstuurdeMail[]>([]);
+  const [alleMails, setAlleMails] = useState(false);
+  const [bekeken, setBekeken] = useState<VerstuurdeMail | null>(null);
+  // Het schrijfvak: null = dicht.
+  const [mailConcept, setMailConcept] = useState<MailConcept | null>(null);
+  const [sjabloonId, setSjabloonId] = useState<string | null>(null);
+  const [sjablonen, setSjablonen] = useState<KlantMailSjabloon[]>([]);
+  const [bedrijf, setBedrijf] = useState<PdfBedrijf | null>(null);
+  const [mailLaden, setMailLaden] = useState(false);
+  const { save: saveMail, saving: mailBezig, error: mailFout, setError: setMailFout } = useSave<null>();
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
   const { save: saveNotitie, saving: notitieBezig, error: notitieFout } = useSave<unknown>();
   const [werkbonnen, setWerkbonnen] = useState<KlantWerkbon[]>([]);
@@ -165,7 +230,7 @@ export default function CustomerDetailScreen() {
       setError(null);
 
       const leeg = { data: [], error: null };
-      const [custResp, woResp, noteResp, actResp, offResp, facResp, projResp, teamResp] =
+      const [custResp, woResp, noteResp, actResp, offResp, facResp, projResp, teamResp, tijdResp, mailResp] =
         await Promise.all([
           getCustomer(id),
           listKlantWerkbonnen(id),
@@ -175,6 +240,8 @@ export default function CustomerDetailScreen() {
           magFacturen ? listKlantFacturen(id) : Promise.resolve(leeg),
           magProjecten ? listKlantProjecten(id) : Promise.resolve(leeg),
           listCompanyProfiles(),
+          listKlantTijdlijn(id),
+          listVerstuurdeMails(id),
         ]);
 
       if (custResp.error || !custResp.data) {
@@ -198,6 +265,8 @@ export default function CustomerDetailScreen() {
       if (!offResp.error) setOffertes(offResp.data as KlantOfferte[]);
       if (!facResp.error) setFacturen(facResp.data as KlantFactuur[]);
       if (!projResp.error) setProjecten(projResp.data as KlantProject[]);
+      if (!tijdResp.error) setTijdlijn(tijdResp.data);
+      if (!mailResp.error) setMails(mailResp.data);
       if (!teamResp.error) {
         setMedewerkers(
           teamResp.data
@@ -287,6 +356,9 @@ export default function CustomerDetailScreen() {
   const magWerkbonInplannen =
     rechtenGeladen && !readonly && (can('planning') || can('werkbonnen_bewerken'));
   const magActiviteitMaken = rechtenGeladen && mag('activiteiten', 'maken');
+  const magOfferteMaken = magOffertes && mag('offertes', 'maken');
+  const magFactuurMaken = magFacturen && mag('facturen', 'maken');
+  const magProjectMaken = magProjecten && mag('projecten', 'maken');
   const magActiviteitBewerken =
     // Dashboard ActivityEditModal: canEdit = magBewerken('planning').
     mag('activiteiten', 'wijzigen') && can('planning');
@@ -319,6 +391,99 @@ export default function CustomerDetailScreen() {
     if (a) setActiviteitConcept(conceptVanActiviteit(a));
   };
 
+  // ── Notitie met @-vermeldingen (addNotitieLog + createMentionNotifications) ──
+  const notitieToevoegen = () => {
+    if (!id) return;
+    // Alleen met een tag HTML met mention-span, zoals het dashboard; anders
+    // platte tekst zoals altijd.
+    const notitie = naarHtml(nieuweNotitie, gekozen);
+    const html = notitie.getagd ? notitie.html : undefined;
+    saveNotitie(() => createNote({ body: nieuweNotitie, customer_id: id, html }), {
+      onSuccess: async () => {
+        setNieuweNotitie('');
+        setGekozen([]);
+        // De getagde collega krijgt een melding en mail; mislukt dat, dan
+        // blijft de notitie gewoon staan.
+        if (html) {
+          void pushNotificaties(
+            mentionMeldingen({
+              text: html,
+              relatedType: 'klant',
+              relatedId: id,
+              link: 'customers',
+              creatorName: profile?.full_name ?? null,
+              contextName: customer.name,
+            }),
+          );
+        }
+        const [n, t] = await Promise.all([listNotes({ customerId: id }), listKlantTijdlijn(id)]);
+        if (!n.error) setNotities(n.data);
+        if (!t.error) setTijdlijn(t.data);
+      },
+    });
+  };
+
+  // ── E-mail aan de klant (tab E-mails in het dashboard) ────────────────────
+  const openMail = async () => {
+    setMailFout(null);
+    setSjabloonId(null);
+    setMailConcept({ aan: customer.email ?? '', onderwerp: '', tekst: '' });
+    setMailLaden(true);
+    const [sj, bd] = await Promise.all([listKlantMailSjablonen(), getBedrijfVoorDocument()]);
+    setSjablonen(sj.data);
+    setBedrijf(bd);
+    setMailLaden(false);
+  };
+
+  const kiesSjabloon = (sid: string | null) => {
+    setSjabloonId(sid);
+    const tpl = sjablonen.find((x) => x.id === sid) ?? null;
+    const c = klantMailConcept({ sjabloon: tpl, klantNaam: customer.name, bedrijfsnaam: bedrijf?.name });
+    setMailConcept((m) => (m ? { ...m, ...c } : m));
+  };
+
+  const verstuurKlantMail = () => {
+    if (!mailConcept || !id) return;
+    const aan = mailConcept.aan.trim();
+    const onderwerp = mailConcept.onderwerp;
+    const tpl = sjablonen.find((x) => x.id === sjabloonId) ?? null;
+    saveMail(
+      async (): Promise<WriteResult<null>> => {
+        const fout = klantMailFout(mailConcept);
+        if (fout) return writeFout('validatie', fout);
+        const html = klantMailHtml({
+          onderwerp,
+          tekst: mailConcept.tekst,
+          bedrijfsnaam: bedrijf?.name,
+          logoUrl: bedrijf?.logoUrl,
+        });
+        const verstuurd = await verstuurMail({ to: aan, subject: onderwerp, html });
+        if (!verstuurd.ok) return writeFout('onbekend', verstuurd.melding);
+        await logVerstuurdeMail({
+          toEmail: aan,
+          subject: onderwerp,
+          bodyHtml: html,
+          relatedType: tpl?.type || null,
+          customerId: id,
+        });
+        await logTijdlijn(id, 'email_verstuurd', `E-mail verstuurd: ${onderwerp}`, { to: aan, subject: onderwerp });
+        return { ok: true, data: null };
+      },
+      {
+        onSuccess: async () => {
+          setMailConcept(null);
+          const [m, t] = await Promise.all([listVerstuurdeMails(id), listKlantTijdlijn(id)]);
+          if (!m.error) setMails(m.data);
+          if (!t.error) setTijdlijn(t.data);
+        },
+        succesMelding: 'E-mail verstuurd',
+      },
+    );
+  };
+
+  const zichtbareMails = ingekort(mails, alleMails, 5);
+  const zichtbareTijdlijn = ingekort(tijdlijn, alleTijdlijn, 8);
+
   const zichtbarePlanning = allePlanning ? regels : komendePlanRegels(regels, vandaag, 4);
   const zichtbareNotities = alleNotities ? notities : notities.slice(0, 2);
 
@@ -332,6 +497,11 @@ export default function CustomerDetailScreen() {
         {customer.kvk_number ? <GegevensRij label="KvK" waarde={customer.kvk_number} /> : null}
         {customer.btw_number ? <GegevensRij label="Btw" waarde={customer.btw_number} /> : null}
         {customer.iban ? <GegevensRij label="IBAN" waarde={customer.iban} /> : null}
+        {customer.type ? <GegevensRij label="Type" waarde={customer.type} /> : null}
+        {customer.source ? <GegevensRij label="Bron" waarde={customer.source} /> : null}
+        {customer.betaaltermijn_dagen != null ? (
+          <GegevensRij label="Betaaltermijn" waarde={`${customer.betaaltermijn_dagen} dagen`} />
+        ) : null}
       </KaartBlok>
 
       <KaartBlok
@@ -378,12 +548,14 @@ export default function CustomerDetailScreen() {
       >
         {magNotitie ? (
           <View style={styles.notitieInvoer}>
-            <FormField
+            <MentionInvoer
               label="Nieuwe notitie"
               value={nieuweNotitie}
               onChangeText={setNieuweNotitie}
-              placeholder="Wat moet er bewaard blijven?"
-              multiline
+              gekozen={gekozen}
+              onGekozen={setGekozen}
+              leden={medewerkers.map((m) => ({ id: m.id, full_name: m.label }))}
+              placeholder="Wat moet er bewaard blijven? Typ @ om iemand te taggen"
             />
             {notitieFout ? <Text style={styles.notitieFout}>{notitieFout}</Text> : null}
             <Button
@@ -391,16 +563,7 @@ export default function CustomerDetailScreen() {
               variant="secondary"
               loading={notitieBezig}
               disabled={!nieuweNotitie.trim() || notitieBezig}
-              onPress={() => {
-                if (!id) return;
-                saveNotitie(() => createNote({ body: nieuweNotitie, customer_id: id }), {
-                  onSuccess: async () => {
-                    setNieuweNotitie('');
-                    const { data } = await listNotes({ customerId: id });
-                    setNotities(data);
-                  },
-                });
-              }}
+              onPress={notitieToevoegen}
             />
           </View>
         ) : null}
@@ -413,6 +576,59 @@ export default function CustomerDetailScreen() {
               eerste={i === 0 && !magNotitie}
               titel={[formatDateNL(n.created_at), n.auteurNaam].filter(Boolean).join(' · ')}
               sub={n.body}
+            />
+          ))
+        )}
+      </KaartBlok>
+
+      {/* E-mails — `sent_emails` van deze klant; het schrijfvak achter de "+". */}
+      <KaartBlok
+        titel="E-mails"
+        aantal={mails.length}
+        onToevoegen={() => void openMail()}
+        toevoegLabel="Nieuwe e-mail"
+        actie={mails.length > 5 ? (alleMails ? 'Minder' : `Alles (${mails.length})`) : undefined}
+        onActie={() => setAlleMails((v) => !v)}
+      >
+        {mails.length === 0 ? (
+          <KaartLeeg tekst="Nog geen e-mails verstuurd aan deze klant." />
+        ) : (
+          zichtbareMails.map((m, i) => (
+            <KaartRij
+              key={m.id}
+              eerste={i === 0}
+              links={
+                m.related_type ? (
+                  <FileText size={16} color={th.green700} strokeWidth={2} />
+                ) : (
+                  <Mail size={16} color={th.muted} strokeWidth={2} />
+                )
+              }
+              titel={m.subject || '(geen onderwerp)'}
+              sub={verstuurdeMailSub(m)}
+              onPress={() => setBekeken(m)}
+            />
+          ))
+        )}
+      </KaartBlok>
+
+      {/* Tijdlijn — alle `klant_tijdlijn`-regels, nieuwste eerst. */}
+      <KaartBlok
+        titel="Tijdlijn"
+        aantal={tijdlijn.length}
+        actie={tijdlijn.length > 8 ? (alleTijdlijn ? 'Minder' : `Alles (${tijdlijn.length})`) : undefined}
+        onActie={() => setAlleTijdlijn((v) => !v)}
+      >
+        {tijdlijn.length === 0 ? (
+          <KaartLeeg tekst="Nog geen activiteit gelogd" />
+        ) : (
+          zichtbareTijdlijn.map((r, i) => (
+            <KaartRij
+              key={r.id}
+              eerste={i === 0}
+              links={<TijdlijnBol type={r.type} />}
+              titel={alsTekst(r.omschrijving) || r.type}
+              sub={tijdlijnDatum(r.aangemaakt_op)}
             />
           ))
         )}
@@ -457,6 +673,12 @@ export default function CustomerDetailScreen() {
           aantal={offertes.length}
           actie={offertes.length ? 'Alle offertes' : undefined}
           onActie={() => router.push('/offers')}
+          toevoegLabel="Nieuwe offerte"
+          onToevoegen={
+            magOfferteMaken
+              ? () => router.push({ pathname: '/offers', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {offertes.length === 0 ? (
             <KaartLeeg tekst="Nog geen offertes voor deze klant." />
@@ -491,6 +713,12 @@ export default function CustomerDetailScreen() {
           aantal={facturen.length}
           actie={facturen.length ? 'Alle facturen' : undefined}
           onActie={() => router.push('/invoices')}
+          toevoegLabel="Nieuwe factuur"
+          onToevoegen={
+            magFactuurMaken
+              ? () => router.push({ pathname: '/invoices', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {facturen.length === 0 ? (
             <KaartLeeg tekst="Nog geen facturen voor deze klant." />
@@ -523,6 +751,12 @@ export default function CustomerDetailScreen() {
           aantal={projecten.length}
           actie={projecten.length ? 'Alle projecten' : undefined}
           onActie={() => router.push('/projects')}
+          toevoegLabel="Nieuw project"
+          onToevoegen={
+            magProjectMaken
+              ? () => router.push({ pathname: '/projects', params: { nieuw: '1', klant: customer.id } })
+              : undefined
+          }
         >
           {projecten.length === 0 ? (
             <KaartLeeg tekst="Nog geen projecten voor deze klant." />
@@ -582,6 +816,10 @@ export default function CustomerDetailScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
+          // iOS: de notitie-invoer blijft boven het toetsenbord en "Toevoegen"
+          // werkt met één tik terwijl het toetsenbord open is.
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -618,6 +856,9 @@ export default function CustomerDetailScreen() {
                       btw: customer.btw_number ?? '',
                       iban: customer.iban ?? '',
                       notes: alsTekst(customer.notes),
+                      type: customer.type ?? null,
+                      source: customer.source ?? '',
+                      betaaltermijn: customer.betaaltermijn_dagen != null ? String(customer.betaaltermijn_dagen) : '',
                     });
                   }}
                 />
@@ -705,6 +946,11 @@ export default function CustomerDetailScreen() {
           submitDisabled={!concept?.name.trim()}
           onSubmit={() => {
             if (!concept || !id) return;
+            const termijn = leesBetaaltermijn(concept.betaaltermijn);
+            if (termijn.fout) {
+              setSaveError(termijn.fout);
+              return;
+            }
             save(
               () =>
                 updateCustomer(id, {
@@ -717,6 +963,9 @@ export default function CustomerDetailScreen() {
                   kvk_number: concept.kvk,
                   btw_number: concept.btw,
                   iban: concept.iban,
+                  type: concept.type,
+                  source: concept.source,
+                  betaaltermijn_dagen: termijn.waarde,
                   // Ongewijzigd? Niet meesturen: anders gaan opmaak en
                   // @-vermeldingen uit de dashboard-editor verloren.
                   notes:
@@ -779,6 +1028,9 @@ export default function CustomerDetailScreen() {
             placeholder="06 12 34 56 78"
             keyboardType="phone-pad"
           />
+          <AdresZoeker
+            onSelect={(v) => setConcept((c) => (c ? { ...c, ...v } : c))}
+          />
           <FormField
             label="Adres"
             value={concept?.address ?? ''}
@@ -832,6 +1084,28 @@ export default function CustomerDetailScreen() {
             autoCapitalize="characters"
             autoCorrect={false}
           />
+          <SelectField
+            label="Type"
+            value={concept?.type ?? null}
+            options={KLANT_TYPES.map((k) => ({ id: k, label: k }))}
+            onChange={(v) => setConcept((c) => (c ? { ...c, type: v } : c))}
+            allowEmpty
+            emptyLabel="Geen type"
+          />
+          <FormField
+            label="Bron"
+            value={concept?.source ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, source: v } : c))}
+            placeholder="Website, aanbeveling, …"
+          />
+          <FormField
+            label="Betaaltermijn (dagen)"
+            value={concept?.betaaltermijn ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, betaaltermijn: v } : c))}
+            keyboardType="number-pad"
+            placeholder="Standaard uit Instellingen"
+            hint="Leeg = de standaard betaaltermijn uit Instellingen."
+          />
           <FormField
             label="Notities"
             value={concept?.notes ?? ''}
@@ -840,8 +1114,84 @@ export default function CustomerDetailScreen() {
             multiline
           />
         </FormSheet>
+
+        <DocumentMailSheet
+          visible={mailConcept !== null}
+          titel="Nieuw bericht"
+          nummer={name}
+          laden={mailLaden}
+          concept={mailConcept ?? { aan: '', onderwerp: '', tekst: '' }}
+          onWijzig={setMailConcept}
+          kop={
+            sjablonen.length ? (
+              <SelectField
+                label="Sjabloon"
+                value={sjabloonId}
+                options={sjablonen.map((x) => ({ id: x.id, label: x.naam }))}
+                onChange={kiesSjabloon}
+                placeholder="Schrijf zelf een bericht"
+                allowEmpty
+                emptyLabel="Schrijf zelf een bericht"
+              />
+            ) : null
+          }
+          vereistOnderwerp
+          saving={mailBezig}
+          error={mailFout}
+          onVerstuur={verstuurKlantMail}
+          onSluit={() => setMailConcept(null)}
+        />
+
+        <FormSheet
+          visible={bekeken !== null}
+          title={bekeken?.subject || 'E-mail'}
+          subtitle={bekeken ? verstuurdeMailSub(bekeken) : undefined}
+          submitLabel="Sluiten"
+          onSubmit={() => setBekeken(null)}
+          onClose={() => setBekeken(null)}
+        >
+          {bekeken?.body_html ? (
+            <MailVoorbeeld html={bekeken.body_html} hoogte={460} />
+          ) : (
+            <Text style={styles.mailLeeg}>Inhoud niet beschikbaar voor oudere e-mails</Text>
+          )}
+          {bekeken?.to_email ? <Text style={styles.mailAan}>Aan: {bekeken.to_email}</Text> : null}
+        </FormSheet>
       </View>
     </>
+  );
+}
+
+const TIJDLIJN_ICOON: Record<TijdlijnIcoon, LucideIcon> = {
+  klant: User,
+  document: FileText,
+  euro: Euro,
+  credit: RotateCcw,
+  map: Folder,
+  pen: PenLine,
+  mail: Mail,
+  agenda: Calendar,
+  deal: ShoppingCart,
+  export: Download,
+};
+
+/** Het ronde icoon van een tijdlijnregel, in de kleur van het type (TIJDLIJN_KLEUR). */
+function TijdlijnBol({ type }: { type: string }) {
+  const styles = useStyles(themaStijlen);
+  const { colors: th } = useTheme();
+  const kleur = tijdlijnKleur(type) ?? th.muted;
+  const Icoon = TIJDLIJN_ICOON[tijdlijnIcoon(type)];
+  // Alleen bij een hexkleur de doorzichtige tint; de themakleur krijgt de lijnkleur.
+  const hex = kleur.startsWith('#');
+  return (
+    <View
+      style={[
+        styles.tijdlijnBol,
+        { backgroundColor: hex ? `${kleur}18` : th.bg, borderColor: hex ? `${kleur}40` : th.line },
+      ]}
+    >
+      <Icoon size={14} color={kleur} strokeWidth={2.2} />
+    </View>
   );
 }
 
@@ -975,6 +1325,16 @@ const makeStyles = (t: ThemeColors) =>
     bedrag: { fontSize: 14, fontWeight: '700', color: t.ink },
     notitieInvoer: { padding: 14, gap: 10 },
     notitieFout: { fontSize: 12.5, fontWeight: '600', color: t.statusRejectFg },
+    tijdlijnBol: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    mailLeeg: { fontSize: 13, fontStyle: 'italic', color: t.muted },
+    mailAan: { fontSize: 12.5, color: t.muted, paddingTop: 4 },
   });
 
 /**

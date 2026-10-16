@@ -3,22 +3,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FormField } from '@/components/FormField';
 import { FormSheet } from '@/components/FormSheet';
 import { SelectField, type SelectOption } from '@/components/SelectField';
-import { usePermissions, useTheme } from '@/providers';
+import { usePermissions, useTheme, useToast } from '@/providers';
 import { useSave } from '@/lib/useSave';
 import { getCompanyId, getUserId } from '@/lib/sessionContext';
 import { writeFout } from '@/lib/writeResult';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { createCustomer } from '@/services/customerService';
 import { createDeal, DEAL_PRIORITEITEN, type DealRow } from '@/services/dealService';
+import { stuurAanvraagOntvangen } from '@/services/autoMailService';
 import { LedenKeuze, type Lid } from './LedenKeuze';
 
 /**
  * "Nieuwe aanvraag" / "Lead toevoegen" — de `NewLeadModal` van het dashboard:
- * titel, klant (bestaand of nieuw, alleen naam), fase, verwachte omzet,
- * prioriteit, behandelaars (standaard jijzelf) en omschrijving.
+ * titel, klant (bestaand, of nieuw met naam, e-mail en telefoon), fase,
+ * verwachte omzet, prioriteit, behandelaars (standaard jijzelf) en omschrijving.
  *
- * Bewust niet: de automatische "aanvraag ontvangen"-mail naar de klant. De app
- * verstuurt geen mails; dat blijft het dashboard.
+ * Bij een bestaande klant met e-mailadres gaat de "aanvraag ontvangen"-mail
+ * mee (`triggerAutoEmail`), tenzij het bedrijf hem in Instellingen uitzette.
  */
 export function NieuweAanvraagSheet({
   open,
@@ -46,6 +47,9 @@ export function NieuweAanvraagSheet({
   const [klantModus, setKlantModus] = useState<'bestaand' | 'nieuw'>('bestaand');
   const [klantId, setKlantId] = useState<string | null>(null);
   const [nieuweKlant, setNieuweKlant] = useState('');
+  const [nieuwEmail, setNieuwEmail] = useState('');
+  const [nieuwTelefoon, setNieuwTelefoon] = useState('');
+  const { toon } = useToast();
   const [faseId, setFaseId] = useState<string | null>(null);
   const [omzet, setOmzet] = useState('');
   const [prio, setPrio] = useState('med');
@@ -60,6 +64,8 @@ export function NieuweAanvraagSheet({
     setKlantModus('bestaand');
     setKlantId(null);
     setNieuweKlant('');
+    setNieuwEmail('');
+    setNieuwTelefoon('');
     setFaseId(startFaseId ?? fasen[0]?.id ?? null);
     setOmzet('');
     setPrio('med');
@@ -79,9 +85,19 @@ export function NieuweAanvraagSheet({
         let customerId = klantId;
         if (klantModus === 'nieuw') {
           if (!nieuweKlant.trim()) return writeFout('validatie', 'Naam klant is verplicht');
+          // Zoals het dashboard: e-mail mag leeg, maar dan wel een geldig adres.
+          if (nieuwEmail.trim() && !/^\S+@\S+\.\S+$/.test(nieuwEmail.trim()))
+            return writeFout('validatie', 'Ongeldig e-mailadres');
           const companyId = getCompanyId();
           if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
-          const k = await createCustomer({ company_id: companyId, name: nieuweKlant });
+          // E-mail en telefoon meteen mee: zonder adres kun je later geen
+          // offerte of factuur naar deze klant mailen.
+          const k = await createCustomer({
+            company_id: companyId,
+            name: nieuweKlant,
+            email: nieuwEmail,
+            phone: nieuwTelefoon,
+          });
           if (k.error || !k.data) return writeFout('onbekend', k.error ?? 'Klant aanmaken mislukt.');
           customerId = k.data.id;
         } else if (!customerId) {
@@ -100,6 +116,11 @@ export function NieuweAanvraagSheet({
       },
       {
         onSuccess: (deal) => {
+          if (klantModus === 'bestaand' && klantId) {
+            void stuurAanvraagOntvangen({ dealId: deal.id, customerId: klantId }).then(({ resultaat, aan }) => {
+              if (resultaat === false) toon(`De bevestigingsmail aan ${aan} is niet verstuurd.`, 'fout');
+            });
+          }
           onSaved(deal);
           onClose();
         },
@@ -159,7 +180,27 @@ export function NieuweAanvraagSheet({
           searchable
         />
       ) : (
-        <FormField label="Naam klant" value={nieuweKlant} onChangeText={setNieuweKlant} placeholder="Naam" />
+        <>
+          <FormField label="Naam klant" value={nieuweKlant} onChangeText={setNieuweKlant} placeholder="Naam" />
+          <FormField
+            label="E-mailadres"
+            value={nieuwEmail}
+            onChangeText={setNieuwEmail}
+            placeholder="Voor offertes en facturen"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+          />
+          <FormField
+            label="Telefoon"
+            value={nieuwTelefoon}
+            onChangeText={setNieuwTelefoon}
+            placeholder="Telefoonnummer"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
+        </>
       )}
 
       <SelectField

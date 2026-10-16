@@ -15,6 +15,13 @@ type Props = {
   trailing?: ReactNode;
   first?: boolean;
   onPress?: () => void;
+  /**
+   * `leading`/`trailing` is zelf een knop (vinkvak, actiemenu): dan staat hij
+   * naast de rijknop in plaats van erin — een knop in een knop is ongeldig op
+   * web en schermlezers zien de binnenste dan niet.
+   */
+  leadingKnop?: boolean;
+  trailingKnop?: boolean;
 };
 
 /**
@@ -22,9 +29,50 @@ type Props = {
  * card via the `<AppListGroup>` wrapper; pass `first` to suppress the top
  * border on the first row.
  */
-export function AppListItem({ title, subtitle, icon: Icon, leading, trailing, first, onPress }: Props) {
+export function AppListItem({
+  title,
+  subtitle,
+  icon: Icon,
+  leading,
+  trailing,
+  first,
+  onPress,
+  leadingKnop,
+  trailingKnop,
+}: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  if (onPress && (leadingKnop || trailingKnop)) {
+    return (
+      <View style={[styles.row, !first && styles.rowBorder]}>
+        {leadingKnop ? leading : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => [styles.rowHoofd, pressed && { opacity: 0.85 }]}
+        >
+          {!leadingKnop && leading ? leading : null}
+          {!leading && Icon ? (
+            <View style={styles.icon}>
+              <Icon size={18} color={t.ink2} strokeWidth={2} />
+            </View>
+          ) : null}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {!trailingKnop ? (trailing ?? <ChevronRight size={16} color={t.muted2} strokeWidth={2} />) : null}
+        </Pressable>
+        {trailingKnop ? trailing : null}
+      </View>
+    );
+  }
   const body = (
     <View style={[styles.row, !first && styles.rowBorder]}>
       {leading ? (
@@ -79,6 +127,7 @@ const makeStyles = (t: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
+  rowHoofd: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   rowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: t.line,

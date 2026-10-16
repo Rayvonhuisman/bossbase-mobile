@@ -11,12 +11,14 @@ type Props = {
   /** Sub-text next to value, e.g. "/ 8 u" or "+12%". */
   sub?: string;
   tone?: 'default' | 'good' | 'warn';
+  /** Kleur van het getal zelf: groen voor positief, amber voor "hier ligt nog iets". */
+  valueTone?: 'default' | 'good' | 'warn';
 };
 
 /**
  * Compact KPI cell used on Vandaag/Uren horizontal strip. Theme-aware.
  */
-export function AppKpiCard({ label, value, sub, tone = 'default' }: Props) {
+export function AppKpiCard({ label, value, sub, tone = 'default', valueTone = 'default' }: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const subColor =
@@ -25,7 +27,15 @@ export function AppKpiCard({ label, value, sub, tone = 'default' }: Props) {
     <View style={[styles.card, dsShadow]}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.valueRow}>
-        <Text style={styles.value}>{value}</Text>
+        <Text
+          style={[
+            styles.value,
+            valueTone === 'good' && { color: t.green700 },
+            valueTone === 'warn' && { color: t.statusWarnFg },
+          ]}
+        >
+          {value}
+        </Text>
         {sub ? <Text style={[styles.sub, { color: subColor }]}>{sub}</Text> : null}
       </View>
     </View>

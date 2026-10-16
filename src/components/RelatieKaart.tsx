@@ -93,6 +93,7 @@ export function KaartBlok({
 export function KaartRij({
   titel,
   sub,
+  links,
   rechts,
   eerste,
   onPress,
@@ -100,6 +101,8 @@ export function KaartRij({
 }: {
   titel: string;
   sub?: string | null;
+  /** Iets vóór de tekst, bijvoorbeeld het icoon van een tijdlijnregel. */
+  links?: ReactNode;
   rechts?: ReactNode;
   eerste?: boolean;
   onPress?: () => void;
@@ -109,6 +112,7 @@ export function KaartRij({
   const styles = useMemo(() => makeStyles(t), [t]);
   const inhoud = (
     <View style={[styles.rij, !eerste && styles.rijRand, gedimd && { opacity: 0.6 }]}>
+      {links}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.rijTitel} numberOfLines={1}>
           {titel}

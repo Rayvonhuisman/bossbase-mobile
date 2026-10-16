@@ -4,6 +4,8 @@ import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { MobielKader } from './MobielKader';
+import { ToetsenbordVlak } from './ToetsenbordVlak';
+import { VelStatusbalk } from './VelStatusbalk';
 import { useFocusTerug } from '@/lib/focusTerug';
 
 export type SelectOption = {
@@ -95,9 +97,11 @@ export function SelectField({
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}
       >
+        <VelStatusbalk />
         {/* Op web staat de kiezer op telefoonbreedte, net als de app eronder. */}
         <MobielKader soort="formulier">
-        <View style={{ flex: 1, backgroundColor: t.bg }}>
+        {/* iOS: de onderste opties blijven boven het toetsenbord (zoekveld). */}
+        <ToetsenbordVlak style={{ flex: 1, backgroundColor: t.bg }}>
           <View style={styles.kopBalk}>
             <Text style={styles.kopTitel}>{label}</Text>
             <Pressable
@@ -157,7 +161,7 @@ export function SelectField({
               />
             )}
           />
-        </View>
+        </ToetsenbordVlak>
         </MobielKader>
       </Modal>
     </View>

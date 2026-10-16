@@ -1,16 +1,8 @@
 import { useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedScreen, Button, InstalleerBossBase } from '@/components';
-import { openWachtwoordHerstel } from '@/lib/linking';
+import { vraagWachtwoordResetAan } from '@/services/wachtwoordService';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
@@ -24,6 +16,29 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Wachtwoord vergeten, zoals het dashboard: null = inloggen, 'form' = adres
+  // invullen, 'sent' = "check je e-mail".
+  const [vergeten, setVergeten] = useState<null | 'form' | 'sent'>(null);
+  const [resetBezig, setResetBezig] = useState(false);
+
+  const stuurReset = async () => {
+    setErrorMessage(null);
+    const adres = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(adres)) {
+      setErrorMessage('Vul een geldig e-mailadres in.');
+      return;
+    }
+    setResetBezig(true);
+    const { error } = await vraagWachtwoordResetAan(adres);
+    setResetBezig(false);
+    if (error) setErrorMessage(error);
+    else setVergeten('sent');
+  };
+
+  const terugNaarInloggen = () => {
+    setErrorMessage(null);
+    setVergeten(null);
+  };
 
   const onSubmit = async () => {
     setErrorMessage(null);
@@ -46,74 +61,119 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <AnimatedScreen style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>BossBase</Text>
-            <Text style={styles.subtitle}>Log in om verder te gaan</Text>
+            <Text style={styles.title}>
+              {vergeten === 'sent' ? 'Check je e-mail' : vergeten ? 'Wachtwoord vergeten' : 'BossBase'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {vergeten === 'sent'
+                ? `Als ${email.trim()} bij ons bekend is, hebben we daar een resetlink naartoe gestuurd. Open de link in de mail om je wachtwoord opnieuw in te stellen, en log daarna hier in.`
+                : vergeten
+                  ? 'Vul je e-mailadres in en we sturen je een resetlink.'
+                  : 'Log in om verder te gaan'}
+            </Text>
           </View>
 
-          <View style={styles.form}>
-            <View>
-              <Text style={styles.label}>E-mail</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  if (errorMessage) setErrorMessage(null);
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                keyboardType="email-address"
-                placeholder="jij@bedrijf.nl"
-                placeholderTextColor={t.muted2}
-                editable={!loading}
-                returnKeyType="next"
-              />
+          {vergeten === 'sent' ? (
+            <View style={styles.form}>
+              <Button label="Terug naar inloggen" onPress={terugNaarInloggen} />
             </View>
-
-            <View>
-              <Text style={styles.label}>Wachtwoord</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={(value) => {
-                  setPassword(value);
-                  if (errorMessage) setErrorMessage(null);
-                }}
-                secureTextEntry
-                autoComplete="password"
-                placeholder="••••••••"
-                placeholderTextColor={t.muted2}
-                editable={!loading}
-                returnKeyType="go"
-                onSubmitEditing={onSubmit}
-              />
-              {/* Herstel loopt via de website (zie openWachtwoordHerstel). */}
-              <Pressable
-                onPress={openWachtwoordHerstel}
-                accessibilityRole="link"
-                accessibilityHint="Opent bossbase.nl in je browser"
-                hitSlop={8}
-                style={styles.vergeten}
-              >
-                <Text style={styles.vergetenTekst}>Wachtwoord vergeten?</Text>
+          ) : vergeten === 'form' ? (
+            <View style={styles.form}>
+              <View>
+                <Text style={styles.label}>E-mail</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  placeholder="jij@bedrijf.nl"
+                  placeholderTextColor={t.muted2}
+                  editable={!resetBezig}
+                  autoFocus
+                  returnKeyType="send"
+                  onSubmitEditing={stuurReset}
+                />
+              </View>
+              {errorMessage ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+              <Button label="Stuur resetlink" onPress={stuurReset} loading={resetBezig} />
+              <Pressable onPress={terugNaarInloggen} accessibilityRole="button" hitSlop={8} style={styles.terug}>
+                <Text style={styles.vergetenTekst}>Terug naar inloggen</Text>
               </Pressable>
             </View>
-
-            {errorMessage ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : (
+            <View style={styles.form}>
+              <View>
+                <Text style={styles.label}>E-mail</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  placeholder="jij@bedrijf.nl"
+                  placeholderTextColor={t.muted2}
+                  editable={!loading}
+                  returnKeyType="next"
+                />
               </View>
-            ) : null}
 
-            <Button label="Inloggen" onPress={onSubmit} loading={loading} />
-          </View>
+              <View>
+                <Text style={styles.label}>Wachtwoord</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  secureTextEntry
+                  autoComplete="password"
+                  placeholder="••••••••"
+                  placeholderTextColor={t.muted2}
+                  editable={!loading}
+                  returnKeyType="go"
+                  onSubmitEditing={onSubmit}
+                />
+                <Pressable
+                  onPress={() => {
+                    setErrorMessage(null);
+                    setVergeten('form');
+                  }}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  style={styles.vergeten}
+                >
+                  <Text style={styles.vergetenTekst}>Wachtwoord vergeten?</Text>
+                </Pressable>
+              </View>
+
+              {errorMessage ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <Button label="Inloggen" onPress={onSubmit} loading={loading} />
+            </View>
+          )}
 
           {/* Alleen in de webapp, en niet als hij al geïnstalleerd is. */}
           <InstalleerBossBase />
@@ -170,6 +230,7 @@ const makeStyles = (t: ThemeColors) =>
       marginTop: spacing.sm,
       paddingVertical: 2,
     },
+    terug: { alignSelf: 'center', paddingVertical: 4 },
     vergetenTekst: {
       fontSize: 13.5,
       fontWeight: '600',

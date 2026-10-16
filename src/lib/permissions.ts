@@ -135,6 +135,9 @@ export const ROUTE_GATES: Record<string, NavGate> = {
   '/offers': { permission: 'offertes' },
   '/invoices': { permission: 'facturen' },
   '/expenses': { permission: 'kosten', feature: 'kosten_nacalculatie' },
+  // Financiën (NAV `revenue`): alleen het recht, geen pakketfeature — net als
+  // het dashboard. Het btw-blok daar (feature btw_overzicht) staat niet in de app.
+  '/financien': { permission: 'bedrijfsfinancien' },
   '/team': { permission: 'team' },
   // Instellingen zelf is open (Mijn profiel is voor iedereen); de pagina
   // toont per tab wat je mag, zoals het dashboard.
@@ -188,7 +191,34 @@ export const READONLY_ALGEMEEN = {
     'versturen kan weer zodra er een lopend abonnement is.',
 };
 
-export function readonlyTekst(reden: string | null | undefined) {
+/**
+ * iOS (App Store 3.1.1): dezelfde uitleg zonder oproep om een abonnement te
+ * kiezen of betaalgegevens bij te werken — dat gebeurt buiten de app.
+ */
+export const READONLY_TEKSTEN_IOS: Record<string, { titel: string; uitleg: string }> = {
+  proefperiode_verlopen: {
+    titel: 'Je proefperiode is voorbij',
+    uitleg:
+      'Je kunt alles blijven bekijken, zoeken en exporteren. Toevoegen, wijzigen, ' +
+      'verwijderen en versturen kan weer zodra je abonnement actief is. Je abonnement wordt buiten de app beheerd.',
+  },
+  betaling_mislukt: {
+    titel: 'Je account staat tijdelijk op alleen-lezen',
+    uitleg:
+      'Bekijken en exporteren kan; wijzigen en versturen niet. Zodra de betaling in orde is, gaat alles ' +
+      'direct weer open. Je abonnement wordt buiten de app beheerd.',
+  },
+  opgezegd: {
+    titel: 'Je abonnement is gestopt',
+    uitleg:
+      'Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Toevoegen, ' +
+      'wijzigen, verwijderen en versturen kan weer zodra je abonnement actief is.',
+  },
+};
+
+/** `platform`: geef `Platform.OS` mee vanuit het scherm (dit bestand blijft vrij van react-native). */
+export function readonlyTekst(reden: string | null | undefined, platform: string = 'web') {
+  if (platform === 'ios') return (reden && READONLY_TEKSTEN_IOS[reden]) || READONLY_ALGEMEEN;
   return (reden && READONLY_TEKSTEN[reden]) || READONLY_ALGEMEEN;
 }
 

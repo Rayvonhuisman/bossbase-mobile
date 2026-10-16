@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, useSegments } from 'expo-router';
 import { LoadingScreen } from '@/components';
 import { useAuth } from '@/providers';
 import { leesbreedte } from '@/lib/schermklasseRegels';
@@ -8,10 +8,22 @@ const ACHTERGROND = '#F5F5F1';
 
 export default function OnboardingLayout() {
   const { status, session } = useAuth();
+  const segments = useSegments();
+  const scherm = segments[segments.length - 1];
 
   if (status === 'restoring') return <LoadingScreen />;
-  // Als de gebruiker al ingelogd is, hoort hij niet in de onboarding.
-  if (session) return <Redirect href="/(tabs)/today" />;
+  if (session) {
+    // Net geregistreerd of nooit bevestigd: eerst de code, zoals de gate van het dashboard.
+    if (status === 'needs-verification') {
+      if (scherm !== 'verify') return <Redirect href="/(onboarding)/verify" />;
+    } else if (status !== 'loading-profile' && scherm !== 'verify' && scherm !== 'success') {
+      // Ingelogd en klaar: hoort niet in de onboarding. Het codescherm en het
+      // successcherm blijven staan, want daar komt de gebruiker juist ingelogd
+      // aan (na de code). Tijdens 'loading-profile' (meteen na signUp) blijft
+      // de stapel staan in plaats van te verspringen.
+      return <Redirect href="/(tabs)/today" />;
+    }
+  }
 
   // Op een iPad of desktop staat de onboarding in een kolom op leesbreedte in
   // het midden; op een telefoon vult hij het scherm, zoals altijd.
@@ -26,9 +38,10 @@ export default function OnboardingLayout() {
           }}
         >
           <Stack.Screen name="index" />
-          <Stack.Screen name="role" />
+          <Stack.Screen name="pakket" />
           <Stack.Screen name="company" />
           <Stack.Screen name="account" />
+          <Stack.Screen name="verify" options={{ gestureEnabled: false }} />
           <Stack.Screen name="success" />
         </Stack>
       </View>

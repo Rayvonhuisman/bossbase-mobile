@@ -445,6 +445,8 @@ function DatabaseInhoud() {
                         </Pressable>
                       }
                       onPress={() => router.push(`/customers/${c.id}`)}
+                      leadingKnop
+                      trailingKnop
                     />
                   );
                 })}

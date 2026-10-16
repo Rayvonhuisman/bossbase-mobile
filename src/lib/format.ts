@@ -82,6 +82,19 @@ const NL_EUR_FMT = new Intl.NumberFormat('nl-NL', {
   maximumFractionDigits: 0,
 });
 
+const NL_EUR_CENT_FMT = new Intl.NumberFormat('nl-NL', {
+  style: 'currency',
+  currency: 'EUR',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Euro's met centen, zoals `fmt` in het dashboard: 2480.5 → "€ 2.480,50". Null/NaN → "—". */
+export function formatEURCent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return NL_EUR_CENT_FMT.format(value);
+}
+
 /** Format a number as euros, e.g. 2480 → "€ 2.480". Null/NaN → "—". */
 export function formatEUR(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';

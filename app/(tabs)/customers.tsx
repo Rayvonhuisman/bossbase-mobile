@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -50,6 +50,7 @@ import { avatarKleuren, initialen } from '@/lib/avatar';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { Customer } from '@/types/domain';
 import { useLaden } from '@/lib/useLaden';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -140,7 +141,18 @@ export default function CustomersScreen() {
    * leverancierskaart weer op de leverancierslijst uitkomt.
    */
   const soort: Soort = params.soort === 'leveranciers' ? 'leveranciers' : 'klanten';
-  const kiesSoort = (s: Soort) => router.setParams({ soort: s === 'klanten' ? undefined : s });
+  // Het laatst gekozen tabblad onthouden: wie op Leveranciers stond, komt daar
+  // via de tabbalk weer uit. Een ?soort= in de link wint.
+  const [bewaardeSoort, bewaarSoort] = useOnthouden<Soort>('relaties.soort', 'klanten', ['klanten', 'leveranciers']);
+  const kiesSoort = (s: Soort) => {
+    bewaarSoort(s);
+    router.setParams({ soort: s === 'klanten' ? undefined : s });
+  };
+  useEffect(() => {
+    if (!params.soort && bewaardeSoort === 'leveranciers') router.setParams({ soort: 'leveranciers' });
+    // Alleen bij het openen en zodra de bewaarde keuze binnen is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bewaardeSoort]);
 
   /**
    * Klanten aanmaken volgt het dashboard: het recht `klanten_bewerken`. RLS
@@ -175,7 +187,13 @@ export default function CustomersScreen() {
   const [error, setError] = useState<string | null>(null);
   const [levFout, setLevFout] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<FilterKey>('alle');
+  const [filter, setFilter] = useOnthouden<FilterKey>('relaties.filter', 'alle', [
+    'alle',
+    'recent',
+    'actief',
+    'zakelijk',
+    'particulier',
+  ]);
 
   // Eén keer bij het openen vastgelegd (useState: geen onzuivere aanroep
   // tijdens het renderen).
@@ -569,18 +587,13 @@ function LeverancierLijst({
             .join(' · ');
           const tel = l.telefoon || l.mobiel;
           return (
-            <Pressable
-              key={l.id}
-              onPress={() => onOpen(l)}
-              accessibilityRole="button"
-              accessibilityLabel={`${naam}${actief ? '' : ', inactief'}`}
-              style={({ pressed }) => [
-                styles.row,
-                i > 0 && styles.rowBorder,
-                !actief && { opacity: 0.6 },
-                pressed && { opacity: 0.95 },
-              ]}
-            >
+            <View key={l.id} style={[styles.row, i > 0 && styles.rowBorder, !actief && { opacity: 0.6 }]}>
+              <Pressable
+                onPress={() => onOpen(l)}
+                accessibilityRole="button"
+                accessibilityLabel={`${naam}${actief ? '' : ', inactief'}`}
+                style={({ pressed }) => [styles.rowHoofd, pressed && { opacity: 0.85 }]}
+              >
               <View style={[styles.rowAvatar, { backgroundColor: av.bg }]}>
                 <Text style={[styles.rowAvatarText, { color: av.fg }]}>{initialen(naam)}</Text>
               </View>
@@ -597,14 +610,12 @@ function LeverancierLijst({
                   </Text>
                 ) : null}
               </View>
+              </Pressable>
               <View style={styles.rowActions}>
                 {tel ? (
                   <Pressable
                     accessibilityRole="button"
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onCall(l);
-                    }}
+                    onPress={() => onCall(l)}
                     hitSlop={6}
                     accessibilityLabel={`${naam} bellen`}
                     style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
@@ -612,9 +623,11 @@ function LeverancierLijst({
                     <Phone size={15} color={t.ink} strokeWidth={2} />
                   </Pressable>
                 ) : null}
-                <ChevronRight size={16} color={t.muted2} strokeWidth={2} />
+                <Pressable onPress={() => onOpen(l)} accessible={false} hitSlop={8}>
+                  <ChevronRight size={16} color={t.muted2} strokeWidth={2} />
+                </Pressable>
               </View>
-            </Pressable>
+            </View>
           );
         })}
       </View>
@@ -684,12 +697,16 @@ function CustomerRow({
   // de filterchips, en die derde waarde duwde het adres uit beeld.
   const cityLine = [c.address, c.city].filter(Boolean).join(', ');
 
+  // Geen knop in een knop (ongeldig op web, en schermlezers raken de bel- en
+  // routeknop kwijt): de rij is een vlak, naam + avatar en de pijl openen de kaart.
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, !first && styles.rowBorder, pressed && { opacity: 0.95 }]}
-    >
+    <View style={[styles.row, !first && styles.rowBorder]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${c.name ?? 'Klant'} openen`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.rowHoofd, pressed && { opacity: 0.85 }]}
+      >
       <View style={[styles.rowAvatar, { backgroundColor: av.bg }]}>
         <Text style={[styles.rowAvatarText, { color: av.fg }]}>{initialen(c.name)}</Text>
       </View>
@@ -710,15 +727,13 @@ function CustomerRow({
           </Text>
         ) : null}
       </View>
+      </Pressable>
       <View style={styles.rowActions}>
         {c.phone ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${c.name ?? 'Klant'} bellen`}
-            onPress={(e) => {
-              e.stopPropagation();
-              onCall();
-            }}
+            onPress={onCall}
             hitSlop={6}
             style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
           >
@@ -729,19 +744,18 @@ function CustomerRow({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Route naar ${c.name ?? 'klant'}`}
-            onPress={(e) => {
-              e.stopPropagation();
-              onNavigate();
-            }}
+            onPress={onNavigate}
             hitSlop={6}
             style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
           >
             <NavigationIcon size={15} color={t.ink} strokeWidth={2} />
           </Pressable>
         ) : null}
-        <ChevronRight size={16} color={t.muted2} strokeWidth={2} />
+        <Pressable onPress={onPress} accessible={false} hitSlop={8}>
+          <ChevronRight size={16} color={t.muted2} strokeWidth={2} />
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -839,6 +853,7 @@ const makeStyles = (t: ThemeColors) =>
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  rowHoofd: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   rowBorder: {
     borderTopWidth: 1,
     borderTopColor: t.line,

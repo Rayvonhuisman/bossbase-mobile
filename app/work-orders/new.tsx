@@ -15,8 +15,9 @@ import { terugOfNaar } from '@/lib/navigatie';
  */
 export default function NewWorkOrderScreen() {
   const router = useRouter();
-  // De klantkaart opent `/work-orders/new?customerId=<id>`.
-  const { customerId } = useLocalSearchParams<{ customerId?: string }>();
+  // De klantkaart opent `/work-orders/new?customerId=<id>`; de projectkaart
+  // geeft er ook `projectId=<id>` bij (WerkbonModal met dat project voorgevuld).
+  const { customerId, projectId } = useLocalSearchParams<{ customerId?: string; projectId?: string }>();
   const { user, role } = useAuth();
   const { can, hasFeature, readonly, loaded } = usePermissions();
   const { colors: t } = useTheme();
@@ -53,6 +54,7 @@ export default function NewWorkOrderScreen() {
         ) : (
           <WerkbonFormulier
             klantVooraf={typeof customerId === 'string' && customerId ? customerId : null}
+            projectVooraf={typeof projectId === 'string' && projectId ? projectId : null}
             onKlaar={(id) => router.replace(`/work-orders/${id}`)}
           />
         )}

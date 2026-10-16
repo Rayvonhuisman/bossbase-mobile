@@ -103,3 +103,14 @@ export function eersteRelatieFout(velden: Parameters<typeof valideerRelatieVelde
   const fouten = valideerRelatieVelden(velden);
   return fouten.btw_number ?? fouten.kvk_number ?? fouten.iban ?? null;
 }
+
+/** Lege tekst → null; anders een heel aantal dagen (0–365), of de fout. */
+export function leesBetaaltermijn(v: string | null | undefined): { waarde: number | null; fout: string | null } {
+  const t = (v ?? '').trim();
+  if (!t) return { waarde: null, fout: null };
+  const n = Number(t);
+  if (!Number.isInteger(n) || n < 0 || n > 365) {
+    return { waarde: null, fout: 'Vul de betaaltermijn in als een aantal dagen (0 tot 365).' };
+  }
+  return { waarde: n, fout: null };
+}

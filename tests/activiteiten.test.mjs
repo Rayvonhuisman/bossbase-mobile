@@ -79,6 +79,24 @@ test('homepage: eigen activiteiten vandaag en te laat', () => {
   assert.deepEqual(A.eigenActiviteitenVandaag(rijen, null, VANDAAG, dagVan), { teLaat: [], vandaag: [] });
 });
 
+test('homepage: aan niemand toegewezen telt mee, van een collega niet (1 eigen + 3 los = 4 te laat)', () => {
+  const r = A.eigenActiviteitenVandaag(
+    [
+      { id: 'eigen', completed: false, due_at: om9('2026-09-18'), assigned_to: 'u1', assigned_to_ids: ['u1'] },
+      { id: 'los1', completed: false, due_at: om9('2026-05-01'), assigned_to: null, assigned_to_ids: [] },
+      { id: 'los2', completed: false, due_at: om9('2026-05-09'), assigned_to: null, assigned_to_ids: null },
+      { id: 'los3', completed: false, due_at: om9('2026-05-12'), assigned_to: null },
+      { id: 'collega', completed: false, due_at: om9('2026-10-01'), assigned_to: 'u2', assigned_to_ids: ['u2'] },
+      { id: 'alleenLijst', completed: false, due_at: om9('2026-10-02'), assigned_to: null, assigned_to_ids: ['u2'] },
+    ],
+    'u1',
+    VANDAAG,
+    dagVan,
+  );
+  assert.deepEqual(r.teLaat.map((x) => x.id).sort(), ['eigen', 'los1', 'los2', 'los3']);
+  assert.equal(A.isNiemandToegewezen({ assigned_to: null, assigned_to_ids: ['u2'] }), false);
+});
+
 test('overzicht: pipelinewaarden op deals.status', () => {
   const deals = [
     { status: 'open', stage_id: 's1', expected_revenue: 1000, final_revenue: null },
@@ -93,6 +111,19 @@ test('overzicht: pipelinewaarden op deals.status', () => {
   const fases = [{ id: 's2', position: 2 }, { id: 's1', position: 1 }];
   assert.deepEqual(O.nieuweAanvragen(deals, fases), { aantal: 1, waarde: 1000 });
   assert.deepEqual(O.nieuweAanvragen(deals, []), { aantal: 0, waarde: 0 });
+});
+
+test('overzicht: nieuwste aanvragen uit de eerste fase, nieuwste eerst', () => {
+  const fases = [{ id: 'f2', position: 2 }, { id: 'f1', position: 1 }];
+  const deals = [
+    { id: 'a', stage_id: 'f1', created_at: '2026-10-01T10:00:00Z' },
+    { id: 'b', stage_id: 'f2', created_at: '2026-10-14T10:00:00Z' },
+    { id: 'c', stage_id: 'f1', created_at: '2026-10-12T10:00:00Z' },
+    { id: 'd', stage_id: 'f1', created_at: null },
+  ];
+  assert.deepEqual(O.nieuwsteAanvragen(deals, fases).map((d) => d.id), ['c', 'a', 'd']);
+  assert.deepEqual(O.nieuwsteAanvragen(deals, fases, 1).map((d) => d.id), ['c']);
+  assert.deepEqual(O.nieuwsteAanvragen(deals, []), []);
 });
 
 test('overzicht: open offertes, openstaande facturen, omzet deze maand', () => {
@@ -114,4 +145,19 @@ test('overzicht: open offertes, openstaande facturen, omzet deze maand', () => {
   assert.deepEqual(O.openFacturen(facturen, VANDAAG), { aantal: 2, waarde: 363, teLaat: 1 });
   // Niet-concept facturen van oktober, creditnota trekt zichzelf af.
   assert.equal(O.omzetDezeMaand(facturen, VANDAAG), 100 - 41 + 500);
+});
+
+test('overzicht: nieuwe aanvragen deze week tegen vorige week', () => {
+  const nu = Date.parse('2026-10-15T12:00:00Z');
+  const dag = 864e5;
+  const d = (n) => ({ created_at: new Date(nu - n * dag).toISOString() });
+  assert.deepEqual(O.aanvragenPerWeek([d(1), d(3), d(8), d(20)], nu), { dezeWeek: 2, delta: 1 });
+  assert.deepEqual(O.aanvragenPerWeek([{ created_at: null }, { created_at: null }], nu), { dezeWeek: 2, delta: 2 });
+});
+
+test('activiteit: eindtijd standaard een kwartier na het begin (addMins van het dashboard)', async () => {
+  const D = await import('../src/lib/datum.ts');
+  assert.equal(D.plusMinuten('09:00', 15), '09:15');
+  assert.equal(D.plusMinuten('23:50', 15), '00:05');
+  assert.equal(D.plusMinuten('', 15), '');
 });

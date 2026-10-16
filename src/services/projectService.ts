@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
+import { getCompanyId, getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { haalInStukken } from '@/lib/inStukken';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
@@ -342,6 +342,10 @@ export type ProjectUur = {
   id: string;
   datum: string;
   uren: number;
+  start_tijd: string | null;
+  eind_tijd: string | null;
+  pauze_minuten: number | null;
+  reis_km: number | null;
   notitie: string | null;
   werkbon_id: string | null;
   medewerker: { full_name: string | null } | null;
@@ -352,7 +356,7 @@ export async function listProjectUren(projectId: string): Promise<ProjectUur[]> 
     supabase
       .from('werkbon_uren')
       .select(
-        'id, datum, uren, notitie, werkbon_id, medewerker:profiles!werkbon_uren_profile_id_fkey ( full_name ), werkbonnen!inner ( project_id )',
+        'id, datum, uren, start_tijd, eind_tijd, pauze_minuten, reis_km, notitie, werkbon_id, medewerker:profiles!werkbon_uren_profile_id_fkey ( full_name ), werkbonnen!inner ( project_id )',
       )
       .eq('werkbonnen.project_id', projectId)
       .order('datum', { ascending: false })
@@ -405,13 +409,15 @@ export type ProjectWerkbon = {
     eindtijd: string | null;
     medewerker_ids: string[] | null;
   }[] | null;
+  /** Voor de takenvoortgang in de Werkbonnen-tab (meerwerk telt niet mee). */
+  werkbon_taken: { afgerond: boolean | null; is_meerwerk: boolean | null }[] | null;
 };
 
 export async function listProjectWerkbonnen(projectId: string): Promise<ProjectWerkbon[]> {
   const { data, error } = await supabase
     .from('werkbonnen')
     .select(
-      'id, titel, nummer, locatie, status, gepland_op, starttijd, eindtijd, assigned_to_ids, werkbon_dagen ( datum, starttijd, eindtijd, medewerker_ids )',
+      'id, titel, nummer, locatie, status, gepland_op, starttijd, eindtijd, assigned_to_ids, werkbon_dagen ( datum, starttijd, eindtijd, medewerker_ids ), werkbon_taken ( afgerond, is_meerwerk )',
     )
     .eq('project_id', projectId)
     .order('gepland_op', { ascending: true });
@@ -424,11 +430,19 @@ export async function listProjectWerkbonnen(projectId: string): Promise<ProjectW
 
 export type ProjectOfferte = {
   id: string;
+  customer_id: string | null;
+  deal_id: string | null;
   nummer: string | null;
   omschrijving: string | null;
   status: string | null;
   totaal_incl: number | null;
+  arbeidsuren: number | null;
+  geldig_tot: string | null;
+  geaccepteerd_op: string | null;
 };
+
+const PROJECT_OFFERTE_KOLOMMEN =
+  'id, customer_id, deal_id, nummer, omschrijving, status, totaal_incl, arbeidsuren, geldig_tot, geaccepteerd_op';
 
 /** Offertes van deze klus: zelfde aanvraag, plus de expliciet gekoppelde. */
 export async function listProjectOffertes(
@@ -441,7 +455,7 @@ export async function listProjectOffertes(
   if (!delen.length) return [];
   const { data, error } = await supabase
     .from('offertes')
-    .select('id, nummer, omschrijving, status, totaal_incl')
+    .select(PROJECT_OFFERTE_KOLOMMEN)
     .or(delen.join(','))
     .order('created_at', { ascending: false });
   if (error) {
@@ -451,7 +465,28 @@ export async function listProjectOffertes(
   return (data as ProjectOfferte[]) ?? [];
 }
 
-export type ProjectFoto = { id: string; url: string };
+/**
+ * Offertes om aan het project te koppelen (Offertes-tab, "Bestaande koppelen"):
+ * die van de klant van het project, of alle offertes als er geen klant is —
+ * dezelfde keuze als `OfferteTab` in het dashboard.
+ */
+export async function listKoppelbareOffertes(
+  customerId: string | null,
+): Promise<{ data: ProjectOfferte[]; error: string | null }> {
+  const { data, error } = await haalInStukken((van, tot) => {
+    let q = supabase.from('offertes').select(PROJECT_OFFERTE_KOLOMMEN);
+    if (customerId) q = q.eq('customer_id', customerId);
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true }).range(van, tot);
+  });
+  if (error) {
+    console.warn('[projectService.listKoppelbareOffertes]', error.message);
+    return { data: [], error: 'Offertes konden niet worden geladen.' };
+  }
+  return { data: (data as unknown as ProjectOfferte[]) ?? [], error: null };
+}
+
+/** `url` is de tijdelijke link; `pad` het opgeslagen pad (nodig om te verwijderen). */
+export type ProjectFoto = { id: string; url: string; pad: string };
 
 const fotoPad = (val: string) => {
   const s = String(val || '').split('?')[0] ?? '';
@@ -473,23 +508,139 @@ export async function listProjectFotos(projectId: string): Promise<ProjectFoto[]
     .from('project-fotos')
     .createSignedUrls(rijen.map((r) => fotoPad(r.url)), 3600);
   return rijen
-    .map((r, i) => ({ id: r.id, url: signed?.[i]?.signedUrl ?? '' }))
+    .map((r, i) => ({ id: r.id, url: signed?.[i]?.signedUrl ?? '', pad: fotoPad(r.url) }))
     .filter((f) => f.url);
 }
 
-/** Waar de aanvraag vandaan kwam (`inquiries.source`); null zonder rij of zonder recht. */
-export async function getAanvraagBron(
-  dealId: string,
-): Promise<{ bron: string | null; binnenOp: string | null } | null> {
+/**
+ * Een foto bij de aanvraag (`uploadProjectFoto` in het dashboard): privébucket
+ * `project-fotos`, pad `<company_id>/<project_id>/<uuid>.<ext>`, het PAD in
+ * `project_fotos.url`. Zelfde opzet als de werkbonfoto's; verkleinen deed de
+ * kiezer al (`quality`, `fotoVoorbereiden`).
+ *
+ * RLS `project_fotos_insert`: gedeelde werkruimte, `projecten_bewerken`, of het
+ * project staat op jouw naam.
+ */
+export async function uploadProjectFoto(input: {
+  projectId: string;
+  bytes: ArrayBuffer;
+  contentType: string;
+  extensie: string;
+}): Promise<WriteResult<ProjectFoto>> {
+  const companyId = getCompanyId();
+  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (isReadonly()) return writeFout('readonly', 'Je account staat op alleen-lezen.');
+  const naam = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const pad = `${companyId}/${input.projectId}/${naam}.${input.extensie}`;
+
+  const { error: uploadFout } = await supabase.storage
+    .from('project-fotos')
+    .upload(pad, input.bytes, { contentType: input.contentType, upsert: false });
+  if (uploadFout) {
+    console.warn('[projectService.uploadProjectFoto]', uploadFout.message);
+    return writeFout('geen-rechten', 'De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.');
+  }
+
+  const res = await schrijf<{ id: string; url: string }>(
+    () =>
+      supabase
+        .from('project_fotos')
+        .insert({ company_id: companyId, project_id: input.projectId, url: pad, categorie: null })
+        .select('id, url'),
+    {
+      context: 'projectService.uploadProjectFoto',
+      bedrijfReadonly: isReadonly(),
+      leegMelding: 'De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.',
+    },
+  );
+  if (!res.ok) {
+    // De rij is er niet gekomen; laat het bestand dan ook niet rondslingeren.
+    await supabase.storage.from('project-fotos').remove([pad]);
+    return res;
+  }
+  const { data: signed } = await supabase.storage.from('project-fotos').createSignedUrl(pad, 3600);
+  return { ok: true, data: { id: res.data.id, url: signed?.signedUrl ?? '', pad } };
+}
+
+/**
+ * Foto verwijderen (`deleteProjectFoto`): eerst de rij (RLS beslist), dan het
+ * bestand — en alleen een pad binnen de map van het eigen bedrijf.
+ */
+export async function deleteProjectFoto(foto: Pick<ProjectFoto, 'id' | 'pad'>): Promise<WriteStatus> {
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('project_fotos').delete().eq('id', foto.id).select('id'),
+    {
+      context: 'projectService.deleteProjectFoto',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'De foto is niet verwijderd. Je hebt het recht Projecten bewerken nodig.',
+    },
+  );
+  if (!res.ok) return res;
+  const companyId = getCompanyId();
+  if (companyId && foto.pad.startsWith(`${companyId}/`)) {
+    const { error } = await supabase.storage.from('project-fotos').remove([foto.pad]);
+    if (error && __DEV__) console.log('[projectService.deleteProjectFoto] bestand bleef staan', error.message);
+  }
+  return { ok: true, data: null };
+}
+
+export type AanvraagVeld = { key: string; label: string; waarde: string; eigen?: boolean };
+
+export type AanvraagBron = {
+  bron: string | null;
+  binnenOp: string | null;
+  isTest: boolean;
+  /** Wat er op het websiteformulier is ingevuld; lege velden vallen weg. */
+  velden: AanvraagVeld[];
+  fotos: number;
+};
+
+/**
+ * Waar de aanvraag vandaan kwam en wat er op het websiteformulier stond
+ * (`inquiries`) — `getAanvraagBron` uit het dashboard (`projectsService.js`).
+ * Null zonder rij of zonder recht (`verkoop`).
+ */
+export async function getAanvraagBron(dealId: string): Promise<AanvraagBron | null> {
   const { data, error } = await supabase
     .from('inquiries')
-    .select('source, created_at')
+    .select(
+      'source, created_at, is_test, name, email, phone, address, postcode, city, gewenste_datum, message, metadata, eigen_velden',
+    )
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
     .limit(1);
   if (error || !data?.length) return null;
-  const r = data[0] as { source: string | null; created_at: string | null };
-  return { bron: r.source, binnenOp: r.created_at };
+  const r = data[0] as Record<string, unknown> & {
+    metadata?: { fotos?: unknown } | null;
+    eigen_velden?: { naam?: string; waarde?: unknown }[] | null;
+  };
+  const vast: [string, string, unknown][] = [
+    ['naam', 'Naam', r.name],
+    ['email', 'E-mailadres', r.email],
+    ['telefoon', 'Telefoonnummer', r.phone],
+    ['adres', 'Adres', r.address],
+    ['postcode', 'Postcode', r.postcode],
+    ['plaats', 'Plaats', r.city],
+    ['gewensteDatum', 'Gewenste datum', r.gewenste_datum],
+    ['omschrijving', 'Omschrijving', r.message],
+  ];
+  const velden: AanvraagVeld[] = vast
+    .filter(([, , w]) => w != null && String(w).trim() !== '')
+    .map(([key, label, waarde]) => ({ key, label, waarde: String(waarde) }));
+  // De eigen velden van het bedrijf ("Soort dak"), onder de vaste.
+  (Array.isArray(r.eigen_velden) ? r.eigen_velden : []).forEach((e, i) => {
+    if (e?.naam && String(e.waarde ?? '').trim()) {
+      velden.push({ key: `eigen-${i}`, label: e.naam, waarde: String(e.waarde), eigen: true });
+    }
+  });
+  return {
+    bron: (r.source as string | null) || null,
+    binnenOp: (r.created_at as string | null) || null,
+    isTest: !!r.is_test,
+    velden,
+    fotos: Number(r.metadata?.fotos || 0),
+  };
 }
 
 // ── Projectnotities ────────────────────────────────────────────────────────

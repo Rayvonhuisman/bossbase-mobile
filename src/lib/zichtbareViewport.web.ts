@@ -170,10 +170,19 @@ function installeer() {
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
       if (el.scrollTop === 0 && el.scrollLeft === 0) return;
-      if (getComputedStyle(el).overflowY !== 'hidden') return;
-      el.scrollTop = 0;
-      el.scrollLeft = 0;
-      if (huidig.toetsenbordOpen) planVeldInBeeld();
+      // Per as: een horizontale ScrollView (filterchips, weekstrook) heeft
+      // `overflow-y: hidden` maar `overflow-x: auto` — die mag gewoon opzij.
+      const stijl = getComputedStyle(el);
+      let teruggezet = false;
+      if (el.scrollTop !== 0 && stijl.overflowY === 'hidden') {
+        el.scrollTop = 0;
+        teruggezet = true;
+      }
+      if (el.scrollLeft !== 0 && stijl.overflowX === 'hidden') {
+        el.scrollLeft = 0;
+        teruggezet = true;
+      }
+      if (teruggezet && huidig.toetsenbordOpen) planVeldInBeeld();
     },
     true,
   );

@@ -1,19 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { FormField } from './FormField';
 import { DateField, TimeField } from './DateField';
 import { FormSheet } from './FormSheet';
 import { SelectField, type SelectOption } from './SelectField';
-import { usePermissions, useTheme } from '@/providers';
+import { useAuth, usePermissions, useTheme, useToast } from '@/providers';
+import { afspraakDatum } from '@/lib/autoMail';
+import { stuurAfspraakbevestiging } from '@/services/autoMailService';
+import { LedenKeuze } from './pipeline/LedenKeuze';
+import { MentionInvoer, naarHtml, NotitieLog, type Getagd, type LogItem } from './NotitieLog';
+import { mentionMeldingen } from '@/lib/mentions';
+import { pushNotificaties } from '@/services/collegaMeldingService';
 import {
   ACTIVITEIT_TYPES,
   activiteitTypeLabel,
+  addActiviteitNotitie,
   createActivity,
   deleteActivity,
+  listActiviteitNotities,
+  meldActiviteitToewijzing,
   updateActivity,
   type ActivityRow,
 } from '@/services/activityService';
 import { splitsLokaal, vandaagIso } from '@/lib/nlTijd';
+import { plusMinuten } from '@/lib/datum';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { spacing, typography, radius, type ThemeColors } from '@/theme';
@@ -30,9 +40,15 @@ export type ActivityConcept = {
   /** De notitie zoals hij in de database stond (mogelijk HTML). */
   notesOrigineel?: string | null;
   customerId: string | null;
-  assigneeId: string | null;
+  /** Project/aanvraag (`deal_id`). */
+  dealId: string | null;
+  /** Alle toegewezenen; leeg = op jouw naam (bij nieuw). */
+  assigneeIds: string[];
+  /** HH:mm; standaard het begin + 15 minuten, zoals het dashboard. */
+  endTime: string;
   completed: boolean;
 };
+
 
 /** Een bestaande rij naar een bewerkbaar concept. */
 export function conceptVanActiviteit(a: ActivityRow): ActivityConcept {
@@ -46,7 +62,9 @@ export function conceptVanActiviteit(a: ActivityRow): ActivityConcept {
     notes: alsTekst(a.notes),
     notesOrigineel: a.notes,
     customerId: a.customer_id,
-    assigneeId: a.assigned_to,
+    dealId: a.deal_id,
+    assigneeIds: a.assigned_to_ids?.length ? a.assigned_to_ids : a.assigned_to ? [a.assigned_to] : [],
+    endTime: a.end_time ? String(a.end_time).slice(0, 5) : '',
     completed: a.completed,
   };
 }
@@ -57,10 +75,13 @@ export function leegConcept(type = 'task'): ActivityConcept {
     title: '',
     type,
     date: vandaagIso(),
-    time: '',
+    // Zoals het dashboard: 09:00, eind een kwartier later.
+    time: '09:00',
     notes: '',
     customerId: null,
-    assigneeId: null,
+    dealId: null,
+    assigneeIds: [],
+    endTime: '09:15',
     completed: false,
   };
 }
@@ -69,6 +90,8 @@ type Props = {
   concept: ActivityConcept | null;
   klanten: SelectOption[];
   medewerkers: SelectOption[];
+  /** Projecten om aan te koppelen; gefilterd op de gekozen klant. */
+  projecten?: (SelectOption & { customerId?: string | null })[];
   /** Toon het type-veld. */
   toonType?: boolean;
   /**
@@ -94,6 +117,7 @@ export function ActivityFormSheet({
   concept,
   klanten,
   medewerkers,
+  projecten = [],
   toonType = true,
   magBewerken = true,
   onClose,
@@ -102,7 +126,19 @@ export function ActivityFormSheet({
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { mag } = usePermissions();
+  const { user, profile } = useAuth();
+  const { toon } = useToast();
+  const [stuurMail, setStuurMail] = useState(true);
+  // Eindtijd zelf gekozen? Dan schuift hij niet meer mee met het begin.
+  const [eindHandmatig, setEindHandmatig] = useState(false);
   const { save, saving, error, setError } = useSave<unknown>();
+  // @-vermeldingen in de notitie van een nieuwe activiteit.
+  const [getagd, setGetagd] = useState<Getagd[]>([]);
+  // Het notitielog van een bestaande activiteit (activiteit_notities).
+  const [log, setLog] = useState<LogItem[]>([]);
+  const [logFout, setLogFout] = useState<string | null>(null);
+  const logOpslaan = useSave<{ id: string }>();
+  const activiteitId = concept?.id ?? null;
 
   const [vorm, setVorm] = useState<ActivityConcept | null>(concept);
 
@@ -112,7 +148,45 @@ export function ActivityFormSheet({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setVorm(concept);
     setError(null);
+    setEindHandmatig(!!concept?.id);
+    setGetagd([]);
   }, [concept, setError]);
+
+  const laadLog = useCallback(async () => {
+    if (!activiteitId) return;
+    const r = await listActiviteitNotities(activiteitId);
+    setLogFout(r.error);
+    setLog(r.data.map((n) => ({ id: n.id, html: n.note, auteur: n.auteur, at: n.created_at })));
+  }, [activiteitId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLog([]);
+    void laadLog();
+  }, [laadLog]);
+
+  const klantNaam = (id: string | null) => klanten.find((k) => k.id === id)?.label ?? '';
+  const leden = useMemo(() => medewerkers.map((m) => ({ id: m.id, full_name: m.label })), [medewerkers]);
+
+  const plaatsInLog = async (html: string, metTag: boolean): Promise<boolean> => {
+    if (!activiteitId) return false;
+    const res = await logOpslaan.save(() => addActiviteitNotitie(activiteitId, html));
+    if (!res?.ok) return false;
+    if (metTag) {
+      void pushNotificaties(
+        mentionMeldingen({
+          text: html,
+          relatedType: 'activiteit',
+          relatedId: activiteitId,
+          link: 'activities',
+          creatorName: profile?.full_name ?? null,
+          contextName: klantNaam(vorm?.customerId ?? null),
+        }),
+      );
+    }
+    await laadLog();
+    return true;
+  };
 
   const zetVeld = <K extends keyof ActivityConcept>(sleutel: K, waarde: ActivityConcept[K]) =>
     setVorm((v) => (v ? { ...v, [sleutel]: waarde } : v));
@@ -133,6 +207,7 @@ export function ActivityFormSheet({
       });
       return;
     }
+    const nieuweNotitie = naarHtml(vorm.notes, getagd);
     const invoer = {
       title: vorm.title,
       type: vorm.type,
@@ -140,25 +215,61 @@ export function ActivityFormSheet({
       time: vorm.time || null,
       // Ongewijzigd? Dan de notitie niet meesturen, zodat opmaak en @-tags uit
       // het dashboard intact blijven. Gewijzigd: als veilige HTML terug.
+      // Bestaand: de notitie staat in het log hieronder en gaat niet mee
+      // (zoals het dashboard). Nieuw: met @-vermeldingen als mention-span.
       notes:
         vorm.id && vorm.notes === alsTekst(vorm.notesOrigineel)
           ? undefined
           : vorm.notes.trim()
-            ? alsHtml(vorm.notes)
+            ? vorm.id
+              ? alsHtml(vorm.notes)
+              : nieuweNotitie.html
             : '',
       customer_id: vorm.customerId,
-      // Alleen meesturen als de keuze is veranderd: een activiteit kan in het
-      // dashboard meerdere toegewezenen hebben, en die willen we niet wissen.
-      assigned_to_ids:
-        vorm.id && vorm.assigneeId === concept?.assigneeId
-          ? undefined
-          : vorm.assigneeId
-            ? [vorm.assigneeId]
-            : [],
+      deal_id: vorm.dealId,
+      // Nieuw zonder keuze: de service zet hem op jouw naam (zoals het dashboard).
+      assigned_to_ids: vorm.id || vorm.assigneeIds.length ? vorm.assigneeIds : undefined,
+      end_time: vorm.endTime || null,
       completed: vorm.completed,
     };
+    const vorige = concept?.id ? concept.assigneeIds : [];
     save(() => (vorm.id ? updateActivity(vorm.id, invoer) : createActivity(invoer)), {
-      onSuccess: async () => {
+      onSuccess: async (resultaat) => {
+        const rij = resultaat as ActivityRow | null;
+        if (rij?.id) {
+          void meldActiviteitToewijzing({
+            activiteitId: rij.id,
+            titel: vorm.title.trim(),
+            datum: vorm.date || null,
+            toegewezen: vorm.assigneeIds,
+            vorige,
+            maker: user?.id ?? null,
+            stuurMail,
+          });
+        }
+        if (rij?.id && !vorm.id && nieuweNotitie.getagd) {
+          void pushNotificaties(
+            mentionMeldingen({
+              text: nieuweNotitie.html,
+              relatedType: 'activiteit',
+              relatedId: rij.id,
+              link: 'activities',
+              creatorName: profile?.full_name ?? null,
+              contextName: klantNaam(vorm.customerId),
+            }),
+          );
+        }
+        // Nieuw bezoek bij een klant: de afspraakbevestiging, zoals het dashboard.
+        if (rij?.id && !vorm.id && vorm.type === 'visit' && vorm.customerId) {
+          void stuurAfspraakbevestiging({
+            activiteitId: rij.id,
+            customerId: vorm.customerId,
+            datum: afspraakDatum(vorm.date),
+            tijd: vorm.time || '',
+          }).then(({ resultaat, aan }) => {
+            if (resultaat === false) toon(`De afspraakbevestiging aan ${aan} is niet verstuurd.`, 'fout');
+          });
+        }
         onClose();
         await onSaved();
       },
@@ -239,11 +350,24 @@ export function ActivityFormSheet({
         </View>
         <View style={{ flex: 1 }}>
           <TimeField
-            label="Tijd"
+            label="Van"
             value={vorm?.time || null}
-            onChange={(v) => zetVeld('time', v)}
+            onChange={(v) =>
+              setVorm((c) => (c ? { ...c, time: v, endTime: eindHandmatig ? c.endTime : plusMinuten(v, 15) } : c))
+            }
             placeholder="09:00"
-            hint="Leeg = 09:00"
+            disabled={alleenLezen}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <TimeField
+            label="Tot"
+            value={vorm?.endTime || null}
+            onChange={(v) => {
+              setEindHandmatig(true);
+              zetVeld('endTime', v);
+            }}
+            placeholder="09:15"
             disabled={alleenLezen}
           />
         </View>
@@ -261,28 +385,67 @@ export function ActivityFormSheet({
         placeholder="Geen klant"
       />
 
-      <SelectField
-        label="Toegewezen aan"
-        value={vorm?.assigneeId ?? null}
-        options={medewerkers}
-        onChange={(id) => zetVeld('assigneeId', id)}
-        disabled={alleenLezen}
-        allowEmpty
-        emptyLabel="Aan mij toewijzen"
-        placeholder="Aan mij toewijzen"
-        hint="Zonder keuze komt de activiteit op jouw naam."
-      />
+      {projecten.length ? (
+        <SelectField
+          label="Project"
+          value={vorm?.dealId ?? null}
+          options={projecten.filter((p) => !vorm?.customerId || !p.customerId || p.customerId === vorm.customerId)}
+          onChange={(id) => zetVeld('dealId', id)}
+          disabled={alleenLezen}
+          searchable
+          allowEmpty
+          emptyLabel="Geen project"
+          placeholder="Geen project"
+        />
+      ) : null}
 
-      <FormField
-        label="Notities"
-        value={vorm?.notes ?? ''}
-        onChangeText={(v) => zetVeld('notes', v)}
-        placeholder="Optioneel"
-        multiline
-        editable={!alleenLezen}
+      <LedenKeuze
+        label="Toegewezen aan"
+        leden={medewerkers.map((m) => ({ id: m.id, full_name: m.label }))}
+        waarde={vorm?.assigneeIds ?? []}
+        onChange={(ids) => zetVeld('assigneeIds', ids)}
+        disabled={alleenLezen}
       />
+      {!vorm?.id && !vorm?.assigneeIds.length ? (
+        <Text style={styles.schakelUitleg}>Zonder keuze komt de activiteit op jouw naam.</Text>
+      ) : null}
+      {!alleenLezen && (vorm?.assigneeIds ?? []).some((id) => id !== user?.id && !(concept?.assigneeIds ?? []).includes(id)) ? (
+        <View style={styles.schakelRij}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.schakelTitel}>Ook per e-mail laten weten</Text>
+            <Text style={styles.schakelUitleg}>Nieuwe toegewezenen krijgen naast de melding in de app een mail.</Text>
+          </View>
+          <Switch value={stuurMail} onValueChange={setStuurMail} />
+        </View>
+      ) : null}
 
       {vorm?.id ? (
+        // Zoals het dashboard: een bestaande activiteit heeft een notitielog
+        // (losse regels) in plaats van één veld dat overschreven wordt.
+        <>
+          {logFout ? <Text style={styles.schakelUitleg}>{logFout}</Text> : null}
+          <NotitieLog
+            items={log}
+            leden={leden}
+            magSchrijven={!alleenLezen}
+            bezig={logOpslaan.saving}
+            fout={logOpslaan.error}
+            onPlaats={plaatsInLog}
+          />
+        </>
+      ) : (
+        <MentionInvoer
+          label="Notities"
+          value={vorm?.notes ?? ''}
+          onChangeText={(v) => zetVeld('notes', v)}
+          gekozen={getagd}
+          onGekozen={setGetagd}
+          leden={leden}
+          placeholder="Optioneel. Typ @ om iemand te taggen"
+        />
+      )}
+
+      {vorm ? (
         <View style={styles.schakelRij}>
           <View style={{ flex: 1 }}>
             <Text style={styles.schakelTitel}>Afgerond</Text>

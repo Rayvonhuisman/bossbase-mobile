@@ -32,7 +32,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          {/* Op web: de app op telefoonbreedte. Op iOS en Android doet dit niets. */}
+          {/* Op een groot scherm (iPad, desktop) een gecentreerde kolom; op een telefoon het hele scherm. */}
           <MobielKader>
           {/* Sora wordt hier geladen, binnen ThemeProvider zodat het
               wachtscherm de themakleuren gebruikt en niet wit is. */}

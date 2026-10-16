@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { pushNotificaties } from './collegaMeldingService';
 import { metTijdslimiet } from '@/lib/queryTijdslimiet';
 import type {
   Role,
@@ -14,6 +15,7 @@ import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
 import { hhmm, type DagPayload, type WerkbonDag } from '@/lib/werkbonLogica';
 import { idBatches, MATERIAAL_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
 import { magWerkbonRegelsBeheren } from '@/lib/werkbonRechten';
+import { mentionMeldingen } from '@/lib/mentions';
 
 /**
  * Een werkbonrij zoals WORK_ORDER_COLUMNS hem levert: de basisvorm uit
@@ -24,6 +26,10 @@ export type Werkbon = WorkOrderWithRelations & {
   ondertekende_pdf_url?: string | null;
   verstuurd_naar_email?: string | null;
   verstuurd_op?: string | null;
+  /** Publieke ondertekenlink (/werkbon/<token>); ook ter plekke tekenen loopt hierlangs. */
+  sign_token?: string | null;
+  handtekening_url?: string | null;
+  ondertekend_door_email?: string | null;
 };
 
 /**
@@ -61,8 +67,8 @@ const WORK_ORDER_COLUMNS = `
   activity_id, nummer, assigned_to, assigned_to_ids, verantwoordelijke_ids,
   titel, omschrijving, status, gepland_op, starttijd, eindtijd, locatie,
   notes, werkbon_notities, gestart_op, afgerond_op,
-  ondertekend_op, ondertekend_door_naam, ondertekende_pdf_url,
-  verstuurd_naar_email, verstuurd_op, created_at, updated_at,
+  ondertekend_op, ondertekend_door_naam, ondertekend_door_email, ondertekende_pdf_url,
+  handtekening_url, sign_token, verstuurd_naar_email, verstuurd_op, created_at, updated_at,
   werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
     voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
@@ -213,20 +219,25 @@ export async function getWorkOrder(
  */
 export async function listVoertuigen(
   ids: string[],
-): Promise<{ data: Record<string, { naam: string; kleur: string | null }>; error: string | null }> {
+): Promise<{
+  data: Record<string, { naam: string; kleur: string | null; zitplaatsen: number | null }>;
+  error: string | null;
+}> {
   const uniek = Array.from(new Set(ids.filter(Boolean)));
   if (uniek.length === 0) return { data: {}, error: null };
 
+  // `*`: `zitplaatsen` kwam later (dashboard voertuigService); zonder die kolom
+  // blijft de bezetting gewoon weg.
   const { data, error } = await metTijdslimiet((signal) =>
-    supabase.from('voertuigen').select('id, naam, kleur').in('id', uniek).abortSignal(signal),
+    supabase.from('voertuigen').select('*').in('id', uniek).abortSignal(signal),
   );
 
   if (error) {
     return { data: {}, error: describeError('listVoertuigen', error) };
   }
-  const map: Record<string, { naam: string; kleur: string | null }> = {};
-  for (const row of (data as { id: string; naam: string | null; kleur: string | null }[]) ?? []) {
-    map[row.id] = { naam: row.naam ?? 'Voertuig', kleur: row.kleur };
+  const map: Record<string, { naam: string; kleur: string | null; zitplaatsen: number | null }> = {};
+  for (const row of (data as { id: string; naam: string | null; kleur: string | null; zitplaatsen?: number | null }[]) ?? []) {
+    map[row.id] = { naam: row.naam ?? 'Voertuig', kleur: row.kleur, zitplaatsen: row.zitplaatsen ?? null };
   }
   return { data: map, error: null };
 }
@@ -989,6 +1000,50 @@ export async function updateMaterialAmount(
   return { data: naarRegel(metPrijs ?? row), error: null };
 }
 
+/** De velden van een materiaalregel die je op de werkbon kunt wijzigen. */
+export type MateriaalWijziging = Partial<{
+  naam: string;
+  eenheid: string | null;
+  aantal: number;
+  prijs_per: number;
+  leverancier_id: string | null;
+  /** Alleen met het recht `inkoopprijzen`; zonder weigert RLS het stil. */
+  inkoopprijs_per: number | null;
+}>;
+
+/**
+ * Eén of meer velden van een materiaalregel bijwerken (updateWerkbonMateriaal
+ * in het dashboard). De inkoopprijs staat in `werkbon_materiaal_inkoop` met
+ * eigen RLS en gaat apart; het subtotaal rekent de database (a1_wm_subtotaal).
+ */
+export async function updateWorkOrderMaterial(
+  id: string,
+  patch: MateriaalWijziging,
+): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
+  const { inkoopprijs_per, ...velden } = patch;
+  const heeftInkoop = 'inkoopprijs_per' in patch;
+  if ('naam' in velden && !String(velden.naam ?? '').trim()) return { data: null, error: 'Vul een naam in.' };
+  if ('aantal' in velden && (!Number.isFinite(velden.aantal) || (velden.aantal ?? 0) < 0)) {
+    return { data: null, error: 'Vul een geldig aantal in.' };
+  }
+  if (Object.keys(velden).length) {
+    const { data, error } = await supabase.from('werkbon_materialen').update(velden).eq('id', id).select('id');
+    if (error) return { data: null, error: describeError('updateWorkOrderMaterial', error) };
+    if (!((data as { id: string }[]) ?? []).length) {
+      return { data: null, error: 'Niet opgeslagen — je hebt hier geen rechten voor.' };
+    }
+  }
+  if (heeftInkoop) {
+    await supabase
+      .from('werkbon_materiaal_inkoop')
+      .update({ inkoopprijs_per: inkoopprijs_per ?? null, updated_at: new Date().toISOString() })
+      .eq('werkbon_materiaal_id', id);
+  }
+  const regel = await leesRegel(id);
+  if (!regel) return { data: null, error: 'De regel kon niet opnieuw worden geladen.' };
+  return { data: regel, error: null };
+}
+
 export async function deleteWorkOrderMaterial(id: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase
     .from('werkbon_materialen')
@@ -1040,6 +1095,8 @@ export type CreateWorkOrderInput = {
   company_id: string;
   titel: string;
   customer_id?: string | null;
+  /** Aanvraag/project (`deals`), zoals createWerkbon van het dashboard. */
+  deal_id?: string | null;
   project_id?: string | null;
   omschrijving?: string | null;
   gepland_op?: string | null;
@@ -1086,6 +1143,7 @@ export async function createWorkOrder(
     company_id: input.company_id,
     titel,
     customer_id: input.customer_id ?? null,
+    deal_id: input.deal_id ?? null,
     project_id: input.project_id ?? null,
     omschrijving: leegNaarNull(input.omschrijving),
     gepland_op: input.gepland_op || null,
@@ -1306,26 +1364,27 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
 // (de RLS op `notifications` staat alleen self-insert toe). Alleen in-app: de
 // HTML-mail die het dashboard optioneel meestuurt bouwt de app (nog) niet.
 
-type NotificatieRij = {
-  user_id: string;
-  type: string;
-  title: string;
-  body?: string | null;
-  link?: string | null;
-  related_type?: string | null;
-  related_id?: string | null;
-};
-
-async function pushNotificaties(rijen: NotificatieRij[]): Promise<void> {
-  if (!rijen.length) return;
-  try {
-    const { error } = await supabase.functions.invoke('create-notification', {
-      body: { notifications: rijen },
-    });
-    if (error && __DEV__) console.log('[werkbon] create-notification mislukt', error.message);
-  } catch (e) {
-    if (__DEV__) console.log('[werkbon] create-notification mislukt', e);
-  }
+/**
+ * @-vermeldingen in een nieuwe notitie (createMentionNotifications): elke
+ * getagde collega krijgt een melding in de app en een mail. Ook wie zichzelf
+ * tagt, zoals in het dashboard.
+ */
+export async function meldVermeldingen(opts: {
+  html: string;
+  werkbonId: string;
+  maakerNaam: string | null;
+  context: string;
+}): Promise<void> {
+  await pushNotificaties(
+    mentionMeldingen({
+      text: opts.html,
+      relatedType: 'werkbon',
+      relatedId: opts.werkbonId,
+      link: 'werkbonnen',
+      creatorName: opts.maakerNaam,
+      contextName: opts.context,
+    }),
+  );
 }
 
 /**
@@ -1341,8 +1400,11 @@ export async function meldToewijzingen(opts: {
   vorigeUitvoerders?: string[];
   vorigeVerantwoordelijken?: string[];
   maker: string | null;
+  /** "Stuur e-mail" van het dashboard: naast de melding in de app ook een mail. */
+  stuurMail?: boolean;
 }): Promise<void> {
   const link = `werkbonnen/${opts.werkbonId}`;
+  const mail = opts.stuurMail ? { email: true } : {};
   const prevV = new Set(opts.vorigeVerantwoordelijken ?? []);
   const nieuweV = [...new Set(opts.verantwoordelijken)].filter((id) => !prevV.has(id) && id !== opts.maker);
   const prevU = new Set(opts.vorigeUitvoerders ?? []);
@@ -1358,6 +1420,7 @@ export async function meldToewijzingen(opts: {
       link,
       related_type: 'werkbon',
       related_id: opts.werkbonId,
+      ...mail,
     })),
     ...nieuweV.map((uid) => ({
       user_id: uid,
@@ -1367,6 +1430,7 @@ export async function meldToewijzingen(opts: {
       link,
       related_type: 'werkbon',
       related_id: opts.werkbonId,
+      ...mail,
     })),
   ]);
 }
@@ -1380,13 +1444,15 @@ export async function meldPlanningWijziging(opts: {
   userIds: string[];
   soort: 'verzet' | 'ingepland' | 'afgehaald';
   werkbon: { id: string; nummer: string | null; titel: string; klant: string | null };
-  oud: { datum: string | null; start: string; eind: string };
+  /** Leeg bij een dag die er nieuw bij komt. */
+  oud?: { datum: string | null; start: string; eind: string };
   nieuw?: { datum: string | null; start: string; eind: string };
   maker: string | null;
 }): Promise<void> {
   const ontvangers = [...new Set(opts.userIds.filter(Boolean))].filter((id) => id !== opts.maker);
   if (!ontvangers.length) return;
   const nieuw = opts.nieuw ?? { datum: null, start: '', eind: '' };
+  const oud = opts.oud ?? { datum: null, start: '', eind: '' };
   const omschrijf = (d: string | null, s: string) => (d ? `${d}${s ? ` om ${s}` : ''}` : 'niet ingepland');
   const titel =
     opts.soort === 'afgehaald'
@@ -1396,8 +1462,8 @@ export async function meldPlanningWijziging(opts: {
         : `Planning gewijzigd: ${opts.werkbon.titel || 'een klus'}`;
   const body =
     opts.soort === 'afgehaald'
-      ? `Was: ${omschrijf(opts.oud.datum, opts.oud.start)}`
-      : `Was ${omschrijf(opts.oud.datum, opts.oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
+      ? `Was: ${omschrijf(oud.datum, oud.start)}`
+      : `Was ${omschrijf(oud.datum, oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
   await pushNotificaties(
     ontvangers.map((uid) => ({
       user_id: uid,
@@ -1418,9 +1484,9 @@ export async function meldPlanningWijziging(opts: {
       titel: opts.werkbon.titel,
       klant: opts.werkbon.klant,
       soort: opts.soort,
-      oude_datum: opts.oud.datum || null,
-      oude_start: opts.oud.start || null,
-      oude_eind: opts.oud.eind || null,
+      oude_datum: oud.datum || null,
+      oude_start: oud.start || null,
+      oude_eind: oud.eind || null,
       nieuwe_datum: nieuw.datum || null,
       nieuwe_start: nieuw.start || null,
       nieuwe_eind: nieuw.eind || null,

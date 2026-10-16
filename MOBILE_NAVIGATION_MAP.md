@@ -71,7 +71,7 @@ Desktop page IDs/labels are from SPEC §4.3/§4.4. Backend support column summar
 | **Activiteiten** (todo/agenda tasks) | `activities` | **Menu page (MVP)** | `app/activities/index.tsx` | all (own); admin/planner all | YES — `activityService` already exists |
 | **Agenda** (week calendar) | `calendar_events` | **Folded into Planning tab** | `app/(tabs)/planning.tsx` | all | YES — `activityService.listCalendarEventsForRange` exists |
 | **Kosten** (job costs) | `job_costs` | **Menu page (MVP)** | `app/expenses/index.tsx` | admin, planner (medewerker: upload receipts later) | YES (table); no mobile service yet → build |
-| **Financiën** (revenue charts) | derived/widgets | **Desktop-only** | — | — | Charts only; MOBILE_SPEC §4 = desktop-only |
+| **Financiën** (revenue) | `bb_financien_kpi`, `facturen`, `job_costs`, `project_kosten`, `werkbon_uren` | **Menu page** (Financieel) | `app/(more)/financien.tsx` ✅ | recht `bedrijfsfinancien` (geen pakketfeature) | YES (read). Tegels, grafiek en tabel per klant; Excel-export en btw-blok alleen in het dashboard |
 | **Facturen** (invoices) | `facturen`, `factuur_regels` | **Menu page — Mobile later** | `app/invoices/index.tsx` | admin, planner (read-only) | YES (read) |
 | **Offertes** (quotes) | `offertes`, `offerte_items` | **Menu page — Mobile later** | `app/offers/index.tsx` | admin, planner (read-only) | YES (read) |
 | **Projecten** (projects) | `projects`, `time_entries`, `project_notes` | **Menu page — Mobile later** | `app/projects/index.tsx` | admin, planner (read-only) | YES (read) |

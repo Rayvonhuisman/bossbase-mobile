@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/providers';
-import { formatEUR } from '@/lib/format';
+import { formatEURCent } from '@/lib/format';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import type { StatusToon } from '@/lib/documentLogica';
 
@@ -110,7 +110,7 @@ export function RegelLijst({
             <Text style={styles.regelTitel}>{r.omschrijving}</Text>
             <Text style={styles.zacht}>{r.meta}</Text>
           </View>
-          <Text style={styles.bedrag}>{formatEUR(r.bedrag)}</Text>
+          <Text style={styles.bedrag}>{formatEURCent(r.bedrag)}</Text>
         </View>
       ))}
     </View>
@@ -132,24 +132,25 @@ export function TotalenBlok({
     <View style={styles.totalen}>
       <View style={styles.totaalRij}>
         <Text style={styles.zacht}>Subtotaal excl. BTW</Text>
-        <Text style={styles.totaalBedrag}>{formatEUR(excl)}</Text>
+        <Text style={styles.totaalBedrag}>{formatEURCent(excl)}</Text>
       </View>
       {btwPerTarief.map((b) => (
         <View key={b.pct} style={styles.totaalRij}>
           <Text style={styles.zacht}>BTW {b.pct}%</Text>
-          <Text style={styles.totaalBedrag}>{formatEUR(b.bedrag)}</Text>
+          <Text style={styles.totaalBedrag}>{formatEURCent(b.bedrag)}</Text>
         </View>
       ))}
       <View style={[styles.totaalRij, styles.totaalEind]}>
         <Text style={styles.eindLabel}>Totaal incl. BTW</Text>
-        <Text style={styles.eindBedrag}>{formatEUR(incl)}</Text>
+        <Text style={styles.eindBedrag}>{formatEURCent(incl)}</Text>
       </View>
     </View>
   );
 }
 
 /** Een tegel van het KPI-raster: label, waarde en een optionele toelichting. */
-export type Tegel = { id: string; label: string; waarde: string; uitleg?: string };
+/** `toon: 'goed'` = groen getal, voor wat positief is (geaccepteerd, betaald); `'slecht'` = rood (een negatief saldo). */
+export type Tegel = { id: string; label: string; waarde: string; uitleg?: string; toon?: 'goed' | 'slecht' };
 
 /**
  * KPI-raster: twee kolommen op een telefoon, alles op één rij vanaf tabletbreedte
@@ -170,11 +171,19 @@ export function TegelRaster({ tegels, breed }: { tegels: Tegel[]; breed: boolean
           <Text style={styles.tegelLabel} numberOfLines={2}>
             {tg.label}
           </Text>
-          <Text style={styles.tegelWaarde} numberOfLines={1} adjustsFontSizeToFit>
+          <Text
+            style={[
+              styles.tegelWaarde,
+              tg.toon === 'goed' && { color: t.green700 },
+              tg.toon === 'slecht' && { color: t.statusRejectFg },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {tg.waarde}
           </Text>
           {tg.uitleg ? (
-            <Text style={styles.tegelUitleg} numberOfLines={2}>
+            <Text style={[styles.tegelUitleg, tg.toon === 'goed' && { color: t.green700 }]} numberOfLines={2}>
               {tg.uitleg}
             </Text>
           ) : null}

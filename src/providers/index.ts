@@ -7,4 +7,4 @@ export { PermissionsProvider, usePermissions } from './PermissionsProvider';
 export type { PlanStatus } from './PermissionsProvider';
 export { ThemeProvider, useTheme } from './ThemeProvider';
 export type { ColorMode } from './ThemeProvider';
-export type { OnboardingData, RoleChoice } from './OnboardingProvider';
+export type { OnboardingData } from './OnboardingProvider';

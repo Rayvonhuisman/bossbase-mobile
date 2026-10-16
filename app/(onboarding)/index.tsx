@@ -7,12 +7,13 @@ import { BBMark } from '@/components';
 import { useOnboarding } from '@/providers';
 import { GhostLink, GreenButton } from './_components';
 import { onb } from './_tokens';
+import { toonAankoopInfo } from '@/lib/aankoopInfo';
 
 /**
- * Screen 1/5 — Welcome.
+ * Screen 1/6 — Welcome.
  *
  * Hero met logo + gestapelde sample-cards (planning · werkbon · uren timer),
- * grote hero-tekst, CTA naar role-screen, ghost link naar bestaande login.
+ * grote hero-tekst, CTA naar de pakketkeuze, ghost link naar bestaande login.
  */
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -21,7 +22,10 @@ export default function WelcomeScreen() {
 
   const onStart = () => {
     reset();
-    router.push('/(onboarding)/role');
+    // iOS (App Store 3.1.1): geen keuze tussen betaalde pakketten in de app.
+    // Zonder keuze start de proef op het standaardpakket (verify-code), net als
+    // in het dashboard wanneer je niets kiest.
+    router.push(toonAankoopInfo() ? '/(onboarding)/pakket' : '/(onboarding)/company');
   };
   const onAlreadyHaveAccount = () => {
     router.replace('/(auth)/login');

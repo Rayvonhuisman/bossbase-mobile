@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Monitor, Smartphone, TabletSmartphone } from 'lucide-react-native';
 import { BBMark, Button } from '@/components';
@@ -15,6 +15,13 @@ import { fonts, radius, spacing, typography, type ThemeColors } from '@/theme';
  * bedrijf. Draait de app al geïnstalleerd, dan tonen we geen browserstappen.
  */
 export default function InstallerenScreen() {
+  // In de iOS- en Android-app is er niets te installeren: een (universele) link
+  // naar /installeren gaat gewoon naar het begin van de app.
+  if (Platform.OS !== 'web') return <Redirect href="/" />;
+  return <InstallerenWeb />;
+}
+
+function InstallerenWeb() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors: t } = useTheme();

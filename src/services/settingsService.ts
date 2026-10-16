@@ -20,7 +20,7 @@ import { classificeerFout, schrijf, writeFout, type WriteResult } from '@/lib/wr
 
 const SETTINGS_COLUMNS = `
   id, company_id, uurtarief, reiskosten_per_km, standaard_marge,
-  btw_pct, offerte_geldig_dagen, btw_stelsel, auto_sync_google_calendar,
+  btw_pct, offerte_geldig_dagen, betaaltermijn_dagen, btw_stelsel, auto_sync_google_calendar,
   uren_herinnering_interval_min, uren_herinnering_moment, uren_herinnering_dagen,
   uren_herinnering_mail, uren_herinnering_uitgesloten, agenda_start_uur, agenda_eind_uur
 `;
@@ -37,6 +37,8 @@ export type CompanySettings = {
   standaard_marge: number;
   btw_pct: number;
   offerte_geldig_dagen: number;
+  /** Na hoeveel dagen een nieuwe factuur vervalt (tenzij de klant een eigen termijn heeft). */
+  betaaltermijn_dagen: number;
   btw_stelsel: string;
   auto_sync_google_calendar: boolean;
   uren_herinnering_interval_min: number;
@@ -60,6 +62,7 @@ const STANDAARD: CompanySettings = {
   standaard_marge: 25,
   btw_pct: 21,
   offerte_geldig_dagen: 14,
+  betaaltermijn_dagen: 14,
   btw_stelsel: 'factuur',
   auto_sync_google_calendar: false,
   // Zelfde terugval als `toBedrijfsinstellingen` in het dashboard: zonder rij
@@ -86,6 +89,7 @@ function toSettings(row: SettingsDb | null): CompanySettings {
     standaard_marge: num(row.standaard_marge, STANDAARD.standaard_marge),
     btw_pct: num(row.btw_pct, STANDAARD.btw_pct),
     offerte_geldig_dagen: num(row.offerte_geldig_dagen, STANDAARD.offerte_geldig_dagen),
+    betaaltermijn_dagen: num(row.betaaltermijn_dagen, STANDAARD.betaaltermijn_dagen),
     btw_stelsel: (row.btw_stelsel as string) ?? STANDAARD.btw_stelsel,
     auto_sync_google_calendar: row.auto_sync_google_calendar === true,
     uren_herinnering_interval_min: num(
@@ -134,6 +138,7 @@ export type SettingsInput = Partial<
     | 'standaard_marge'
     | 'btw_pct'
     | 'offerte_geldig_dagen'
+    | 'betaaltermijn_dagen'
     | 'btw_stelsel'
     | 'auto_sync_google_calendar'
     | 'uren_herinnering_interval_min'
@@ -158,6 +163,7 @@ function valideerSettings(input: SettingsInput): string | null {
     bereik(input.standaard_marge, 0, 100, 'marge') ??
     bereik(input.btw_pct, 0, 100, 'btw-percentage') ??
     bereik(input.offerte_geldig_dagen, 1, 365, 'geldigheidsduur in dagen') ??
+    bereik(input.betaaltermijn_dagen, 0, 365, 'betaaltermijn in dagen') ??
     bereik(input.agenda_start_uur, 0, 23, 'startuur') ??
     bereik(input.agenda_eind_uur, 1, 24, 'einduur') ??
     bereik(input.uren_herinnering_interval_min, 0, 1440, 'herhaalinterval') ??
@@ -198,6 +204,7 @@ export async function upsertCompanySettings(
   zetGetal('standaard_marge');
   zetGetal('btw_pct');
   zetGetal('offerte_geldig_dagen');
+  zetGetal('betaaltermijn_dagen');
   zetGetal('agenda_start_uur');
   zetGetal('agenda_eind_uur');
   zetGetal('uren_herinnering_interval_min');
@@ -271,7 +278,7 @@ export async function upsertCompanySettings(
 
 const COMPANY_COLUMNS = `
   id, name, kvk, btw_number, email, phone, address, city, postal_code,
-  website, logo_url, branding_color, reply_to_email, iban, iban_tnv
+  website, logo_url, branding_color, reply_to_email, iban, iban_tnv, branche
 `;
 
 export type CompanyRow = {
@@ -291,6 +298,8 @@ export type CompanyRow = {
   /** Komt op de facturen (migratie 20261002132507_iban_op_factuur). */
   iban: string | null;
   iban_tnv: string | null;
+  /** Uit de vaste lijst (lib/registratie BRANCHES); ouder dan oktober 2026: leeg. */
+  branche: string | null;
 };
 
 export async function getCompany(): Promise<{ data: CompanyRow | null; error: string | null }> {
@@ -324,6 +333,7 @@ export type CompanyInput = Partial<
     | 'branding_color'
     | 'iban'
     | 'iban_tnv'
+    | 'branche'
   >
 >;
 
@@ -371,6 +381,7 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
     'website',
     'reply_to_email',
     'branding_color',
+    'branche',
   ] as const) {
     const v = input[veld];
     if (v !== undefined) updates[veld] = v?.trim() || null;

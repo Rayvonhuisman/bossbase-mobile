@@ -12,8 +12,7 @@ import {
   Plug,
   ShieldCheck,
   Users,
-  type LucideIcon,
-} from 'lucide-react-native';
+  type LucideIcon, UserX } from 'lucide-react-native';
 import { AnimatedScreen, AppTopBar, FormField, FormSheet,
   LoadingScreen,
   StatusBarScrim,
@@ -47,7 +46,7 @@ export default function ProfileScreen() {
   const initials = computeInitials(profile?.full_name ?? user?.email ?? '?');
   const roleLabel = role ? ROLE_LABELS[role] : 'Onbekende rol';
   const companyName = company?.name ?? '—';
-  const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+  const appVersion = Constants.expoConfig?.version ?? '0.2.0';
 
   const [naamConcept, setNaamConcept] = useState<string | null>(null);
   const [wachtwoord, setWachtwoord] = useState<{ nieuw: string; herhaal: string } | null>(null);
@@ -211,6 +210,13 @@ export default function ProfileScreen() {
                 setWachtwoordFout(null);
                 setWachtwoord({ nieuw: '', herhaal: '' });
               },
+            },
+            {
+              // Apple 5.1.1(v): verwijderen moet makkelijk te vinden zijn.
+              icon: UserX,
+              title: 'Account verwijderen',
+              sub: 'Wat er gebeurt en hoe je het aanvraagt',
+              onPress: () => router.push('/settings?tab=profiel'),
             },
             {
               icon: HelpCircle,

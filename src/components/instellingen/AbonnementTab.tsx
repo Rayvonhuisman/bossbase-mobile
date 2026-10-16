@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, Platform } from 'react-native';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/providers';
 import { formatDateLongNL } from '@/lib/format';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/instellingenRegels';
 import { getAbonnement, type AbonnementStand } from '@/services/instellingenService';
 import { Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { BEHEER_BUITEN_APP, toonAankoopInfo } from '@/lib/aankoopInfo';
 
 /**
  * Abonnement — alleen lezen, uit RPC `get_billing_status`, met dezelfde
@@ -59,6 +60,7 @@ export function AbonnementTab() {
     );
   }
 
+  const aankoop = toonAankoopInfo();
   const opzeggen = stand.opzeggenPerEindePeriode || stand.stoptNaLooptijd;
   const status =
     (ABONNEMENT_STATUS[stand.status ?? ''] ?? stand.status ?? 'Onbekend') +
@@ -75,22 +77,26 @@ export function AbonnementTab() {
       {stand.readonly ? (
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
           <Uitleg toon="waarschuwing">
-            {`${readonlyTekst(stand.readonlyReden).titel}\n${readonlyTekst(stand.readonlyReden).uitleg}`}
+            {`${readonlyTekst(stand.readonlyReden, Platform.OS).titel}\n${readonlyTekst(stand.readonlyReden, Platform.OS).uitleg}`}
           </Uitleg>
         </View>
       ) : null}
 
       <Kaart
         titel={pakketLabel(stand.tier)}
-        sub={`€ ${maandbedrag(stand.tier, stand.extraGebruikers)} p/mnd${
-          stand.extraGebruikers > 0
-            ? ` (${pakketLabel(stand.tier)} + ${stand.extraGebruikers} × € ${EXTRA_GEBRUIKER_PRIJS})`
-            : ''
-        }${stand.billingInterval === 'jaar' ? ' · jaarabonnement' : ''}`}
+        sub={
+          aankoop
+            ? `€ ${maandbedrag(stand.tier, stand.extraGebruikers)} p/mnd${
+                stand.extraGebruikers > 0
+                  ? ` (${pakketLabel(stand.tier)} + ${stand.extraGebruikers} × € ${EXTRA_GEBRUIKER_PRIJS})`
+                  : ''
+              }${stand.billingInterval === 'jaar' ? ' · jaarabonnement' : ''}`
+            : 'Huidig pakket'
+        }
       >
         <Uitleg toon={statusToon}>{status}</Uitleg>
         {stand.trial && stand.trialEindigtOp ? (
-          <Regel label="Gratis uitproberen t/m" waarde={formatDateLongNL(stand.trialEindigtOp)} s={s} />
+          <Regel label={aankoop ? 'Gratis uitproberen t/m' : 'Proefperiode t/m'} waarde={formatDateLongNL(stand.trialEindigtOp)} s={s} />
         ) : null}
         {stand.verlengtOp ? (
           <Regel
@@ -119,7 +125,7 @@ export function AbonnementTab() {
         </Kaart>
       ) : null}
 
-      {stand.billingInterval === 'jaar' && stand.welkomstactie ? (
+      {aankoop && stand.billingInterval === 'jaar' && stand.welkomstactie ? (
         <Kaart titel="Welkomstactie">
           <Text style={s.lijstTitel}>{WELKOMSTACTIES[stand.welkomstactie]?.label ?? stand.welkomstactie}</Text>
           <Text style={s.hint}>{WELKOMSTACTIES[stand.welkomstactie]?.kort ?? ''}</Text>
@@ -137,14 +143,14 @@ export function AbonnementTab() {
             <Regel
               key={k}
               label={MODULES[k]?.label ?? k}
-              waarde={MODULES[k] ? `€ ${MODULES[k].prijs} p/mnd` : ''}
+              waarde={aankoop && MODULES[k] ? `€ ${MODULES[k].prijs} p/mnd` : ''}
               s={s}
             />
           ))}
         </Kaart>
       ) : null}
 
-      {stand.heeftVerplichting && stand.verplichtingTot ? (
+      {aankoop && stand.heeftVerplichting && stand.verplichtingTot ? (
         <Kaart titel="Looptijd">
           <Text style={s.lijstTitel}>Jaarabonnement, loopt t/m {formatDateLongNL(stand.verplichtingTot)}</Text>
           <Text style={s.hint}>
@@ -155,6 +161,12 @@ export function AbonnementTab() {
         </Kaart>
       ) : null}
 
+      {!aankoop ? (
+        <Kaart titel="Beheren">
+          {/* iOS (App Store 3.1.1): geen prijzen, geen aankoop- of beheerlink. */}
+          <Text style={s.hint}>{BEHEER_BUITEN_APP}</Text>
+        </Kaart>
+      ) : (
       <Kaart titel="Beheren">
         <Text style={s.hint}>
           {stand.magBeheren
@@ -174,6 +186,7 @@ export function AbonnementTab() {
           />
         ) : null}
       </Kaart>
+      )}
     </>
   );
 }

@@ -41,8 +41,10 @@ import {
   werkbonVenster,
   WERKBON_STATUS_STIJL,
   type StatusFilter,
+  WERKBON_STATUSSEN,
 } from '@/lib/werkbonLogica';
 import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 type ChipKey = StatusFilter | 'mij';
 
@@ -97,7 +99,11 @@ export default function WorkOrdersScreen() {
   const [taken, setTaken] = useState<Record<string, { done: number; total: number }>>({});
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState<ChipKey>(isField ? 'mij' : 'alle');
+  const [chip, setChip] = useOnthouden<ChipKey>('werkbonnen.filter', isField ? 'mij' : 'alle', [
+    'mij',
+    'alle',
+    ...WERKBON_STATUSSEN,
+  ]);
 
   const load = useCallback(
     async () => {

@@ -5,7 +5,10 @@ const config: ExpoConfig = {
   slug: 'bossbase',
   owner: 'bossbase',
   scheme: 'bossbase',
-  version: '0.1.0',
+  // 0.2.0: nieuwe native modules (webview, print, sharing, file-system) en de
+  // echte iPad-app. Met runtimeVersion-policy 'appVersion' krijgt deze build zo
+  // een eigen runtime; een OTA-update kan build 0.1.0 (5) nooit bereiken.
+  version: '0.2.0',
 
   updates: {
     url: 'https://u.expo.dev/4e4f5d3e-9633-441a-a520-a32df9cc05e2',
@@ -21,8 +24,18 @@ const config: ExpoConfig = {
     },
   },
 
+  /**
+   * Oriëntatie: telefoons blijven staand (zo is de telefoonindeling ontworpen).
+   * De iPad mag alle kanten op — liggend, staand en in Split View/Stage
+   * Manager, wat op iPad alle vier de oriëntaties vraagt. Dat regelt
+   * `ios.infoPlist` hieronder (UISupportedInterfaceOrientations~ipad).
+   */
   orientation: 'portrait',
-  userInterfaceStyle: 'light',
+  /**
+   * 'automatic': zonder eigen keuze volgt de app het systeem (licht/donker).
+   * De keuze in de app (zon/maan-knop) wint altijd; zie ThemeProvider.
+   */
+  userInterfaceStyle: 'automatic',
 
   /**
    * Het appicoon komt uit `assets/bossbase-logo-source.jpeg`, het goedgekeurde
@@ -35,7 +48,9 @@ const config: ExpoConfig = {
 
   ios: {
     bundleIdentifier: 'nl.bossbase.app',
-    supportsTablet: false,
+    // Een echte iPad-app (geen vergrote iPhone-weergave): de layout schakelt
+    // vanaf 700 punten naar de tabletindeling, net als de webapp.
+    supportsTablet: true,
     associatedDomains: ['applinks:app.bossbase.nl'],
     config: {
       // Exportcompliance. BossBase gebruikt uitsluitend standaard- en daarmee
@@ -47,6 +62,19 @@ const config: ExpoConfig = {
       // Zonder deze verklaring vraagt App Store Connect er bij elke build
       // opnieuw naar, en blijft de build zolang bij de testers vandaan.
       usesNonExemptEncryption: false,
+    },
+    infoPlist: {
+      // De route-knop vraagt of Google Maps erop staat (canOpenURL) om dan de
+      // keuze Apple Kaarten / Google Maps te geven. Zonder deze regel antwoordt
+      // iOS altijd "nee".
+      LSApplicationQueriesSchemes: ['comgooglemaps'],
+      UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
     },
   },
 
@@ -96,9 +124,11 @@ const config: ExpoConfig = {
       'expo-image-picker',
       {
         photosPermission:
-          'BossBase gebruikt je fotobibliotheek om foto\'s aan een werkbon toe te voegen.',
+          'BossBase gebruikt je fotobibliotheek om foto\'s bij werkbonnen, kostenbonnen en projecten toe te voegen.',
         cameraPermission:
-          'BossBase gebruikt je camera om foto\'s bij een werkbon vast te leggen.',
+          'BossBase gebruikt je camera om foto\'s bij werkbonnen, kostenbonnen en projecten vast te leggen.',
+        // De app neemt geen video op: geen microfoontoestemming in Info.plist.
+        microphonePermission: false,
       },
     ],
     [

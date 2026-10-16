@@ -49,6 +49,7 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { ds, radius, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { useOnthouden } from '@/lib/useOnthouden';
 
 /**
  * Projecten — de projectenpagina van het dashboard (`ProjectsPage.jsx`):
@@ -98,7 +99,13 @@ const LEEG_CONCEPT: Concept = {
 
 function ProjectsInhoud() {
   const router = useRouter();
-  const { id: openId } = useLocalSearchParams<{ id?: string }>();
+  // `?nieuw=1&klant=<id>` (de "+" op de klantkaart) opent meteen een nieuw
+  // project met die klant ingevuld, zoals NewProjectModal in het dashboard.
+  const {
+    id: openId,
+    nieuw: nieuwParam,
+    klant: klantParam,
+  } = useLocalSearchParams<{ id?: string; nieuw?: string; klant?: string }>();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, mag, can } = usePermissions();
@@ -119,8 +126,17 @@ function ProjectsInhoud() {
   const [leden, setLeden] = useState<SelectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<ProjectStatusFilter>('all');
-  const [facturatie, setFacturatie] = useState<FacturatieFilter>('all');
+  const [status, setStatus] = useOnthouden<ProjectStatusFilter>('projecten.status', 'all', [
+    'all',
+    'gepland',
+    'in_uitvoering',
+    'afgerond',
+  ]);
+  const [facturatieKeuze, setFacturatie] = useOnthouden<FacturatieFilter>('projecten.facturatie', 'all', [
+    'all',
+    'unbilled',
+    'billed',
+  ]);
   const [zoek, setZoek] = useState('');
   const [concept, setConcept] = useState<Concept | null>(null);
 
@@ -128,6 +144,8 @@ function ProjectsInhoud() {
 
   const magMaken = mag('projecten', 'maken');
   const magBedragen = can('projectbedragen');
+  // Zonder recht op bedragen geen (onzichtbaar) facturatiefilter.
+  const facturatie: FacturatieFilter = magBedragen ? facturatieKeuze : 'all';
   const magVerkoop = can('verkoop');
 
   const load = useCallback(async () => {
@@ -165,9 +183,9 @@ function ProjectsInhoud() {
   }, [items]);
   const vandaag = vandaagIso();
 
-  const openNieuw = async () => {
+  const openNieuw = async (klantId?: string | null) => {
     setSaveError(null);
-    setConcept(LEEG_CONCEPT);
+    setConcept(klantId ? { ...LEEG_CONCEPT, customerId: klantId } : LEEG_CONCEPT);
     // Keuzelijsten pas bij het openen: de lijst zelf heeft ze niet nodig.
     const [k, l, d] = await Promise.all([
       klanten.length ? null : listCustomers(),
@@ -212,6 +230,15 @@ function ProjectsInhoud() {
     );
   };
 
+  useEffect(() => {
+    if (nieuwParam !== '1' || loading || !rechtenGeladen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (magMaken) openNieuw(klantParam || null);
+    router.setParams({ nieuw: undefined, klant: undefined });
+    // openNieuw als afhankelijkheid zou bij elke render opnieuw openen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nieuwParam, loading, rechtenGeladen]);
+
   if (loading || !rechtenGeladen) return <LoadingScreen label="Projecten laden…" />;
 
   if (error) {
@@ -241,7 +268,7 @@ function ProjectsInhoud() {
             subtitle="Beheer projecten, uren, offertes en facturatie"
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
-              magMaken ? <HeaderIconButton icon={Plus} label="Nieuw project" onPress={openNieuw} /> : undefined
+              magMaken ? <HeaderIconButton icon={Plus} label="Nieuw project" onPress={() => openNieuw()} /> : undefined
             }
           />
         }
@@ -250,20 +277,24 @@ function ProjectsInhoud() {
       >
         {/* KPI's */}
         <View style={[styles.kpis, tablet && styles.kpisTablet]}>
-          <View style={styles.kpi}>
+          <View style={[styles.kpi, tablet && styles.kpiTablet]}>
             <AppKpiCard label="Actieve projecten" value={String(kpi.actief)} />
           </View>
           {magBedragen ? (
-            <View style={styles.kpi}>
-              <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} />
+            <View style={[styles.kpi, tablet && styles.kpiTablet]}>
+              <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} valueTone="good" />
             </View>
           ) : null}
           {magBedragen ? (
-            <View style={styles.kpi}>
-              <AppKpiCard label="Te factureren" value={formatEUR(kpi.teFactureren)} />
+            <View style={[styles.kpi, tablet && styles.kpiTablet]}>
+              <AppKpiCard
+                label="Te factureren"
+                value={formatEUR(kpi.teFactureren)}
+                valueTone={kpi.teFactureren > 0 ? 'warn' : 'default'}
+              />
             </View>
           ) : null}
-          <View style={styles.kpi}>
+          <View style={[styles.kpi, tablet && styles.kpiTablet]}>
             <AppKpiCard label="Gewerkte uren" value={formatUren(kpi.uren)} />
           </View>
         </View>
@@ -308,7 +339,7 @@ function ProjectsInhoud() {
             />
             {items.length === 0 && magMaken ? (
               <View style={{ alignItems: 'center' }}>
-                <Button label="Eerste project" onPress={openNieuw} />
+                <Button label="Eerste project" onPress={() => openNieuw()} />
               </View>
             ) : null}
           </View>
@@ -481,6 +512,8 @@ const makeStyles = (t: ThemeColors) =>
     kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.md },
     kpisTablet: { flexWrap: 'nowrap' },
     kpi: { flexBasis: '45%', flexGrow: 1 },
+    // Op een tablet staan ze naast elkaar en delen ze de breedte gelijk.
+    kpiTablet: { flexBasis: 0, minWidth: 0 },
     zoek: { paddingHorizontal: 16, marginBottom: spacing.sm },
     lijst: { paddingHorizontal: 16, marginTop: spacing.md, gap: spacing.sm },
     lijstTablet: { flexDirection: 'row', flexWrap: 'wrap' },
