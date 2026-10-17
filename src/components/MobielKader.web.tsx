@@ -47,10 +47,18 @@ export function MobielKader({
   const viewport = useZichtbareViewport();
 
   // De browserbalk (en in een geïnstalleerde app de statusbalk) volgt het thema
-  // van de app, niet dat van het systeem.
+  // van de app, niet dat van het systeem. Nieuwere iOS-versies kleuren de balk
+  // achter het Dynamic Island naar de achtergrond van de pagina in plaats van
+  // naar `theme-color`; daarom gaan html en body mee (thema-start.js zet ze
+  // alleen bij openen).
   useEffect(() => {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.bg);
-  }, [t.bg]);
+    const donker = colorMode === 'dark';
+    for (const el of [document.documentElement, document.body]) {
+      el.style.backgroundColor = t.bg;
+      el.style.colorScheme = donker ? 'dark' : 'light';
+    }
+  }, [t.bg, colorMode]);
   return (
     <View
       style={[
