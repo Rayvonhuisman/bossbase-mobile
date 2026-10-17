@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Text, View, Platform } from 'react-native';
-import { openExtern } from '@/lib/linking';
+import { useMemo, useState } from 'react';
+import { Image, Text, View } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
@@ -10,17 +9,15 @@ import { Dialog } from '@/lib/dialog';
 import { useSave } from '@/lib/useSave';
 import { avatarKleuren, initialen } from '@/lib/avatar';
 import { WACHTWOORD_REGELS, wachtwoordGeldig } from '@/lib/instellingenRegels';
-import { openDashboard } from '@/lib/dashboardLink';
 import {
-  deactiveerEigenAccount,
   updateEigenProfiel,
   uploadEigenAvatar,
   verwijderEigenAvatar,
   wijzigWachtwoordMetHuidig,
 } from '@/services/profileService';
-import { getEigenaarId } from '@/services/teamService';
 import { spacing } from '@/theme';
-import { Gegeven, Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { Gegeven, Kaart, stijlVoorInstellingen } from './Bouwstenen';
+import { AccountVerwijderenKaart } from './AccountVerwijderenKaart';
 import { kiesAfbeelding } from './kiesAfbeelding';
 
 const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewerker: 'Medewerker' };
@@ -28,37 +25,20 @@ const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewe
 /**
  * Mijn profiel — voor iedereen, zoals de tab `profiel` in het dashboard:
  * profielfoto, naam, e-mail (alleen lezen), rol (alleen lezen), wachtwoord
- * wijzigen (met het huidige wachtwoord) en de Gevarenzone.
- *
- * Gevarenzone: een teamlid kan zijn eigen account deactiveren (RPC
- * `delete_own_account`). De eigenaar sluit met "Bedrijf sluiten" het hele
- * bedrijf én zegt het abonnement op (edge function `billing-cancel`); dat doet
- * de app bewust niet zelf en verwijst daarvoor naar het dashboard.
+ * wijzigen (met het huidige wachtwoord) en Account verwijderen
+ * (AccountVerwijderenKaart: teamlid, eigendomsoverdracht, bedrijf).
  */
 export function ProfielTab() {
   const { colors: t, colorMode } = useTheme();
   const s = useMemo(() => stijlVoorInstellingen(t), [t]);
-  const { user, profile, role, refreshProfile, signOut } = useAuth();
+  const { user, profile, role, refreshProfile } = useAuth();
 
   const [naamConcept, setNaam] = useState<string | null>(null);
   const naam = naamConcept ?? profile?.full_name ?? '';
   const [ww, setWw] = useState<{ huidig: string; nieuw: string; herhaal: string } | null>(null);
-  const [verwijder, setVerwijder] = useState<string | null>(null);
-  const [eigenaarId, setEigenaarId] = useState<string | null | undefined>(undefined);
   const { save, saving } = useSave<unknown>();
   const { save: saveWw, saving: wwBezig, error: wwFout } = useSave<unknown>();
-  const { save: saveDel, saving: delBezig, error: delFout } = useSave<unknown>();
 
-  useEffect(() => {
-    let actief = true;
-    getEigenaarId().then((id) => actief && setEigenaarId(id));
-    return () => {
-      actief = false;
-    };
-  }, []);
-
-  const isAdmin = role === 'admin';
-  const zegtBedrijfOp = isAdmin && (!eigenaarId || eigenaarId === profile?.id);
   const naamGewijzigd = naam.trim() !== (profile?.full_name ?? '').trim();
   const kleuren = avatarKleuren(profile?.full_name || user?.email || '?', colorMode === 'dark');
 
@@ -110,17 +90,6 @@ export function ProfielTab() {
     saveWw(() => wijzigWachtwoordMetHuidig(ww.huidig, ww.nieuw), {
       onSuccess: () => setWw(null),
       succesMelding: 'Wachtwoord gewijzigd',
-    });
-  };
-
-  const deactiveren = () => {
-    if ((verwijder ?? '').trim().toUpperCase() !== 'VERWIJDEREN') return;
-    saveDel(() => deactiveerEigenAccount(), {
-      onSuccess: async () => {
-        setVerwijder(null);
-        Dialog.alert('Account gedeactiveerd', 'Je account is gedeactiveerd. Je wordt nu uitgelogd.');
-        await signOut();
-      },
     });
   };
 
@@ -186,48 +155,8 @@ export function ProfielTab() {
         />
       </Kaart>
 
-      {/* Account verwijderen — vindbaar onder Instellingen › Mijn profiel (Apple 5.1.1(v)).
-          Eerlijk over wat er nu gebeurt: de backend kent nog geen definitieve
-          verwijdering van één account (zie docs/testflight-gelijktrekken.md). */}
-      <Kaart titel="Account verwijderen">
-        <Text style={s.hint}>
-          {zegtBedrijfOp
-            ? 'Je bent de eigenaar. Je account hoort bij het hele bedrijf: sluit je het bedrijf, dan verliezen jij en je hele team direct de toegang en wordt het abonnement opgezegd. Dit kan niet ongedaan worden gemaakt. Facturen en btw-gegevens moet je zelf 7 jaar bewaren; exporteer ze eerst.'
-            : 'Je verliest direct de toegang tot BossBase. Het bedrijf en het werk dat je voor het bedrijf hebt vastgelegd (uren, werkbonnen, notities) blijven bij het bedrijf voor zijn administratie.'}
-        </Text>
-        <Text style={s.hint}>
-          {zegtBedrijfOp
-            ? 'Vraag hieronder de verwijdering van je bedrijf en alle accounts aan; wij bevestigen per e-mail.'
-            : 'Deactiveren stopt je toegang meteen. Vraag daarna de definitieve verwijdering van je naam, e-mailadres en profielfoto aan; wij bevestigen per e-mail.'}
-        </Text>
-        <View style={s.knoppen}>
-          {zegtBedrijfOp ? (
-            // Op een telefoon opent het dashboard niet (alleen op computer/tablet).
-            Platform.OS === 'web' ? (
-              <Button
-                label="Bedrijf sluiten op het dashboard"
-                variant="secondary"
-                onPress={() => openDashboard('instellingen', 'profiel')}
-              />
-            ) : null
-          ) : eigenaarId !== undefined ? (
-            <Button label="Account deactiveren" variant="secondary" onPress={() => setVerwijder('')} />
-          ) : null}
-          <Button
-            label={zegtBedrijfOp ? 'Verwijdering van bedrijf aanvragen' : 'Definitieve verwijdering aanvragen'}
-            variant="ghost"
-            onPress={() =>
-              openExtern(
-                `mailto:info@bossbase.nl?subject=${encodeURIComponent(
-                  zegtBedrijfOp
-                    ? 'Verzoek: mijn account en de gegevens van mijn bedrijf verwijderen'
-                    : 'Verzoek: mijn account en gegevens verwijderen',
-                )}`,
-              )
-            }
-          />
-        </View>
-      </Kaart>
+      {/* Account verwijderen — vindbaar onder Instellingen › Mijn profiel (Apple 5.1.1(v)). */}
+      <AccountVerwijderenKaart />
 
       <FormSheet
         visible={ww !== null}
@@ -281,31 +210,6 @@ export function ProfielTab() {
         ) : null}
       </FormSheet>
 
-      <FormSheet
-        visible={verwijder !== null}
-        title="Account deactiveren"
-        subtitle="Lees dit goed door — deze actie heeft gevolgen."
-        error={delFout}
-        saving={delBezig}
-        submitLabel="Account deactiveren"
-        submitDisabled={(verwijder ?? '').trim().toUpperCase() !== 'VERWIJDEREN'}
-        onSubmit={deactiveren}
-        onClose={() => setVerwijder(null)}
-      >
-        <Uitleg toon="waarschuwing">
-          {'• Je wordt direct uitgelogd en kunt niet meer inloggen.\n' +
-            '• Wat je in BossBase hebt vastgelegd (uren, werkbonnen, notities) hoort bij het bedrijf en blijft daar staan.\n' +
-            '• Je profiel wordt niet verwijderd, zodat een beheerder je later weer kan activeren. Wil je dat je naam en e-mailadres worden verwijderd, mail dan naar info@bossbase.nl.'}
-        </Uitleg>
-        <FormField
-          label="Typ VERWIJDEREN om te bevestigen"
-          value={verwijder ?? ''}
-          onChangeText={setVerwijder}
-          placeholder="VERWIJDEREN"
-          autoCapitalize="characters"
-          autoCorrect={false}
-        />
-      </FormSheet>
     </>
   );
 }
