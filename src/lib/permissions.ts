@@ -163,6 +163,13 @@ export function gateFor(route: string): NavGate | null {
 // iets vergeten, en het is zijn eigen administratie die hij voor zich ziet.
 
 export const READONLY_TEKSTEN: Record<string, { titel: string; uitleg: string }> = {
+  verwijdering_gepland: {
+    titel: 'Dit bedrijf wordt verwijderd',
+    uitleg:
+      'De eigenaar heeft het bedrijf laten verwijderen. Tot de verwijderdatum kun je alles bekijken en ' +
+      'exporteren, maar niets meer toevoegen, wijzigen of versturen. De eigenaar kan dit nog annuleren ' +
+      'onder Instellingen › Mijn profiel.',
+  },
   proefperiode_verlopen: {
     titel: 'Je gratis periode is voorbij',
     uitleg:
@@ -196,6 +203,13 @@ export const READONLY_ALGEMEEN = {
  * kiezen of betaalgegevens bij te werken — dat gebeurt buiten de app.
  */
 export const READONLY_TEKSTEN_IOS: Record<string, { titel: string; uitleg: string }> = {
+  verwijdering_gepland: {
+    titel: 'Dit bedrijf wordt verwijderd',
+    uitleg:
+      'De eigenaar heeft het bedrijf laten verwijderen. Tot de verwijderdatum kun je alles bekijken en ' +
+      'exporteren, maar niets meer toevoegen, wijzigen of versturen. De eigenaar kan dit nog annuleren ' +
+      'onder Instellingen › Mijn profiel.',
+  },
   proefperiode_verlopen: {
     titel: 'Je proefperiode is voorbij',
     uitleg:

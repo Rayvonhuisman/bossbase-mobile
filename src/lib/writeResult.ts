@@ -92,6 +92,12 @@ export function classificeerFout(
 
   const technisch = `${code} ${message}`.trim();
 
+  // Geplande bedrijfsverwijdering (hint 'verwijdering_gepland'): de melding
+  // van de database zegt precies wat er aan de hand is.
+  if (hint === 'verwijdering_gepland') {
+    return writeFout('readonly', 'Dit bedrijf wordt verwijderd. Je kunt alles nog bekijken en exporteren, maar niets meer wijzigen.', technisch);
+  }
+
   // De trigger van het dashboard zet 'readonly' letterlijk in de HINT.
   if (alles.includes('readonly')) return writeFout('readonly', undefined, technisch);
 
