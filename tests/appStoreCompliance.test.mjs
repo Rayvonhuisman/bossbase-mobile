@@ -51,21 +51,36 @@ test('geen externe abonnementslink of pakketkeuze op iOS', () => {
   }
 });
 
-test('accountverwijdering: vindbaar, rolafhankelijk, eigenaar kan niet deactiveren in plaats van sluiten', () => {
+test('accountverwijdering: vindbaar en echt (Edge Function account-verwijderen), geen deactiveren of mailverzoek meer', () => {
   const tab = lees('src/components/instellingen/ProfielTab.tsx');
-  assert.match(tab, /<Kaart titel="Account verwijderen">/);
-  // Eigenaar: geen deactiveerknop; medewerker/beheerder wel (na laden eigenaar).
-  assert.match(tab, /zegtBedrijfOp \? \([\s\S]*?\) : eigenaarId !== undefined \? \(\s*<Button label="Account deactiveren"/);
-  // Op iOS geen dashboardlink die op een telefoon niet opent.
-  assert.match(tab, /Platform\.OS === 'web' \? \(\s*<Button\s*label="Bedrijf sluiten op het dashboard"/);
+  assert.match(tab, /<AccountVerwijderenKaart \/>/);
+  assert.doesNotMatch(tab, /deactiveer|delete_own_account|mailto:|openDashboard/);
+  const kaart = lees('src/components/instellingen/AccountVerwijderenKaart.tsx');
+  assert.match(kaart, /<Kaart titel="Account verwijderen">/);
+  for (const knop of ['Account verwijderen', 'Eigendom overdragen', 'Bedrijf verwijderen', 'Verwijdering annuleren', 'Accepteren', 'Weigeren']) {
+    assert.match(kaart, new RegExp(`label="${knop}"`), knop);
+  }
   const profiel = lees('app/profile/index.tsx');
   assert.match(profiel, /title: 'Account verwijderen'[\s\S]*router\.push\('\/settings\?tab=profiel'\)/);
 });
 
-test('geen echte verwijdering in tests: de RPC zit alleen achter de bevestiging met VERWIJDEREN', () => {
-  const tab = lees('src/components/instellingen/ProfielTab.tsx');
-  assert.match(tab, /VERWIJDEREN/);
-  assert.match(lees('src/services/profileService.ts'), /rpc\('delete_own_account'\)/);
+test('geen echte verwijdering zonder wachtwoord en bevestiging; geen ids of wachtwoord naar de functie', () => {
+  const kaart = lees('src/components/instellingen/AccountVerwijderenKaart.tsx');
+  // Elke ingrijpende actie begint met opnieuw aanmelden.
+  for (const fn of ['lidVerwijderen', 'overdragen', 'bedrijfVerwijderen']) {
+    assert.match(kaart, new RegExp(`const ${fn} = \\(\\) =>[\\s\\S]*?await bevestigMetWachtwoord\\(wachtwoord\\)`), fn);
+  }
+  assert.match(kaart, /submitDisabled=\{!wachtwoord \|\| !bevestigingKlopt\(bevestiging\)\}/);
+  const dienst = lees('src/services/accountVerwijderenService.ts');
+  assert.doesNotMatch(dienst, /user_id|company_id/);
+  // Wat er per actie meegaat: alleen sleutel, ontvanger, overdracht-id en bevestiging.
+  const velden = [...dienst.matchAll(/actie<[^(]*\('[a-z_]+'(?:, \{ ([^}]*) \})?\)/g)].flatMap((m) => (m[1] ?? '').split(',').map((v) => v.trim().split(':')[0]).filter(Boolean));
+  assert.ok(velden.length >= 6, String(velden));
+  for (const v of velden) assert.ok(['sleutel', 'naar', 'id', 'bevestiging'].includes(v), v);
+  // Het wachtwoord gaat alleen naar Supabase Auth, niet naar de functie.
+  assert.match(dienst, /signInWithPassword\(\{ email, password: wachtwoord \}\)/);
+  assert.doesNotMatch(dienst, /invoke\([^)]*wachtwoord/);
+  assert.doesNotMatch(dienst, /service_role|SERVICE_ROLE/);
 });
 
 test('PDOK: alleen zoektekst en lookup-id naar api.pdok.nl, geen BossBase-opslag', () => {
