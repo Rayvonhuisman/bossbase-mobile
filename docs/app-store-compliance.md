@@ -3,41 +3,26 @@
 Stand 2026-10-16, branch `sync/testflight-met-pwa`. Alleen-lezen onderzocht tegen dashboard `origin/main` en de
 live database; geen backend gewijzigd.
 
-## 1. Accountverwijdering (richtlijn 5.1.1(v)) — **open blokkade**
+## 1. Accountverwijdering (richtlijn 5.1.1(v)) — gebouwd, nog niet op productie
 
-**Hoe het nu werkt (code + live functies):**
+De app (Instellingen › Mijn profiel › **Account verwijderen**, ook via Profiel ›
+Account verwijderen) gebruikt de nieuwe Edge Function `account-verwijderen` uit de
+dashboardrepository (branch `security/accountverwijdering-app-store`, lokaal, nog niet
+gepusht). Volledige beschrijving, verwijdermatrix, bewaarbeleid, back-ups, Stripe en
+uitrol: `docs/accountverwijdering.md` in die branch.
 
-| Rol | Dashboard en app bieden | Backend doet | Voldoet aan 5.1.1(v)? |
-|---|---|---|---|
-| Medewerker | "Account deactiveren" (VERWIJDEREN typen) | `delete_own_account()`: `profiles.actief=false`, `verwijderd_op`, Auth-ban 100 jaar, sessies weg. Naam, e-mail, avatar en `auth.users`-rij blijven. | Nee — omkeerbare deactivering |
-| Beheerder (niet eigenaar) | idem; laatste actieve beheerder geblokkeerd | idem | Nee |
-| Eigenaar | "Bedrijf sluiten" — alleen in het dashboard | `billing-cancel` (opzeggen per einde periode) + `cancel_company_account()` (bedrijf `opgezegd`, alle profielen gedeactiveerd); echte verwijdering pas 2 jaar later via cron `opschonen` | Nee — en in de iOS-app kan de eigenaar niets: de dashboardlink opent op een telefoon het "download de app"-scherm |
+| Rol | In de app |
+| --- | --- |
+| Teamlid | **Account verwijderen**: wachtwoord + VERWIJDEREN. Login weg uit Auth, persoonsgegevens weg, historie bij het bedrijf als „Verwijderde gebruiker”. Daarna lokaal uitgelogd, toestelgegevens van de gebruiker gewist, inlogscherm. |
+| Eigenaar | **Eigendom overdragen** aan een actieve beheerder (die accepteert, 7 dagen geldig) en daarna het eigen account verwijderen, of **Bedrijf verwijderen**: over 30 dagen (alleen-lezen, exporteren kan, annuleren kan) of nu definitief (bedrijfsnaam typen). |
+| Ontvanger van een overdracht | **Accepteren** / **Weigeren** op dezelfde kaart; melding linkt naar Mijn profiel. |
 
-Herbevestiging: alleen VERWIJDEREN typen, geen wachtwoord. Bewaarplicht wordt alleen als tekst genoemd (klant
-bewaart facturen 7 jaar zelf). Geen functie om eigenaarschap over te dragen.
+Een medewerker kan het bedrijf niet verwijderen en een beheerder kan de eigenaar niet
+vervangen: de server controleert rol en eigendom (lokaal getest, 105 integratietests).
+Tot de backend live staat, geeft de kaart in een build tegen productie de melding dat
+de gegevens niet geladen konden worden; er wordt dan niets verwijderd.
 
-**Wat de app nu doet (deze branch):**
-- Instellingen › Mijn profiel: kaart **"Account verwijderen"** (was "Gevarenzone"), plus een ingang
-  "Account verwijderen" op de profielpagina (avatar rechtsboven → Account).
-- Teksten zeggen eerlijk wat er gebeurt: wat stopt, wat bij het bedrijf blijft, definitief, en voor de eigenaar
-  dat het hele bedrijf en team geraakt worden. Medewerker/beheerder: deactiveren + "Definitieve verwijdering
-  aanvragen" (e-mail). Eigenaar: alleen "Verwijdering van bedrijf aanvragen" (e-mail); de dashboardknop staat
-  alleen op web. Een medewerker kan nooit het bedrijf verwijderen (server weigert `cancel_company_account`).
-- **Dit is niet genoeg voor Apple**: deactiveren + e-mail is expliciet onvoldoende.
-
-**Wat aan de backend ontbreekt (niet gebouwd, apart te beslissen):**
-1. Edge Function `account-verwijderen` (verify_jwt, service-role binnen de functie) met herauthenticatie
-   (wachtwoord via `signInWithPassword` met een anon-client, of de bestaande e-mailcode).
-2. Niet-eigenaar: profiel anonimiseren (`full_name='Verwijderd account'`, e-mail/telefoon leeg, avatar-bestand
-   weg), persoonlijke rijen verwijderen (Boss-gesprekken, notificaties, tokens — exact te inventariseren),
-   `company_members` ontkoppelen, daarna `auth.admin.deleteUser`. Profiel blijft als anonieme rij omdat
-   `werkbon_uren.profile_id` NO ACTION is (uren horen bij de administratie van het bedrijf).
-3. Eigenaar: of eigenaarschap overdragen (nieuwe RPC `bb_eigenaar_overdragen`), of "account en bedrijf
-   verwijderen": `billing-cancel` + `cancel_company_account` + verwijderdatum (bijv. 30 dagen bedenktijd) waarop
-   `opschonen` het bedrijf en alle accounts verwijdert in plaats van na 2 jaar.
-4. Beleidsbesluiten: bedenktermijn; lopende incasso bij een jaarabonnement; wat BossBase zelf bewaart.
-
-Zodra dat er is, roept de app hem aan vanuit dezelfde kaart (sheet met wachtwoord + VERWIJDEREN).
+**Nog nodig voor App Review:** de productie-uitrol van de backend (aparte goedkeuring).
 
 ## 2. Abonnementen en aankopen op iOS (richtlijn 3.1.1/3.1.3)
 
