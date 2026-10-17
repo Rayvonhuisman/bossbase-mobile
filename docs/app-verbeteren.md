@@ -167,6 +167,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 17-10 — Donkere modus: de balk achter het Dynamic Island bleef wit. html en body volgen nu het thema van de app, niet alleen `theme-color` (dc04ac8). Commits gaan voortaan met `info@bossbase.nl` (GitHub-account BossBase); de app-repo staat tijdelijk openbaar zodat Vercel op een push uitrolt.
 - 16-10 — Eindtest op de preview (productiebuild met de echte Vercel-headers), als Claude Eigenaar in Test Account Claude, telefoon 390×844 en iPad 820×1180 / 1180×820:
   - Totaal-overzicht met dubbelboekingen.
   - WB-004 ingepland op twee dagen, met een dagploeg en Bus 2 alleen op de eerste dag.
