@@ -3,6 +3,21 @@
 Dit bestand wordt bij elke sessie ingelezen. De app deelt database, edge functions,
 rechten en pakketten met het dashboard (~/BossBase); zie ook ~/BossBase/CLAUDE.md.
 
+## Nooit iets versturen naar echte gebruikers of klanten zonder akkoord
+
+**Vaste regel: stuur nooit een mail, melding of bericht naar echte gebruikers of
+klanten zonder uitdrukkelijk akkoord van Niels.** Dat geldt voor eenmalige
+verzendingen, aankondigingen, bulkmails en tests. Laat vooraf zien naar wie het
+gaat (aantal en bedrijven) en de volledige tekst, en wacht op akkoord. Testen
+gebeurt alleen met Test Account Claude en +adressen van Niels.
+
+Een opdracht als "kondig het aan" of "stuur het rond" is géén akkoord om te
+versturen: maak het klaar, laat ontvangers en tekst zien, en wacht. Op 22 oktober
+2026 ging de aankondiging van de verwerkersovereenkomst zonder dat akkoord naar
+zeven beheerders, onder wie die van Glasmeesters. Aankondigingen van juridische
+documenten gaan daarom standaard alleen als melding in het dashboard (edge
+function `juridisch-aankondigen`); een mail kan pas na akkoord per keer.
+
 ## Testen: altijd met Test Account Claude
 
 **Vaste regel: test alleen met het bedrijf "Test Account Claude", nooit met echte
