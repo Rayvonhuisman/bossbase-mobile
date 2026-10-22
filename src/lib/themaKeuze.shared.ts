@@ -5,7 +5,13 @@
  */
 export type Thema = 'light' | 'dark';
 
-export const THEMA_SLEUTEL = 'bb.colorMode';
+/**
+ * Nieuwe sleutel sinds 22-10: onder `bb.colorMode` stonden ook de standen van de
+ * oude themaknop in de kop, waardoor wie daar ooit op tikte nooit op
+ * "Zoals het apparaat" kwam. Die oude waarde wordt bij het openen gewist.
+ */
+export const THEMA_SLEUTEL = 'bb.weergave';
+export const OUDE_THEMA_SLEUTEL = 'bb.colorMode';
 
 export function bepaalThema(opgeslagen: string | null | undefined, systeem: string | null | undefined): Thema {
   if (opgeslagen === 'light' || opgeslagen === 'dark') return opgeslagen;

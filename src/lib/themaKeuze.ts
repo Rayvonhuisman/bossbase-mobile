@@ -3,6 +3,7 @@ export {
   leesVoorkeur,
   THEMA_OPTIES,
   THEMA_SLEUTEL,
+  OUDE_THEMA_SLEUTEL,
   type Thema,
   type ThemaVoorkeur,
 } from './themaKeuze.shared';

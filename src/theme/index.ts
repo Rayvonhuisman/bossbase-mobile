@@ -204,15 +204,6 @@ export const dsShadowPop = {
   elevation: 8,
 } as const;
 
-/** De groene gloed onder een primaire knop of FAB. */
-export const dsShadowGreen = {
-  shadowColor: '#22C55E',
-  shadowOpacity: 0.3,
-  shadowRadius: 24,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 6,
-} as const;
-
 // ---------------------------------------------------------------------------
 // Light en dark
 // ---------------------------------------------------------------------------

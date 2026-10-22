@@ -167,6 +167,7 @@ testdata in productie aanmaken is niet gedaan. Afgedekt met een unit-test
 
 ## Voortgangslog
 
+- 22-10 — Groene gloed weg rond knoppen (primaire knop, FAB, + in de kop, onboarding). Weergave: nieuwe opslagsleutel `bb.weergave`; de oude `bb.colorMode` (ook gevuld door de vroegere themaknop in de kop) wordt gewist, dus iedereen start eenmalig op "Zoals het apparaat". Getest op de PWA-build als Claude Eigenaar, telefoon 390×844 en iPad 820×1180 / 1180×820. Native app niet getest (geen simulator); die krijgt het pas met een nieuwe build.
 - 17-10 — Donkere modus: de balk achter het Dynamic Island bleef wit. html en body volgen nu het thema van de app, niet alleen `theme-color` (dc04ac8). Commits gaan voortaan met `info@bossbase.nl` (GitHub-account BossBase); de app-repo staat tijdelijk openbaar zodat Vercel op een push uitrolt.
 - 16-10 — Eindtest op de preview (productiebuild met de echte Vercel-headers), als Claude Eigenaar in Test Account Claude, telefoon 390×844 en iPad 820×1180 / 1180×820:
   - Totaal-overzicht met dubbelboekingen.

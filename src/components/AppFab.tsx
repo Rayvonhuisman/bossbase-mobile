@@ -47,12 +47,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    // De groene gloed uit het ontwerp: 0 8px 24px rgba(34,197,94,.3).
-    shadowColor: ds.green,
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 9,
   },
   label: {
     fontSize: 15,

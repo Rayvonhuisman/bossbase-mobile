@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
-import { ds, dsShadowGreen, radius, spacing, type ThemeColors } from '@/theme';
+import { ds, radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
@@ -67,9 +67,6 @@ const makeStyles = (t: ThemeColors) =>
     },
     primary: {
       backgroundColor: ds.green,
-      // Dezelfde groene gloed als de FAB, zodat de primaire actie op elk
-      // scherm hetzelfde gewicht heeft.
-      ...dsShadowGreen,
     },
     secondary: {
       backgroundColor: t.card,

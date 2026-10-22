@@ -2,7 +2,8 @@
 (function () {
   var donker = false;
   try {
-    var opgeslagen = window.localStorage.getItem('bb.colorMode');
+    window.localStorage.removeItem('bb.colorMode'); /* oude sleutel, zie themaKeuze.shared.ts */
+    var opgeslagen = window.localStorage.getItem('bb.weergave');
     if (opgeslagen === 'dark') donker = true;
     else if (opgeslagen !== 'light') donker = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   } catch (e) {

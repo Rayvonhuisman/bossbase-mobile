@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { ds, type ThemeColors, dsShadowGreen } from '@/theme';
+import { ds, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 
 type Props = {
@@ -60,7 +60,7 @@ export function HeaderIconButton({
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     knop: { alignItems: 'center', justifyContent: 'center' },
-    primair: { backgroundColor: ds.green, ...dsShadowGreen },
+    primair: { backgroundColor: ds.green },
     plain: {
       backgroundColor: t.card,
       borderWidth: StyleSheet.hairlineWidth,

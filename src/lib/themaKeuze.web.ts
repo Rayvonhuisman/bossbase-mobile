@@ -1,8 +1,11 @@
+import { THEMA_SLEUTEL } from './themaKeuze.shared';
+
 export {
   bepaalThema,
   leesVoorkeur,
   THEMA_OPTIES,
   THEMA_SLEUTEL,
+  OUDE_THEMA_SLEUTEL,
   type Thema,
   type ThemaVoorkeur,
 } from './themaKeuze.shared';
@@ -13,7 +16,7 @@ export {
  */
 export function leesOpgeslagenThemaDirect(): string | null {
   try {
-    return window.localStorage.getItem('bb.colorMode');
+    return window.localStorage.getItem(THEMA_SLEUTEL);
   } catch {
     return null;
   }

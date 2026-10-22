@@ -45,6 +45,18 @@ test('geen themaflits: startscript leest dezelfde sleutel vóór de bundel en zi
   assert.match(lees('src/providers/ThemeProvider.tsx'), /useState<ThemaVoorkeur>\(\(\) =>\s*leesVoorkeur\(leesOpgeslagenThemaDirect\(\)\)/);
 });
 
+test('oude sleutel van de themaknop wordt gewist, zodat iedereen op "Zoals het apparaat" begint', () => {
+  assert.notEqual(THEMA_SLEUTEL, 'bb.colorMode');
+  assert.match(lees('public/thema-start.js'), /removeItem\('bb\.colorMode'\)/);
+  assert.match(lees('src/providers/ThemeProvider.tsx'), /removeItem\(OUDE_THEMA_SLEUTEL\)/);
+});
+
+test('geen groene gloed rond knoppen', () => {
+  for (const pad of ['src/components/Button.tsx', 'src/components/AppFab.tsx', 'src/components/HeaderIconButton.tsx', 'app/(onboarding)/_components.tsx']) {
+    assert.doesNotMatch(lees(pad), /dsShadowGreen|shadowColor: (ds|onb)\.green/, pad);
+  }
+});
+
 test('weekurenwidget: op iPad onder de kolommen over de volle breedte, op telefoon in de kolom', () => {
   const bron = lees('app/(tabs)/today.tsx');
   assert.match(bron, /\{tablet \? null : dezeWeek\}/);

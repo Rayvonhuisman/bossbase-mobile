@@ -14,6 +14,7 @@ import {
   bepaalThema,
   leesOpgeslagenThemaDirect,
   leesVoorkeur,
+  OUDE_THEMA_SLEUTEL,
   THEMA_SLEUTEL,
   type ThemaVoorkeur,
 } from '@/lib/themaKeuze';
@@ -60,6 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         // Ignore read failures — fall back to the system preference.
       });
+    AsyncStorage.removeItem(OUDE_THEMA_SLEUTEL).catch(() => {});
     return () => {
       mounted = false;
     };
