@@ -11,14 +11,21 @@ gaan via EAS en worden hier niet geraakt.
 - **Featurebranches worden nooit Production.** In `vercel.json` staan alleen
   `main` en `feature/pwa-web` aan voor Git-deployments; alle andere branches
   bouwen niet.
-- **Er bouwt niets vanzelf.** De Ignored Build Step van het project staat in
-  rust op exact `exit 0` (alles overslaan). Voor een release zet je hem
-  tijdelijk open voor precies één branch, en daarna weer terug.
+- **Een push bouwt vanzelf (sinds 22-10).** De Ignored Build Step is leeg: een
+  push naar `main` gaat direct naar Production (`app.bossbase.nl`), een push
+  naar `feature/pwa-web` wordt een Preview. Andere branches bouwen niet
+  (`vercel.json`). De stappen hieronder over de Ignored Build Step open- en
+  dichtzetten zijn daarmee vervallen.
+- **Wie kan uitrollen:** alleen wie naar de GitHub-repo mag pushen (Rayvonhuisman,
+  BossBase) en lid is van het Vercel-team *Bossbase* (bossbase en
+  rayvonhuisman-2797, beiden eigenaar). Vercel weigert commits van auteurs die
+  het niet aan een teamlid kan koppelen ("Deployment was blocked"), en Git Fork
+  Protection staat aan: een pull request vanuit een fork bouwt pas na goedkeuring.
 - **Previews zijn afgeschermd** met Vercel Deployment Protection. Na de
   livegang staat de bescherming op *Standard Protection*: alle previews en
   gegenereerde `*.vercel.app`-adressen vragen een Vercel-login, alleen
   `app.bossbase.nl` is openbaar.
-- **Nooit force-pushen, nooit rechtstreeks naar `main` pushen.** GitHub kan dat
+- **Nooit force-pushen.** GitHub kan dat
   op het huidige gratis plan niet afdwingen voor een privé-repo; de
   `pre-push`-hook in de lokale clone weigert het wel (zie onderaan).
 - In de webbundel staan alleen de publieke Supabase-URL en de anon-sleutel.
