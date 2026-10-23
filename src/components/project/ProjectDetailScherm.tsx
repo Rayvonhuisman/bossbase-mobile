@@ -103,6 +103,7 @@ import { OFFERTE_STATUS } from '@/services/offerteService';
 import { factuurStatusLabel } from '@/services/factuurService';
 import { ACTIVITEIT_TYPES, activiteitTypeLabel, createActivity } from '@/services/activityService';
 import type { Customer } from '@/types/domain';
+import { BestandenBlok } from '@/components/BestandenBlok';
 
 /**
  * Het projectdetail — de app-versie van `ProjectDetailDrawer` uit het
@@ -893,6 +894,10 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           </View>
         ) : null}
       </View>
+
+      {/* Alles wat bij deze klus bewaard is, plus eigen uploads (tekeningen,
+          certificaten). Wie wat ziet, bepaalt de database per bron. */}
+      {project ? <BestandenBlok projectId={project.id} /> : null}
 
       {project ? (
         <Blok

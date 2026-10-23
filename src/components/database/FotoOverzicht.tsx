@@ -17,8 +17,10 @@ import { ds, radius, spacing, type ThemeColors } from '@/theme';
  * de Database-pagina.
  *
  * De bucket `werkbon-fotos` is privé: elke tegel loopt via een kortlopende
- * signed URL. Een foto waarvan je de werkbon niet mag openen toont wel de foto
- * maar niet de klus (RLS op `werkbonnen` is smaller dan op `werkbon_fotos`).
+ * signed URL. Werkbonfoto's volgen de rechten van hun werkbon, in de tabel én in
+ * de opslag (migratie 20261023161512 in ~/BossBase): je ziet hier alleen foto's
+ * van werkbonnen die je mag openen. Admins, het recht planning of alles inzien
+ * en de gedeelde werkruimte (Starter/Groei) zien dus alles.
  */
 export function FotoOverzicht() {
   const router = useRouter();

@@ -114,6 +114,7 @@ import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
+import { BestandenBlok } from '@/components/BestandenBlok';
 import { klantTotalen, klantType, komendePlanRegels, lokaleDatumTijd, planRegels } from '@/lib/relaties';
 
 /**
@@ -778,6 +779,9 @@ export default function CustomerDetailScreen() {
           )}
         </KaartBlok>
       ) : null}
+
+      {/* Bestanden van deze klant en al zijn projecten, plus eigen uploads. */}
+      <BestandenBlok klantId={customer.id} projecten={projecten} />
 
       <KaartBlok
         titel="Werkbonnen"

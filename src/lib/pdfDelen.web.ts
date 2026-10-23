@@ -15,12 +15,17 @@ const kanBestandDelen = (f: File) =>
 
 export const kanPrintenViaDelen = isIos;
 
-function alsBestand(base64: string, bestandsnaam: string): File {
-  return new File([base64NaarBytes(base64) as BlobPart], bestandsnaam, { type: 'application/pdf' });
+function alsBestand(base64: string, bestandsnaam: string, mime = 'application/pdf'): File {
+  return new File([base64NaarBytes(base64) as BlobPart], bestandsnaam, { type: mime });
 }
 
-export async function deelPdf(base64: string, bestandsnaam: string): Promise<void> {
-  const f = alsBestand(base64, bestandsnaam);
+export function deelPdf(base64: string, bestandsnaam: string): Promise<void> {
+  return deelBestand(base64, bestandsnaam, 'application/pdf');
+}
+
+/** Elk soort bestand delen; kan het toestel dat niet, dan downloaden. */
+export async function deelBestand(base64: string, bestandsnaam: string, mime: string): Promise<void> {
+  const f = alsBestand(base64, bestandsnaam, mime);
   if (kanBestandDelen(f)) {
     try {
       await navigator.share({ files: [f], title: bestandsnaam });
@@ -30,6 +35,17 @@ export async function deelPdf(base64: string, bestandsnaam: string): Promise<voi
       if ((e as { name?: string })?.name === 'AbortError') return;
     }
   }
+  download(f);
+}
+
+/** Bewaren = downloaden (in de PWA op iPhone: het venster met "Bewaar in Bestanden"). */
+export async function bewaarBestand(base64: string, bestandsnaam: string, mime: string): Promise<boolean> {
+  download(alsBestand(base64, bestandsnaam, mime));
+  return true;
+}
+
+function download(f: File): void {
+  const bestandsnaam = f.name;
   const url = URL.createObjectURL(f);
   const a = document.createElement('a');
   a.href = url;

@@ -1558,12 +1558,10 @@ export async function listCompanyProfiles(): Promise<{
  * Alle werkbonfoto's van het bedrijf, nieuwste eerst — voor het overzicht
  * "Foto's & bestanden".
  *
- * De SELECT-policy op `werkbon_fotos` is bedrijfsbreed (`company_id`), terwijl
- * die op `werkbonnen` smaller is (eigen werk, tenzij gedeelde werkruimte of een
- * inzage-recht). Een medewerker kan dus foto's zien waarvan hij de bijbehorende
- * werkbon niet mag openen. We embedden de werkbon daarom als optionele join en
- * tonen "Werkbon" zonder titel als hij niet meekomt — in plaats van de rij weg
- * te laten en de gebruiker een onverklaarbaar gat te laten zien.
+ * Werkbonfoto's volgen de rechten van hun werkbon (migratie 20261023161512 in
+ * ~/BossBase): wie de werkbon niet mag zien, krijgt de foto ook niet. De werkbon
+ * staat er als optionele join bij; komt hij toch niet mee, dan staat er
+ * "Werkbon" zonder titel in plaats van een leeg gat.
  */
 export async function listCompanyPhotos(
   limit = 120,
