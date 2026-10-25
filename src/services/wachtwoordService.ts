@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
  * `request-password-reset` — dezelfde als het dashboard (`requestPasswordReset`).
  * De function geeft altijd succes terug, ook voor een onbekend adres (geen
  * uitlekken wie een account heeft). De mail linkt naar
- * www.bossbase.nl/reset-password; daar stel je het nieuwe wachtwoord in.
+ * dashboard.bossbase.nl/reset-password; daar stel je het nieuwe wachtwoord in.
  */
 export async function vraagWachtwoordResetAan(email: string): Promise<{ error: string | null }> {
   try {

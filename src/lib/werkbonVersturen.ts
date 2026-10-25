@@ -15,7 +15,7 @@ import { esc, mailButton, mailTemplate } from './mail/mailTemplate';
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** De publieke ondertekenpagina van het dashboard (werkbonSignUrl). */
-export const SIGN_BASIS = 'https://www.bossbase.nl';
+export const SIGN_BASIS = 'https://dashboard.bossbase.nl';
 export function werkbonSignUrl(signToken: string | null | undefined): string | null {
   return signToken ? `${SIGN_BASIS}/werkbon/${signToken}` : null;
 }

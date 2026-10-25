@@ -330,7 +330,7 @@ export async function inviteTeamMember(
     if (naam) uitnodiger = naam;
   }
   const mail = uitnodigingsMail({
-    inviteUrl: `https://www.bossbase.nl/uitnodiging/${token}`,
+    inviteUrl: `https://dashboard.bossbase.nl/uitnodiging/${token}`,
     bedrijfsnaam,
     uitnodiger,
     ontvanger: lid.full_name || email,

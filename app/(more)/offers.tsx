@@ -166,7 +166,7 @@ type MailStand = {
 
 type KopieStand = { offerte: OfferteRow; modus: 'zelfde' | 'ander'; klantId: string | null };
 
-const APP_URL = 'https://www.bossbase.nl';
+const APP_URL = 'https://dashboard.bossbase.nl';
 
 function subtitleFor(o: OfferteRow): string {
   const delen: string[] = [];

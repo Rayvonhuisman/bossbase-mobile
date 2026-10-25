@@ -104,8 +104,9 @@ test('mailTemplate (zakelijk) en mailButton gelijk aan het dashboard', async (t)
 
 test('per mail ter ondertekening: zelfde send-email, mailarchief en werkbonupdate', async (t) => {
   if (!lader) return t.skip('dashboardrepo niet gevonden');
-  // werkbonSignUrl leest window.location.origin: het dashboard draait op bossbase.nl.
-  globalThis.window = { location: { origin: 'https://www.bossbase.nl' } };
+  // werkbonSignUrl leest window.location.origin: het dashboard draait op
+  // dashboard.bossbase.nl (sinds de domeinsplitsing van 26-10-2026).
+  globalThis.window = { location: { origin: 'https://dashboard.bossbase.nl' } };
   const S = await lader.importeer('src/services/werkbonOndertekenenService.js');
 
   // De bijlage bouwt het dashboard in de browser; in Node lukt dat niet en
@@ -134,7 +135,7 @@ test('per mail ter ondertekening: zelfde send-email, mailarchief en werkbonupdat
     },
   });
   await new Promise((r) => setTimeout(r, 10));
-  assert.equal(res.link, 'https://www.bossbase.nl/werkbon/11111111-2222-3333-4444-555555555555');
+  assert.equal(res.link, 'https://dashboard.bossbase.nl/werkbon/11111111-2222-3333-4444-555555555555');
 
   // Het dashboard zoekt company_id via het profiel op (withCompanyId); de app
   // heeft hem al. Die extra profielquery laten we buiten de vergelijking.
