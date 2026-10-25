@@ -14,6 +14,7 @@
     "test": "node --test \"tests/*.test.mjs\"",
     "check:bundel": "node scripts/controleer-bundel.mjs dist",
     "pdf:overnemen": "node scripts/pdf-opbouw-overnemen.mjs",
+    "mail:overnemen": "node scripts/mail-overnemen.mjs",
     "pdf:vergelijk": "node scripts/vergelijk-pdf.mjs",
     "pdf:vergelijk-werkbon": "node scripts/vergelijk-werkbon-pdf.mjs"
   },

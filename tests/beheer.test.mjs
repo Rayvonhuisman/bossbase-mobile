@@ -1,6 +1,7 @@
 /**
  * Team, Instellingen en Database: de pure regels die het dashboard volgen.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

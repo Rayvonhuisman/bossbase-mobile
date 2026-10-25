@@ -2,6 +2,7 @@
  * Offertes en facturen: de acties van het dashboard (versturen, herzien,
  * kopiëren, crediteren, herinneren, verwijderen) als pure regels.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

@@ -6,6 +6,7 @@
  * is de uitleg vooraf, niet de beveiliging.
  */
 
+import { mailTemplate } from './mail/mailTemplate';
 export type TeamLidBasis = {
   id: string;
   profile_id: string | null;
@@ -120,10 +121,17 @@ export function escHtml(s: string | null | undefined): string {
 }
 
 /**
- * De uitnodigingsmail, inhoudelijk gelijk aan `mailTemplate()` met
- * companyName 'BossBase' (systeemmail) in het dashboard: titel, wie je
- * uitnodigt, je rol, knop "Accepteer uitnodiging" en "48 uur geldig".
+ * De uitnodigingsmail, gelijk aan die van het dashboard
+ * (src/services/teamService.js → inviteTeamMember): mailTemplate() met
+ * companyName 'BossBase', dus de BossBase-opmaak. Titel, preheader, body,
+ * knop en voettekst letterlijk zoals daar. Tot oktober 2026 bouwde de app hier
+ * een eigen opmaak; tests/mailOpmaak.test.mjs vergelijkt nu met het dashboard.
  */
+// escapeHtml uit src/services/emailService.js van het dashboard: zonder de
+// apostrof, zodat de uitnodiging letterlijk dezelfde HTML geeft.
+const escapeHtmlDashboard = (s: string | null | undefined): string =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export function uitnodigingsMail(input: {
   inviteUrl: string;
   bedrijfsnaam: string;
@@ -137,26 +145,18 @@ export function uitnodigingsMail(input: {
     manager: 'Manager',
   };
   const rol = rollen[input.rol] ?? input.rol;
-  const groen = '#1DDB62';
-  const html =
-    `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"></head>` +
-    `<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">` +
-    `<div style="display:none;max-height:0;overflow:hidden;">${escHtml(input.uitnodiger)} heeft je uitgenodigd voor ${escHtml(input.bedrijfsnaam)} op BossBase</div>` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;"><tr><td align="center">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px;">` +
-    `<tr><td style="padding-bottom:18px;"><img src="https://www.bossbase.nl/brand/icon-512.png" alt="BossBase" width="32" height="32" style="vertical-align:middle;border-radius:8px;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;">BossBase</span></td></tr>` +
-    `<tr><td style="font-size:22px;font-weight:700;color:#0a0a0a;padding-bottom:12px;">Je bent uitgenodigd!</td></tr>` +
-    `<tr><td style="font-size:15px;line-height:1.6;color:#374151;">` +
-    `<p>Hallo ${escHtml(input.ontvanger)},</p>` +
-    `<p><strong>${escHtml(input.uitnodiger)}</strong> heeft je uitgenodigd om deel uit te maken van <strong>${escHtml(input.bedrijfsnaam)}</strong> op BossBase.</p>` +
-    `<p>Je krijgt de rol: <strong>${escHtml(rol)}</strong></p>` +
-    `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${groen};">` +
-    `<a href="${escHtml(input.inviteUrl)}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:#0a0a0a;text-decoration:none;border-radius:8px;">Accepteer uitnodiging</a>` +
-    `</td></tr></table>` +
-    `</td></tr>` +
-    `<tr><td style="font-size:13px;color:#6b7280;padding-top:16px;">Deze uitnodiging is 48 uur geldig. Als je deze uitnodiging niet verwacht hebt, kun je deze mail negeren.</td></tr>` +
-    `</table>` +
-    `<div style="font-size:12px;color:#9ca3af;padding-top:14px;">BossBase, een handelsnaam van NG E-Commerce B.V. &middot; KvK 91856396 &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a></div>` +
-    `</td></tr></table></body></html>`;
+  const html = mailTemplate({
+    title: 'Je bent uitgenodigd!',
+    preheader: `${input.uitnodiger} heeft je uitgenodigd voor ${input.bedrijfsnaam} op BossBase`,
+    // Namen zijn invoer van gebruikers: escapen vóór ze in de mail-HTML gaan.
+    body: `<p>Hallo ${escapeHtmlDashboard(input.ontvanger)},</p>
+           <p><strong>${escapeHtmlDashboard(input.uitnodiger)}</strong> heeft je uitgenodigd om deel uit te maken van
+           <strong>${escapeHtmlDashboard(input.bedrijfsnaam)}</strong> op BossBase.</p>
+           <p>Je krijgt de rol: <strong>${escapeHtmlDashboard(rol)}</strong></p>`,
+    buttonText: 'Accepteer uitnodiging',
+    buttonUrl: input.inviteUrl,
+    footerText: 'Deze uitnodiging is 48 uur geldig. Als je deze uitnodiging niet verwacht hebt, kun je deze mail negeren.',
+    companyName: 'BossBase',
+  });
   return { onderwerp: `Je bent uitgenodigd voor ${input.bedrijfsnaam} op BossBase`, html };
 }

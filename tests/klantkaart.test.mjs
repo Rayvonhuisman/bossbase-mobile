@@ -4,6 +4,7 @@
  * E-mails-tab (handleTemplateSelect, handleSendEmail) en @-vermeldingen in
  * klantnotities (createMentionNotifications met relatedType 'klant').
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

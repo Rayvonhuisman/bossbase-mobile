@@ -18,6 +18,7 @@
 // ── Tekst en HTML ──────────────────────────────────────────────────────────
 
 /** `escapeHtml` uit emailService.js. */
+import { mailButton, mailTemplate, readableTextColor } from './mail/mailTemplate';
 export function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -93,115 +94,41 @@ export function voegRegelInVoorAfsluiting(tekst: string, regel: string): string 
 }
 
 // ── Mailopmaak (utils/mailTemplate.js) ─────────────────────────────────────
-
-const BOSSBASE_GROEN = '#1DDB62';
+// Sinds oktober 2026 via ./mail/mailTemplate, dat de gedeelde mailcode van het
+// dashboard letterlijk overneemt (src/lib/mail/vendored). De eigen kopie die
+// hier stond, miste de Gmail-fix voor de knop in de bedrijfskleur.
 
 /** `readableTextColor`: donkere tekst op lichte kleuren, witte op donkere. */
 export function leesbareTekstkleur(hex: string | null | undefined): string {
-  let h = String(hex || '').trim().replace(/^#/, '');
-  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#ffffff';
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum > 0.6 ? '#0a0a0a' : '#ffffff';
-}
-
-/** `esc` uit mailTemplate.js (ook `'`). */
-function esc(s: unknown): string {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/** Alleen http(s) in href/src. */
-function veiligeUrl(u: unknown): string {
-  const s = String(u ?? '').trim();
-  if (!/^https?:\/\//i.test(s)) return '';
-  return esc(s);
+  return readableTextColor(hex);
 }
 
 /** `mailButton`: knop in de bedrijfskleur, met BossBase-groen als terugval. */
 export function mailKnop(tekst: string, url: string, merkkleur?: string | null): string {
-  const bg = merkkleur || BOSSBASE_GROEN;
-  const fg = leesbareTekstkleur(bg);
-  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${bg};"><a href="${veiligeUrl(url)}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px;">${esc(tekst)}</a></td></tr></table>`;
+  return mailButton(tekst, url, merkkleur);
 }
 
 /**
  * `mailTemplate` uit het dashboard, de zakelijke variant (bedrijf → klant):
- * bedrijfslogo of -naam, de titel, de body en "Verstuurd met BossBase".
- * Letterlijk dezelfde HTML, zodat een mail vanuit de app er bij de klant
- * precies zo uitziet als een mail vanuit het dashboard. (De systeemvariant
- * voor bedrijfsnaam 'BossBase' komt hier niet voor: de aanroepers geven altijd
- * de bedrijfsnaam of 'Ons bedrijf' mee.)
+ * bedrijfslogo of -naam, de titel, de body en "Verstuurd met BossBase". Zonder
+ * knop en voettekst: de knop staat in de body, zoals in het dashboard. (De
+ * systeemvariant voor bedrijfsnaam 'BossBase' komt hier niet voor: de
+ * aanroepers geven altijd de bedrijfsnaam of 'Ons bedrijf' mee.)
  */
 export function zakelijkeMail({
   titel,
   body,
   bedrijfsnaam,
   logoUrl,
+  merkkleur,
 }: {
   titel: string;
   body: string;
   bedrijfsnaam: string;
   logoUrl?: string | null;
+  merkkleur?: string | null;
 }): string {
-  const headerHtml = veiligeUrl(logoUrl)
-    ? `<img src="${veiligeUrl(logoUrl)}" alt="${esc(bedrijfsnaam)}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`
-    : `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${esc(bedrijfsnaam)}</span>`;
-  const footerLine = `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`;
-  // Knop en voettekst van mailTemplate gebruiken deze mails niet (de knop
-  // staat in de body); leeg, zodat de witruimte gelijk blijft.
-  const buttonHtml = '';
-  const footerTextHtml = '';
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${esc(titel)}</title>
-</head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;">${esc(titel)}</div>
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-    <tr>
-      <td align="center" style="padding:40px 16px;">
-        <table width="560" cellpadding="0" cellspacing="0" role="presentation"
-               style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-          <tr>
-            <td style="padding:32px 40px 24px;border-bottom:1px solid #f3f4f6;">
-              ${headerHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px 40px;">
-              <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0a0a0a;line-height:1.3;">${esc(titel)}</h1>
-              <div style="font-size:15px;color:#374151;line-height:1.6;">
-                ${body}
-              </div>
-              ${buttonHtml}
-              ${footerTextHtml}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 40px;background:#f9fafb;border-top:1px solid #f3f4f6;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                ${footerLine}
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  return mailTemplate({ title: titel, body, companyName: bedrijfsnaam, logoUrl, brandColor: merkkleur });
 }
 
 // ── Bedragen en datums zoals de mailvariabelen ze tonen ────────────────────
