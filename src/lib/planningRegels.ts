@@ -166,7 +166,8 @@ export function agendaWerkbonItems<W extends WerkbonPlanbaar>(
   const { uid, gedeeld, van, tot, ookAfgerond = false } = opties;
   const uit: AgendaWerkbonItem<W>[] = [];
   for (const w of werkbonnen) {
-    if (!w.gepland_op || (w.status === 'afgerond' && !ookAfgerond)) continue;
+    // Geannuleerd gaat niet door: nooit in agenda, planning of urenherinnering.
+    if (!w.gepland_op || w.status === 'geannuleerd' || (w.status === 'afgerond' && !ookAfgerond)) continue;
     for (const dag of werkbonDagen(w)) {
       if (dag.datum < van || dag.datum > tot) continue;
       const ploeg = ploegOpDag(w, dag);
@@ -267,6 +268,7 @@ export function roosterBlokken<W extends WerkbonPlanbaar>(
   const { van, tot, modus } = opties;
   const uit: RoosterBlok<W>[] = [];
   for (const w of werkbonnen) {
+    if (w.status === 'geannuleerd') continue;
     const dagen = werkbonDagen(w);
     dagen.forEach((dag, i) => {
       if (dag.datum < van || dag.datum > tot) return;
@@ -457,7 +459,7 @@ export function dubbelMetActiviteiten(
     for (const pid of ab.resource ? [ab.resource] : ab.personen) {
       for (const wb of werkbonBlokken) {
         if (wb.resource !== pid || wb.datum !== ab.datum) continue;
-        if (wb.werkbon.status === 'afgerond' || wb.werkbon.activity_id === a.id) continue;
+        if (wb.werkbon.status === 'afgerond' || wb.werkbon.status === 'geannuleerd' || wb.werkbon.activity_id === a.id) continue;
         const ws = minuten(wb.starttijd);
         const we = wb.eindtijd ? minuten(wb.eindtijd) : ws + 60;
         if (as < we && ws < ae) {

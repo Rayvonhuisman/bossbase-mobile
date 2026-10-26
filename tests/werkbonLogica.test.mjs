@@ -101,8 +101,14 @@ test('lijst: zoeken op titel/klant/locatie en tellen per status', () => {
   ];
   assert.equal(lijst.filter((w) => L.matchtZoekterm(w, 'jans')).length, 1);
   assert.equal(lijst.filter((w) => L.matchtZoekterm(w, 'assen')).length, 1);
-  assert.deepEqual(L.telStatussen(lijst), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1 });
+  assert.deepEqual(L.telStatussen(lijst), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1, geannuleerd: 0 });
   assert.equal(lijst.filter((w) => L.matchtStatus(w, 'afgerond')).length, 1);
+  // Geannuleerd telt niet bij "Alle" en heeft een eigen filter.
+  const metAfgezegd = [...lijst, { titel: 'Schuur', status: 'geannuleerd', locatie: null, customer: null }];
+  assert.deepEqual(L.telStatussen(metAfgezegd), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1, geannuleerd: 1 });
+  assert.equal(metAfgezegd.filter((w) => L.matchtStatus(w, 'alle')).length, 3);
+  assert.equal(metAfgezegd.filter((w) => L.matchtStatus(w, 'geannuleerd')).length, 1);
+  assert.equal(L.normaliseerStatus('geannuleerd'), 'geannuleerd');
 });
 
 test('materiaal: subtotaal, btw, marge en bedrag lezen', () => {
@@ -167,4 +173,25 @@ test('dagMeldingen: een dag erbij of eraf voor wie op de bon blijft', () => {
     m.map((x) => [x.uid, x.soort, x.dag.datum]),
     [['piet', 'ingepland', '2026-10-14'], ['piet', 'afgehaald', '2026-10-13']],
   );
+});
+
+test('verzetten: de bus schuift mee (G-10)', () => {
+  const w = {
+    id: 'w', starttijd: '08:00', eindtijd: '16:00', assigned_to_ids: ['a', 'b'], voertuig_ids: ['bus'],
+    werkbon_dagen: [{ datum: '2026-11-02', starttijd: null, eindtijd: null, medewerker_ids: null,
+      medewerker_tijden: null, voertuig_ids: null, voertuig_tijden: null, medewerker_voertuig: { a: 'bus' } }],
+  };
+  const f = L.voertuigTijdenNaVerzetten;
+  const nieuw = { starttijd: '10:00', eindtijd: '18:00' };
+  assert.deepEqual(f(w, '2026-11-02', 'a', nieuw), { bus: nieuw });
+  assert.equal(f(w, '2026-11-02', 'b', nieuw), undefined);
+  const samen = structuredClone(w);
+  samen.werkbon_dagen[0].medewerker_voertuig = { a: 'bus', b: 'bus' };
+  assert.deepEqual(f(samen, '2026-11-02', 'a', nieuw), { bus: { starttijd: '08:00', eindtijd: '18:00' } });
+  const eigen = structuredClone(w);
+  eigen.werkbon_dagen[0].voertuig_tijden = { bus: { starttijd: '07:30', eindtijd: '16:30' } };
+  assert.deepEqual(f(eigen, '2026-11-02', null, { starttijd: '09:00', eindtijd: '17:00' }), {
+    bus: { starttijd: '08:30', eindtijd: '17:30' },
+  });
+  assert.equal(f(w, '2026-11-02', null, { starttijd: '09:00', eindtijd: '17:00' }), undefined);
 });

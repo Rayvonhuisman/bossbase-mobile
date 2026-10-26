@@ -41,6 +41,7 @@ import {
   STANDAARD_TIJD,
   tijdVanDag,
   verzetTijd,
+  voertuigTijdenNaVerzetten,
   voertuigPlanningUitWerkbon,
   wisselDag,
   type Planning,
@@ -206,7 +207,11 @@ function BlokInhoud({
     setFout(null);
     setBezig(true);
     try {
-      const { dagen, standaard } = verzetTijd(w, blok.datum, pid, { starttijd: van, eindtijd: tot });
+      const { dagen: verzet, standaard } = verzetTijd(w, blok.datum, pid, { starttijd: van, eindtijd: tot });
+      // De bus van die dag schuift mee (G-10); alleen díé dag krijgt de sleutel.
+      const busTijden = voertuigTijdenNaVerzetten(w, blok.datum, pid, { starttijd: van, eindtijd: tot });
+      const dagen =
+        busTijden === undefined ? verzet : verzet.map((d) => (d.datum === blok.datum ? { ...d, voertuig_tijden: busTijden } : d));
       const r = await zetWerkbonDagen(w.id, dagen);
       if (r.error) throw new Error(r.error);
       // Eerst de dagen, dan pas de standaardtijd (die verandert alleen als

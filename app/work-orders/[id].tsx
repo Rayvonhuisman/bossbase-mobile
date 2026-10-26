@@ -65,7 +65,7 @@ import { KostenInhoud } from '@/components/werkbon/KostenInhoud';
 import { MateriaalRegel } from '@/components/werkbon/Regels';
 import { signMelding } from '@/lib/werkbonVersturen';
 import { kostenRechten } from '@/lib/werkbonKosten';
-import { mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
+import { extractMentions, mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
 import { stuurGetekendePdfNa, zetStartmoment } from '@/services/werkbonOndertekenenService';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import * as ImagePicker from 'expo-image-picker';
@@ -79,6 +79,7 @@ import {
   canEditDetail,
   canManageWerkbonnen,
   deleteWorkOrderMaterial,
+  deleteWorkOrderNote,
   deleteWorkOrderPhoto,
   deleteWorkOrderTask,
   getWorkOrder,
@@ -90,10 +91,12 @@ import {
   listWorkOrderNotes,
   listWorkOrderPhotos,
   listWorkOrderTasks,
+  magNotitieWijzigen,
   meldVermeldingen,
   setNoteVoorKlant,
   setTaskDone,
   updateWorkOrderMaterial,
+  updateWorkOrderNote,
   updateWorkOrderStatus,
   uploadWorkOrderPhoto,
   type FotoCategorie,
@@ -106,7 +109,7 @@ import {
 import { listMaterialen, listLeveranciers, type Materiaal } from '@/services/materiaalService';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import { useFocusTerug } from '@/lib/focusTerug';
-import { createWerkbonUur, listWerkbonUren } from '@/services/werkbonUrenService';
+import { createWerkbonUur, deleteWerkbonUur, listWerkbonUren, updateWerkbonUur } from '@/services/werkbonUrenService';
 import { isGeldigeISODatum, vandaagISO } from '@/lib/datum';
 import { lokaalNaarUtc } from '@/lib/nlTijd';
 import { berekenUren } from '@/lib/urenBerekening';
@@ -117,6 +120,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
 import type { WerkbonUur, WorkOrderPhoto, WorkOrderTask } from '@/types/domain';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { initialen } from '@/lib/avatar';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import {
   busRegels,
@@ -174,6 +178,9 @@ export default function WorkOrderDetailScreen() {
   const [noteModal, setNoteModal] = useState(false);
   const [notitieTab, setNotitieTab] = useState<'intern' | 'klant'>('intern');
   const [timeModal, setTimeModal] = useState(false);
+  // Een geboekt uur of een notitie wijzigen (besluit 26-10, G-06/G-07).
+  const [bewerkUur, setBewerkUur] = useState<WerkbonUur | null>(null);
+  const [bewerkNotitie, setBewerkNotitie] = useState<WerkbonNotitie | null>(null);
   const [materialModal, setMaterialModal] = useState(false);
   const [startModal, setStartModal] = useState(false);
   // Afronden met handtekening (WerkbonAfrondenModal), de Wkb-waarschuwing,
@@ -277,12 +284,15 @@ export default function WorkOrderDetailScreen() {
   // canEditDetail: beheerder of verantwoordelijke van deze bon.
   const editDetail = klaar && canEditDetail(workOrder!, rechten);
   const viewOnly = klaar && !editDetail;
-  const canEdit = editDetail && !opSlot && !readonly;
-  const canBook = klaar && canBookHours(workOrder!, rechten);
+  // Geannuleerd (dashboard, 20261026121700): gaat niet door; geen uren, taken,
+  // foto's of materiaal meer. De database weigert uren er ook op.
+  const geannuleerd = workOrder?.status === 'geannuleerd';
+  const canEdit = editDetail && !opSlot && !readonly && !geannuleerd;
+  const canBook = klaar && !geannuleerd && canBookHours(workOrder!, rechten);
   // Taken/meerwerk toevoegen of weggooien en materiaal verwijderen: zelfde
   // regel als wijzigen (gedeelde werkruimte, werkbonnen_bewerken of
   // verantwoordelijke; 20261002135952).
-  const canTasks = klaar && canAddTask(workOrder!, rechten);
+  const canTasks = klaar && !geannuleerd && canAddTask(workOrder!, rechten);
   const canDelMaterial = klaar && canDeleteMaterial(workOrder!, rechten);
   // Notities: ook die staan op slot na ondertekenen (trigger
   // bb_werkbon_kind_op_slot op werkbon_notities, 20261002135135).
@@ -290,8 +300,15 @@ export default function WorkOrderDetailScreen() {
   const magInkoop = can('inkoopprijzen');
   const magBedragen = can('projectbedragen');
   // Notitie voor-klant/intern wisselen: policy `werkbon_notities_update` —
-  // schrijver, of admin/`werkbonnen_bewerken` (20261002135952, geen rol planner).
-  const magNotitiesBeheren = role === 'admin' || can('werkbonnen_bewerken');
+  // schrijver, of admin/planning/`werkbonnen_bewerken` (20261026121548).
+  const magNotitiesBeheren = role === 'admin' || can('planning') || can('werkbonnen_bewerken');
+  // Eigen notitie (of als beheerder/planner elke) wijzigen of verwijderen: ook
+  // zonder bewerkrecht op de bon, maar niet na ondertekenen of in alleen-lezen.
+  const magNotitieAanpassen = (n: WerkbonNotitie) =>
+    klaar && !readonly && !opSlot && magNotitieWijzigen(n, { userId: user?.id ?? null, role, can });
+  // Eigen uur (of als beheerder/planner/verantwoordelijke elk uur) wijzigen of
+  // verwijderen: zelfde regel als boeken plus bb_mag_uren_voor_ander.
+  const magUurAanpassen = (u: WerkbonUur) => canBook && (u.profile_id === user?.id || magUrenVoorAnder);
   // Uren voor een collega boeken: `bb_mag_uren_voor_ander` — admin, recht
   // planning of verantwoordelijke van deze bon (dashboard HoursQuickAdd).
   const magUrenVoorAnder =
@@ -576,6 +593,43 @@ export default function WorkOrderDetailScreen() {
       return e;
     });
 
+  // ── Uren en notities corrigeren ─────────────────────────────────────────
+  const verwijderUur = (u: WerkbonUur) => {
+    Dialog.alert('Uren verwijderen?', `${korteDatum(u.datum)} · ${u.medewerker?.full_name ?? 'Onbekend'}`, [
+      { text: 'Annuleren', style: 'cancel' },
+      {
+        text: 'Verwijderen',
+        style: 'destructive',
+        onPress: async () => {
+          const res = await deleteWerkbonUur(u.id);
+          if (!res.ok) {
+            Dialog.alert('Niet verwijderd', res.melding);
+            return;
+          }
+          setUren((prev) => prev.filter((x) => x.id !== u.id));
+        },
+      },
+    ]);
+  };
+
+  const verwijderNotitie = (n: WerkbonNotitie) => {
+    Dialog.alert('Notitie verwijderen?', alsTekst(n.note).slice(0, 120), [
+      { text: 'Annuleren', style: 'cancel' },
+      {
+        text: 'Verwijderen',
+        style: 'destructive',
+        onPress: async () => {
+          const { error: e } = await deleteWorkOrderNote(n.id);
+          if (e) {
+            Dialog.alert('Niet verwijderd', e);
+            return;
+          }
+          setNotes((prev) => prev.filter((x) => x.id !== n.id));
+        },
+      },
+    ]);
+  };
+
   // ── Notities ────────────────────────────────────────────────────────────
   const wisselZichtbaarheid = async (n: WerkbonNotitie) => {
     const { data, error: e } = await setNoteVoorKlant(n.id, !n.voor_klant);
@@ -824,12 +878,12 @@ export default function WorkOrderDetailScreen() {
               </Pressable>
               <Pressable
                 onPress={status === 'gepland' ? startKlus : vraagAfronden}
-                disabled={!canEdit || status === 'afgerond' || statusUpdating}
+                disabled={!canEdit || status === 'afgerond' || status === 'geannuleerd' || statusUpdating}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.actieTegel,
                   styles.actieTegelHoofd,
-                  (!canEdit || status === 'afgerond') && styles.uit,
+                  (!canEdit || status === 'afgerond' || status === 'geannuleerd') && styles.uit,
                   pressed && { opacity: 0.85 },
                 ]}
               >
@@ -841,7 +895,13 @@ export default function WorkOrderDetailScreen() {
                   <CheckCircle2 size={18} color={ds.greenInk} />
                 )}
                 <Text style={[styles.actieTegelTekst, { color: ds.greenInk }]}>
-                  {status === 'gepland' ? 'Start klus' : status === 'in_uitvoering' ? 'Afronden' : 'Afgerond'}
+                  {status === 'gepland'
+                    ? 'Start klus'
+                    : status === 'in_uitvoering'
+                      ? 'Afronden'
+                      : status === 'geannuleerd'
+                        ? 'Geannuleerd'
+                        : 'Afgerond'}
                 </Text>
               </Pressable>
             </View>
@@ -1039,6 +1099,16 @@ export default function WorkOrderDetailScreen() {
                             </Text>
                           ) : null}
                           <Text style={styles.timeEntryHours}>{Number(u.uren).toFixed(2).replace('.', ',')}</Text>
+                          {magUurAanpassen(u) ? (
+                            <View style={styles.notitieActies}>
+                              <Pressable onPress={() => setBewerkUur(u)} accessibilityRole="button" style={styles.linkKnop}>
+                                <Text style={styles.addText}>Wijzigen</Text>
+                              </Pressable>
+                              <Pressable onPress={() => verwijderUur(u)} accessibilityRole="button" style={styles.linkKnop}>
+                                <Text style={styles.addText}>Verwijderen</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
                         </View>
                       </View>
                     ))}
@@ -1280,7 +1350,8 @@ export default function WorkOrderDetailScreen() {
               ) : (
                 <View style={{ gap: spacing.md }}>
                   {(notitieTab === 'intern' ? internNotes : klantNotes).map((n) => {
-                    const magWisselen = canNote && (n.created_by === user?.id || magNotitiesBeheren);
+                    const magWisselen =
+                      canNote && !n.waarschuwing_verzonden_op && (n.created_by === user?.id || magNotitiesBeheren);
                     return (
                       <View key={n.id} style={styles.noteCard}>
                         <View style={styles.noteMetaRow}>
@@ -1310,6 +1381,16 @@ export default function WorkOrderDetailScreen() {
                             >
                               <Text style={styles.addText}>{n.voor_klant ? 'Naar intern' : 'Naar de klant'}</Text>
                             </Pressable>
+                          ) : null}
+                          {magNotitieAanpassen(n) ? (
+                            <>
+                              <Pressable onPress={() => setBewerkNotitie(n)} accessibilityRole="button" style={styles.linkKnop}>
+                                <Text style={styles.addText}>Wijzigen</Text>
+                              </Pressable>
+                              <Pressable onPress={() => verwijderNotitie(n)} accessibilityRole="button" style={styles.linkKnop}>
+                                <Text style={styles.addText}>Verwijderen</Text>
+                              </Pressable>
+                            </>
                           ) : null}
                         </View>
                       </View>
@@ -1366,7 +1447,7 @@ export default function WorkOrderDetailScreen() {
                     Ondertekend en afgerond{workOrder.ondertekend_op ? ` · ${formatKortMoment(workOrder.ondertekend_op)}` : ''}
                   </Text>
                 </View>
-              ) : status !== 'afgerond' && editDetail && !readonly ? (
+              ) : status !== 'afgerond' && status !== 'geannuleerd' && editDetail && !readonly ? (
                 <Button label="Klus afronden" onPress={vraagAfronden} loading={statusUpdating} />
               ) : status === 'afgerond' && editDetail && !readonly ? (
                 // Afgerond maar nog niet getekend: alsnog laten ondertekenen.
@@ -1415,6 +1496,25 @@ export default function WorkOrderDetailScreen() {
         }}
       />
 
+      {bewerkNotitie ? (
+        <AddNoteModal
+          key={bewerkNotitie.id}
+          styles={styles}
+          th={th}
+          visible
+          voorKlant={!!bewerkNotitie.voor_klant}
+          begin={bewerkNotitie}
+          onClose={() => setBewerkNotitie(null)}
+          onSubmit={async (body, gekozen) => {
+            const html = gekozen.length ? tekstMetVermeldingen(body, gekozen) : alsHtml(body);
+            const { data, error: e } = await updateWorkOrderNote(bewerkNotitie.id, html);
+            if (e || !data) return { error: e ?? 'Notitie kon niet worden gewijzigd.' };
+            setNotes((prev) => prev.map((x) => (x.id === data.id ? data : x)));
+            return { error: null };
+          }}
+        />
+      ) : null}
+
       {materialModal ? (
         <AddMaterialModal
           styles={styles}
@@ -1431,6 +1531,33 @@ export default function WorkOrderDetailScreen() {
             if (matError || !data) return { error: matError ?? 'Opslaan mislukt.' };
             setMaterials((prev) => [...prev, data]);
             if (data.leverancier_id && !leveranciers[data.leverancier_id]) herlaad();
+            return { error: null };
+          }}
+        />
+      ) : null}
+
+      {bewerkUur ? (
+        <AddTimeEntryModal
+          styles={styles}
+          th={th}
+          ikzelf={user?.id ?? null}
+          kiesMedewerker={magUrenVoorAnder}
+          uur={bewerkUur}
+          onClose={() => setBewerkUur(null)}
+          onSubmit={async (input) => {
+            const res = await updateWerkbonUur(bewerkUur.id, {
+              // Op naam van een ander zetten mag alleen wie voor een ander mag boeken.
+              ...(magUrenVoorAnder && input.profileId ? { profile_id: input.profileId } : {}),
+              datum: input.datum,
+              start_tijd: input.start,
+              eind_tijd: input.eind,
+              pauze_minuten: input.pauze,
+              uren: input.uren,
+              reis_km: input.km,
+              notitie: input.notitie,
+            });
+            if (!res.ok) return { error: res.melding };
+            setUren((prev) => prev.map((x) => (x.id === res.data.id ? res.data : x)));
             return { error: null };
           }}
         />
@@ -1637,6 +1764,7 @@ function AddNoteModal({
   voorKlant,
   onClose,
   onSubmit,
+  begin,
 }: {
   styles: Styles;
   th: ThemeColors;
@@ -1646,11 +1774,18 @@ function AddNoteModal({
   onClose: () => void;
   /** `gekozen`: de collega's die met @ zijn getagd (uit de keuzelijst). */
   onSubmit: (body: string, gekozen: { id: string; naam: string }[]) => Promise<{ error: string | null }>;
+  /** Een bestaande notitie wijzigen: begint met zijn tekst en vermeldingen. */
+  begin?: WerkbonNotitie | null;
 }) {
   useFocusTerug(visible);
-  const [body, setBody] = useState('');
-  const [cursor, setCursor] = useState(0);
-  const [gekozen, setGekozen] = useState<{ id: string; naam: string }[]>([]);
+  // Bij wijzigen (het venster wordt dan per notitie opnieuw gemount): de
+  // opgeslagen tekst als platte tekst, en de @-vermeldingen erin als gekozen
+  // collega's, zodat ze bij opslaan weer vermeldingen worden.
+  const [body, setBody] = useState(() => (begin ? alsTekst(begin.note) : ''));
+  const [cursor, setCursor] = useState(() => (begin ? alsTekst(begin.note).length : 0));
+  const [gekozen, setGekozen] = useState<{ id: string; naam: string }[]>(() =>
+    begin ? extractMentions(begin.note).map((v) => ({ id: v.userId, naam: v.name })) : [],
+  );
   const [team, setTeam] = useState<{ id: string; naam: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -1710,7 +1845,11 @@ function AddNoteModal({
     <Modal visible={visible} animationType="slide" onRequestClose={close} presentationStyle="formSheet">
       <MobielKader soort="formulier">
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ModalKop styles={styles} titel={voorKlant ? 'Notitie voor de klant' : 'Interne notitie'} onClose={close} />
+          <ModalKop
+            styles={styles}
+            titel={begin ? 'Notitie wijzigen' : voorKlant ? 'Notitie voor de klant' : 'Interne notitie'}
+            onClose={close}
+          />
           <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             {voorKlant ? (
               <View style={styles.klantInfo}>
@@ -1743,7 +1882,7 @@ function AddNoteModal({
                     style={({ pressed }) => [styles.mentionRij, pressed && { backgroundColor: th.bgAlt }]}
                   >
                     <View style={styles.mentionAvatar}>
-                      <Text style={styles.mentionAvatarTekst}>{m.naam.slice(0, 2).toUpperCase()}</Text>
+                      <Text style={styles.mentionAvatarTekst}>{initialen(m.naam)}</Text>
                     </View>
                     <Text style={styles.mentionNaam}>{m.naam}</Text>
                   </Pressable>
@@ -2005,6 +2144,7 @@ function AddTimeEntryModal({
   th,
   ikzelf,
   kiesMedewerker,
+  uur,
   onClose,
   onSubmit,
 }: {
@@ -2012,6 +2152,8 @@ function AddTimeEntryModal({
   th: ThemeColors;
   ikzelf: string | null;
   kiesMedewerker: boolean;
+  /** Een geboekt uur wijzigen: het formulier begint met zijn waarden. */
+  uur?: WerkbonUur | null;
   onClose: () => void;
   onSubmit: (input: {
     profileId: string | null;
@@ -2025,14 +2167,14 @@ function AddTimeEntryModal({
   }) => Promise<{ error: string | null }>;
 }) {
   useFocusTerug(true);
-  const [datum, setDatum] = useState(vandaagISO());
-  const [profileId, setProfileId] = useState<string | null>(ikzelf);
+  const [datum, setDatum] = useState(uur?.datum ?? vandaagISO());
+  const [profileId, setProfileId] = useState<string | null>(uur?.profile_id ?? ikzelf);
   const [team, setTeam] = useState<{ id: string; full_name: string | null }[]>([]);
-  const [start, setStart] = useState('');
-  const [eind, setEind] = useState('');
-  const [pauzeStr, setPauzeStr] = useState('0');
-  const [kmStr, setKmStr] = useState('');
-  const [notitie, setNotitie] = useState('');
+  const [start, setStart] = useState(uur?.start_tijd ? hhmm(uur.start_tijd) : '');
+  const [eind, setEind] = useState(uur?.eind_tijd ? hhmm(uur.eind_tijd) : '');
+  const [pauzeStr, setPauzeStr] = useState(String(uur?.pauze_minuten ?? 0));
+  const [kmStr, setKmStr] = useState(uur?.reis_km != null ? String(uur.reis_km) : '');
+  const [notitie, setNotitie] = useState(uur?.notitie ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -2081,7 +2223,7 @@ function AddTimeEntryModal({
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ModalKop styles={styles} titel="Uren boeken" onClose={onClose} />
+          <ModalKop styles={styles} titel={uur ? 'Uren wijzigen' : 'Uren boeken'} onClose={onClose} />
           <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             <DateField label="Datum *" value={datum} onChange={setDatum} disabled={submitting} />
             {kiesMedewerker ? (
