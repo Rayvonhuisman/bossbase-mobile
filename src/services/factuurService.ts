@@ -15,7 +15,6 @@ import {
   btwPctVoorOpslag,
   magCrediteren,
   magFactuurVerwijderen,
-  volgendNummer,
   type CreditBronRegel,
 } from '@/lib/documentLogica';
 import { maakFactuurPdf } from '@/lib/pdf';
@@ -235,45 +234,36 @@ export async function getFactuurPdfUrl(factuurId: string): Promise<string | null
 /**
  * Volgend factuurnummer: `BB-F001`, `BB-F002`, …
  *
- * Zie de toelichting bij `volgendOfferteNummer`: het dashboard telt rijen,
- * en dat botst zodra er ooit een factuur is verwijderd. Er is geen unique index
- * op `facturen.nummer`, dus de database vangt dat niet af. We kijken daarom
- * naar het hoogste bestaande nummer.
+ * Het echte nummer deelt de database uit bij het opslaan (trigger
+ * `a02_factuur_nummer_uitdelen`, per bedrijf uniek en doorlopend, met een
+ * unieke index — audit 2026-10-25, G-01). Wat de app meestuurt telt niet. Dit is
+ * de voorproef voor het formulier, via `bb_volgend_factuurnummer`.
  */
 export async function volgendFactuurNummer(): Promise<
   { ok: true; nummer: string } | { ok: false; melding: string }
 > {
-  const { data, error } = await haalInStukken((van, tot) =>
-    supabase.from('facturen').select('id, nummer').order('id', { ascending: true }).range(van, tot),
-  );
-  if (error) {
-    console.warn('[factuurService.volgendFactuurNummer]', error.message);
+  const { data, error } = await supabase.rpc('bb_volgend_factuurnummer', { p_credit: false });
+  if (error || typeof data !== 'string') {
+    console.warn('[factuurService.volgendFactuurNummer]', error?.message);
     return { ok: false, melding: 'Het factuurnummer kon niet worden bepaald. Probeer het opnieuw.' };
   }
-  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
-  return { ok: true, nummer: volgendNummer(nummers, 'factuur') };
+  return { ok: true, nummer: data };
 }
 
-/** Volgend creditnummer: `BB-CF001`, `BB-CF002`, … (hoogste + 1). */
+/** Volgend creditnummer: `BB-CF001`, `BB-CF002`, … (voorproef; de database deelt uit). */
 export async function volgendCreditNummer(): Promise<
   { ok: true; nummer: string } | { ok: false; melding: string }
 > {
-  const { data, error } = await haalInStukken((van, tot) =>
-    supabase
-      .from('facturen')
-      .select('id, nummer')
-      .eq('is_credit', true)
-      .order('id', { ascending: true })
-      .range(van, tot),
-  );
-  if (error) {
-    console.warn('[factuurService.volgendCreditNummer]', error.message);
+  const { data, error } = await supabase.rpc('bb_volgend_factuurnummer', { p_credit: true });
+  if (error || typeof data !== 'string') {
+    console.warn('[factuurService.volgendCreditNummer]', error?.message);
     return { ok: false, melding: 'Het creditnummer kon niet worden bepaald. Probeer het opnieuw.' };
   }
-  const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
-  return { ok: true, nummer: volgendNummer(nummers, 'credit') };
+  return { ok: true, nummer: data };
 }
 
+// Vangnet van vóór de nummering in de database. Met de unieke index kan een
+// nieuw nummer niet meer botsen, dus dit vindt niets; blijft voor oude rijen.
 async function nummerAlInGebruik(nummer: string, behalveId: string): Promise<boolean> {
   const companyId = getCompanyId();
   if (!companyId) return false;
