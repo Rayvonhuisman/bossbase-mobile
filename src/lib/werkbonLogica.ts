@@ -955,3 +955,86 @@ export function voertuigDubbel(o: {
   }
   return uit;
 }
+
+// ── Verslepen/verzetten in de planning ──────────────────────────────────────
+
+const minutenNaarTijd = (m: number) => {
+  const k = Math.max(0, Math.min(24 * 60 - 1, m));
+  return `${String(Math.floor(k / 60)).padStart(2, '0')}:${String(k % 60).padStart(2, '0')}`;
+};
+
+/**
+ * De bus volgt bij verzetten (audit G-10) — `voertuigTijdenNaVerzetten` van het
+ * dashboard (utils/voertuigDagen.js). Geeft de nieuwe `voertuig_tijden` van díé
+ * dag, of `undefined` als er geen voertuig meeschuift (dan gaat de sleutel niet
+ * mee en laat de RPC het voertuig staan).
+ *
+ * Persoonsblok: de bus van die persoon schuift evenveel mee; zitten er anderen
+ * in, dan loopt hij van het vroegste begin tot het laatste eind van wie erin
+ * zit. Hele dag: een bus met een eigen tijd schuift evenveel mee; zonder eigen
+ * tijd volgt hij de dag al. Een tijd gelijk aan de dagtijd wordt geen eigen tijd.
+ */
+export function voertuigTijdenNaVerzetten(
+  werkbon: WerkbonPlanbaar & { dagen?: readonly object[] | null; voertuig_ids?: string[] | null },
+  datum: string,
+  pid: string | null,
+  nieuw: { starttijd: string; eindtijd: string },
+): Record<string, { starttijd: string; eindtijd: string }> | null | undefined {
+  const w = {
+    ...werkbon,
+    werkbon_dagen: werkbon.werkbon_dagen ?? ((werkbon.dagen as WerkbonDag[] | null | undefined) ?? null),
+  };
+  const dag = werkbonDagen(w).find((d) => d.datum === datum);
+  if (!dag || !heeftTijd(nieuw)) return undefined;
+  const vids = voertuigenOpDag(w, dag);
+  if (!vids.length) return undefined;
+
+  const oud = pid ? tijdenVoorPersoon(w, dag, pid) : tijdenOpDag(w, dag);
+  if (!heeftTijd(oud)) return undefined;
+  const dStart = naarMin(nieuw.starttijd) - naarMin(oud.starttijd);
+  const dEind = naarMin(nieuw.eindtijd) - naarMin(oud.eindtijd);
+  const schuif = (t: Tijdvak) => ({
+    starttijd: minutenNaarTijd(naarMin(t.starttijd) + dStart),
+    eindtijd: minutenNaarTijd(naarMin(t.eindtijd) + dEind),
+  });
+
+  const eigen = dag.voertuig_tijden ?? {};
+  const nieuweTijden: Record<string, { starttijd: string; eindtijd: string }> = {};
+  let geraakt = false;
+  for (const vid of vids) {
+    const huidig = tijdVanVoertuig(w, dag, vid);
+    let t: { starttijd: string; eindtijd: string } | null = heeftTijd(eigen[vid])
+      ? { starttijd: hhmm(huidig.starttijd), eindtijd: hhmm(huidig.eindtijd) }
+      : null;
+    if (pid) {
+      const zitErIn = dag.medewerker_voertuig?.[pid] === vid && ploegOpDag(w, dag).includes(pid);
+      if (zitErIn && heeftTijd(huidig)) {
+        geraakt = true;
+        const anderen = ploegOpDag(w, dag)
+          .filter((x) => x !== pid && dag.medewerker_voertuig?.[x] === vid)
+          .map((x) => tijdenVoorPersoon(w, dag, x))
+          .filter(heeftTijd);
+        if (anderen.length) {
+          const alle = [nieuw, ...anderen];
+          t = {
+            starttijd: alle.map((x) => hhmm(x.starttijd)).sort()[0]!,
+            eindtijd: alle.map((x) => hhmm(x.eindtijd)).sort().at(-1)!,
+          };
+        } else {
+          t = schuif(huidig);
+        }
+      }
+    } else if (t) {
+      geraakt = true;
+      t = schuif(t);
+    }
+    if (t && heeftTijd(t) && t.starttijd < t.eindtijd) nieuweTijden[vid] = t;
+  }
+  if (!geraakt) return undefined;
+
+  const dagTijd = pid ? tijdenOpDag(w, dag) : { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };
+  const afwijkend = Object.entries(nieuweTijden).filter(
+    ([, t]) => t.starttijd !== hhmm(dagTijd.starttijd) || t.eindtijd !== hhmm(dagTijd.eindtijd),
+  );
+  return afwijkend.length ? Object.fromEntries(afwijkend) : null;
+}

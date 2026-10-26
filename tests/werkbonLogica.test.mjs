@@ -173,3 +173,24 @@ test('dagMeldingen: een dag erbij of eraf voor wie op de bon blijft', () => {
     [['piet', 'ingepland', '2026-10-14'], ['piet', 'afgehaald', '2026-10-13']],
   );
 });
+
+test('verzetten: de bus schuift mee (G-10)', () => {
+  const w = {
+    id: 'w', starttijd: '08:00', eindtijd: '16:00', assigned_to_ids: ['a', 'b'], voertuig_ids: ['bus'],
+    werkbon_dagen: [{ datum: '2026-11-02', starttijd: null, eindtijd: null, medewerker_ids: null,
+      medewerker_tijden: null, voertuig_ids: null, voertuig_tijden: null, medewerker_voertuig: { a: 'bus' } }],
+  };
+  const f = L.voertuigTijdenNaVerzetten;
+  const nieuw = { starttijd: '10:00', eindtijd: '18:00' };
+  assert.deepEqual(f(w, '2026-11-02', 'a', nieuw), { bus: nieuw });
+  assert.equal(f(w, '2026-11-02', 'b', nieuw), undefined);
+  const samen = structuredClone(w);
+  samen.werkbon_dagen[0].medewerker_voertuig = { a: 'bus', b: 'bus' };
+  assert.deepEqual(f(samen, '2026-11-02', 'a', nieuw), { bus: { starttijd: '08:00', eindtijd: '18:00' } });
+  const eigen = structuredClone(w);
+  eigen.werkbon_dagen[0].voertuig_tijden = { bus: { starttijd: '07:30', eindtijd: '16:30' } };
+  assert.deepEqual(f(eigen, '2026-11-02', null, { starttijd: '09:00', eindtijd: '17:00' }), {
+    bus: { starttijd: '08:30', eindtijd: '17:30' },
+  });
+  assert.equal(f(w, '2026-11-02', null, { starttijd: '09:00', eindtijd: '17:00' }), undefined);
+});
