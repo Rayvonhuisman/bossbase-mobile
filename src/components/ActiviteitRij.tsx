@@ -223,9 +223,10 @@ const makeStyles = (t: ThemeColors) =>
     badgeTekst: { fontSize: 11.5, fontWeight: '700' },
     vinkVlak: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
     vink: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      // Vierkant met ronde hoeken, zelfde vakje als in het dashboard.
+      width: 24,
+      height: 24,
+      borderRadius: 7,
       borderWidth: 1.6,
       borderColor: t.lineStrong,
       alignItems: 'center',
