@@ -120,6 +120,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
 import type { WerkbonUur, WorkOrderPhoto, WorkOrderTask } from '@/types/domain';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { initialen } from '@/lib/avatar';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import {
   busRegels,
@@ -1881,7 +1882,7 @@ function AddNoteModal({
                     style={({ pressed }) => [styles.mentionRij, pressed && { backgroundColor: th.bgAlt }]}
                   >
                     <View style={styles.mentionAvatar}>
-                      <Text style={styles.mentionAvatarTekst}>{m.naam.slice(0, 2).toUpperCase()}</Text>
+                      <Text style={styles.mentionAvatarTekst}>{initialen(m.naam)}</Text>
                     </View>
                     <Text style={styles.mentionNaam}>{m.naam}</Text>
                   </Pressable>
