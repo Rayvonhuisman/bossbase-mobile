@@ -207,7 +207,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Zonder netwerk mislukt het afmelden bij de server en liet auth-js de
+    // sessie op het toestel staan: na een herstart was je weer ingelogd
+    // (review 26-10, S4-01). Dan in elk geval lokaal afmelden; de sessie op de
+    // server verloopt vanzelf of wordt bij een volgende login vervangen.
+    const { error } = await supabase.auth.signOut().catch((e: unknown) => ({ error: e }));
+    if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
     // onAuthStateChange will fire SIGNED_OUT and clear state, but do it
     // eagerly so the UI flips immediately.
     clearAuthState();
