@@ -66,7 +66,7 @@ function worksOn(wo: Werkbon, userId: string): boolean {
 }
 
 function matchesChip(wo: Werkbon, chip: ChipKey, userId: string | null): boolean {
-  if (chip === 'mij') return userId ? worksOn(wo, userId) : true;
+  if (chip === 'mij') return wo.status !== 'geannuleerd' && (userId ? worksOn(wo, userId) : true);
   return matchtStatus(wo, chip);
 }
 
@@ -103,6 +103,7 @@ export default function WorkOrdersScreen() {
     'mij',
     'alle',
     ...WERKBON_STATUSSEN,
+    'geannuleerd',
   ]);
 
   const load = useCallback(
@@ -174,6 +175,7 @@ export default function WorkOrdersScreen() {
       { id: 'gepland', label: WERKBON_STATUS_STIJL.gepland.label, count: counts.gepland },
       { id: 'in_uitvoering', label: WERKBON_STATUS_STIJL.in_uitvoering.label, count: counts.in_uitvoering },
       { id: 'afgerond', label: WERKBON_STATUS_STIJL.afgerond.label, count: counts.afgerond },
+      { id: 'geannuleerd', label: WERKBON_STATUS_STIJL.geannuleerd.label, count: counts.geannuleerd },
       { id: 'mij', label: 'Mijn werkbonnen' },
     ],
     [counts],

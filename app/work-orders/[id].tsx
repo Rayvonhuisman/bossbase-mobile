@@ -283,12 +283,15 @@ export default function WorkOrderDetailScreen() {
   // canEditDetail: beheerder of verantwoordelijke van deze bon.
   const editDetail = klaar && canEditDetail(workOrder!, rechten);
   const viewOnly = klaar && !editDetail;
-  const canEdit = editDetail && !opSlot && !readonly;
-  const canBook = klaar && canBookHours(workOrder!, rechten);
+  // Geannuleerd (dashboard, 20261026121700): gaat niet door; geen uren, taken,
+  // foto's of materiaal meer. De database weigert uren er ook op.
+  const geannuleerd = workOrder?.status === 'geannuleerd';
+  const canEdit = editDetail && !opSlot && !readonly && !geannuleerd;
+  const canBook = klaar && !geannuleerd && canBookHours(workOrder!, rechten);
   // Taken/meerwerk toevoegen of weggooien en materiaal verwijderen: zelfde
   // regel als wijzigen (gedeelde werkruimte, werkbonnen_bewerken of
   // verantwoordelijke; 20261002135952).
-  const canTasks = klaar && canAddTask(workOrder!, rechten);
+  const canTasks = klaar && !geannuleerd && canAddTask(workOrder!, rechten);
   const canDelMaterial = klaar && canDeleteMaterial(workOrder!, rechten);
   // Notities: ook die staan op slot na ondertekenen (trigger
   // bb_werkbon_kind_op_slot op werkbon_notities, 20261002135135).
@@ -874,12 +877,12 @@ export default function WorkOrderDetailScreen() {
               </Pressable>
               <Pressable
                 onPress={status === 'gepland' ? startKlus : vraagAfronden}
-                disabled={!canEdit || status === 'afgerond' || statusUpdating}
+                disabled={!canEdit || status === 'afgerond' || status === 'geannuleerd' || statusUpdating}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.actieTegel,
                   styles.actieTegelHoofd,
-                  (!canEdit || status === 'afgerond') && styles.uit,
+                  (!canEdit || status === 'afgerond' || status === 'geannuleerd') && styles.uit,
                   pressed && { opacity: 0.85 },
                 ]}
               >
@@ -891,7 +894,13 @@ export default function WorkOrderDetailScreen() {
                   <CheckCircle2 size={18} color={ds.greenInk} />
                 )}
                 <Text style={[styles.actieTegelTekst, { color: ds.greenInk }]}>
-                  {status === 'gepland' ? 'Start klus' : status === 'in_uitvoering' ? 'Afronden' : 'Afgerond'}
+                  {status === 'gepland'
+                    ? 'Start klus'
+                    : status === 'in_uitvoering'
+                      ? 'Afronden'
+                      : status === 'geannuleerd'
+                        ? 'Geannuleerd'
+                        : 'Afgerond'}
                 </Text>
               </Pressable>
             </View>
@@ -1437,7 +1446,7 @@ export default function WorkOrderDetailScreen() {
                     Ondertekend en afgerond{workOrder.ondertekend_op ? ` · ${formatKortMoment(workOrder.ondertekend_op)}` : ''}
                   </Text>
                 </View>
-              ) : status !== 'afgerond' && editDetail && !readonly ? (
+              ) : status !== 'afgerond' && status !== 'geannuleerd' && editDetail && !readonly ? (
                 <Button label="Klus afronden" onPress={vraagAfronden} loading={statusUpdating} />
               ) : status === 'afgerond' && editDetail && !readonly ? (
                 // Afgerond maar nog niet getekend: alsnog laten ondertekenen.

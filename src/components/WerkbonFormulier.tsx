@@ -380,7 +380,8 @@ export function WerkbonFormulier({
           <View style={styles.blok}>
             <Text style={styles.label}>Status</Text>
             <View style={styles.chipRij}>
-              {WERKBON_STATUSSEN.map((s) => {
+              {/* Een geannuleerde bon toont zijn eigen status en kan terug; annuleren zelf gaat in het dashboard. */}
+              {(werkbon?.status === 'geannuleerd' ? [...WERKBON_STATUSSEN, 'geannuleerd' as const] : WERKBON_STATUSSEN).map((s) => {
                 const st = WERKBON_STATUS_STIJL[s];
                 const aan = status === s;
                 return (

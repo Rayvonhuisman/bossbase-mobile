@@ -11,8 +11,13 @@
 
 // ── Statussen ───────────────────────────────────────────────────────────────
 
-export type WerkbonStatusKey = 'gepland' | 'in_uitvoering' | 'afgerond';
+export type WerkbonStatusKey = 'gepland' | 'in_uitvoering' | 'afgerond' | 'geannuleerd';
 
+/**
+ * De statussen die je in het formulier kiest. `geannuleerd` (dashboard,
+ * migratie 20261026121700) staat er bewust niet in: annuleren gaat met de knop
+ * op de werkbon in het dashboard, met de controle op uren en handtekening.
+ */
 export const WERKBON_STATUSSEN: readonly WerkbonStatusKey[] = ['gepland', 'in_uitvoering', 'afgerond'];
 
 /** Kleuren uit het dashboard (statusColors.js: blue / orange / green). */
@@ -23,6 +28,8 @@ export const WERKBON_STATUS_STIJL: Record<
   gepland: { label: 'Gepland', kleur: '#2563eb', bg: '#eff6ff', dot: '#2563eb' },
   in_uitvoering: { label: 'In uitvoering', kleur: '#e8784a', bg: '#fff4ec', dot: '#e8784a' },
   afgerond: { label: 'Afgerond', kleur: '#15A34A', bg: '#ecfdf5', dot: '#15A34A' },
+  // Grijs, zoals statusColors.js: gaat niet door.
+  geannuleerd: { label: 'Geannuleerd', kleur: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
 };
 
 /** Aliassen zoals het dashboard ze accepteert; onbekend → gepland. */
@@ -30,6 +37,7 @@ export function normaliseerStatus(status: string | null | undefined): WerkbonSta
   const s = String(status ?? '').toLowerCase();
   if (s === 'in_uitvoering' || s === 'in_progress' || s === 'bezig') return 'in_uitvoering';
   if (s === 'afgerond' || s === 'done' || s === 'completed' || s === 'voltooid') return 'afgerond';
+  if (s === 'geannuleerd') return 'geannuleerd';
   return 'gepland';
 }
 
@@ -526,13 +534,19 @@ export function matchtZoekterm(w: WerkbonZoekbaar, q: string): boolean {
 
 export type StatusFilter = 'alle' | WerkbonStatusKey;
 
+/** "Alle" is alles wat doorgaat; een geannuleerde werkbon staat alleen onder zijn eigen filter. */
 export function matchtStatus(w: WerkbonZoekbaar, filter: StatusFilter): boolean {
-  return filter === 'alle' || normaliseerStatus(w.status) === filter;
+  const s = normaliseerStatus(w.status);
+  return filter === 'alle' ? s !== 'geannuleerd' : s === filter;
 }
 
 export function telStatussen(lijst: WerkbonZoekbaar[]): Record<StatusFilter, number> {
-  const tel: Record<StatusFilter, number> = { alle: lijst.length, gepland: 0, in_uitvoering: 0, afgerond: 0 };
-  for (const w of lijst) tel[normaliseerStatus(w.status)]++;
+  const tel: Record<StatusFilter, number> = { alle: 0, gepland: 0, in_uitvoering: 0, afgerond: 0, geannuleerd: 0 };
+  for (const w of lijst) {
+    const s = normaliseerStatus(w.status);
+    tel[s]++;
+    if (s !== 'geannuleerd') tel.alle++;
+  }
   return tel;
 }
 
@@ -929,7 +943,7 @@ export function voertuigDubbel(o: {
   const e = naarMin(o.eindtijd);
   const uit: { titel: string; starttijd: string; eindtijd: string }[] = [];
   for (const w of o.werkbonnen) {
-    if (!w || w.id === o.werkbonId || w.status === 'afgerond') continue;
+    if (!w || w.id === o.werkbonId || w.status === 'afgerond' || w.status === 'geannuleerd') continue;
     for (const dag of werkbonDagen(w)) {
       if (dag.datum !== o.datum || !voertuigenOpDag(w, dag).includes(o.vid)) continue;
       const t = tijdVanVoertuig(w, dag, o.vid);

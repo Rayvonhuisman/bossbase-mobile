@@ -100,8 +100,14 @@ test('lijst: zoeken op titel/klant/locatie en tellen per status', () => {
   ];
   assert.equal(lijst.filter((w) => L.matchtZoekterm(w, 'jans')).length, 1);
   assert.equal(lijst.filter((w) => L.matchtZoekterm(w, 'assen')).length, 1);
-  assert.deepEqual(L.telStatussen(lijst), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1 });
+  assert.deepEqual(L.telStatussen(lijst), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1, geannuleerd: 0 });
   assert.equal(lijst.filter((w) => L.matchtStatus(w, 'afgerond')).length, 1);
+  // Geannuleerd telt niet bij "Alle" en heeft een eigen filter.
+  const metAfgezegd = [...lijst, { titel: 'Schuur', status: 'geannuleerd', locatie: null, customer: null }];
+  assert.deepEqual(L.telStatussen(metAfgezegd), { alle: 3, gepland: 1, in_uitvoering: 1, afgerond: 1, geannuleerd: 1 });
+  assert.equal(metAfgezegd.filter((w) => L.matchtStatus(w, 'alle')).length, 3);
+  assert.equal(metAfgezegd.filter((w) => L.matchtStatus(w, 'geannuleerd')).length, 1);
+  assert.equal(L.normaliseerStatus('geannuleerd'), 'geannuleerd');
 });
 
 test('materiaal: subtotaal, btw, marge en bedrag lezen', () => {
