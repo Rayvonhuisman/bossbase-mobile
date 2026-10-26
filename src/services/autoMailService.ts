@@ -52,7 +52,7 @@ export async function verstuurAutoMail(input: {
       bedrijfsnaam: input.vars.bedrijfsnaam || 'Ons bedrijf',
       logoUrl,
     });
-    const r = await verstuurMail({ to: aan, subject: onderwerp, html });
+    const r = await verstuurMail({ to: aan, subject: onderwerp, html, soort: input.relatedType, gerelateerdId: input.relatedId });
     if (!r.ok) throw new Error(r.melding);
 
     const { error: logFout } = await supabase.from('sent_emails').insert({

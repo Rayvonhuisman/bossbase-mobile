@@ -57,7 +57,7 @@ async function functieFout(error: { message?: string; context?: unknown }): Prom
 export async function verstuurMail(
   client: SupabaseClient,
   companyId: string,
-  mail: { to: string; subject: string; html: string; attachments?: Bijlage[] },
+  mail: { to: string; subject: string; html: string; attachments?: Bijlage[]; werkbonId?: string | null },
 ): Promise<void> {
   let fromName = 'BossBase';
   let replyTo: string | null = null;
@@ -73,7 +73,12 @@ export async function verstuurMail(
   } catch {
     /* zoals het dashboard: dan BossBase zonder antwoordadres */
   }
-  const body: Record<string, unknown> = { to: mail.to, subject: mail.subject, html: mail.html, from_name: fromName };
+  // Soort werkbon: send-email vraagt dan dat je de werkbon mag beheren
+  // (uitvoerder, verantwoordelijke, of werkbonnen/planning). Review 26-10, S2-02.
+  const body: Record<string, unknown> = {
+    to: mail.to, subject: mail.subject, html: mail.html, from_name: fromName, gerelateerd_type: 'werkbon',
+  };
+  if (mail.werkbonId) body.gerelateerd_id = mail.werkbonId;
   if (replyTo) body.reply_to = replyTo;
   if (mail.attachments?.length) body.attachments = mail.attachments;
 
@@ -217,6 +222,7 @@ export async function verstuurTerOndertekening(
     subject: onderwerp,
     html,
     attachments: bijlage ? [bijlage] : undefined,
+    werkbonId: werkbon.id,
   });
   void logVerstuurdeMail(client, {
     companyId,
@@ -325,7 +331,7 @@ export async function verstuurWaarschuwing<T>(
   if (!wat) throw new VersturenFout('Beschrijf wat je hebt geconstateerd');
 
   const { onderwerp, html } = waarschuwingMail({ werkbon, constatering: wat, gevolg: gev, customer, company });
-  await verstuurMail(client, companyId, { to: adres, subject: onderwerp, html });
+  await verstuurMail(client, companyId, { to: adres, subject: onderwerp, html, werkbonId: werkbon.id });
   void logVerstuurdeMail(client, {
     companyId,
     toEmail: adres,

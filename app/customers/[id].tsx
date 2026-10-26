@@ -458,7 +458,7 @@ export default function CustomerDetailScreen() {
           bedrijfsnaam: bedrijf?.name,
           logoUrl: bedrijf?.logoUrl,
         });
-        const verstuurd = await verstuurMail({ to: aan, subject: onderwerp, html });
+        const verstuurd = await verstuurMail({ to: aan, subject: onderwerp, html, soort: 'klant' });
         if (!verstuurd.ok) return writeFout('onbekend', verstuurd.melding);
         await logVerstuurdeMail({
           toEmail: aan,

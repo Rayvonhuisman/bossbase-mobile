@@ -628,7 +628,7 @@ function OffersScreenInhoud() {
           logoUrl: m.bedrijf?.logoUrl,
           merkkleur: m.bedrijf?.brandingColor,
         });
-        const verstuurd = await verstuurMail({ to: aan, subject: m.concept.onderwerp, html, attachments: bijlagen });
+        const verstuurd = await verstuurMail({ to: aan, subject: m.concept.onderwerp, html, attachments: bijlagen, soort: 'offerte', gerelateerdId: m.offerte?.id });
         if (!verstuurd.ok) return writeFout('onbekend', verstuurd.melding);
 
         await logVerstuurdeMail({

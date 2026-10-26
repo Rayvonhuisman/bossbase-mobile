@@ -782,7 +782,7 @@ function InvoicesScreenInhoud() {
           logoUrl: m.bedrijf?.logoUrl,
           merkkleur: m.bedrijf?.brandingColor,
         });
-        const verstuurd = await verstuurMail({ to: aan, subject: m.concept.onderwerp, html, attachments: bijlagen });
+        const verstuurd = await verstuurMail({ to: aan, subject: m.concept.onderwerp, html, attachments: bijlagen, soort: 'factuur', gerelateerdId: f.id });
         if (!verstuurd.ok) return writeFout('onbekend', verstuurd.melding);
 
         await logVerstuurdeMail({

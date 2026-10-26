@@ -341,7 +341,7 @@ export async function inviteTeamMember(
   try {
     // Zelfde body als `sendEmail` in het dashboard: `from_name`, niet `fromName`.
     const { data, error } = await supabase.functions.invoke('send-email', {
-      body: { to: email, subject: mail.onderwerp, html: mail.html, from_name: 'BossBase' },
+      body: { to: email, subject: mail.onderwerp, html: mail.html, from_name: 'BossBase', gerelateerd_type: 'uitnodiging' },
     });
     if (error) {
       mailFout = error.message;

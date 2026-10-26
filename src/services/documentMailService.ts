@@ -130,11 +130,21 @@ async function leesFout(error: unknown, terugval: string): Promise<string> {
  * `companies` (reply_to_email, anders email, anders geen reply-to). Gooit niet:
  * een fout komt terug als melding die zo op het scherm kan.
  */
+/**
+ * Soorten mail die send-email kent; elk vraagt een eigen recht (review 26-10,
+ * S2-02). Onbekend of leeg wordt 'klant' (klanten bewerken of verkoop).
+ */
+const MAILSOORTEN = ['factuur', 'offerte', 'deal', 'werkbon', 'calendar_event', 'activity', 'klant', 'leverancier', 'uitnodiging'];
+export const mailSoortVan = (t: string | null | undefined): string => (t && MAILSOORTEN.includes(t) ? t : 'klant');
+
 export async function verstuurMail(input: {
   to: string;
   subject: string;
   html: string;
   attachments?: MailBijlage[];
+  /** Soort mail (factuur, offerte, klant, …): bepaalt welk recht send-email vraagt. */
+  soort?: string | null;
+  gerelateerdId?: string | null;
 }): Promise<{ ok: true } | { ok: false; melding: string }> {
   let fromName = 'BossBase';
   let replyTo: string | null = null;
@@ -158,7 +168,9 @@ export async function verstuurMail(input: {
     subject: input.subject,
     html: input.html,
     from_name: fromName,
+    gerelateerd_type: mailSoortVan(input.soort),
   };
+  if (input.gerelateerdId) body.gerelateerd_id = input.gerelateerdId;
   if (replyTo) body.reply_to = replyTo;
   if (input.attachments?.length) body.attachments = input.attachments;
 
