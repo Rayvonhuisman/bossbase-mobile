@@ -33,7 +33,7 @@ import {
   updateTeamMember,
   type TeamMemberRow,
 } from '@/services/teamService';
-import { PERMISSION_GROEPEN, type PermissionGroep } from '@/lib/permissionGroups';
+import { PERMISSION_GROEPEN, RECHTENSETS, type PermissionGroep, type Rechtenset } from '@/lib/permissionGroups';
 import { BREDE_INZAGE_WAARSCHUWING, RECHT_UITLEG } from '@/lib/rechtenUitleg';
 import {
   beheerStand,
@@ -341,6 +341,10 @@ function TeamScreenInhoud() {
   const allesZetten = (aan: boolean) =>
     setRechten((r) => Object.fromEntries(Object.keys(r).map((k) => [k, aan])));
 
+  // Voorinstelling: precies deze rechten aan, de rest uit (zoals het dashboard).
+  const setZetten = (set: Rechtenset) =>
+    setRechten((r) => Object.fromEntries(Object.keys(r).map((k) => [k, (set.rechten as string[]).includes(k)])));
+
   const rechtenOpslaan = () => {
     const lid = rechtenVoor;
     if (!lid?.profile_id) return;
@@ -645,6 +649,15 @@ function TeamScreenInhoud() {
             <Button label="Alles uit" variant="secondary" disabled={rechtenBezig} onPress={() => allesZetten(false)} />
           </View>
         </View>
+        {RECHTENSETS.map((set) => (
+          <Button
+            key={set.key}
+            label={set.label}
+            variant="secondary"
+            disabled={rechtenBezig}
+            onPress={() => setZetten(set)}
+          />
+        ))}
         {PERMISSION_GROEPEN.map((groep) => {
           const aan = groep.subs.filter((s) => rechten[s.key]).length;
           const alles = aan === groep.subs.length;
