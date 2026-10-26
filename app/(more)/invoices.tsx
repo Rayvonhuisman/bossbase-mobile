@@ -243,7 +243,7 @@ function InvoicesScreenInhoud() {
   const terugNaarProject = useRef<string | null>(null);
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { loaded: rechtenGeladen, mag, waaromNiet, hasFeature, planStatus } = usePermissions();
+  const { loaded: rechtenGeladen, mag, can, waaromNiet, hasFeature, planStatus } = usePermissions();
   const { toonResultaat } = useToast();
   const { klasse } = useSchermklasse();
   const breed = klasse === 'tablet';
@@ -687,6 +687,27 @@ function InvoicesScreenInhoud() {
     ]);
     const doc = d.data;
     const docBedrijf = doc ? bedrijfVoorDocument(naarFactuur(doc as unknown as Record<string, unknown>), bedrijf) : bedrijf;
+    // Een factuur zonder rekeningnummer gaat niet de deur uit: de klant weet dan
+    // niet waar hij moet betalen (audit 2026-10-25, G-05). Creditnota's wel. De
+    // database weigert het daarna ook, net als in het dashboard.
+    if (soort === 'factuur' && !f.is_credit && !String(docBedrijf?.iban ?? '').trim()) {
+      setMail(null);
+      const magInstellingen = can('instellingen');
+      Dialog.alert(
+        'IBAN ontbreekt',
+        'Deze factuur kan nog niet weg: het IBAN van je bedrijf ontbreekt. Zonder rekeningnummer weet je klant niet waar hij moet betalen. '
+          + (magInstellingen
+            ? 'Vul het IBAN in bij Instellingen › Bedrijfsprofiel en verstuur de factuur daarna opnieuw.'
+            : 'Vraag een beheerder om het IBAN in te vullen bij Instellingen › Bedrijfsprofiel.'),
+        magInstellingen
+          ? [
+              { text: 'Annuleren', style: 'cancel' },
+              { text: 'Naar Bedrijfsprofiel', onPress: () => router.push('/settings?tab=bedrijf') },
+            ]
+          : [{ text: 'OK' }],
+      );
+      return;
+    }
     const tekst = factuurMailConcept({
       sjabloon: sjabloon.error ? null : sjabloon.data,
       klantNaam: doc?.customer?.name ?? f.customer?.name,
