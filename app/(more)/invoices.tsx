@@ -122,6 +122,7 @@ import {
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { getalOfNul } from '@/lib/getalNl';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
@@ -684,8 +685,8 @@ function InvoicesScreenInhoud() {
         createFactuurRegel({
           factuur_id: factuurId,
           omschrijving: nieuweRegel.omschrijving,
-          aantal: Number(nieuweRegel.aantal.replace(',', '.') || 0),
-          eenheidsprijs: Number(nieuweRegel.prijs.replace(',', '.') || 0),
+          aantal: getalOfNul(nieuweRegel.aantal),
+          eenheidsprijs: getalOfNul(nieuweRegel.prijs),
           btw_pct: Number(nieuweRegel.btw.replace(',', '.') || 21),
           volgorde: regels.length,
         }),
@@ -1039,7 +1040,7 @@ function InvoicesScreenInhoud() {
           .filter((k) => k.gekozen)
           .reduce(
             (s, k) =>
-              s + Number(k.aantal.replace(',', '.') || 0) * Math.abs(Number(k.prijs.replace(',', '.') || 0)),
+              s + getalOfNul(k.aantal) * Math.abs(getalOfNul(k.prijs)),
             0,
           )
       : null;

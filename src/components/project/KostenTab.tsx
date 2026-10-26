@@ -15,6 +15,7 @@ import {
 } from '@/services/projectKostenService';
 import type { ProjectUur } from '@/services/projectService';
 import { Blok, KleineKnop, Rij, useStijl, Veld } from './bouwstenen';
+import { getalOfNul } from '@/lib/getalNl';
 
 /**
  * De Kosten-tab (`KostenTab` in het dashboard): wat deze klus gekost heeft.
@@ -30,7 +31,7 @@ import { Blok, KleineKnop, Rij, useStijl, Veld } from './bouwstenen';
 
 type Concept = { id: string | null; naam: string; aantal: string; eenheid: string; prijs: string; leverancierId: string | null };
 
-const getal = (v: string) => Number(v.replace(',', '.').trim() || 0);
+const getal = (v: string) => getalOfNul(v);
 const alsVeld = (n: number) => String(n).replace('.', ',');
 
 export function KostenTab({

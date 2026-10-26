@@ -9,6 +9,8 @@
  * (tests/werkbonLogica.test.mjs). Rijen hebben de databasevorm (snake_case).
  */
 
+import { leesGetalNl } from './getalNl';
+
 // ── Statussen ───────────────────────────────────────────────────────────────
 
 export type WerkbonStatusKey = 'gepland' | 'in_uitvoering' | 'afgerond';
@@ -573,11 +575,8 @@ export function marge(
 
 /** "12,50" of "" → getal of null. */
 export function leesBedrag(v: string | number | null | undefined): number | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim().replace(/\s/g, '').replace('€', '');
-  if (!s) return null;
-  const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
-  return Number.isFinite(n) ? n : null;
+  const n = leesGetalNl(v);
+  return n === null || Number.isNaN(n) ? null : n;
 }
 
 // ── Foto's ──────────────────────────────────────────────────────────────────

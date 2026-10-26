@@ -22,6 +22,8 @@
  * omzetting naar de database staat in de servicelaag, niet hier.
  */
 
+import { getalOfNul } from './getalNl';
+
 // ── Regeltypes (regelTypes.js in het dashboard) ────────────────────────────
 
 export const EIGEN_PREFIX = 'eigen:';
@@ -200,10 +202,9 @@ export function pasTypeToe(
 
 // ── Bedragen ───────────────────────────────────────────────────────────────
 
-/** "2,5" → 2.5. Lege of onzinnige invoer telt als 0. */
+/** "2,5" → 2.5, "1.234,56" → 1234.56 (lib/getalNl). Lege of onzinnige invoer telt als 0. */
 export function veldNaarNummer(waarde: string): number {
-  const n = Number(String(waarde).replace(',', '.').trim());
-  return Number.isFinite(n) ? n : 0;
+  return getalOfNul(waarde);
 }
 
 export function nummerNaarVeld(n: number): string {

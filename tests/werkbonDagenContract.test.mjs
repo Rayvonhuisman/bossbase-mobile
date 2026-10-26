@@ -10,6 +10,7 @@
  *     dus die sleutels mogen er NIET in staan (anders wist de app ze).
  *   - dagen die niet in de lijst staan worden verwijderd.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

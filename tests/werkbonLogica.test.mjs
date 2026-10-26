@@ -1,4 +1,5 @@
 /** Werkbonlogica zoals het dashboard: statussen, dagen/tijden, filters, bedragen. */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

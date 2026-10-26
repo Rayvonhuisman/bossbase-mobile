@@ -2,6 +2,7 @@
  * Dashboard a37a907 → origin/main (331250b): rechten, pakketten, projectbedragen,
  * werkbonregels, pipeline-tegel en de factuurvoettekst.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
