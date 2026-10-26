@@ -488,6 +488,8 @@ export type AbonnementStand = {
   readonlyReden: string | null;
   modules: string[];
   limieten: Record<string, { max: number | null; gebruikt: number }>;
+  /** Actief en uitgenodigd apart: de prijs telt alleen actief (G-22). Null zonder migratie 20261026122446. */
+  gebruikers: { actief: number; uitgenodigd: number } | null;
 };
 
 /** RPC `get_billing_status`, zelfde mapping als `getBillingStatus`. */
@@ -521,6 +523,7 @@ export async function getAbonnement(): Promise<{ data: AbonnementStand | null; e
       readonlyReden: (d.readonlyReden as string) || null,
       modules: Array.isArray(d.modules) ? (d.modules as string[]) : [],
       limieten: (d.limieten as AbonnementStand['limieten']) || {},
+      gebruikers: (d.gebruikers as AbonnementStand['gebruikers']) || null,
     },
     error: null,
   };
