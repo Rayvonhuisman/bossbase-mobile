@@ -67,3 +67,7 @@ secrets.json
 
 # Vercel CLI: lokale projectkoppeling (project- en team-ID), hoort niet in Git.
 .vercel/
+
+# Schermafdrukken van scripts/screenshots-formaten.mjs: bevatten gegevens van
+# het testbedrijf en horen niet in de repo (ook niet in EAS/Vercel-uploads).
+docs/screenshots/

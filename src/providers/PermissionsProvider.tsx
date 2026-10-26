@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import {
   createContext,
   useCallback,
@@ -220,7 +221,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         return 'Dit zit niet in je huidige abonnement.';
       }
       if (gate.readonlyBlokkeert && readonly) {
-        return readonlyTekst(planStatus?.readonlyReden ?? null).titel;
+        return readonlyTekst(planStatus?.readonlyReden ?? null, Platform.OS).titel;
       }
       return null;
     };

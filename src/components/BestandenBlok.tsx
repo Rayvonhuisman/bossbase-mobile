@@ -22,6 +22,7 @@ import { BestandWeergave } from '@/components/BestandWeergave';
 import { KaartBlok, KaartLeeg, KaartRij } from '@/components/RelatieKaart';
 import { Blok, KleineKnop } from '@/components/project/bouwstenen';
 import { Dialog } from '@/lib/dialog';
+import { aankoopTekst } from '@/lib/aankoopInfo';
 import { bevestigVerwijderen } from '@/lib/useSave';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import { kiesBestanden, type KandidaatBestand } from '@/lib/kiesBestand';
@@ -388,7 +389,7 @@ export function BestandenBlok({
       {magToevoegen && opslag && (opslag.vol || (opslag.max && opslag.deel >= OPSLAG_WAARSCHUWING)) ? (
         <Text style={[styles.opslag, { color: opslag.vol ? t.statusRejectFg : t.statusWarnFg }]}>
           {opslag.vol
-            ? `Je opslag is vol (${fmtOpslag(opslag.gebruikt)} van ${fmtOpslag(opslag.max ?? 0)}). Nieuwe bestanden toevoegen lukt pas weer met meer ruimte: verwijder bestanden of kies een groter pakket.`
+            ? `Je opslag is vol (${fmtOpslag(opslag.gebruikt)} van ${fmtOpslag(opslag.max ?? 0)}). Nieuwe bestanden toevoegen lukt pas weer met meer ruimte: ${aankoopTekst('verwijder bestanden of kies een groter pakket.', 'verwijder bestanden.')}`
             : `Je gebruikt ${Math.round(opslag.deel * 100)}% van je opslag (${fmtOpslag(opslag.gebruikt)} van ${fmtOpslag(opslag.max ?? 0)}).`}
         </Text>
       ) : null}

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Platform } from 'react-native';
+import { openExtern } from '@/lib/linking';
 import { useRouter } from 'expo-router';
 import {
   BookOpen,
@@ -132,9 +133,9 @@ export default function MenuScreen() {
   const ondersteuning: Item[] = [
     { icon: MessageCircleQuestion, title: 'Help', sub: 'Vraag het Boss, onze helpagent', onPress: openBoss },
     { icon: Bug, title: 'Bug of idee', sub: 'Meld het en help BossBase beter maken', onPress: openMelden },
-    { icon: BookOpen, title: 'Kennisbank', sub: 'Uitleg en handleidingen op bossbase.nl', onPress: () => void Linking.openURL(KENNISBANK_URL) },
-    { icon: HelpCircle, title: 'Veelgestelde vragen', sub: 'Snel antwoord op bossbase.nl', onPress: () => void Linking.openURL(FAQ_URL) },
-    { icon: Phone, title: 'Bel ons', sub: HULP_TELEFOON, onPress: () => void Linking.openURL(HULP_TELEFOON_LINK) },
+    { icon: BookOpen, title: 'Kennisbank', sub: 'Uitleg en handleidingen op bossbase.nl', onPress: () => openExtern(KENNISBANK_URL) },
+    { icon: HelpCircle, title: 'Veelgestelde vragen', sub: 'Snel antwoord op bossbase.nl', onPress: () => openExtern(FAQ_URL) },
+    { icon: Phone, title: 'Bel ons', sub: HULP_TELEFOON, onPress: () => openExtern(HULP_TELEFOON_LINK, 'Bellen werkt niet op dit toestel.') },
   ];
 
   const secties = groepen.map((g) => ({ ...g, items: zichtbaar(g.items) })).filter((g) => g.items.length > 0);
@@ -197,7 +198,7 @@ export default function MenuScreen() {
 
         {readonly ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            <NoticeBanner title={readonlyTekst(readonlyReden).titel} message={readonlyTekst(readonlyReden).uitleg} />
+            <NoticeBanner title={readonlyTekst(readonlyReden, Platform.OS).titel} message={readonlyTekst(readonlyReden, Platform.OS).uitleg} />
           </View>
         ) : null}
 

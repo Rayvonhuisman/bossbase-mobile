@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { MobielKader } from '@/components/MobielKader';
+import { VelStatusbalk } from '@/components/VelStatusbalk';
 import { Dialog } from '@/lib/dialog';
 import { useFocusTerug } from '@/lib/focusTerug';
 import type { MailBedrijf } from '@/lib/werkbonVersturen';
@@ -88,8 +89,9 @@ export function WaarschuwingModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={sluit} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <View style={styles.kop}>
             <Pressable onPress={sluit} hitSlop={8} style={styles.minTouch} accessibilityRole="button" disabled={bezig}>
               <Text style={styles.annuleer}>{stap === 'voorbeeld' ? 'Sluiten' : 'Annuleren'}</Text>
@@ -102,7 +104,7 @@ export function WaarschuwingModal({
             </View>
             <View style={{ width: 64 }} />
           </View>
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
             {stap === 'invoer' ? (
               <>
                 <View style={styles.uitleg}>
@@ -166,7 +168,7 @@ export function WaarschuwingModal({
               </>
             )}
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
     </Modal>
   );

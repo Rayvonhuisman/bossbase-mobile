@@ -1,6 +1,6 @@
 {
   "name": "bossbase-mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -33,7 +33,6 @@
     "expo-linking": "~57.0.10",
     "expo-print": "~57.0.2",
     "expo-router": "~57.0.22",
-    "expo-screen-orientation": "~57.0.3",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.23",
     "expo-splash-screen": "~57.0.9",

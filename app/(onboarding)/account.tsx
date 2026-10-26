@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ import {
   heeftFouten,
   type AccountFouten,
 } from '@/lib/registratie';
+import { openExtern } from '@/lib/linking';
 import { Field, GreenButton, TopBar } from './_components';
 import { onb } from './_tokens';
 
@@ -20,7 +21,7 @@ const GOED = '#15A34A';
 const FOUT = '#C81E1E';
 
 function openLink(url: string) {
-  Linking.openURL(url).catch(() => {});
+  openExtern(url, 'De pagina kon niet worden geopend.');
 }
 
 /**

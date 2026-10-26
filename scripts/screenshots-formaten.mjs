@@ -4,7 +4,9 @@
  *   BB_TEST_EMAIL=… BB_TEST_WACHTWOORD=… BB_URL=http://localhost:8099 \
  *   PLAYWRIGHT_CORE=/pad/naar/playwright-core node scripts/screenshots-formaten.mjs
  *
- * Schrijft naar docs/screenshots/formaten/<formaat>/<scherm>.png. Alleen voor
+ * Schrijft naar docs/screenshots/formaten/<formaat>/<scherm>.png (of naar
+ * BB_SCREENSHOTS_UIT). Die map staat in .gitignore en .easignore: de beelden
+ * tonen gegevens van het testbedrijf en horen niet in de repo. Alleen voor
  * een testbedrijf; er wordt niets gewijzigd (alleen bekeken).
  */
 import { mkdirSync } from 'node:fs';
@@ -12,7 +14,7 @@ import { join } from 'node:path';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? 'playwright-core');
 const BASIS = process.env.BB_URL ?? 'http://localhost:8099';
-const UIT = new URL('../docs/screenshots/formaten/', import.meta.url).pathname;
+const UIT = process.env.BB_SCREENSHOTS_UIT ?? new URL('../docs/screenshots/formaten/', import.meta.url).pathname;
 
 export const FORMATEN = [
   ['iphone-se', 375, 667],

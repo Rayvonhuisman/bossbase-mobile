@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { aankoopTekst } from '@/lib/aankoopInfo';
 import { getCompanyId, isReadonly } from '@/lib/sessionContext';
 import { classificeerFout, schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { haalDocumentPdf, PdfFout } from '@/lib/pdf';
@@ -161,8 +162,11 @@ function nieuweId(): string {
 // Limiet per pakket (migratie 20261023163939). De database houdt een upload
 // tegen als de opslag vol is; hier komt de begrijpelijke melding vandaan.
 export const OPSLAG_WAARSCHUWING = 0.8;
-export const OPSLAG_VOL_TEKST =
-  'Je opslag is vol. Verwijder bestanden die je niet meer nodig hebt, of kies een groter pakket voor meer opslag.';
+// iOS (App Store 3.1.1): geen oproep om een groter pakket te kiezen.
+export const OPSLAG_VOL_TEKST = aankoopTekst(
+  'Je opslag is vol. Verwijder bestanden die je niet meer nodig hebt, of kies een groter pakket voor meer opslag.',
+  'Je opslag is vol. Verwijder bestanden die je niet meer nodig hebt.',
+);
 
 export type OpslagStand = { gebruikt: number; max: number | null; vol: boolean; deel: number };
 

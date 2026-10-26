@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import { Square } from 'lucide-react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { MobielKader } from '@/components/MobielKader';
+import { VelStatusbalk } from '@/components/VelStatusbalk';
 import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
 import { useFocusTerug } from '@/lib/focusTerug';
 import { formatHours } from '@/lib/format';
@@ -123,8 +122,9 @@ export function AfrondenModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={sluit} presentationStyle="formSheet">
+      <VelStatusbalk />
       <MobielKader soort="formulier">
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, backgroundColor: th.bg }}>
           <View style={styles.kop}>
             <Pressable onPress={sluit} hitSlop={8} style={styles.minTouch} accessibilityRole="button" disabled={bezig}>
               <Text style={styles.annuleer}>Annuleren</Text>
@@ -141,7 +141,7 @@ export function AfrondenModal({
             <View style={{ width: 64 }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" scrollEnabled={!tekent}>
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets scrollEnabled={!tekent}>
             {/* Samenvatting — wat de klant straks op de bon ziet */}
             <View style={styles.cijfers}>
               <Cijfer styles={styles} label="Taken" waarde={`${taken.filter((t) => t.afgerond).length}/${taken.length}`} />
@@ -265,7 +265,7 @@ export function AfrondenModal({
               </View>
             )}
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </MobielKader>
       <PdfWeergave document={pdf} onSluit={() => setPdf(null)} />
     </Modal>

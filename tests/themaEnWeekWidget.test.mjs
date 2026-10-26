@@ -65,3 +65,11 @@ test('weekurenwidget: op iPad onder de kolommen over de volle breedte, op telefo
   const overzicht = bron.indexOf('Overzicht: de cijfertegels');
   assert.ok(kolommenEinde > 0 && kolommenEinde < overzicht, 'tussen de kolommen en het overzicht');
 });
+
+test('native: opstartscherm blijft staan tot de opgeslagen weergave gelezen is (geen themaflits)', () => {
+  const provider = lees('src/providers/ThemeProvider.tsx');
+  assert.match(provider, /SplashScreen\.preventAutoHideAsync/);
+  assert.match(provider, /SplashScreen\.hideAsync/);
+  assert.match(provider, /klaar \? children : null/);
+  assert.match(provider, /THEMA_WACHT_MS/);
+});

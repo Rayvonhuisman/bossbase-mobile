@@ -319,13 +319,3 @@ async function ruimAvatarOp(url: string | null): Promise<void> {
   }
 }
 
-/**
- * Eigen account deactiveren (RPC `delete_own_account`), zoals de Gevarenzone
- * van het dashboard voor iemand die niet de eigenaar is. Het bedrijf sluiten
- * (eigenaar) zegt ook het abonnement op en loopt daarom via het dashboard.
- */
-export async function deactiveerEigenAccount(): Promise<WriteStatus> {
-  const { error } = await supabase.rpc('delete_own_account');
-  if (error) return writeFout('onbekend', error.message || 'Deactiveren mislukt');
-  return { ok: true, data: null };
-}

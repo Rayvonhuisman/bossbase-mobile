@@ -1,8 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Button } from './Button';
 import { MobielKader } from './MobielKader';
+import { ToetsenbordVlak } from './ToetsenbordVlak';
+import { VelStatusbalk } from './VelStatusbalk';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
@@ -64,8 +64,8 @@ export function FormSheet({
   const { colors: t } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(t), [t]);
-  // Web: ligt het toetsenbord over de homebalk, dan is die ruimte niet nodig.
-  // Native: altijd false.
+  // Ligt het toetsenbord over de homebalk, dan is die ruimte niet nodig
+  // (web en native).
   const toetsenbordOpen = useToetsenbordOpen();
   // Web: na sluiten (ook met Escape) de focus terug naar de knop die het opende.
   useFocusTerug(visible);
@@ -84,12 +84,12 @@ export function FormSheet({
       presentationStyle="pageSheet"
       onRequestClose={sluit}
     >
+      <VelStatusbalk />
       {/* Op web staat het vel op telefoonbreedte, net als de app eronder. */}
       <MobielKader soort="formulier">
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: t.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* iOS: een pageSheet begint niet bovenaan het scherm, daarom geen
+          KeyboardAvoidingView maar een vlak dat zichzelf in het venster meet. */}
+      <ToetsenbordVlak style={{ flex: 1, backgroundColor: t.bg }}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{title}</Text>
@@ -114,7 +114,9 @@ export function FormSheet({
           // sluit het toetsenbord dan bij élk scroll-event, ook als de browser
           // het actieve veld zelf in beeld scrolt — en dan raakt het veld zijn
           // focus kwijt zodra het toetsenbord opent.
-          keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
+          // Scrollen sluit het toetsenbord niet (ook niet op iOS): wie in een
+          // lang formulier omhoog kijkt, blijft gewoon in het veld.
+          keyboardDismissMode="none"
         >
           {children}
         </ScrollView>
@@ -151,7 +153,7 @@ export function FormSheet({
             </Pressable>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </ToetsenbordVlak>
       </MobielKader>
     </Modal>
   );

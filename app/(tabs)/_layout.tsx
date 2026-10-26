@@ -61,8 +61,8 @@ const PROFILE_ERROR_MESSAGES: Record<string, { title: string; body: string }> = 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors: t } = useTheme();
-  // Met een open toetsenbord (web) zou de balk erboven gaan zweven en ruimte
-  // van het zoekveld afsnoepen. Native: altijd false, de balk blijft zoals hij was.
+  // Met een open toetsenbord zou de balk erboven gaan zweven (web, Android) en
+  // ruimte van het zoekveld afsnoepen. Op iOS ligt hij er anders onder.
   const toetsenbordOpen = useToetsenbordOpen();
   if (toetsenbordOpen) return null;
 

@@ -40,6 +40,9 @@ export const TABBALK_MAX = 520;
  * `platform` blijft als parameter voor bestaande aanroepen, maar telt niet.
  */
 export function bepaalSchermklasse(breedte: number, _platform?: string): Schermklasse {
+  // Op elk platform dezelfde regel: de iOS-app op een iPad (ook in Split View
+  // of Stage Manager) volgt net als de webapp de breedte van het venster.
+  // Telefoons komen in staande stand nooit aan 700 punten.
   return breedte >= TABLET_VANAF ? 'tablet' : 'telefoon';
 }
 

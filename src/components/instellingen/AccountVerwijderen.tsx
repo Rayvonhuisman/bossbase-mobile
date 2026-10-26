@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { FormSheet } from '@/components/FormSheet';
-import { useTheme, useToast } from '@/providers';
+import { useAuth, useTheme, useToast } from '@/providers';
 import { Dialog } from '@/lib/dialog';
 import { writeFout, writeOk, type WriteStatus } from '@/lib/writeResult';
 import { useSave } from '@/lib/useSave';
+import {
+  LID_GEVOLGEN,
+  MODUS_UITLEG,
+  OVERDRACHT_GEVOLGEN,
+  bedrijfGevolgen,
+  bedrijfsnaamKlopt,
+  bevestigingKlopt,
+  datumNl as datum,
+  eigenaarUitleg,
+  verwijderingMelding,
+  weergave,
+} from '@/lib/accountVerwijderenRegels';
 import {
   bevestigMetWachtwoord,
   lokaalUitloggen,
@@ -16,12 +28,9 @@ import {
 } from '@/services/accountVerwijderenService';
 import { Kaart, Keuze, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
 
-const datum = (iso: string | null | undefined) =>
-  iso
-    ? new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' })
-    : '';
-
 type Venster = 'lid' | 'overdracht' | 'bedrijf' | null;
+
+const punten = (regels: string[]) => regels.map((r) => `• ${r}`).join('\n');
 
 /**
  * Account verwijderen — dezelfde flow als `AccountVerwijderen.jsx` in het
@@ -34,11 +43,14 @@ type Venster = 'lid' | 'overdracht' | 'bedrijf' | null;
  *
  * Rol, eigendom en bevestigingen controleert de server; het wachtwoord gaat
  * alleen naar Supabase Auth (opnieuw inloggen), nooit naar onze functie.
+ * Teksten en regels staan in `lib/accountVerwijderenRegels` (getest, op iOS
+ * zonder verwijzing naar betalen buiten de app).
  */
 export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void }) {
   const { colors: t } = useTheme();
   const s = useMemo(() => stijlVoorInstellingen(t), [t]);
   const { toonResultaat } = useToast();
+  const { user } = useAuth();
   const [status, setStatus] = useState<VerwijderStatus | null>(null);
   const [laadFout, setLaadFout] = useState<string | null>(null);
   const [venster, setVenster] = useState<Venster>(null);
@@ -77,7 +89,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
   const naarBuiten = async (bericht: string) => {
     setVenster(null);
     Dialog.alert('Verwijderd', bericht);
-    await lokaalUitloggen();
+    await lokaalUitloggen(user?.id);
     onUitgelogd();
   };
 
@@ -162,17 +174,14 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
   }
 
   const v = status.verwijdering;
-  const eigenaar = status.isEigenaar;
-  const kandidaten = status.kandidaten ?? [];
+  const w = weergave(status);
+  const melding = verwijderingMelding(status);
+  const kandidaten = status.kandidaten;
 
   return (
     <Kaart titel="Account verwijderen">
-      {v ? (
-        <Uitleg toon="waarschuwing">
-          {`Dit bedrijf wordt ${v.modus === 'direct' || v.status === 'bezig' ? 'nu verwijderd' : `verwijderd op ${datum(v.geplandOp)}`}. Tot die tijd kun je alles bekijken en exporteren, maar niets meer wijzigen.`}
-        </Uitleg>
-      ) : null}
-      {v && eigenaar && v.status === 'gepland' ? (
+      {melding ? <Uitleg toon="waarschuwing">{melding}</Uitleg> : null}
+      {v && w.kanAnnuleren ? (
         <View style={s.knoppen}>
           <Button
             label="Verwijdering annuleren"
@@ -204,13 +213,9 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         </>
       ) : null}
 
-      {!v && eigenaar ? (
+      {w.toonEigenaarKeuzes ? (
         <>
-          <Text style={s.hint}>
-            Je bent de eigenaar. Wil je alleen je eigen account verwijderen, draag dan eerst het eigendom over aan een
-            andere beheerder. Of verwijder het hele bedrijf, met alle teamleden en gegevens. Wil je alleen stoppen met
-            betalen, zeg dan je abonnement op (dashboard › Instellingen › Abonnement).
-          </Text>
+          <Text style={s.hint}>{eigenaarUitleg(Platform.OS)}</Text>
           {status.overdrachtUit ? (
             <>
               <Uitleg>
@@ -230,18 +235,18 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
             <Button
               label="Eigendom overdragen"
               variant="secondary"
-              disabled={kandidaten.length === 0 || !!status.overdrachtUit}
+              disabled={!w.kanOverdragen}
               onPress={() => open('overdracht')}
             />
             <Button label="Bedrijf verwijderen" variant="secondary" onPress={() => open('bedrijf')} />
           </View>
-          {kandidaten.length === 0 ? (
+          {w.geenOpvolger ? (
             <Text style={s.hint}>Overdragen kan aan een actieve beheerder. Maak eerst iemand beheerder bij Team.</Text>
           ) : null}
         </>
       ) : null}
 
-      {!eigenaar ? (
+      {w.toonLidVerwijderen ? (
         <>
           <Text style={s.hint}>
             Verwijder je eigen account definitief. Het bedrijf en het werk van je collega’s blijven bestaan.
@@ -259,15 +264,11 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         error={error}
         saving={saving}
         submitLabel="Definitief verwijderen"
-        submitDisabled={!wachtwoord || bevestiging.trim().toUpperCase() !== 'VERWIJDEREN'}
+        submitDisabled={!wachtwoord || !bevestigingKlopt(bevestiging)}
         onSubmit={lidVerwijderen}
         onClose={() => setVenster(null)}
       >
-        <Uitleg toon="waarschuwing">
-          {'• Weg: je login, naam, e-mailadres, telefoonnummer, profielfoto, meldingen en koppelingen. Je wordt overal uitgelogd.\n' +
-            '• Blijft bij het bedrijf: wat je voor het bedrijf hebt vastgelegd (uren, werkbonnen, notities). Daar staat voortaan „Verwijderde gebruiker”.\n' +
-            '• Het bedrijf en de accounts van je collega’s blijven bestaan.'}
-        </Uitleg>
+        <Uitleg toon="waarschuwing">{punten(LID_GEVOLGEN)}</Uitleg>
         <FormField
           label="Bevestig met je wachtwoord"
           value={wachtwoord}
@@ -297,11 +298,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         onSubmit={overdragen}
         onClose={() => setVenster(null)}
       >
-        <Uitleg>
-          {'• De nieuwe eigenaar beheert het abonnement en kan het bedrijf verwijderen.\n' +
-            '• Tot de acceptatie blijf jij eigenaar. Het verzoek verloopt na 7 dagen; je kunt het eerder intrekken.\n' +
-            '• Daarna kun je je eigen account verwijderen.'}
-        </Uitleg>
+        <Uitleg>{punten(OVERDRACHT_GEVOLGEN)}</Uitleg>
         <Keuze
           label="Nieuwe eigenaar"
           opties={kandidaten.map((k) => ({ id: k.id, label: k.naam || 'Beheerder' }))}
@@ -325,24 +322,26 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         error={error}
         saving={saving}
         submitLabel={modus === 'direct' ? 'Nu definitief verwijderen' : 'Verwijderen over 30 dagen'}
-        submitDisabled={!wachtwoord || (modus === 'direct' && bevestiging !== status.bedrijfsnaam)}
+        submitDisabled={!wachtwoord || (modus === 'direct' && !bedrijfsnaamKlopt(bevestiging, status.bedrijfsnaam))}
         onSubmit={bedrijfVerwijderen}
         onClose={() => setVenster(null)}
       >
-        <Uitleg toon="waarschuwing">
-          {`• Weg: alle klanten, projecten, werkbonnen, uren, planning, offertes, facturen, kosten, bestanden en foto’s, en de accounts van jou en ${status.teamleden ? `${status.teamleden} teamleden` : 'je team'}.\n` +
-            '• Abonnement: stopt op de verwijderdatum; daarna wordt er niets meer afgeschreven.\n' +
-            '• Wat BossBase bewaart: alleen de facturen die BossBase jou stuurde en de betaalgegevens daarvan, 7 jaar (wettelijke bewaarplicht), plus een kort technisch bewijs van dit verzoek.\n' +
-            '• Exporteer eerst wat je zelf moet bewaren, zoals je facturen en btw-gegevens (op het dashboard). Jouw eigen administratieplicht blijft gelden.'}
-        </Uitleg>
+        <Uitleg toon="waarschuwing">{punten(bedrijfGevolgen(status.teamleden))}</Uitleg>
         <Keuze
           label="Wanneer?"
+          // Korte labels (een lang label liep op telefoonbreedte buiten beeld);
+          // de uitleg per keuze staat eronder.
           opties={[
-            { id: 'gepland', label: 'Over 30 dagen (aanbevolen): eerst alleen-lezen, annuleren kan nog' },
-            { id: 'direct', label: 'Nu definitief: alles is direct weg' },
+            { id: 'gepland', label: 'Over 30 dagen (aanbevolen)' },
+            { id: 'direct', label: 'Nu definitief' },
           ]}
           waarde={modus}
-          onKies={(id) => setModus(id as 'gepland' | 'direct')}
+          onKies={(id) => {
+            setModus(id as 'gepland' | 'direct');
+            setBevestiging('');
+          }}
+          uitgeschakeld={saving}
+          hint={MODUS_UITLEG[modus]}
         />
         {modus === 'direct' ? (
           <FormField

@@ -163,6 +163,13 @@ export function gateFor(route: string): NavGate | null {
 // iets vergeten, en het is zijn eigen administratie die hij voor zich ziet.
 
 export const READONLY_TEKSTEN: Record<string, { titel: string; uitleg: string }> = {
+  verwijdering_gepland: {
+    titel: 'Dit bedrijf wordt verwijderd',
+    uitleg:
+      'De eigenaar heeft het bedrijf laten verwijderen. Tot de verwijderdatum kun je alles bekijken en ' +
+      'exporteren, maar niets meer toevoegen, wijzigen of versturen. De eigenaar kan dit nog annuleren ' +
+      'onder Instellingen › Mijn profiel.',
+  },
   proefperiode_verlopen: {
     titel: 'Je gratis periode is voorbij',
     uitleg:
@@ -191,7 +198,41 @@ export const READONLY_ALGEMEEN = {
     'versturen kan weer zodra er een lopend abonnement is.',
 };
 
-export function readonlyTekst(reden: string | null | undefined) {
+/**
+ * iOS (App Store 3.1.1): dezelfde uitleg zonder oproep om een abonnement te
+ * kiezen of betaalgegevens bij te werken — dat gebeurt buiten de app.
+ */
+export const READONLY_TEKSTEN_IOS: Record<string, { titel: string; uitleg: string }> = {
+  verwijdering_gepland: {
+    titel: 'Dit bedrijf wordt verwijderd',
+    uitleg:
+      'De eigenaar heeft het bedrijf laten verwijderen. Tot de verwijderdatum kun je alles bekijken en ' +
+      'exporteren, maar niets meer toevoegen, wijzigen of versturen. De eigenaar kan dit nog annuleren ' +
+      'onder Instellingen › Mijn profiel.',
+  },
+  proefperiode_verlopen: {
+    titel: 'Je proefperiode is voorbij',
+    uitleg:
+      'Je kunt alles blijven bekijken, zoeken en exporteren. Toevoegen, wijzigen, ' +
+      'verwijderen en versturen kan weer zodra je abonnement actief is. Je abonnement wordt buiten de app beheerd.',
+  },
+  betaling_mislukt: {
+    titel: 'Je account staat tijdelijk op alleen-lezen',
+    uitleg:
+      'Bekijken en exporteren kan; wijzigen en versturen niet. Zodra de betaling in orde is, gaat alles ' +
+      'direct weer open. Je abonnement wordt buiten de app beheerd.',
+  },
+  opgezegd: {
+    titel: 'Je abonnement is gestopt',
+    uitleg:
+      'Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Toevoegen, ' +
+      'wijzigen, verwijderen en versturen kan weer zodra je abonnement actief is.',
+  },
+};
+
+/** `platform`: geef `Platform.OS` mee vanuit het scherm (dit bestand blijft vrij van react-native). */
+export function readonlyTekst(reden: string | null | undefined, platform: string = 'web') {
+  if (platform === 'ios') return (reden && READONLY_TEKSTEN_IOS[reden]) || READONLY_ALGEMEEN;
   return (reden && READONLY_TEKSTEN[reden]) || READONLY_ALGEMEEN;
 }
 

@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DialogHost, MobielKader, NieuweVersieMelding } from '@/components';
 import { registreerServiceWorker } from '@/lib/pwa';
-import { zetSchermstand } from '@/lib/schermstand';
 import { HulpProvider } from '@/providers/HulpProvider';
 import {
   AuthProvider,
@@ -27,7 +26,6 @@ export default function RootLayout() {
   // productiebuild). Op iOS en Android doet dit niets.
   useEffect(() => {
     registreerServiceWorker();
-    zetSchermstand();
   }, []);
 
   return (

@@ -42,6 +42,10 @@ export function routeVoorLink(link: string | null | undefined): string | null {
       return '/customers';
     case 'uren':
       return '/hours';
+    // 'instellingen/profiel': een tabblad (o.a. eigendomsoverdracht en
+    // bedrijfsverwijdering, migratie 20261017120000 in het dashboard).
+    case 'instellingen':
+      return id ? `/settings?tab=${id}` : '/settings';
     default:
       return null;
   }
