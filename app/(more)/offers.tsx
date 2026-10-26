@@ -1206,6 +1206,15 @@ function OffersScreenInhoud() {
               ? 'De offerte gaat als PDF mee. Digitaal ondertekenen zit niet in je abonnement, dus er gaat geen ondertekenlink mee.'
               : null
         }
+        kop={
+          // Zonder IBAN kan de offerte weg, de factuur straks niet (besluit 26-10).
+          mail && !mail.laden && mail.bedrijf && !String(mail.bedrijf.iban || '').trim() ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message="Let op: het IBAN van je bedrijf ontbreekt. De offerte kun je gewoon versturen, maar een factuur pas als het IBAN is ingevuld (Instellingen › Bedrijfsprofiel)."
+            />
+          ) : null
+        }
         saving={mailBezig}
         error={mailFout}
         onVerstuur={verstuurOfferte}
