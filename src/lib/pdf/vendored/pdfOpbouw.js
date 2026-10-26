@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/pdfOpbouw.js
-// Dashboardcommit: 20a5e68
+// Dashboardcommit: ac667de
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -480,7 +480,10 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
   if (noteText) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(noteText, CW - 22);
+    // Hooguit 25 regels: genoeg voor een opmerking voor de klant, en het vak
+    // en de tekst gebruiken hetzelfde aantal (voorheen werd na 5 regels stil
+    // afgekapt terwijl het vak voor alles werd berekend).
+    const noteLines = doc.splitTextToSize(noteText, CW - 22).slice(0, 25);
     const noteH = Math.max(13, noteLines.length * 4 + 10);
     ruimte(noteH + 8);
 
@@ -503,7 +506,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(noteLines.slice(0, 5), M + 11.5, noteTextY);
+    doc.text(noteLines, M + 11.5, noteTextY);
 
     y += noteH + 8;
   }
