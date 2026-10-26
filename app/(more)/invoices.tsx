@@ -163,6 +163,8 @@ type Concept = {
   id: string | null;
   customerId: string | null;
   projectId: string | null;
+  /** Bij "Maak factuur" vanuit een offerte: die offerte (kolom offerte_id). */
+  offerteId: string | null;
   factuurdatum: string;
   betaaltermijn: string;
   vervaldatum: string;
@@ -393,7 +395,12 @@ function InvoicesScreenInhoud() {
    * een geaccepteerde offerte). De betaaltermijn is die van de klant, anders
    * die uit Instellingen, anders 14 dagen; de vervaldatum volgt daaruit.
    */
-  const openNieuw = (prefill?: { customerId: string | null; projectId?: string | null; regels?: Regel[] }) => {
+  const openNieuw = (prefill?: {
+    customerId: string | null;
+    projectId?: string | null;
+    offerteId?: string | null;
+    regels?: Regel[];
+  }) => {
     if (limietBereikt()) return;
     setSaveError(null);
     const factuurdatum = vandaagIso();
@@ -401,6 +408,7 @@ function InvoicesScreenInhoud() {
       id: null,
       customerId: prefill?.customerId ?? null,
       projectId: prefill?.projectId ?? null,
+      offerteId: prefill?.offerteId ?? null,
       factuurdatum,
       betaaltermijn: '14',
       vervaldatum: berekenVervaldatum(factuurdatum, 14),
@@ -446,6 +454,7 @@ function InvoicesScreenInhoud() {
       }
       openNieuw({
         customerId: o.data.customer_id,
+        offerteId: o.data.id,
         regels: r.data.map((it) => regelUitOfferteItem(it, o.data!)),
       });
     })();
@@ -473,6 +482,7 @@ function InvoicesScreenInhoud() {
       id: f.id,
       customerId: f.customer_id,
       projectId: f.project_id,
+      offerteId: null,
       factuurdatum: f.factuurdatum,
       betaaltermijn: String(f.betaaltermijn_dagen ?? 14),
       vervaldatum: f.vervaldatum ?? '',
@@ -530,7 +540,7 @@ function InvoicesScreenInhoud() {
         if (!magRegels) return createFactuur(invoer);
         const totalen = berekenTotalen(c.regels);
         const res = await createFactuurMetRegels(
-          { ...invoer, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
+          { ...invoer, offerte_id: c.offerteId, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
           c.regels.map((r) => factuurRegelVoorOpslag(r, eenheden)),
         );
         return res.ok ? { ok: true, data: res.data.factuur } : res;

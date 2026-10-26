@@ -337,6 +337,8 @@ export function berekenVervaldatum(factuurdatum: string, termijnDagen: number): 
 export type FactuurInput = {
   customer_id?: string | null;
   project_id?: string | null;
+  /** Alleen bij aanmaken uit een offerte; de RPC controleert hem en zoekt het project erbij. */
+  offerte_id?: string | null;
   factuurdatum?: string;
   betaaltermijn_dagen?: number;
   vervaldatum?: string | null;
@@ -877,6 +879,7 @@ export async function createFactuurMetRegels(
     {
       customer_id: input.customer_id || null,
       project_id: input.project_id || null,
+      offerte_id: input.offerte_id || null,
       nummer: nummerRes.nummer,
       factuurdatum,
       vervaldatum: input.vervaldatum || berekenVervaldatum(factuurdatum, termijn),
@@ -1186,4 +1189,28 @@ export async function standaardBetaaltermijn(customerId: string | null): Promise
   const b = (inst as { betaaltermijn_dagen?: number | null } | null)?.betaaltermijn_dagen;
   if (b !== null && b !== undefined && Number.isFinite(Number(b))) return Number(b);
   return 14;
+}
+
+/**
+ * Welke offertes al een factuur hebben (via "Maak factuur", kolom `offerte_id`),
+ * zoals `getFactuurnummersPerOfferte` in het dashboard. Vervallen facturen en
+ * creditnota's tellen niet. Zonder recht op facturen of bij een fout: leeg.
+ */
+export async function factuurnummersPerOfferte(): Promise<Map<string, string[]>> {
+  const per = new Map<string, string[]>();
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('facturen')
+      .select('id, offerte_id, nummer')
+      .not('offerte_id', 'is', null)
+      .neq('status', 'vervallen')
+      .eq('is_credit', false)
+      .order('id')
+      .range(van, tot),
+  );
+  if (error) return per;
+  for (const r of (data ?? []) as { offerte_id: string; nummer: string | null }[]) {
+    per.set(r.offerte_id, [...(per.get(r.offerte_id) ?? []), r.nummer ?? '']);
+  }
+  return per;
 }
