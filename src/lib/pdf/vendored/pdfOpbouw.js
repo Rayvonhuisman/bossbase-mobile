@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/pdfOpbouw.js
-// Dashboardcommit: aac2a38
+// Dashboardcommit: 20a5e68
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -468,7 +468,10 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
 
   // ── NOTITIE / GELDIGHEID ──────────────────────────────────────
 
-  const rawNotes = document.notities || document.notes;
+  // De notitie van een factuur is intern: nooit op de PDF voor de klant (audit
+  // 2026-10-25, G-03; het veld beloofde "interne notities" en kwam er toch op).
+  // Een creditnota toont zijn toelichting hierboven als creditNote.
+  const rawNotes = type === 'factuur' ? null : (document.notities || document.notes);
   const defaultNote = !rawNotes && type === 'offerte' && document.geldigTot
     ? `Deze offerte is geldig tot ${fmtDate(document.geldigTot)}. Na akkoord ontvangt u een bevestiging per e-mail.`
     : null;

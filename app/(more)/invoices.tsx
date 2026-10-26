@@ -39,6 +39,7 @@ import {
   kopieerFactuur,
   listFacturenMetDocument,
   markeerFactuurVerstuurd,
+  factuurRestbedrag,
   standaardBetaaltermijn,
   type FactuurDetail,
   herberekenFactuurTotalen,
@@ -713,7 +714,11 @@ function InvoicesScreenInhoud() {
       klantNaam: doc?.customer?.name ?? f.customer?.name,
       bedrijfsnaam: bedrijf?.name,
       nummer: f.nummer,
-      totaalIncl: doc?.totaal_incl ?? f.totaal_incl,
+      // Een herinnering vraagt wat er nog openstaat, niet het factuurtotaal.
+      totaalIncl:
+        soort === 'factuur' || f.is_credit
+          ? (doc?.totaal_incl ?? f.totaal_incl)
+          : await factuurRestbedrag(f.id, Number(doc?.totaal_incl ?? f.totaal_incl ?? 0)),
       vervaldatum: doc?.vervaldatum ?? f.vervaldatum,
       betalingskenmerk: doc?.betalingskenmerk ?? f.betalingskenmerk,
       isCredit: Boolean(f.is_credit),
@@ -1193,7 +1198,7 @@ function InvoicesScreenInhoud() {
 
             {detail.notities ? (
               <View style={{ gap: spacing.xs }}>
-                <Text style={styles.label}>Notities</Text>
+                <Text style={styles.label}>{detail.is_credit ? 'Toelichting' : 'Interne notitie'}</Text>
                 <Text style={styles.uitleg}>{alsTekst(detail.notities)}</Text>
               </View>
             ) : null}
@@ -1405,10 +1410,10 @@ function InvoicesScreenInhoud() {
         ) : null}
 
         <FormField
-          label="Notities / betalingsinstructies"
+          label="Interne notitie"
           value={concept?.notities ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, notities: v } : c))}
-          placeholder="Betalingsinstructies, interne notities..."
+          placeholder="Alleen voor jou en je collega's — niet op de factuur of in de mail"
           multiline
           editable={!concept?.opSlot && !concept?.geimporteerd}
         />

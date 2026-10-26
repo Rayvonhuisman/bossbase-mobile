@@ -229,6 +229,20 @@ export async function getFactuurPdfUrl(factuurId: string): Promise<string | null
   return data?.signedUrl ?? null;
 }
 
+// ── Restbedrag ─────────────────────────────────────────────────────────────
+
+/**
+ * Wat er van een factuur nog openstaat: het totaal min de creditnota's
+ * (`bb_factuur_restbedrag`). Na een deelcreditering is dat minder dan het
+ * totaal; herinneringen en de betaallink gaan over dit bedrag (audit
+ * 2026-10-25, G-02). Bij een fout het meegegeven totaal.
+ */
+export async function factuurRestbedrag(id: string, terugval: number): Promise<number> {
+  const { data, error } = await supabase.rpc('bb_factuur_restbedrag', { p_factuur_id: id });
+  if (error || data == null) return Number(terugval) || 0;
+  return Number(data);
+}
+
 // ── Nummering ──────────────────────────────────────────────────────────────
 
 /**
