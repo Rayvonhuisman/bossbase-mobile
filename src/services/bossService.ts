@@ -8,7 +8,9 @@ import { env } from '@/lib/env';
  * anon-sleutel en het toegangstoken van de gebruiker, en het antwoord als
  * Server-Sent Events. De server bewaakt alles (ingelogd, actief account,
  * 30 berichten per uur, opslaan van het gesprek); de app stuurt alleen de
- * berichten en het gesprek-id.
+ * berichten, het gesprek-id en `bron: 'app'`. Die bron laat Boss naar de app
+ * verwijzen in plaats van naar het dashboard; rol, rechten en pakket bepaalt de
+ * server zelf.
  *
  * Kan de omgeving het antwoord niet als stroom lezen (native fetch zonder
  * streams), dan lezen we het in één keer en verwerken we dezelfde events.
@@ -72,6 +74,7 @@ export async function vraagBoss({
       },
       body: JSON.stringify({
         messages: berichten,
+        bron: 'app',
         ...(gesprekId ? { conversation_id: gesprekId } : {}),
       }),
       signal,
