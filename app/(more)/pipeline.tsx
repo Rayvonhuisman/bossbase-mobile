@@ -51,6 +51,7 @@ import {
   zichtbareFasen,
   type PipelineFilter,
   type VervolgActiviteit,
+  telAanvragenProjecten,
 } from '@/lib/pipelineLogica';
 import { useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
@@ -250,7 +251,7 @@ function PipelineScreenInhoud() {
           <AppTopBar
             variant="detail"
             title="Pipeline"
-            subtitle={`${n} ${n === 1 ? 'aanvraag' : 'aanvragen'} · ${formatEUR(totaal)} totaal`}
+            subtitle={`${n} ${n === 1 ? 'aanvraag of project' : 'aanvragen en projecten'} · ${formatEUR(totaal)} totaal`}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
@@ -432,7 +433,7 @@ function PipelineScreenInhoud() {
                     groot
                   />
                   <Text style={styles.kolomSom}>
-                    {telefoonRijen.length} {telefoonRijen.length === 1 ? 'aanvraag' : 'aanvragen'} ·{' '}
+                    {telAanvragenProjecten(telefoonRijen)} ·{' '}
                     {formatEUR(telefoonRijen.reduce((s, d) => s + dealWaarde(d), 0))}
                   </Text>
                 </View>

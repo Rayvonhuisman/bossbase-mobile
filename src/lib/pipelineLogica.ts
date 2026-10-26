@@ -89,6 +89,21 @@ export function dealStatus(d: Pick<DealLike, 'status'>): 'open' | 'won' | 'lost'
 }
 
 /** Afgerond = `afgerond_op` gezet ("Project voltooid"). */
+/**
+ * Tot het akkoord heet een kaart een aanvraag, daarna een project (besluit
+ * 25-10). "3 aanvragen", "2 projecten" of gemengd "1 aanvraag · 2 projecten".
+ * Zelfde tekst als telAanvragenProjecten in het dashboard (BbDashboard.jsx).
+ */
+export function telAanvragenProjecten(kaarten: Pick<DealLike, 'status'>[]): string {
+  const projecten = kaarten.filter((d) => dealStatus(d) === 'won').length;
+  const aanvragen = kaarten.length - projecten;
+  const a = `${aanvragen} ${aanvragen === 1 ? 'aanvraag' : 'aanvragen'}`;
+  const p = `${projecten} ${projecten === 1 ? 'project' : 'projecten'}`;
+  if (!projecten) return a;
+  if (!aanvragen) return p;
+  return `${a} · ${p}`;
+}
+
 export function isAfgerond(d: Pick<DealLike, 'afgerond_op'> | null | undefined): boolean {
   return Boolean(d?.afgerond_op);
 }
