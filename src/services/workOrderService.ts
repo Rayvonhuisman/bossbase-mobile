@@ -607,6 +607,32 @@ export function getAllowedNextStatuses(
  * Only these fields are sent, so a concurrent dashboard edit to the title,
  * planning or assignment is not overwritten.
  */
+/**
+ * Annuleren of terugzetten (besluit 26-10): alleen de status, zoals het
+ * dashboard. De database bewaakt wie het mag (admin of recht planning), dat er
+ * geen uren of handtekening op staan, en stuurt de medewerkers een melding
+ * (bb_werkbon_annulering_melden).
+ */
+export async function zetWerkbonGeannuleerd(
+  werkbonId: string,
+  geannuleerd: boolean,
+): Promise<{ data: Werkbon | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .update({ status: geannuleerd ? 'geannuleerd' : 'gepland' })
+    .eq('id', werkbonId)
+    .select(WORK_ORDER_COLUMNS);
+  if (error) {
+    if (error.hint === 'werkbon_heeft_uren' || error.hint === 'werkbon_ondertekend' || error.code === '42501') {
+      return { data: null, error: error.message };
+    }
+    return { data: null, error: describeError('zetWerkbonGeannuleerd', error) };
+  }
+  const row = (data as unknown as Werkbon[])?.[0];
+  if (!row) return { data: null, error: 'Je kunt deze werkbon niet annuleren.' };
+  return { data: row, error: null };
+}
+
 export async function updateWorkOrderStatus(
   workOrder: Pick<WorkOrderWithRelations, 'id' | 'gestart_op'>,
   status: WorkOrderStatus,
@@ -1321,7 +1347,7 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
   const { data: wb, error } = await supabase
     .from('werkbonnen')
     .select(
-      'id, titel, customer_id, omschrijving, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden )',
+      'id, titel, customer_id, omschrijving, status, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden )',
     )
     .eq('id', werkbonId)
     .maybeSingle();
@@ -1331,6 +1357,7 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
     titel: string | null;
     customer_id: string | null;
     omschrijving: string | null;
+    status: string | null;
     assigned_to: string | null;
     assigned_to_ids: string[] | null;
     starttijd: string | null;
@@ -1343,7 +1370,9 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
   type Bestaand = { id: string; werkbon_dag_id: string | null; assigned_to: string | null; herkomst: string | null; start_at: string | null };
 
   const gewenst: Gewenst[] = [];
-  for (const dag of w.werkbon_dagen ?? []) {
+  // Een geannuleerde werkbon gaat niet door: geen agenda-items. De rest van de
+  // functie ruimt dan zijn planningsitems op; bij terugzetten komen ze terug.
+  for (const dag of w.status === 'geannuleerd' ? [] : (w.werkbon_dagen ?? [])) {
     const dagStart = hhmm(dag.starttijd) || hhmm(w.starttijd);
     const dagEind = hhmm(dag.eindtijd) || hhmm(w.eindtijd);
     const ploeg = Array.isArray(dag.medewerker_ids) ? dag.medewerker_ids : team;

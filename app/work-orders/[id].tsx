@@ -98,6 +98,8 @@ import {
   updateWorkOrderMaterial,
   updateWorkOrderNote,
   updateWorkOrderStatus,
+  syncWerkbonEvents,
+  zetWerkbonGeannuleerd,
   uploadWorkOrderPhoto,
   type FotoCategorie,
   type MateriaalWijziging,
@@ -348,6 +350,43 @@ export default function WorkOrderDetailScreen() {
     }
     setWorkOrder(data);
     if (next === 'afgerond') Dialog.alert('Klus afgerond.');
+  };
+
+  // Annuleren en terugzetten (besluit 26-10), zoals het dashboard: admin of
+  // recht planning, zolang er geen uren en geen handtekening op staan. De
+  // database dwingt hetzelfde af en meldt het de medewerkers op de bon.
+  const magAnnuleren = klaar && can('planning') && !readonly && !opSlot;
+  const vraagAnnuleren = () => {
+    if (!workOrder) return;
+    const terug = workOrder.status === 'geannuleerd';
+    if (!terug && uren.length) {
+      Dialog.alert('Werkbon annuleren', 'Er staan uren op deze werkbon. Verwijder die eerst; dan kun je hem annuleren.');
+      return;
+    }
+    Dialog.alert(
+      terug ? 'Werkbon terugzetten' : 'Werkbon annuleren',
+      terug
+        ? 'De werkbon gaat terug naar Gepland en staat weer in de planning en de agenda.'
+        : 'De werkbon gaat niet door. Hij verdwijnt uit de planning en de agenda en telt niet mee in de nacalculatie. De medewerkers op de werkbon krijgen een melding. Terugzetten kan.',
+      [
+        { text: 'Niet nu', style: 'cancel' },
+        {
+          text: terug ? 'Terugzetten' : 'Werkbon annuleren',
+          style: terug ? 'default' : 'destructive',
+          onPress: async () => {
+            setStatusUpdating(true);
+            const { data, error: e } = await zetWerkbonGeannuleerd(workOrder.id, !terug);
+            setStatusUpdating(false);
+            if (e || !data) {
+              Dialog.alert('Niet gelukt', e ?? 'Probeer het opnieuw.');
+              return;
+            }
+            setWorkOrder(data);
+            void syncWerkbonEvents(data.id, data.company_id);
+          },
+        },
+      ],
+    );
   };
 
   const startKlus = () =>
@@ -1452,6 +1491,14 @@ export default function WorkOrderDetailScreen() {
               ) : status === 'afgerond' && editDetail && !readonly ? (
                 // Afgerond maar nog niet getekend: alsnog laten ondertekenen.
                 <Button label="Laten ondertekenen" onPress={() => setAfrondModal(true)} />
+              ) : null}
+              {magAnnuleren && (status === 'geannuleerd' || status !== 'afgerond') ? (
+                <Button
+                  label={status === 'geannuleerd' ? 'Terugzetten' : 'Werkbon annuleren'}
+                  variant="ghost"
+                  onPress={vraagAnnuleren}
+                  disabled={statusUpdating}
+                />
               ) : null}
             </View>
 
