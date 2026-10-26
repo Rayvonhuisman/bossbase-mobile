@@ -19,7 +19,7 @@ import { AnimatedScreen, AppTopBar, FormField, FormSheet,
   StatusBarScrim,
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
-import { updateEigenProfiel, wijzigWachtwoord } from '@/services/profileService';
+import { updateEigenProfiel, wijzigWachtwoordMetHuidig } from '@/services/profileService';
 import { useSave } from '@/lib/useSave';
 import type { Role } from '@/types/domain';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
@@ -50,7 +50,7 @@ export default function ProfileScreen() {
   const appVersion = Constants.expoConfig?.version ?? '0.1.0';
 
   const [naamConcept, setNaamConcept] = useState<string | null>(null);
-  const [wachtwoord, setWachtwoord] = useState<{ nieuw: string; herhaal: string } | null>(null);
+  const [wachtwoord, setWachtwoord] = useState<{ huidig: string; nieuw: string; herhaal: string } | null>(null);
   const [wachtwoordFout, setWachtwoordFout] = useState<string | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
 
@@ -209,7 +209,7 @@ export default function ProfileScreen() {
               sub: user?.email ?? '—',
               onPress: () => {
                 setWachtwoordFout(null);
-                setWachtwoord({ nieuw: '', herhaal: '' });
+                setWachtwoord({ huidig: '', nieuw: '', herhaal: '' });
               },
             },
             {
@@ -275,7 +275,7 @@ export default function ProfileScreen() {
         error={wachtwoordFout ?? saveError}
         saving={saving}
         submitLabel="Wachtwoord opslaan"
-        submitDisabled={!wachtwoord?.nieuw || !wachtwoord?.herhaal}
+        submitDisabled={!wachtwoord?.huidig || !wachtwoord?.nieuw || !wachtwoord?.herhaal}
         onSubmit={() => {
           if (!wachtwoord) return;
           if (wachtwoord.nieuw !== wachtwoord.herhaal) {
@@ -283,7 +283,10 @@ export default function ProfileScreen() {
             return;
           }
           setWachtwoordFout(null);
-          save(() => wijzigWachtwoord(wachtwoord.nieuw), {
+          // Altijd met het huidige wachtwoord, net als Instellingen › Profiel en
+          // het dashboard: een open toestel mag het wachtwoord niet zomaar
+          // kunnen wijzigen (review 26-10, S4-02).
+          save(() => wijzigWachtwoordMetHuidig(wachtwoord.huidig, wachtwoord.nieuw), {
             onSuccess: () => {
               setWachtwoord(null);
               Dialog.alert('Gelukt', 'Je wachtwoord is gewijzigd.');
@@ -293,13 +296,21 @@ export default function ProfileScreen() {
         onClose={() => setWachtwoord(null)}
       >
         <FormField
+          label="Huidig wachtwoord"
+          value={wachtwoord?.huidig ?? ''}
+          onChangeText={(v) => setWachtwoord((w) => (w ? { ...w, huidig: v } : w))}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+          autoFocus
+        />
+        <FormField
           label="Nieuw wachtwoord"
           value={wachtwoord?.nieuw ?? ''}
           onChangeText={(v) => setWachtwoord((w) => (w ? { ...w, nieuw: v } : w))}
           placeholder="Minstens 8 tekens"
           secureTextEntry
           autoCapitalize="none"
-          autoFocus
         />
         <FormField
           label="Herhaal wachtwoord"

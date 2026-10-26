@@ -243,22 +243,6 @@ export async function updateEigenProfiel(input: {
 }
 
 /**
- * Wachtwoord wijzigen via Supabase Auth. Er komt geen mail aan te pas: de
- * gebruiker is al ingelogd, dus dit is een directe wijziging op zijn eigen
- * account.
- */
-export async function wijzigWachtwoord(nieuw: string): Promise<WriteStatus> {
-  if (nieuw.length < 8) {
-    return writeFout('validatie', 'Kies een wachtwoord van minstens 8 tekens.');
-  }
-  const { error } = await supabase.auth.updateUser({ password: nieuw });
-  if (error) {
-    return writeFout('onbekend', translateAuthError(error.message));
-  }
-  return { ok: true, data: null };
-}
-
-/**
  * Wachtwoord wijzigen zoals `changePassword` in het dashboard: eerst het
  * huidige wachtwoord controleren, dan het nieuwe zetten. De controle is een
  * aanmelding met je eigen e-mailadres; de sessie blijft dezelfde gebruiker.
