@@ -1,7 +1,7 @@
 // @ts-nocheck
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/bossbaseMail.ts
-// Dashboardcommit: 1f9e440
+// Dashboardcommit: a99dbbc
 // Bijwerken: node scripts/mail-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/mailOpmaak.test.mjs
 // vergelijkt het met het dashboard.
@@ -330,7 +330,7 @@ export function bossbaseMail(o: BossbaseMailOpties): string {
           ${o.voetnoot ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.55;color:${BB.grijs};">${o.voetnoot}</p>` : ''}
         </td></tr>
         <tr><td align="center" style="padding:24px 24px 0;font-size:12px;line-height:1.7;color:#8a8a85;">
-          BossBase &middot; KvK 91856396 &middot; <a href="https://www.bossbase.nl" style="color:#8a8a85;">bossbase.nl</a>
+          BossBase &middot; KvK 91856396 &middot; Btw-id NL865794728B01 &middot; <a href="https://www.bossbase.nl" style="color:#8a8a85;">bossbase.nl</a>
           ${o.reden ? `<br>${o.reden}` : ''}
           ${o.afmeldUrl ? `<br><a href="${veiligeUrl(o.afmeldUrl)}" style="color:#8a8a85;">Afmelden</a>` : ''}
         </td></tr>
