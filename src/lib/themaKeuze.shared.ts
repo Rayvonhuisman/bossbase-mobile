@@ -31,3 +31,13 @@ export function leesVoorkeur(opgeslagen: string | null | undefined): ThemaVoorke
   return opgeslagen === 'light' || opgeslagen === 'dark' ? opgeslagen : 'systeem';
 }
 
+
+/** De headerknop wisselt tussen licht en donker; dat wordt een eigen keuze. */
+export function volgendThema(huidig: Thema): Thema {
+  return huidig === 'dark' ? 'light' : 'dark';
+}
+
+/** Toegankelijke naam (en tooltip) van de headerknop: wat een tik doet. */
+export function themaKnopLabel(huidig: Thema): string {
+  return huidig === 'dark' ? 'Lichte modus inschakelen' : 'Donkere modus inschakelen';
+}

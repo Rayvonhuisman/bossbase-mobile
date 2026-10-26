@@ -4,6 +4,8 @@ export {
   THEMA_OPTIES,
   THEMA_SLEUTEL,
   OUDE_THEMA_SLEUTEL,
+  themaKnopLabel,
+  volgendThema,
   type Thema,
   type ThemaVoorkeur,
 } from './themaKeuze.shared';

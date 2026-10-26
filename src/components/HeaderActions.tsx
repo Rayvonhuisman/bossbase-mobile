@@ -5,11 +5,13 @@ import { useHulp } from '@/providers/HulpProvider';
 import { fonts } from '@/theme';
 import { ProfileSettingsButton } from './ProfileSettingsButton';
 import { BossAvatar } from './BossChat';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 /**
  * De knoppen rechtsboven, op elke pagina — zoals de topbalk van het dashboard:
- * meldingen (bel met teller), Boss, en je profiel. Licht/donker kies je in
- * Instellingen › Mijn profiel (Weergave).
+ * licht/donker (klein, secundair), meldingen (bel met teller), Boss, en je
+ * profiel. Dezelfde themakeuze staat uitgebreider in Instellingen › Mijn
+ * profiel › Weergave (ook "Zoals het apparaat").
  */
 export function HeaderActions({ iconSize = 38 }: { iconSize?: number }) {
   const { colors: t } = useTheme();
@@ -17,6 +19,7 @@ export function HeaderActions({ iconSize = 38 }: { iconSize?: number }) {
   const rond = { width: iconSize, height: iconSize, borderRadius: iconSize / 2 };
   return (
     <View style={styles.row}>
+      <ThemeToggleButton size={Math.round(iconSize * 0.84)} />
       <Pressable
         onPress={openMeldingen}
         accessibilityRole="button"

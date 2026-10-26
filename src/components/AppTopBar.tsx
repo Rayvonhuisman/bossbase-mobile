@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import type { ThemeColors } from '@/theme';
 import { HeaderActions } from './HeaderActions';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 export type AppTopBarVariant = 'default' | 'detail' | 'compact';
 
@@ -26,7 +27,7 @@ type Props = {
   rightAction?: ReactNode;
   /** Convenience back button (chevron) at the far left. Ignored if leftAction set. */
   onBack?: () => void;
-  /** Show the notifications + Boss + profile cluster. Default false. */
+  /** Show the theme + notifications + Boss + profile cluster. Default false (then only the theme toggle). */
   showProfileButton?: boolean;
   /** Visual density. `detail` is for pushed sub-pages (smaller title). */
   variant?: AppTopBarVariant;
@@ -116,11 +117,12 @@ export function AppTopBar({
           ) : null}
         </View>
 
-        {/* Rechts: eventuele schermactie, en op hoofdpagina's meldingen, Boss
-            en profiel. Licht/donker staat in Instellingen › Mijn profiel. */}
+        {/* Rechts: eventuele schermactie, dan altijd de themaknop (zelfde plek
+            op elke ingelogde pagina), en op hoofdpagina's meldingen, Boss en
+            profiel. HeaderActions bevat de themaknop zelf: nooit twee. */}
         <View style={styles.right}>
           {rightAction}
-          {showProfileButton ? <HeaderActions /> : null}
+          {showProfileButton ? <HeaderActions /> : <ThemeToggleButton />}
         </View>
       </View>
     </View>

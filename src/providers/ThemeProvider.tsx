@@ -39,7 +39,10 @@ type ThemeContextValue = {
   colorMode: ColorMode;
   /** Themed token palette — drop-in replacement for the static `ds` object. */
   colors: ThemeColors;
-  /** Wat er in Instellingen › Mijn profiel › Weergave gekozen is. */
+  /**
+   * De themakeuze: Instellingen › Mijn profiel › Weergave (licht, donker,
+   * zoals het apparaat) en de themaknop in de kop (licht of donker).
+   */
   voorkeur: ThemaVoorkeur;
   setVoorkeur: (voorkeur: ThemaVoorkeur) => void;
 };
@@ -49,8 +52,8 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 /**
  * App-wide light/dark theme. The saved choice wins; without one ("Zoals het
  * apparaat") the system preference is followed, ook als die verandert terwijl
- * de app open staat. Gekozen in Instellingen › Mijn profiel; er is geen
- * themaknop in de kop meer. Non-sensitive, so AsyncStorage (already a
+ * de app open staat. Gekozen met de themaknop in de kop of in Instellingen ›
+ * Mijn profiel › Weergave; beide zetten deze ene voorkeur. Non-sensitive, so AsyncStorage (already a
  * dependency) is used rather than SecureStore.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
