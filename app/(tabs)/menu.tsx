@@ -86,7 +86,7 @@ export default function MenuScreen() {
       titel: 'Hoofdmenu',
       items: [
         { icon: Home, title: 'Vandaag', sub: 'Je dag in één oogopslag', onPress: ga('/today') },
-        { icon: FolderKanban, title: 'Pipeline', sub: 'Aanvragen en deals per fase', route: '/pipeline', onPress: ga('/pipeline') },
+        { icon: FolderKanban, title: 'Pipeline', sub: 'Aanvragen en projecten per fase', route: '/pipeline', onPress: ga('/pipeline') },
         { icon: Users, title: 'Relaties', sub: 'Klanten en leveranciers', onPress: ga('/customers') },
         { icon: ListChecks, title: 'Activiteiten', sub: 'Bellen, mailen, bezoeken en taken', onPress: ga('/activities') },
       ],

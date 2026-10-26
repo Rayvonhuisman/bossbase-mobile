@@ -232,7 +232,7 @@ function PipelineScreenInhoud() {
           >
             <Plus size={16} color={t.muted} />
             <Text style={styles.leadTekst} numberOfLines={1}>
-              {tablet ? 'Lead toevoegen' : `Lead toevoegen aan ${faseNaam}`}
+              {tablet ? 'Aanvraag toevoegen' : `Aanvraag toevoegen aan ${faseNaam}`}
             </Text>
           </Pressable>
         ) : null}
@@ -250,7 +250,7 @@ function PipelineScreenInhoud() {
           <AppTopBar
             variant="detail"
             title="Pipeline"
-            subtitle={`${n} ${n === 1 ? 'traject' : 'trajecten'} · ${formatEUR(totaal)} totaal`}
+            subtitle={`${n} ${n === 1 ? 'aanvraag' : 'aanvragen'} · ${formatEUR(totaal)} totaal`}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
@@ -346,7 +346,7 @@ function PipelineScreenInhoud() {
           <View>
             <EmptyState
               icon={<FolderKanban size={40} color={ds.green} strokeWidth={1.6} />}
-              title="Geen trajecten gevonden"
+              title="Geen aanvragen gevonden"
               message={actief ? 'Pas je filter aan of voeg een nieuwe aanvraag toe.' : 'Begin met je eerste aanvraag.'}
             />
             <View style={styles.legeKnoppen}>
@@ -432,7 +432,7 @@ function PipelineScreenInhoud() {
                     groot
                   />
                   <Text style={styles.kolomSom}>
-                    {telefoonRijen.length} {telefoonRijen.length === 1 ? 'lead' : 'leads'} ·{' '}
+                    {telefoonRijen.length} {telefoonRijen.length === 1 ? 'aanvraag' : 'aanvragen'} ·{' '}
                     {formatEUR(telefoonRijen.reduce((s, d) => s + dealWaarde(d), 0))}
                   </Text>
                 </View>

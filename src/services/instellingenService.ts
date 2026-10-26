@@ -196,7 +196,7 @@ export async function deleteFase(id: string): Promise<WriteStatus> {
     opties('instellingenService.deleteFase', ALLEEN_BEHEER),
   );
   if (!res.ok && res.soort === 'conflict') {
-    return writeFout('conflict', 'Er staan nog deals in deze fase. Verplaats die eerst.');
+    return writeFout('conflict', 'Er staan nog aanvragen of projecten in deze fase. Verplaats die eerst.');
   }
   return res.ok ? { ok: true, data: null } : res;
 }

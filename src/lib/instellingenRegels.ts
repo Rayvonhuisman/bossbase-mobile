@@ -200,7 +200,7 @@ export const PIPELINE_MOMENTEN = [
   { key: 'in_uitvoering', label: 'Klus gestart', uitleg: 'Zodra iemand op "Start klus" drukt.' },
   { key: 'gefactureerd', label: 'Factuur verstuurd', uitleg: 'Zodra een factuur voor dit project is verstuurd.' },
   { key: 'betaald', label: 'Factuur betaald', uitleg: 'Zodra de factuur als betaald is gemarkeerd.' },
-  { key: 'verloren', label: 'Verloren', uitleg: 'Een deal die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },
+  { key: 'verloren', label: 'Verloren', uitleg: 'Een aanvraag die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },
 ];
 
 export const FASE_KLEUREN = [

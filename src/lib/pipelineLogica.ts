@@ -125,7 +125,7 @@ export const STANDAARD_FILTER: PipelineFilter = {
 };
 
 export const STATUS_FILTER_OPTIES: { id: PipelineStatusFilter; label: string }[] = [
-  { id: 'open', label: 'Open trajecten' },
+  { id: 'open', label: 'Lopend' },
   { id: 'done', label: 'Project voltooid' },
   { id: 'lost', label: 'Verloren' },
   { id: 'any', label: 'Alles tonen' },

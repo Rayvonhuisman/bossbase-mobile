@@ -43,7 +43,7 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
       {
         key: 'verkoop',
         label: 'Verkooppijplijn',
-        kort: 'Deals en leads bekijken en beheren',
+        kort: 'Aanvragen en projecten in de pipeline bekijken en beheren',
       },
     ],
   },

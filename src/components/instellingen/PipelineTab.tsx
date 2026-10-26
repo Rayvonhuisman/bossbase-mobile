@@ -125,7 +125,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
   const redenVerwijderen = (r: VerlorenReden) =>
     Dialog.alert(
       'Verloren-reden verwijderen?',
-      'Bestaande leads met deze reden behouden hun opgeslagen tekst.',
+      'Bestaande aanvragen met deze reden behouden hun opgeslagen tekst.',
       [
         { text: 'Annuleren', style: 'cancel' },
         {
@@ -154,7 +154,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
 
       <Kaart
         titel="Koppeling met uitvoering"
-        sub="Welke fase hoort bij welk moment in de uitvoering. Een deal schuift automatisch door zodra het moment bereikt is."
+        sub="Welke fase hoort bij welk moment in de uitvoering. Een aanvraag of project schuift automatisch door zodra het moment bereikt is."
       >
         {PIPELINE_MOMENTEN.map((m) => (
           <View key={m.key} style={{ gap: 2 }}>
@@ -225,7 +225,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
 
       <Kaart
         titel="Verloren-redenen"
-        sub="De keuzes als je een deal op verloren zet."
+        sub="De keuzes als je een aanvraag op verloren zet."
         rechts={
           isAdmin ? (
             <Button

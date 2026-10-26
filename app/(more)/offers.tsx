@@ -299,7 +299,7 @@ function OffersScreenInhoud() {
     // formulier werken met de vaste regeltypes en zonder deal.
     if (!eenheidRes.error) setEenheden(eenheidRes.data);
     if (!dealRes.error) {
-      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Deal' })));
+      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Aanvraag' })));
     }
   }, []);
 
@@ -1107,13 +1107,13 @@ function OffersScreenInhoud() {
         />
         {deals.length > 0 && !concept?.herzien ? (
           <SelectField
-            label="Deal"
+            label="Aanvraag"
             value={concept?.dealId ?? null}
             options={deals}
             onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
             allowEmpty
-            emptyLabel="Geen deal"
-            placeholder="Geen deal"
+            emptyLabel="Geen aanvraag"
+            placeholder="Geen aanvraag"
             disabled={!conceptBewerkbaar}
           />
         ) : null}
