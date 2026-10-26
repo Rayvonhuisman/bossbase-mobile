@@ -8,7 +8,9 @@ import { Paneel } from './Paneel';
 
 const BOSS_HOOFD = require('../../assets/boss-hoofd.png');
 
-const BEGROETING = 'Hoi! Ik ben Boss. Waar kan ik je mee helpen?';
+// Boss zegt meteen dat hij een AI-assistent is: in de begroeting en in de kop
+// (AI-verordening art. 50, audit 2026-10-25, J-14). Gelijk aan het dashboard.
+const BEGROETING = 'Hoi! Ik ben Boss, de AI-assistent van BossBase. Waar kan ik je mee helpen?';
 
 /**
  * Boss-avatar: zijn hoofd, net als de gids in de rondleiding van het dashboard
@@ -135,7 +137,7 @@ export function BossChat({
     <Paneel
       open={open}
       titel="Boss"
-      subtitel="Helpt je met BossBase"
+      subtitel="AI-assistent · helpt je met BossBase"
       kop={<BossAvatar />}
       onSluit={sluit}
       voet={
