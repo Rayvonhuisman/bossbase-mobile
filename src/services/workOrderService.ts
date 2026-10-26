@@ -738,6 +738,50 @@ export async function addWorkOrderNote(input: {
   return { data: row, error: null };
 }
 
+/**
+ * De tekst van een notitie wijzigen (besluit 26-10, G-07). RLS
+ * `werkbon_notities_update`: de schrijver, een admin, het recht planning of
+ * werkbonnen_bewerken; niet bij een verstuurde Wkb-waarschuwing. Na
+ * ondertekenen weigert bb_werkbon_kind_op_slot.
+ */
+export async function updateWorkOrderNote(
+  id: string,
+  note: string,
+): Promise<{ data: WerkbonNotitie | null; error: string | null }> {
+  const tekst = note.trim();
+  if (!tekst) return { data: null, error: 'Een lege notitie kan niet worden opgeslagen.' };
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .update({ note: tekst, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(NOTE_COLUMNS);
+  if (error) return { data: null, error: describeError('updateWorkOrderNote', error) };
+  const row = (data as unknown as WerkbonNotitie[])?.[0];
+  if (!row) return { data: null, error: 'Niet gewijzigd — je mag deze notitie niet wijzigen.' };
+  return { data: row, error: null };
+}
+
+/** Een notitie verwijderen; zelfde rechten als wijzigen. */
+export async function deleteWorkOrderNote(id: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase.from('werkbon_notities').delete().eq('id', id).select('id');
+  if (error) return { error: describeError('deleteWorkOrderNote', error) };
+  if (!data?.length) return { error: 'Niet verwijderd — je mag deze notitie niet verwijderen.' };
+  return { error: null };
+}
+
+/**
+ * Mag deze gebruiker deze notitie wijzigen of verwijderen? Spiegelt de RLS; het
+ * slot na ondertekenen en alleen-lezen vraagt het scherm zelf na.
+ */
+export function magNotitieWijzigen(
+  n: Pick<WerkbonNotitie, 'created_by' | 'waarschuwing_verzonden_op'>,
+  r: { userId: string | null; role: string | null; can: (p: string) => boolean },
+): boolean {
+  if (n.waarschuwing_verzonden_op) return false;
+  if (r.userId && n.created_by === r.userId) return true;
+  return r.role === 'admin' || r.can('planning') || r.can('werkbonnen_bewerken');
+}
+
 // ---------------------------------------------------------------------------
 // Taken en meerwerk aanmaken/verwijderen — tabel `werkbon_taken`
 // ---------------------------------------------------------------------------
