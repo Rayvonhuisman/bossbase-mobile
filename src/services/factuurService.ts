@@ -52,6 +52,7 @@ export const FACTUUR_STATUS_OPTIES = Object.entries(FACTUUR_STATUS).map(([id, la
 export function factuurStatusLabel(status: string | null | undefined): string {
   if (!status) return 'Concept';
   if (status === 'geboekt') return 'Uit SnelStart';
+  if (status === 'vervallen') return 'Vervallen';
   return FACTUUR_STATUS[status] ?? status;
 }
 
@@ -635,6 +636,15 @@ export async function deleteFactuur(
     },
   );
   if (!res.ok) {
+    // Trigger `bb_factuur_concept_verwijderen`: een ouder concept heeft al een
+    // nummer in de reeks; verwijderen zou een gat geven. Dan "vervallen".
+    if (/op vervallen/i.test(res.technisch ?? '')) {
+      return writeFout(
+        'op-slot',
+        'Deze factuur heeft al een nummer in de reeks en kan daarom niet weg. Zet hem op Vervallen: hij blijft in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+        'vervallen_ipv_verwijderen',
+      );
+    }
     // Trigger `bb_factuur_verzonden_bevriezen`: alleen een concept mag weg.
     if (res.soort === 'validatie' && /verstuurde factuur|creditnota/i.test(res.technisch ?? '')) {
       return writeFout(
@@ -713,6 +723,18 @@ export async function createFactuurRegel(
       bedrijfReadonly: isReadonly(),
       leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Facturen nodig.',
     },
+  );
+}
+
+/**
+ * Een concept op "vervallen" zetten: het nummer blijft in de reeks, de factuur
+ * telt nergens meer mee en kan niet meer worden verstuurd. De database staat
+ * dit alleen toe vanuit concept (`bb_factuur_vervallen_slot`).
+ */
+export async function zetFactuurVervallen(id: string): Promise<WriteResult<FactuurRow>> {
+  return schrijf<FactuurRow>(
+    () => supabase.from('facturen').update({ status: 'vervallen' }).eq('id', id).select(FACTUUR_COLUMNS),
+    { context: 'factuurService.zetFactuurVervallen', bedrijfReadonly: isReadonly() },
   );
 }
 

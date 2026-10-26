@@ -31,6 +31,7 @@ import {
   bewaarFactuurPdf,
   createFactuurRegel,
   deleteFactuur,
+  zetFactuurVervallen,
   deleteFactuurRegel,
   FACTUUR_STATUS_OPTIES,
   createCreditFactuur,
@@ -605,7 +606,11 @@ function InvoicesScreenInhoud() {
     bevestigVerwijderen(
       'Factuur',
       () => {
-        save(() => deleteFactuur(id), {
+        save(async () => {
+          const r = await deleteFactuur(id);
+          if (!r.ok && r.technisch === 'vervallen_ipv_verwijderen') setTimeout(() => vraagVervallen(id), 0);
+          return r;
+        }, {
           onSuccess: async (_data, extra) => {
             setConcept(null);
             // De factuur is weg; lukte de prullenbak niet, dan komt hij bij de
@@ -621,6 +626,28 @@ function InvoicesScreenInhoud() {
         : 'Dit kan niet ongedaan worden gemaakt.',
     );
   };
+
+  // Een ouder concept kan niet weg (gat in de nummering): op Vervallen zetten.
+  const vraagVervallen = (id: string) =>
+    Dialog.alert(
+      'Op Vervallen zetten?',
+      'Deze factuur heeft al een nummer in de reeks. Op Vervallen blijft hij in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+      [
+        { text: 'Annuleren', style: 'cancel' },
+        {
+          text: 'Op Vervallen zetten',
+          style: 'destructive',
+          onPress: () =>
+            save(() => zetFactuurVervallen(id), {
+              onSuccess: async () => {
+                setConcept(null);
+                await herlaad();
+              },
+              succesMelding: 'Factuur op Vervallen gezet',
+            }),
+        },
+      ],
+    );
 
   // ── Regels van een concept ────────────────────────────────────────────────
 

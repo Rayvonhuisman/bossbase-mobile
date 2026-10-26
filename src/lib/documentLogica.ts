@@ -32,7 +32,8 @@ const FACTUUR_STATUSSEN: Record<string, StatusInfo> = {
   betaald: { toon: 'green', label: 'Betaald' },
   verlopen: { toon: 'red', label: 'Te laat' },
   te_laat: { toon: 'red', label: 'Te laat' },
-  vervallen: { toon: 'red', label: 'Te laat' },
+  // Concept met een nummer dat niet meer weg mag (doorlopende reeks), zoals het dashboard.
+  vervallen: { toon: 'gray', label: 'Vervallen' },
   geboekt: { toon: 'purple', label: 'Uit SnelStart' },
 };
 
