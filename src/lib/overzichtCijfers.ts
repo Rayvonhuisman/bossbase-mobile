@@ -130,7 +130,7 @@ export function openFacturen(
   vandaag: string,
 ): { aantal: number; waarde: number; teLaat: number } {
   const open = facturen
-    .filter((f) => f.status && !['betaald', 'concept', 'aangemaakt'].includes(f.status))
+    .filter((f) => f.status && !['betaald', 'concept', 'aangemaakt', 'vervallen'].includes(f.status))
     .filter(isEchteFactuur);
   return {
     aantal: open.length,
@@ -143,7 +143,7 @@ export function openFacturen(
 export function omzetDezeMaand(facturen: FactuurKern[], vandaag: string): number {
   const maand = vandaag.slice(0, 7);
   return facturen
-    .filter((f) => f.status !== 'concept')
+    .filter((f) => f.status !== 'concept' && f.status !== 'vervallen')
     .filter((f) => (f.factuurdatum ?? '').slice(0, 7) === maand)
     .reduce((s, f) => s + (Number(f.totaal_excl) || 0), 0);
 }

@@ -31,14 +31,14 @@ export type FactuurBedrag = {
 /** Gefactureerd (incl. btw): alles behalve concepten; credit trekt zichzelf af. */
 export function sumGefactureerd(f: FactuurBedrag[]): number {
   return f
-    .filter((x) => x.status !== 'concept')
+    .filter((x) => x.status !== 'concept' && x.status !== 'vervallen')
     .reduce((s, x) => s + (Number(x.totaal_incl) || 0), 0);
 }
 
 /** Omzet excl. btw, zelfde selectie als hierboven. */
 export function sumOmzetExclBtw(f: FactuurBedrag[]): number {
   return f
-    .filter((x) => x.status !== 'concept')
+    .filter((x) => x.status !== 'concept' && x.status !== 'vervallen')
     .reduce((s, x) => s + (Number(x.totaal_excl) || 0), 0);
 }
 

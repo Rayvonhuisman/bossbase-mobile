@@ -357,7 +357,7 @@ export function filterKlanten(
     if (f.heeftOffertes && rel.offertes.length === 0) return false;
     if (f.heeftFacturen && rel.facturen.length === 0) return false;
     if (f.heeftGetekendOfferte && !rel.offertes.some((o) => Boolean(o.signed_at))) return false;
-    if (f.heeftOnbetaaldeFacturen && !rel.facturen.some((x) => x.status !== 'betaald' && !x.is_credit)) return false;
+    if (f.heeftOnbetaaldeFacturen && !rel.facturen.some((x) => x.status !== 'betaald' && x.status !== 'vervallen' && !x.is_credit)) return false;
     if (f.heeftVerlopenOffertes && !rel.offertes.some(verlopenOfferte)) return false;
     if (f.documentenPeriodeVan) {
       const ok =
@@ -389,7 +389,7 @@ export function pagina<T>(lijst: readonly T[], nr: number, per = PER_PAGINA) {
 
 const isEcht = (f: DbFactuur) => !f.is_credit && !f.gecrediteerd;
 export const sumGefactureerd = (fs: readonly DbFactuur[]) =>
-  fs.filter((f) => f.status !== 'concept').reduce((s, f) => s + (f.totaal_incl || 0), 0);
+  fs.filter((f) => f.status !== 'concept' && f.status !== 'vervallen').reduce((s, f) => s + (f.totaal_incl || 0), 0);
 export const sumBetaald = (fs: readonly DbFactuur[]) =>
   fs.filter((f) => isEcht(f) && f.status === 'betaald').reduce((s, f) => s + (f.totaal_incl || 0), 0);
 export const sumOpenstaand = (fs: readonly DbFactuur[]) => sumGefactureerd(fs) - sumBetaald(fs);
