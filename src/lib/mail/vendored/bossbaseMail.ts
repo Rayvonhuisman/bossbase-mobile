@@ -1,7 +1,7 @@
 // @ts-nocheck
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/bossbaseMail.ts
-// Dashboardcommit: a99dbbc
+// Dashboardcommit: d961d3f
 // Bijwerken: node scripts/mail-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/mailOpmaak.test.mjs
 // vergelijkt het met het dashboard.
@@ -55,8 +55,8 @@ export const NIELS_FOTO_URL = 'https://www.bossbase.nl/brand/niels.jpg'
 
 export const NIELS = {
   naam: 'Niels Grevink',
-  telefoonLeesbaar: '06 42 00 58 89',
-  telefoon: '+31642005889',
+  telefoonLeesbaar: '085 200 9404',
+  telefoon: '+31852009404',
   whatsapp: 'https://wa.me/31642005889',
   mail: 'info@bossbase.nl',
 }
