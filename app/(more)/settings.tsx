@@ -22,11 +22,12 @@ import { AbonnementTab } from '@/components/instellingen/AbonnementTab';
 import { IntegratiesOverzicht } from '@/components/instellingen/IntegratiesOverzicht';
 
 /**
- * Instellingen — de acht tabs van het dashboard (`InstellingenPage.jsx`), met
+ * Instellingen — de tabs van het dashboard (`InstellingenPage.jsx`), met
  * dezelfde zichtbaarheid:
  *
  *   Mijn profiel       iedereen
- *   Bedrijfsprofiel, Standaardwaarden, E-mailtemplates, Pipeline, Integraties
+ *   Bedrijfsprofiel, Tarieven en termijnen, Eigen prijzen, E-mailtemplates,
+ *   Pipeline, Agenda, Urenherinnering, Integraties
  *                      recht `instellingen`
  *   Voertuigen         + beheerder + feature `voertuigen`
  *   Abonnement         + beheerder
@@ -34,7 +35,7 @@ import { IntegratiesOverzicht } from '@/components/instellingen/IntegratiesOverz
  * Net als het dashboard heeft deze pagina zelf géén rechtgate: iedereen moet
  * bij zijn eigen profiel kunnen. Zonder het recht `instellingen` wordt er
  * niets van de bedrijfsgegevens geladen. Wijzigen van bedrijfsprofiel,
- * standaardwaarden en pipeline is beheerderswerk (policies op rol).
+ * tarieven, agenda, urenherinnering en pipeline is beheerderswerk (policies op rol).
  *
  * De actieve tab staat in de URL (`?tab=`), zoals in het dashboard.
  */
@@ -116,8 +117,14 @@ export default function SettingsScreen() {
           <ProfielTab />
         ) : tab === 'bedrijf' ? (
           <BedrijfTab key={versie} bedrijf={bedrijf} magWijzigen={magBedrijfWijzigen} onGewijzigd={herlaad} />
-        ) : tab === 'standaard' && instellingen ? (
-          <StandaardTab key={versie} instellingen={instellingen} magWijzigen={magBedrijfWijzigen} onGewijzigd={herlaad} />
+        ) : (tab === 'standaard' || tab === 'eenheden' || tab === 'agenda' || tab === 'herinneringen') && instellingen ? (
+          <StandaardTab
+            key={`${tab}-${versie}`}
+            deel={tab}
+            instellingen={instellingen}
+            magWijzigen={magBedrijfWijzigen}
+            onGewijzigd={herlaad}
+          />
         ) : tab === 'templates' ? (
           <TemplatesTab key={ververs} magWijzigen={magInstellingen} />
         ) : tab === 'pipeline' ? (

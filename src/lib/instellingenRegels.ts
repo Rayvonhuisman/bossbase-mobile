@@ -12,8 +12,11 @@ export type InstellingenTab =
   | 'profiel'
   | 'bedrijf'
   | 'standaard'
+  | 'eenheden'
   | 'templates'
   | 'pipeline'
+  | 'agenda'
+  | 'herinneringen'
   | 'voertuigen'
   | 'abonnement'
   | 'integraties';
@@ -21,15 +24,23 @@ export type InstellingenTab =
 export const INSTELLINGEN_TAB_IDS: readonly InstellingenTab[] = [
   'profiel',
   'bedrijf',
+  'abonnement',
   'standaard',
+  'eenheden',
   'templates',
   'pipeline',
+  'agenda',
+  'herinneringen',
   'voertuigen',
-  'abonnement',
   'integraties',
 ];
 
-/** Welke tabs iemand ziet — `TABS` in het dashboard. */
+/**
+ * Welke tabs iemand ziet, met dezelfde namen en volgorde als `TAB_GROEPEN` in
+ * het dashboard (Account · Bedrijf · Offertes en facturen · Klanten en
+ * aanvragen · Planning en uren · Koppelingen). Het websiteformulier staat
+ * alleen in het dashboard.
+ */
 export function zichtbareTabs(stand: {
   instellingen: boolean;
   isAdmin: boolean;
@@ -37,14 +48,17 @@ export function zichtbareTabs(stand: {
 }): { id: InstellingenTab; label: string }[] {
   const tabs: { id: InstellingenTab; label: string }[] = [{ id: 'profiel', label: 'Mijn profiel' }];
   if (!stand.instellingen) return tabs;
+  tabs.push({ id: 'bedrijf', label: 'Bedrijfsprofiel' });
+  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
   tabs.push(
-    { id: 'bedrijf', label: 'Bedrijfsprofiel' },
-    { id: 'standaard', label: 'Standaardwaarden' },
+    { id: 'standaard', label: 'Tarieven en termijnen' },
+    { id: 'eenheden', label: 'Eigen prijzen' },
     { id: 'templates', label: 'E-mailtemplates' },
     { id: 'pipeline', label: 'Pipeline' },
+    { id: 'agenda', label: 'Agenda' },
+    { id: 'herinneringen', label: 'Urenherinnering' },
   );
   if (stand.isAdmin && stand.voertuigen) tabs.push({ id: 'voertuigen', label: 'Voertuigen' });
-  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
   tabs.push({ id: 'integraties', label: 'Integraties' });
   return tabs;
 }

@@ -306,7 +306,7 @@ export default function PlanningScreen() {
           dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Project', sub: d.customer?.name ?? undefined })),
         );
       }
-      // Het uurvenster van de agenda, zoals ingesteld (Instellingen › Standaardwaarden).
+      // Het uurvenster van de agenda, zoals ingesteld (Instellingen › Agenda).
       if (!instRes.error) setAgendaUren({ van: instRes.data.agenda_start_uur, tot: instRes.data.agenda_eind_uur });
     },
     [range.startISO, range.endISO, range.startDate, range.endDate, currentUserId, gedeeld, metVoertuigen],
