@@ -46,7 +46,8 @@ import {
 } from '@/lib/relaties';
 import { formatEUR } from '@/lib/format';
 import { callPhone, openMaps } from '@/lib/linking';
-import { avatarKleuren, initialen } from '@/lib/avatar';
+import { initialen } from '@/lib/avatar';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import type { Customer } from '@/types/domain';
 import { useLaden } from '@/lib/useLaden';
@@ -575,7 +576,7 @@ function LeverancierLijst({
       <View style={[styles.group, dsShadow]}>
         {leveranciers.map((l, i) => {
           const naam = leverancierNaam(l);
-          const av = avatarKleuren(naam, colorMode === 'dark');
+          const av = klantAvatarKleuren({ id: l.id, naam }, colorMode === 'dark');
           const actief = isActief(l);
           const k = kosten[l.id];
           const sub = [
@@ -654,7 +655,7 @@ function RecentPil({
   onPress: () => void;
 }) {
   const { colorMode } = useTheme();
-  const av = avatarKleuren(customer.name, colorMode === 'dark');
+  const av = klantAvatarKleuren(customer, colorMode === 'dark');
   return (
     <Pressable
       onPress={onPress}
@@ -692,7 +693,7 @@ function CustomerRow({
   onNavigate: () => void;
 }) {
   const { colorMode } = useTheme();
-  const av = avatarKleuren(c.name, colorMode === 'dark');
+  const av = klantAvatarKleuren(c, colorMode === 'dark');
   // Plaats en laatste contact; het onderscheid zakelijk/particulier zit al in
   // de filterchips, en die derde waarde duwde het adres uit beeld.
   const cityLine = [c.address, c.city].filter(Boolean).join(', ');

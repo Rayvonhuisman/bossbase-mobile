@@ -56,6 +56,7 @@ import {
   KaartRij,
 } from '@/components/RelatieKaart';
 import { useAuth, usePermissions, useTheme } from '@/providers';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import {
   deleteCustomer,
   getCustomer,
@@ -344,6 +345,8 @@ export default function CustomerDetailScreen() {
   }
 
   const name = customer.name ?? '—';
+  // Zelfde vaste kleur als het rondje in het dashboard (customers.kleur of uit het id).
+  const heroKleur = klantAvatarKleuren(customer, colorMode === 'dark');
   // Opgeslagen klanttype (dashboard 1-10), anders afgeleid van het KvK-nummer.
   const tag = klantType(customer);
   const fullAddress = [customer.address, customer.postcode, customer.city]
@@ -868,8 +871,8 @@ export default function CustomerDetailScreen() {
           <AnimatedScreen>
             {/* Hero */}
             <View style={styles.hero}>
-              <View style={styles.heroAvatar}>
-                <Text style={styles.heroAvatarText}>{initials(name)}</Text>
+              <View style={[styles.heroAvatar, { backgroundColor: heroKleur.bg }]}>
+                <Text style={[styles.heroAvatarText, { color: heroKleur.fg }]}>{initials(name)}</Text>
               </View>
               <Text style={[styles.heroName, { color: th.ink }]} numberOfLines={2}>
                 {name}

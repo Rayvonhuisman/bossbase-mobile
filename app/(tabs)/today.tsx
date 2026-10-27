@@ -59,6 +59,7 @@ import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
 import { formatEUR, formatPlanningTime } from '@/lib/format';
 import { avatarKleuren, initialen } from '@/lib/avatar';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
@@ -762,7 +763,9 @@ export default function TodayScreen() {
                   <View style={styles.lijstKaart}>
                     {aanvragen.lijst.map((d, i) => {
                       const naam = d.customer?.name || 'Onbekende klant';
-                      const kleur = avatarKleuren(naam, colorMode === 'dark');
+                      const kleur = d.customer
+                        ? klantAvatarKleuren(d.customer, colorMode === 'dark')
+                        : avatarKleuren(naam, colorMode === 'dark');
                       return (
                         <AppListItem
                           key={d.id ?? i}

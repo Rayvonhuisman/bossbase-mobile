@@ -25,7 +25,7 @@ const DEAL_COLUMNS = `
   id, company_id, customer_id, stage_id, title, description,
   expected_revenue, final_revenue, status, priority, lost_reason,
   assigned_to, assigned_to_ids, afgerond_op, created_at,
-  customer:customers!deals_customer_id_fkey ( id, name, city, email, phone )
+  customer:customers!deals_customer_id_fkey ( id, name, city, email, phone, kleur )
 `;
 
 const STAGE_COLUMNS = 'id, company_id, name, position, color_class';
@@ -54,6 +54,7 @@ export type DealRow = {
     city: string | null;
     email: string | null;
     phone: string | null;
+    kleur?: string | null;
   } | null;
 };
 

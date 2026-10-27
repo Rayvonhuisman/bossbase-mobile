@@ -72,7 +72,7 @@ const WORK_ORDER_COLUMNS = `
   werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
     voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
-    id, name, email, phone, address, postcode, city
+    id, name, email, phone, address, postcode, city, kleur
   ),
   project:projects ( id, name ),
   toegewezen:profiles!werkbonnen_assigned_to_fkey ( id, full_name )

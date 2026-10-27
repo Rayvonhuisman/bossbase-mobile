@@ -26,7 +26,7 @@ export type DealKern = {
   id?: string;
   title?: string | null;
   created_at?: string | null;
-  customer?: { name: string | null; city: string | null } | null;
+  customer?: { id?: string | null; name: string | null; city: string | null; kleur?: string | null } | null;
 };
 
 export type FaseKern = { id: string; position: number | null };

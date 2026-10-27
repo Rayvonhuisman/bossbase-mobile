@@ -37,7 +37,7 @@ async function lees<T>(
 export function listDealKernen(): Promise<Res<DealKern>> {
   return lees<DealKern>(
     'deals',
-    'id, status, stage_id, expected_revenue, final_revenue, afgerond_op, title, created_at, customer:customers ( name, city )',
+    'id, status, stage_id, expected_revenue, final_revenue, afgerond_op, title, created_at, customer:customers ( id, name, city, kleur )',
     'listDealKernen',
   );
 }

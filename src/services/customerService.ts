@@ -27,7 +27,7 @@ import { metProjectBedragen } from './projectService';
 const SAFE_COLUMNS = `
   id, company_id, name, contactpersoon, email, phone, address, postcode, city,
   kvk_number, btw_number, iban, notes, logo_url, moneybird_id, created_at, type,
-  source, betaaltermijn_dagen
+  source, betaaltermijn_dagen, kleur
 `;
 
 export { leesBetaaltermijn } from '@/lib/relatieValidatie';

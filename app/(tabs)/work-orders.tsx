@@ -28,6 +28,7 @@ import {
   type Werkbon,
 } from '@/services/workOrderService';
 import { avatarKleuren, initialen } from '@/lib/avatar';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { alsTekst } from '@/lib/notitieTekst';
@@ -387,7 +388,10 @@ function WerkbonKaart({
         : `${namen[assignees[0]!] ?? 'Toegewezen'} +${assignees.length - 1}`;
 
   const klant = wo.customer?.name ?? null;
-  const av = avatarKleuren(klant ?? wo.titel, donker);
+  // Zelfde vaste klantkleur als het dashboard; zonder klant uit de titel.
+  const av = wo.customer || wo.customer_id
+    ? klantAvatarKleuren({ id: wo.customer_id, ...wo.customer }, donker)
+    : avatarKleuren(wo.titel, donker);
   const adres = wo.locatie || [wo.customer?.address, wo.customer?.city].filter(Boolean).join(', ') || null;
   const meta = [wo.nummer ?? '—', datumLabel(wo)].join(' · ');
   const pct = taken && taken.total > 0 ? Math.round((taken.done / taken.total) * 100) : null;
