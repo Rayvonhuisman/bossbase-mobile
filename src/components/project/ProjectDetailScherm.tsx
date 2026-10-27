@@ -40,7 +40,14 @@ import { callPhone, openMaps, sendMail } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { writeFout } from '@/lib/writeResult';
-import { faseKeuzes, heropenFase, isAfgerond, verlorenFase, behandelaarIds } from '@/lib/pipelineLogica';
+import {
+  faseKeuzes,
+  heropenFase,
+  isAfgerond,
+  verlorenFase,
+  behandelaarIds,
+  pipelineFaseKleuren,
+} from '@/lib/pipelineLogica';
 import {
   formatUren,
   isVerlopen,
@@ -671,7 +678,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               placeholder="Kies een fase"
             />
           ) : huidigeFase ? (
-            <FaseBadge label={huidigeFase.name ?? 'Fase'} colorClass={huidigeFase.color_class} positie={huidigeFase.position} groot />
+            <FaseBadge
+              label={huidigeFase.name ?? 'Fase'}
+              colorClass={pipelineFaseKleuren(stages)[huidigeFase.id] ?? huidigeFase.color_class}
+              positie={huidigeFase.position}
+              groot
+            />
           ) : (
             <Text style={styles.waarde}>Loopt</Text>
           )}

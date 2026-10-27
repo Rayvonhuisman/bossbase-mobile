@@ -52,6 +52,7 @@ import {
   type PipelineFilter,
   type VervolgActiviteit,
   telAanvragenProjecten,
+  pipelineFaseKleuren,
 } from '@/lib/pipelineLogica';
 import { useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
@@ -148,6 +149,8 @@ function PipelineScreenInhoud() {
   const perFase = useMemo(() => dealsPerFase(gefilterd, kolommen), [gefilterd, kolommen]);
   const sleutels = useMemo(() => vervolgSleutels(vervolg, vandaagIso()), [vervolg]);
   const verloren = useMemo(() => verlorenFase(stages), [stages]);
+  // Eén kleur per fase, dezelfde als de stip in de pipeline van het dashboard.
+  const faseKleur = useMemo(() => pipelineFaseKleuren(stages), [stages]);
   const totaal = totaalWaarde(gefilterd, filter);
 
   const faseOpties = useMemo<SelectOption[]>(
@@ -388,7 +391,7 @@ function PipelineScreenInhoud() {
                 <View key={k.id} style={styles.kolom}>
                   <View style={styles.kolomKop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <FaseBadge label={k.name ?? 'Fase'} colorClass={k.color_class} positie={k.position} />
+                      <FaseBadge label={k.name ?? 'Fase'} colorClass={faseKleur[k.id] ?? k.color_class} positie={k.position} />
                       <Text style={styles.kolomSom}>{formatEUR(som)}</Text>
                     </View>
                     <View style={styles.tel}>
@@ -428,7 +431,7 @@ function PipelineScreenInhoud() {
                 <View style={styles.telefoonKop}>
                   <FaseBadge
                     label={telefoonKolom.name ?? 'Fase'}
-                    colorClass={telefoonKolom.color_class}
+                    colorClass={faseKleur[telefoonKolom.id] ?? telefoonKolom.color_class}
                     positie={telefoonKolom.position}
                     groot
                   />
@@ -474,7 +477,7 @@ function PipelineScreenInhoud() {
                 accessibilityLabel={`Verplaats naar ${s.name ?? 'fase'}`}
                 style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
               >
-                <FaseBadge label={s.name ?? 'Fase'} colorClass={s.color_class} positie={s.position} />
+                <FaseBadge label={s.name ?? 'Fase'} colorClass={faseKleur[s.id] ?? s.color_class} positie={s.position} />
                 {menuDeal.stage_id === s.id ? <Check size={18} color={t.green700} /> : null}
               </Pressable>
             ))}

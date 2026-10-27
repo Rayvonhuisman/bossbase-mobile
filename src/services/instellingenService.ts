@@ -175,15 +175,18 @@ export async function createFase(input: { name: string; color_class: string }): 
 
 export async function updateFase(
   id: string,
-  input: { name: string; color_class: string },
+  /** Zonder `color_class` blijft de kleur wat hij was (ook een automatische). */
+  input: { name: string; color_class?: string },
 ): Promise<WriteResult<Fase>> {
   const naam = input.name.trim();
   if (!naam) return writeFout('validatie', 'Vul een naam in.');
+  const patch: { name: string; color_class?: string } = { name: naam };
+  if (input.color_class) patch.color_class = input.color_class;
   return schrijf<Fase>(
     () =>
       supabase
         .from('pipeline_stages')
-        .update({ name: naam, color_class: input.color_class })
+        .update(patch)
         .eq('id', id)
         .select('id, name, position, color_class'),
     opties('instellingenService.updateFase', ALLEEN_BEHEER),

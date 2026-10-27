@@ -214,6 +214,37 @@ export const FASE_KLEUREN = [
   { label: 'Grijs', value: '#6b7280' },
 ];
 
+/**
+ * Het volledige palet voor pipelinefasen, op kleurvolgorde
+ * (`STAGE_COLOR_OPTIONS` in het dashboard). Alles wat de pipeline kan tonen,
+ * kun je kiezen.
+ */
+export const FASE_KLEUR_OPTIES = [
+  { label: 'Rood', value: '#ef4444' },
+  { label: 'Roze-rood', value: '#f43f5e' },
+  { label: 'Roze', value: '#ec4899' },
+  { label: 'Paars', value: '#a855f7' },
+  { label: 'Violet', value: '#8b5cf6' },
+  { label: 'Indigo', value: '#6366f1' },
+  { label: 'Blauw', value: '#3b82f6' },
+  { label: 'Hemelsblauw', value: '#0ea5e9' },
+  { label: 'Cyaan', value: '#06b6d4' },
+  { label: 'Groenblauw', value: '#14b8a6' },
+  { label: 'Smaragd', value: '#10b981' },
+  { label: 'Groen', value: '#1DDB62' },
+  { label: 'Limoen', value: '#84cc16' },
+  { label: 'Geel', value: '#eab308' },
+  { label: 'Oker', value: '#a16207' },
+  { label: 'Oranje', value: '#f97316' },
+  { label: 'Grijs', value: '#6b7280' },
+];
+
+/** Naam van een getoonde fasekleur (`kleurNaam` in Instellingen van het dashboard). */
+export function faseKleurNaam(hex: string | null | undefined): string {
+  const h = String(hex ?? '').toLowerCase();
+  return FASE_KLEUR_OPTIES.find((k) => k.value.toLowerCase() === h)?.label ?? 'Eigen kleur';
+}
+
 export const STANDAARD_FASE_KLEUR = '#6b7280';
 
 const OUDE_FASE_KLASSEN: Record<string, string> = {

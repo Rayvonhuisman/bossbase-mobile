@@ -8,13 +8,8 @@ import { SelectField } from '@/components/SelectField';
 import { useTheme } from '@/providers';
 import { Dialog } from '@/lib/dialog';
 import { useSave } from '@/lib/useSave';
-import {
-  FASE_KLEUREN,
-  PIPELINE_MOMENTEN,
-  STANDAARD_FASE_KLEUR,
-  faseKleurHex,
-  faseKleurLabel,
-} from '@/lib/instellingenRegels';
+import { FASE_KLEUR_OPTIES, PIPELINE_MOMENTEN, faseKleurNaam } from '@/lib/instellingenRegels';
+import { pipelineFaseKleuren, vrijeFaseKleur } from '@/lib/pipelineLogica';
 import {
   createFase,
   createVerlorenReden,
@@ -47,6 +42,9 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
   const [fase, setFase] = useState<{ id: string | null; name: string; kleur: string } | null>(null);
   const [reden, setReden] = useState<{ id: string | null; label: string } | null>(null);
   const { save, saving, error, setError } = useSave<unknown>();
+  // De kleur die elke fase in de pipeline écht krijgt (automatisch of eigen keuze),
+  // dezelfde berekening als Instellingen en de pipeline in het dashboard.
+  const kleurVan = useMemo(() => pipelineFaseKleuren(fasen), [fasen]);
 
   const haal = () => Promise.all([listFasen(), listKoppelingen(), listVerlorenRedenen()]);
   const verwerk = useCallback(([f, k, r]: Awaited<ReturnType<typeof haal>>) => {
@@ -75,10 +73,15 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
 
   const faseOpslaan = () => {
     if (!fase) return;
+    // Alleen een andere kleur dan nu getoond wordt een eigen keuze; alleen de
+    // naam wijzigen laat een automatische kleur automatisch (zoals het dashboard).
+    const kleurGewijzigd = fase.id
+      ? fase.kleur.toLowerCase() !== String(kleurVan[fase.id] ?? '').toLowerCase()
+      : true;
     save(
       () =>
         fase.id
-          ? updateFase(fase.id, { name: fase.name, color_class: fase.kleur })
+          ? updateFase(fase.id, { name: fase.name, ...(kleurGewijzigd ? { color_class: fase.kleur } : {}) })
           : createFase({ name: fase.name, color_class: fase.kleur }),
       {
         onSuccess: async () => {
@@ -182,7 +185,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
               variant="secondary"
               onPress={() => {
                 setError(null);
-                setFase({ id: null, name: '', kleur: STANDAARD_FASE_KLEUR });
+                setFase({ id: null, name: '', kleur: vrijeFaseKleur(fasen, FASE_KLEUR_OPTIES.map((k) => k.value)) });
               }}
             />
           ) : undefined
@@ -191,17 +194,17 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
         {fasen.length === 0 ? <Text style={s.hint}>Nog geen fasen.</Text> : null}
         {fasen.map((f) => (
           <View key={f.id} style={s.lijstRij}>
-            <View style={[s.stip, { backgroundColor: faseKleurHex(f.color_class) }]} />
+            <View style={[s.stip, { backgroundColor: kleurVan[f.id] }]} />
             <View style={{ flex: 1 }}>
               <Text style={s.lijstTitel}>{f.name}</Text>
-              <Text style={s.lijstSub}>{faseKleurLabel(f.color_class)}</Text>
+              <Text style={s.lijstSub}>{faseKleurNaam(kleurVan[f.id])}</Text>
             </View>
             {isAdmin ? (
               <>
                 <Pressable
                   onPress={() => {
                     setError(null);
-                    setFase({ id: f.id, name: f.name, kleur: faseKleurHex(f.color_class) });
+                    setFase({ id: f.id, name: f.name, kleur: kleurVan[f.id] ?? f.color_class });
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={`${f.name} bewerken`}
@@ -287,7 +290,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
         />
         <Text style={s.label}>Kleur</Text>
         <View style={s.chipRij}>
-          {FASE_KLEUREN.map((k) => {
+          {FASE_KLEUR_OPTIES.map((k) => {
             const gekozen = (fase?.kleur ?? '').toLowerCase() === k.value.toLowerCase();
             return (
               <Pressable

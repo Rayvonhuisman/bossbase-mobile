@@ -45,6 +45,70 @@ export function faseHex(colorClass: string | null | undefined, positie?: number 
   return LEGACY_FASE_HEX[col] ?? GRIJS;
 }
 
+/**
+ * Palet waaruit een fase zonder eigen keuze een vrije kleur krijgt
+ * (`FASE_PALET` in het dashboard, zelfde volgorde).
+ */
+export const FASE_PALET = [
+  '#3b82f6', '#f97316', '#a855f7', '#14b8a6', '#eab308', '#ec4899', '#1DDB62', '#6366f1', '#06b6d4',
+  '#84cc16', '#10b981', '#0ea5e9', '#a16207', '#8b5cf6', '#f43f5e', '#ef4444', '#6b7280',
+];
+
+/** Een hex in `color_class` is een eigen keuze; een oude klasse is automatisch. */
+export function isEigenFaseKleur(col: unknown): col is string {
+  return typeof col === 'string' && /^#[0-9a-f]{3,8}$/i.test(col);
+}
+
+type FaseVoorKleur = { id: string; color_class?: string | null; position?: number | null; name?: string | null };
+
+/**
+ * Eén kleur per fase, zoals `faseKleuren` in het dashboard: een eigen keuze
+ * precies zo; een fase zonder eigen keuze zijn standaardkleur, of — als een
+ * andere fase die al heeft — de eerstvolgende vrije uit het palet. `vast` is de
+ * kleur voor een fase zonder eigen keuze die niemand anders krijgt (Verloren).
+ */
+export function faseKleuren(fasen: FaseVoorKleur[], vast: Record<string, string> = {}): Record<string, string> {
+  const uit: Record<string, string> = {};
+  const gebruikt = new Set<string>();
+  const zet = (id: string, hex: string) => {
+    uit[id] = hex.toLowerCase();
+    gebruikt.add(hex.toLowerCase());
+  };
+  for (const f of fasen) if (isEigenFaseKleur(f.color_class)) zet(f.id, f.color_class);
+  for (const [id, hex] of Object.entries(vast)) if (!(id in uit)) zet(id, hex);
+  for (const f of fasen) {
+    if (f.id in uit) continue;
+    let hex = faseHex(f.color_class, f.position).toLowerCase();
+    if (gebruikt.has(hex)) hex = FASE_PALET.find((c) => !gebruikt.has(c.toLowerCase())) ?? hex;
+    zet(f.id, hex);
+  }
+  return uit;
+}
+
+/**
+ * De kleur die elke fase in de pipeline van het dashboard écht krijgt
+ * (`pipelineKleuren` in InstellingenPage.jsx, gelijk aan BbDashboard): op
+ * volgorde van positie, Verloren rood tenzij eigen keuze, en "Afgerond" — dat
+ * geen kolom op het bord heeft — telt niet mee bij het verdelen.
+ */
+export function pipelineFaseKleuren(fasen: FaseVoorKleur[]): Record<string, string> {
+  const lijst = [...fasen].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const verloren = (
+    lijst.find((f) => /verlor/i.test(f.name ?? '')) ?? lijst.find((f) => /\blost\b/i.test(f.name ?? ''))
+  )?.id;
+  const vast: Record<string, string> = verloren ? { [verloren]: '#ef4444' } : {};
+  const afgerond = lijst.find((f) => /afgerond/i.test(f.name ?? ''))?.id;
+  const kleuren = faseKleuren(lijst.filter((f) => f.id !== afgerond), vast);
+  if (afgerond) kleuren[afgerond] = faseKleuren(lijst, vast)[afgerond]!;
+  return kleuren;
+}
+
+/** Eerste paletkleur die nog geen enkele fase heeft (standaard voor een nieuwe fase). */
+export function vrijeFaseKleur(fasen: FaseVoorKleur[], palet: readonly string[] = FASE_PALET): string {
+  const bezet = new Set(Object.values(pipelineFaseKleuren(fasen)));
+  return palet.find((c) => !bezet.has(c.toLowerCase())) ?? GRIJS;
+}
+
 /** Badgekleuren: achtergrond = hex op 10% (`hex + '1A'`), tekst = hex. */
 export function faseBadge(
   colorClass: string | null | undefined,
