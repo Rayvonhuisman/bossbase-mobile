@@ -2,9 +2,11 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Hoeveel de vaste strook bovenaan hoger is dan de veilige zone: genoeg om de
-// vervaging van iOS onder het Dynamic Island helemaal op te vangen.
-export const VERVAGING_MARGE = 10;
+// Hoeveel de vaste strook bovenaan hoger is dan de veilige zone. iOS tekent
+// boven in een geïnstalleerde web-app een eigen vervaging in de paginakleur die
+// een stuk onder de statusbalk doorloopt (10px was te weinig: de datum viel er
+// nog in). Met 28px valt hij alleen over de lege strook.
+export const VERVAGING_MARGE = 28;
 
 /**
  * Laat de scrollende inhoud pas ónder het Dynamic Island beginnen.
