@@ -99,6 +99,24 @@
           font-size: max(16px, 1em) !important;
         }
       }
+      /* Vaste strook achter klok en Dynamic Island, precies zoals de
+         superadmin-app (superadmin-thema.css, .sa-schil::before). Nieuwere iOS
+         legt in een geïnstalleerde web-app een glazen vervaging over de
+         bovenkant van de pagina; met een vast (position: fixed) element bovenin
+         ziet iOS dat als de bovenbalk en vervaagt het de inhoud niet meer. De
+         kleur volgt de achtergrond van body (die MobielKader bij elk thema
+         bijwerkt). */
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: env(safe-area-inset-top, 0px);
+        background: inherit;
+        z-index: 2147483000;
+        pointer-events: none;
+      }
     </style>
   </head>
 
