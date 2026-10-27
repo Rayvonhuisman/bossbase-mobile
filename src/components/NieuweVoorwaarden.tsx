@@ -62,7 +62,7 @@ export function NieuweVoorwaarden() {
   const accepteer = async () => {
     setBezig(true);
     setFout(null);
-    const { data, error } = await supabase.functions.invoke('akkoord-vastleggen');
+    const { data, error } = await supabase.functions.invoke('akkoord-vastleggen', { body: { aanleiding: 'nieuwe_versie' } });
     setBezig(false);
     if (error || data?.success === false) {
       setFout('Vastleggen lukte niet. Probeer het zo nog eens.');

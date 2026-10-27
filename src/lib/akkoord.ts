@@ -12,8 +12,8 @@
  */
 export const AKKOORD_VERSIES = {
   algemene_voorwaarden: '2026-12',
-  verwerkersovereenkomst: '2026-12',
-  privacyverklaring: '2026-11a',
+  verwerkersovereenkomst: '2026-12b',
+  privacyverklaring: '2026-11c',
 } as const;
 
 export type AkkoordDocument = 'algemene_voorwaarden' | 'verwerkersovereenkomst';
@@ -22,7 +22,9 @@ export const AKKOORD_INGANG: Record<AkkoordDocument, string | null> = {
   // 2026-12: besluit Niels 27 oktober 2026, ingang dezelfde dag, zonder mail of
   // aankondiging; beheerders accepteren bij hun volgende inlog.
   algemene_voorwaarden: '2026-10-27',
-  verwerkersovereenkomst: '2026-10-27',
+  // 2026-12b: voorstel, ingang 7 december 2026 na een aankondiging van minstens
+  // 30 dagen.
+  verwerkersovereenkomst: '2026-12-07',
 };
 
 /** Wat er nieuw is, voor het venster. Teksten letterlijk uit het dashboard. */
@@ -35,7 +37,7 @@ export const AKKOORD_NIEUW: Record<AkkoordDocument, { naam: string; url: string;
   verwerkersovereenkomst: {
     naam: 'Verwerkersovereenkomst',
     url: 'https://www.bossbase.nl/verwerkersovereenkomst',
-    wat: 'Boss en het uitlezen van metingen bij Anthropic (§2, §3 en §5), bestanden bij klanten en projecten (§2 en §3), vier nieuwe subverwerkers als je een website bij ons hebt: Vercel, Mijndomein, Google Workspace en OpenAI (§5 en §6), de volledige export (§7), zelf je account verwijderen (§8), de kosten van een audit (§4) en de back-ups (bijlage).',
+    wat: 'Boss per onderdeel: welke gegevens naar Anthropic gaan bij de helpchat, de hulp bij offertes en facturen, de schrijfhulp voor de mail en het uitlezen van metingen, en wanneer Boss een vraag naar ons team doorzet (§2). Bij Anthropic: waar de verwerking plaatsvindt, geen training en hoe lang Anthropic kan bewaren (§5). Inspreken via je browser (§2). Ten opzichte van versie 2026-10 ook: bestanden bij klanten en projecten, vier subverwerkers als je een website bij ons hebt (Vercel, Mijndomein, Google Workspace en OpenAI), de volledige export, zelf je account verwijderen, de kosten van een audit en de back-ups.',
   },
 };
 
