@@ -99,23 +99,24 @@
           font-size: max(16px, 1em) !important;
         }
       }
-      /* Vaste strook achter klok en Dynamic Island, precies zoals de
-         superadmin-app (superadmin-thema.css, .sa-schil::before). Nieuwere iOS
-         legt in een geïnstalleerde web-app een glazen vervaging over de
-         bovenkant van de pagina; met een vast (position: fixed) element bovenin
-         ziet iOS dat als de bovenbalk en vervaagt het de inhoud niet meer. De
-         kleur volgt de achtergrond van body (die MobielKader bij elk thema
-         bijwerkt). */
-      body::before {
-        content: '';
+      /* Vaste balk achter klok en Dynamic Island (#bb-statusbalk hieronder).
+         iOS 26+ legt in een geïnstalleerde web-app een glazen vervaging over
+         de bovenste ~40pt van de pagina, tenzij er bovenin een vaste
+         (position: fixed), volle breedte, effen gekleurde balk staat van meer
+         dan ~10px hoog. iOS slaat elementen met pointer-events: none over, en
+         leest een ::before maar één keer uit; daarom een echt element, zonder
+         pointer-events: none. De kleur volgt de achtergrond van body (die
+         MobielKader bij elk thema bijwerkt). Op schermen zonder notch is de
+         veilige zone 0 en tekent de balk niets. */
+      #bb-statusbalk {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
+        width: 100%;
         height: env(safe-area-inset-top, 0px);
-        background: inherit;
+        background-color: inherit;
         z-index: 2147483000;
-        pointer-events: none;
       }
     </style>
   </head>
@@ -125,6 +126,7 @@
       Je hebt JavaScript nodig om BossBase te gebruiken.
     </noscript>
     <!-- The root element for your Expo app. -->
+    <div id="bb-statusbalk" aria-hidden="true"></div>
     <div id="root"></div>
   </body>
 </html>
