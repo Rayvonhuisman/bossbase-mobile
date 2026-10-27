@@ -18,7 +18,6 @@ import { Dialog } from '@/lib/dialog';
 import { openMaps } from '@/lib/linking';
 import { FotoViewer } from '@/components/FotoViewer';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
   CalendarDays,
@@ -54,7 +53,7 @@ import {
   LoadingScreen,
   MobielKader,
   SelectField,
-  StatusBarScrim,
+  OnderStatusbalk,
   TimeField,
 } from '@/components';
 import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
@@ -155,7 +154,6 @@ const vandaag = () => vandaagISO();
  */
 export default function WorkOrderDetailScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, role, profile } = useAuth();
   const { can, hasFeature, readonly, loaded: rechtenGeladen } = usePermissions();
@@ -751,6 +749,7 @@ export default function WorkOrderDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={{ flex: 1, backgroundColor: th.bg }}>
+        <OnderStatusbalk>
         <ScrollView
           style={[styles.screen, { backgroundColor: th.bg }]}
           contentContainerStyle={styles.scrollContent}
@@ -762,7 +761,7 @@ export default function WorkOrderDetailScreen() {
               onRefresh={onRefresh}
               tintColor={th.green}
               colors={[th.green]}
-              progressViewOffset={insets.top}
+              progressViewOffset={0}
             />
           }
         >
@@ -1510,7 +1509,7 @@ export default function WorkOrderDetailScreen() {
             </View>
           </AnimatedScreen>
         </ScrollView>
-        <StatusBarScrim />
+        </OnderStatusbalk>
       </View>
 
       <AddNoteModal

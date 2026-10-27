@@ -10,14 +10,14 @@ import {
   type NativeSyntheticEvent,
   type ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/providers';
 import { useTrekOmTeVerversen } from '@/lib/trekOmTeVerversen';
 import { AnimatedScreen } from './AnimatedScreen';
+import { VERVAGING_MARGE } from './OnderStatusbalk';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary';
-import { StatusBarScrim } from './StatusBarScrim';
 
 type Props = {
   children: ReactNode;
@@ -86,7 +86,7 @@ export function AppScreen({
   const scrollPaddingBottom = floatingAction ? insets.bottom + 150 : bottomInset;
   // The header owns the safe-area inset (it pads itself below the status bar).
   // Without one, the content clears the status bar itself.
-  const contentPaddingTop = header ? 0 : insets.top + 4;
+  const contentPaddingTop = header ? 0 : 4;
 
   // Een tabwissel mag geen scherm achterlaten dat nog omlaag hangt van een
   // pull-to-refresh of een overscroll. Komt het scherm terug in beeld terwijl
@@ -123,16 +123,25 @@ export function AppScreen({
           disabled={!animate}
           // Zonder ScrollView is er niets om mee te scrollen: de kop staat
           // gewoon bovenaan, met de gebruikelijke ruimte eronder.
-          style={[{ paddingTop: header ? 12 : contentPaddingTop, flex: 1 }, contentContainerStyle]}
+          style={[{ paddingTop: header ? 12 : insets.top + 4, flex: 1 }, contentContainerStyle]}
         >
           <ScreenErrorBoundary>{children}</ScreenErrorBoundary>
         </AnimatedScreen>
       </View>
     );
   }
+  // De iPhone legt onder het Dynamic Island een eigen vervaging over webinhoud
+  // die eronder door scrolt (iOS, niet van ons; daar kan niets bovenop). Daarom
+  // begint het scrollende deel pas ónder de veilige zone, met een vaste strook
+  // in de paginakleur erboven die iets hoger is dan die zone. De vervaging valt
+  // dan alleen over die lege strook. De kop hoeft de veilige zone dan zelf niet
+  // meer te dragen: binnen de scroll geven we hem top 0 door.
+  const strook = insets.top > 0 ? insets.top + VERVAGING_MARGE : 0;
+  const binnenInsets = { ...insets, top: 0 };
   return (
-    <View style={[styles.root, { backgroundColor: bg }]}>
+    <View style={[styles.root, { backgroundColor: bg, paddingTop: strook }]}>
       <StatusBar style={barStyle} />
+      <SafeAreaInsetsContext.Provider value={binnenInsets}>
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -159,7 +168,7 @@ export function AppScreen({
               colors={[t.green]}
               // De ScrollView begint bovenaan het scherm; zet de spinner onder
               // de statusbalk in plaats van erachter.
-              progressViewOffset={insets.top}
+              progressViewOffset={0}
             />
           ) : undefined
         }
@@ -169,14 +178,14 @@ export function AppScreen({
           <ScreenErrorBoundary>{children}</ScreenErrorBoundary>
         </AnimatedScreen>
       </ScrollView>
-      <StatusBarScrim background={bg} />
+      </SafeAreaInsetsContext.Provider>
       {toonTrek ? (
         <View
           pointerEvents="none"
           style={[
             styles.trek,
             {
-              top: insets.top + 8,
+              top: (insets.top > 0 ? insets.top + VERVAGING_MARGE : 0) + 8,
               opacity: refreshing ? 1 : trek.voortgang,
               transform: [{ translateY: refreshing ? 24 : trek.voortgang * 24 }],
               backgroundColor: t.card,

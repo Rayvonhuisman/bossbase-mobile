@@ -10,7 +10,6 @@ import {
 import { Dialog } from '@/lib/dialog';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Calendar,
   Download,
@@ -40,7 +39,7 @@ import {
   LoadingScreen,
   SelectField,
   StatusBadge,
-  StatusBarScrim,
+  OnderStatusbalk,
   conceptVanActiviteit,
   leegConcept,
   type ActivityConcept,
@@ -187,7 +186,6 @@ export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { companyId, profile } = useAuth();
   const { colors: th, colorMode } = useTheme();
-  const insets = useSafeAreaInsets();
   const { loaded: rechtenGeladen, mag, can, readonly } = usePermissions();
 
   const magOffertes = rechtenGeladen && can('offertes');
@@ -818,6 +816,7 @@ export default function CustomerDetailScreen() {
 
       <View style={{ flex: 1, backgroundColor: th.bg }}>
         <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
+        <OnderStatusbalk>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 40 }}
@@ -829,7 +828,7 @@ export default function CustomerDetailScreen() {
               onRefresh={onRefresh}
               tintColor={th.green}
               colors={[th.green]}
-              progressViewOffset={insets.top}
+              progressViewOffset={0}
             />
           }
         >
@@ -929,7 +928,7 @@ export default function CustomerDetailScreen() {
             <KaartKolommen links={linkerKolom} rechts={rechterKolom} />
           </AnimatedScreen>
         </ScrollView>
-        <StatusBarScrim />
+        </OnderStatusbalk>
 
         <ActivityFormSheet
           concept={activiteitConcept}
