@@ -26,6 +26,7 @@ export { DateField, TimeField } from './DateField';
 export { DialogHost } from './DialogHost';
 export { MobielKader } from './MobielKader';
 export { NieuweVersieMelding } from './NieuweVersieMelding';
+export { NieuweVoorwaarden } from './NieuweVoorwaarden';
 export { InstalleerBossBase } from './InstalleerBossBase';
 export { FormField } from './FormField';
 export { FormSheet } from './FormSheet';
