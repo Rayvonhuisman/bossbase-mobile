@@ -3,6 +3,7 @@
  * dashboard (PlanningPage.jsx, utils/werkbonDagen.js dubbeleBoekingen,
  * utils/voertuigDagen.js).
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

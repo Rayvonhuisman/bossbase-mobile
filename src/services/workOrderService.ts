@@ -72,7 +72,7 @@ const WORK_ORDER_COLUMNS = `
   werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
     voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
-    id, name, email, phone, address, postcode, city
+    id, name, email, phone, address, postcode, city, kleur
   ),
   project:projects ( id, name ),
   toegewezen:profiles!werkbonnen_assigned_to_fkey ( id, full_name )
@@ -608,6 +608,32 @@ export function getAllowedNextStatuses(
  * Only these fields are sent, so a concurrent dashboard edit to the title,
  * planning or assignment is not overwritten.
  */
+/**
+ * Annuleren of terugzetten (besluit 26-10): alleen de status, zoals het
+ * dashboard. De database bewaakt wie het mag (admin of recht planning), dat er
+ * geen uren of handtekening op staan, en stuurt de medewerkers een melding
+ * (bb_werkbon_annulering_melden).
+ */
+export async function zetWerkbonGeannuleerd(
+  werkbonId: string,
+  geannuleerd: boolean,
+): Promise<{ data: Werkbon | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('werkbonnen')
+    .update({ status: geannuleerd ? 'geannuleerd' : 'gepland' })
+    .eq('id', werkbonId)
+    .select(WORK_ORDER_COLUMNS);
+  if (error) {
+    if (error.hint === 'werkbon_heeft_uren' || error.hint === 'werkbon_ondertekend' || error.code === '42501') {
+      return { data: null, error: error.message };
+    }
+    return { data: null, error: describeError('zetWerkbonGeannuleerd', error) };
+  }
+  const row = (data as unknown as Werkbon[])?.[0];
+  if (!row) return { data: null, error: 'Je kunt deze werkbon niet annuleren.' };
+  return { data: row, error: null };
+}
+
 export async function updateWorkOrderStatus(
   workOrder: Pick<WorkOrderWithRelations, 'id' | 'gestart_op'>,
   status: WorkOrderStatus,
@@ -737,6 +763,50 @@ export async function addWorkOrderNote(input: {
     return { data: null, error: 'De notitie is niet opgeslagen — je hebt hier geen rechten voor.' };
   }
   return { data: row, error: null };
+}
+
+/**
+ * De tekst van een notitie wijzigen (besluit 26-10, G-07). RLS
+ * `werkbon_notities_update`: de schrijver, een admin, het recht planning of
+ * werkbonnen_bewerken; niet bij een verstuurde Wkb-waarschuwing. Na
+ * ondertekenen weigert bb_werkbon_kind_op_slot.
+ */
+export async function updateWorkOrderNote(
+  id: string,
+  note: string,
+): Promise<{ data: WerkbonNotitie | null; error: string | null }> {
+  const tekst = note.trim();
+  if (!tekst) return { data: null, error: 'Een lege notitie kan niet worden opgeslagen.' };
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .update({ note: tekst, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(NOTE_COLUMNS);
+  if (error) return { data: null, error: describeError('updateWorkOrderNote', error) };
+  const row = (data as unknown as WerkbonNotitie[])?.[0];
+  if (!row) return { data: null, error: 'Niet gewijzigd — je mag deze notitie niet wijzigen.' };
+  return { data: row, error: null };
+}
+
+/** Een notitie verwijderen; zelfde rechten als wijzigen. */
+export async function deleteWorkOrderNote(id: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase.from('werkbon_notities').delete().eq('id', id).select('id');
+  if (error) return { error: describeError('deleteWorkOrderNote', error) };
+  if (!data?.length) return { error: 'Niet verwijderd — je mag deze notitie niet verwijderen.' };
+  return { error: null };
+}
+
+/**
+ * Mag deze gebruiker deze notitie wijzigen of verwijderen? Spiegelt de RLS; het
+ * slot na ondertekenen en alleen-lezen vraagt het scherm zelf na.
+ */
+export function magNotitieWijzigen(
+  n: Pick<WerkbonNotitie, 'created_by' | 'waarschuwing_verzonden_op'>,
+  r: { userId: string | null; role: string | null; can: (p: string) => boolean },
+): boolean {
+  if (n.waarschuwing_verzonden_op) return false;
+  if (r.userId && n.created_by === r.userId) return true;
+  return r.role === 'admin' || r.can('planning') || r.can('werkbonnen_bewerken');
 }
 
 // ---------------------------------------------------------------------------
@@ -1278,7 +1348,7 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
   const { data: wb, error } = await supabase
     .from('werkbonnen')
     .select(
-      'id, titel, customer_id, omschrijving, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden )',
+      'id, titel, customer_id, omschrijving, status, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden )',
     )
     .eq('id', werkbonId)
     .maybeSingle();
@@ -1288,6 +1358,7 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
     titel: string | null;
     customer_id: string | null;
     omschrijving: string | null;
+    status: string | null;
     assigned_to: string | null;
     assigned_to_ids: string[] | null;
     starttijd: string | null;
@@ -1300,7 +1371,9 @@ export async function syncWerkbonEvents(werkbonId: string, companyId: string): P
   type Bestaand = { id: string; werkbon_dag_id: string | null; assigned_to: string | null; herkomst: string | null; start_at: string | null };
 
   const gewenst: Gewenst[] = [];
-  for (const dag of w.werkbon_dagen ?? []) {
+  // Een geannuleerde werkbon gaat niet door: geen agenda-items. De rest van de
+  // functie ruimt dan zijn planningsitems op; bij terugzetten komen ze terug.
+  for (const dag of w.status === 'geannuleerd' ? [] : (w.werkbon_dagen ?? [])) {
     const dagStart = hhmm(dag.starttijd) || hhmm(w.starttijd);
     const dagEind = hhmm(dag.eindtijd) || hhmm(w.eindtijd);
     const ploeg = Array.isArray(dag.medewerker_ids) ? dag.medewerker_ids : team;

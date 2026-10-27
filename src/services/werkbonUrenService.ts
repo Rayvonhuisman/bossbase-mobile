@@ -197,6 +197,81 @@ export async function createWerkbonUur(
   );
 }
 
-// Werkbonuren wijzigen of verwijderen zit (net als in het dashboard, dat
-// updateWerkbonUur/deleteWerkbonUur in 9dd7088 als dode code schrapte) niet in
-// de app: een regel corrigeren gebeurt op kantoor.
+/**
+ * Een weigering van een trigger (slot na ondertekenen, geannuleerde bon) heeft
+ * al een Nederlandse melding; classificeerFout maakt daar een algemene
+ * `validatie` van. Die melding zetten we hier terug.
+ */
+function metDbMelding<T>(res: WriteResult<T>): WriteResult<T> {
+  if (res.ok || !res.technisch) return res;
+  if (/op slot|geannuleerd/i.test(res.technisch)) {
+    return writeFout('op-slot', res.technisch.replace(/^\S+\s/, ''), res.technisch);
+  }
+  return res;
+}
+
+/** Wat je aan een geboekt uur kunt wijzigen; dezelfde velden als bij boeken. */
+export type UpdateWerkbonUurInput = Omit<CreateWerkbonUurInput, 'company_id' | 'werkbon_id' | 'profile_id'> & {
+  /** Alleen meegeven als je voor een ander mag boeken (bb_mag_uren_voor_ander). */
+  profile_id?: string;
+};
+
+/**
+ * Een geboekt uur wijzigen (besluit 26-10, G-06). RLS `werkbon_uren_update`:
+ * je eigen uur, of als admin, met het recht planning of als verantwoordelijke
+ * van de bon ook dat van een ander. Na ondertekenen weigert bb_werkbon_op_slot.
+ */
+export async function updateWerkbonUur(
+  id: string,
+  input: UpdateWerkbonUurInput,
+): Promise<WriteResult<WerkbonUur>> {
+  if (!isGeldigeDatum(input.datum)) {
+    return writeFout('validatie', 'Vul een geldige datum in.');
+  }
+  const uren = rondUrenAf(input.uren);
+  if (!Number.isFinite(uren) || uren <= 0) {
+    return writeFout('validatie', 'Vul een geldig aantal uren in.');
+  }
+  if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
+    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+  }
+
+  const res = await schrijf<WerkbonUur>(
+    () =>
+      supabase
+        .from('werkbon_uren')
+        .update({
+          datum: input.datum,
+          uren,
+          start_tijd: input.start_tijd || null,
+          eind_tijd: input.eind_tijd || null,
+          pauze_minuten: input.pauze_minuten ?? 0,
+          reis_km: input.reis_km ?? null,
+          notitie: input.notitie?.trim() ? input.notitie.trim() : null,
+          ...(input.profile_id ? { profile_id: input.profile_id } : {}),
+        })
+        .eq('id', id)
+        .select(UREN_COLUMNS),
+    {
+      context: 'werkbonUrenService.updateWerkbonUur',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'Niet gewijzigd. Je kunt alleen je eigen uren wijzigen, of als beheerder of planner die van anderen.',
+    },
+  );
+  return metDbMelding(res);
+}
+
+/** Een geboekt uur verwijderen; zelfde rechten en slot als wijzigen. */
+export async function deleteWerkbonUur(id: string): Promise<WriteResult<{ id: string }>> {
+  const res = await schrijf<{ id: string }>(
+    () => supabase.from('werkbon_uren').delete().eq('id', id).select('id'),
+    {
+      context: 'werkbonUrenService.deleteWerkbonUur',
+      bedrijfReadonly: isReadonly(),
+      leegSoort: 'geen-rechten',
+      leegMelding: 'Niet verwijderd. Je kunt alleen je eigen uren verwijderen, of als beheerder of planner die van anderen.',
+    },
+  );
+  return metDbMelding(res);
+}

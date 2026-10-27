@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mail, Navigation as NavigationIcon, Pencil, Phone } from 'lucide-react-native';
 import {
   AppTopBar,
@@ -12,7 +11,7 @@ import {
   FormSheet,
   HeaderIconButton,
   LoadingScreen,
-  StatusBarScrim,
+  OnderStatusbalk,
 } from '@/components';
 import {
   GegevensRij,
@@ -72,7 +71,6 @@ export default function LeverancierKaart() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors: t, colorMode } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const insets = useSafeAreaInsets();
   const { loaded: rechtenGeladen, can, readonly } = usePermissions();
 
   const [lev, setLev] = useState<Leverancier | null>(null);
@@ -283,6 +281,7 @@ export default function LeverancierKaart() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
+        <OnderStatusbalk>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 40 }}
@@ -298,7 +297,7 @@ export default function LeverancierKaart() {
               onRefresh={onRefresh}
               tintColor={t.green}
               colors={[t.green]}
-              progressViewOffset={insets.top}
+              progressViewOffset={0}
             />
           }
         >
@@ -357,7 +356,7 @@ export default function LeverancierKaart() {
 
           <KaartKolommen links={gegevensKolom} rechts={overzichtKolom} />
         </ScrollView>
-        <StatusBarScrim />
+        </OnderStatusbalk>
 
         <FormSheet
           visible={concept !== null}

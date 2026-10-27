@@ -175,15 +175,18 @@ export async function createFase(input: { name: string; color_class: string }): 
 
 export async function updateFase(
   id: string,
-  input: { name: string; color_class: string },
+  /** Zonder `color_class` blijft de kleur wat hij was (ook een automatische). */
+  input: { name: string; color_class?: string },
 ): Promise<WriteResult<Fase>> {
   const naam = input.name.trim();
   if (!naam) return writeFout('validatie', 'Vul een naam in.');
+  const patch: { name: string; color_class?: string } = { name: naam };
+  if (input.color_class) patch.color_class = input.color_class;
   return schrijf<Fase>(
     () =>
       supabase
         .from('pipeline_stages')
-        .update({ name: naam, color_class: input.color_class })
+        .update(patch)
         .eq('id', id)
         .select('id, name, position, color_class'),
     opties('instellingenService.updateFase', ALLEEN_BEHEER),
@@ -196,7 +199,7 @@ export async function deleteFase(id: string): Promise<WriteStatus> {
     opties('instellingenService.deleteFase', ALLEEN_BEHEER),
   );
   if (!res.ok && res.soort === 'conflict') {
-    return writeFout('conflict', 'Er staan nog deals in deze fase. Verplaats die eerst.');
+    return writeFout('conflict', 'Er staan nog aanvragen of projecten in deze fase. Verplaats die eerst.');
   }
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -488,6 +491,8 @@ export type AbonnementStand = {
   readonlyReden: string | null;
   modules: string[];
   limieten: Record<string, { max: number | null; gebruikt: number }>;
+  /** Actief en uitgenodigd apart: de prijs telt alleen actief (G-22). Null zonder migratie 20261026122446. */
+  gebruikers: { actief: number; uitgenodigd: number } | null;
 };
 
 /** RPC `get_billing_status`, zelfde mapping als `getBillingStatus`. */
@@ -521,6 +526,7 @@ export async function getAbonnement(): Promise<{ data: AbonnementStand | null; e
       readonlyReden: (d.readonlyReden as string) || null,
       modules: Array.isArray(d.modules) ? (d.modules as string[]) : [],
       limieten: (d.limieten as AbonnementStand['limieten']) || {},
+      gebruikers: (d.gebruikers as AbonnementStand['gebruikers']) || null,
     },
     error: null,
   };

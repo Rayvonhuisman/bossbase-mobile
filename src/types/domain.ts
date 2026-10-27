@@ -90,6 +90,8 @@ export type CustomerSummary = {
   address: string | null;
   postcode: string | null;
   city: string | null;
+  /** Kleur van het initialen-rondje; zie lib/klantKleur. */
+  kleur?: string | null;
 };
 
 export type ProfileSummary = {
@@ -137,6 +139,8 @@ export type Customer = {
   source?: string | null;
   /** Eigen betaaltermijn; null = de standaard uit Instellingen. */
   betaaltermijn_dagen?: number | null;
+  /** Kleur van het initialen-rondje (groen, blauw, …); leeg = uit het id. Zie lib/klantKleur. */
+  kleur?: string | null;
 };
 
 export type CustomerType = 'Zakelijk' | 'Particulier' | 'Lead';

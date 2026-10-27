@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DialogHost, MobielKader, NieuweVersieMelding } from '@/components';
+import { DialogHost, MobielKader, NieuweVersieMelding, NieuweVoorwaarden } from '@/components';
 import { registreerServiceWorker } from '@/lib/pwa';
 import { HulpProvider } from '@/providers/HulpProvider';
 import {
@@ -61,6 +61,8 @@ export default function RootLayout() {
                   <Stack.Screen name="installeren" options={{ animation: 'fade' }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
+                {/* Beheerder op een oudere versie van de voorwaarden: eerst accepteren. */}
+                <NieuweVoorwaarden />
                 {/* Op web tekent dit de dialogen van `Dialog.alert`; op iOS en
                     Android doet het besturingssysteem dat zelf. */}
                 <DialogHost />

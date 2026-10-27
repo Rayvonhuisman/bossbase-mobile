@@ -161,6 +161,9 @@ export const ds = {
   /** Nieuw: afspraak en creditnota — paars, zodat ze niet met "goed" botsen. */
   statusInfoBg: '#EDE9FE',
   statusInfoFg: '#6D28D9',
+  /** Oranje = in uitvoering (werkbon en project), zoals statusColors.js van het dashboard. */
+  statusBezigBg: '#FFF4EC',
+  statusBezigFg: '#C2410C',
 
   // ── Hoeken ──────────────────────────────────────────────────────────────
   rSm: 12,
@@ -255,6 +258,8 @@ export const darkTheme: ThemeColors = {
   statusWarnFg: '#FCD34D',
   statusInfoBg: 'rgba(139,92,246,0.18)',
   statusInfoFg: '#C4B5FD',
+  statusBezigBg: 'rgba(249,115,22,0.18)',
+  statusBezigFg: '#FDBA74',
 };
 
 /**

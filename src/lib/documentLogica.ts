@@ -7,6 +7,8 @@
  * Bewust zonder imports: de tests draaien dit bestand rechtstreeks in Node.
  */
 
+import { leesGetalNl } from './getalNl';
+
 // ── Statussen ──────────────────────────────────────────────────────────────
 
 /** De zes tonen van het dashboard (grijs, blauw, oranje, groen, rood, paars). */
@@ -32,7 +34,8 @@ const FACTUUR_STATUSSEN: Record<string, StatusInfo> = {
   betaald: { toon: 'green', label: 'Betaald' },
   verlopen: { toon: 'red', label: 'Te laat' },
   te_laat: { toon: 'red', label: 'Te laat' },
-  vervallen: { toon: 'red', label: 'Te laat' },
+  // Concept met een nummer dat niet meer weg mag (doorlopende reeks), zoals het dashboard.
+  vervallen: { toon: 'gray', label: 'Vervallen' },
   geboekt: { toon: 'purple', label: 'Uit SnelStart' },
 };
 
@@ -578,8 +581,8 @@ export function gedeeltelijkeCreditRegels<R extends CreditBronRegel>(
   if (gekozen.length === 0) return { ok: false, melding: 'Selecteer minimaal één regel.' };
   const regels: CreditBronRegel[] = [];
   for (const k of gekozen) {
-    const aantal = Number(String(k.aantal).replace(',', '.'));
-    const prijs = Math.abs(Number(String(k.prijs).replace(',', '.')));
+    const aantal = leesGetalNl(k.aantal) ?? NaN;
+    const prijs = Math.abs(leesGetalNl(k.prijs) ?? NaN);
     if (!Number.isFinite(aantal) || aantal <= 0) {
       return { ok: false, melding: `Vul bij "${k.regel.omschrijving}" een aantal groter dan 0 in.` };
     }

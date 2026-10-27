@@ -42,11 +42,13 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BossBase" />
     <!--
-      "default": een gewone statusbalk boven de app. "black-translucent" zou de
-      app eronder laten doorlopen, maar dan staat witte statustekst op de lichte
-      achtergrond van de app — onleesbaar.
+      "black-translucent", net als de superadmin-app: iOS tekent zelf niets achter
+      klok en Dynamic Island, de pagina loopt erachter door (viewport-fit=cover)
+      en de app vult die strook met een effen vlak in de paginakleur (AppScreen,
+      OnderStatusbalk). Met "default" legde nieuwere iOS een eigen vervaging
+      over de bovenkant van de pagina, over dag en datum heen.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -97,6 +99,25 @@
           font-size: max(16px, 1em) !important;
         }
       }
+      /* Vaste balk achter klok en Dynamic Island (#bb-statusbalk hieronder).
+         iOS 26+ legt in een geïnstalleerde web-app een glazen vervaging over
+         de bovenste ~40pt van de pagina, tenzij er bovenin een vaste
+         (position: fixed), volle breedte, effen gekleurde balk staat van meer
+         dan ~10px hoog. iOS slaat elementen met pointer-events: none over, en
+         leest een ::before maar één keer uit; daarom een echt element, zonder
+         pointer-events: none. De kleur volgt de achtergrond van body (die
+         MobielKader bij elk thema bijwerkt). Op schermen zonder notch is de
+         veilige zone 0 en tekent de balk niets. */
+      #bb-statusbalk {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: env(safe-area-inset-top, 0px);
+        background-color: inherit;
+        z-index: 2147483000;
+      }
     </style>
   </head>
 
@@ -105,6 +126,7 @@
       Je hebt JavaScript nodig om BossBase te gebruiken.
     </noscript>
     <!-- The root element for your Expo app. -->
+    <div id="bb-statusbalk" aria-hidden="true"></div>
     <div id="root"></div>
   </body>
 </html>

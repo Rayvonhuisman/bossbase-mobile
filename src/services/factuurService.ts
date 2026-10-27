@@ -52,6 +52,7 @@ export const FACTUUR_STATUS_OPTIES = Object.entries(FACTUUR_STATUS).map(([id, la
 export function factuurStatusLabel(status: string | null | undefined): string {
   if (!status) return 'Concept';
   if (status === 'geboekt') return 'Uit SnelStart';
+  if (status === 'vervallen') return 'Vervallen';
   return FACTUUR_STATUS[status] ?? status;
 }
 
@@ -336,6 +337,8 @@ export function berekenVervaldatum(factuurdatum: string, termijnDagen: number): 
 export type FactuurInput = {
   customer_id?: string | null;
   project_id?: string | null;
+  /** Alleen bij aanmaken uit een offerte; de RPC controleert hem en zoekt het project erbij. */
+  offerte_id?: string | null;
   factuurdatum?: string;
   betaaltermijn_dagen?: number;
   vervaldatum?: string | null;
@@ -635,6 +638,15 @@ export async function deleteFactuur(
     },
   );
   if (!res.ok) {
+    // Trigger `bb_factuur_concept_verwijderen`: een ouder concept heeft al een
+    // nummer in de reeks; verwijderen zou een gat geven. Dan "vervallen".
+    if (/op vervallen/i.test(res.technisch ?? '')) {
+      return writeFout(
+        'op-slot',
+        'Deze factuur heeft al een nummer in de reeks en kan daarom niet weg. Zet hem op Vervallen: hij blijft in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+        'vervallen_ipv_verwijderen',
+      );
+    }
     // Trigger `bb_factuur_verzonden_bevriezen`: alleen een concept mag weg.
     if (res.soort === 'validatie' && /verstuurde factuur|creditnota/i.test(res.technisch ?? '')) {
       return writeFout(
@@ -713,6 +725,18 @@ export async function createFactuurRegel(
       bedrijfReadonly: isReadonly(),
       leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Facturen nodig.',
     },
+  );
+}
+
+/**
+ * Een concept op "vervallen" zetten: het nummer blijft in de reeks, de factuur
+ * telt nergens meer mee en kan niet meer worden verstuurd. De database staat
+ * dit alleen toe vanuit concept (`bb_factuur_vervallen_slot`).
+ */
+export async function zetFactuurVervallen(id: string): Promise<WriteResult<FactuurRow>> {
+  return schrijf<FactuurRow>(
+    () => supabase.from('facturen').update({ status: 'vervallen' }).eq('id', id).select(FACTUUR_COLUMNS),
+    { context: 'factuurService.zetFactuurVervallen', bedrijfReadonly: isReadonly() },
   );
 }
 
@@ -855,6 +879,7 @@ export async function createFactuurMetRegels(
     {
       customer_id: input.customer_id || null,
       project_id: input.project_id || null,
+      offerte_id: input.offerte_id || null,
       nummer: nummerRes.nummer,
       factuurdatum,
       vervaldatum: input.vervaldatum || berekenVervaldatum(factuurdatum, termijn),
@@ -1164,4 +1189,28 @@ export async function standaardBetaaltermijn(customerId: string | null): Promise
   const b = (inst as { betaaltermijn_dagen?: number | null } | null)?.betaaltermijn_dagen;
   if (b !== null && b !== undefined && Number.isFinite(Number(b))) return Number(b);
   return 14;
+}
+
+/**
+ * Welke offertes al een factuur hebben (via "Maak factuur", kolom `offerte_id`),
+ * zoals `getFactuurnummersPerOfferte` in het dashboard. Vervallen facturen en
+ * creditnota's tellen niet. Zonder recht op facturen of bij een fout: leeg.
+ */
+export async function factuurnummersPerOfferte(): Promise<Map<string, string[]>> {
+  const per = new Map<string, string[]>();
+  const { data, error } = await haalInStukken((van, tot) =>
+    supabase
+      .from('facturen')
+      .select('id, offerte_id, nummer')
+      .not('offerte_id', 'is', null)
+      .neq('status', 'vervallen')
+      .eq('is_credit', false)
+      .order('id')
+      .range(van, tot),
+  );
+  if (error) return per;
+  for (const r of (data ?? []) as { offerte_id: string; nummer: string | null }[]) {
+    per.set(r.offerte_id, [...(per.get(r.offerte_id) ?? []), r.nummer ?? '']);
+  }
+  return per;
 }

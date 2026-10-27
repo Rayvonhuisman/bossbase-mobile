@@ -19,10 +19,11 @@ import { ds, type ThemeColors } from '@/theme';
 
 /**
  * Eén activiteit in een lijst — de rij van `ActivitiesPageV2` in het dashboard:
- * accentbalk links (rood te laat, blauw vandaag, groen afgerond), type-icoon,
- * titel, klant, datum + tijd, verantwoordelijke en een statuslabel, met een
- * vinkknop om af te ronden of te heropenen. Gebruikt op Activiteiten en op de
- * homepage.
+ * accentbalk links (rood te laat, blauw vandaag, groen afgerond), links een
+ * afvinkvakje (afronden of heropenen) op de plek van het oude type-icoon,
+ * daarnaast titel, klant, datum + tijd, verantwoordelijke en een statuslabel.
+ * Zonder onVink (geen recht om af te ronden) staat er het type-icoon.
+ * Gebruikt op Activiteiten en op de homepage.
  */
 
 const TYPE_ICON: Record<string, LucideIcon> = {
@@ -129,9 +130,26 @@ export function ActiviteitRij({
   const inhoud = (
     <View style={[styles.rij, !first && styles.rand]}>
       <View style={[styles.balk, { backgroundColor: sk.balk }, klaar && { opacity: 0.5 }]} />
-      <View style={[styles.icoon, { backgroundColor: tk.bg }]}>
-        <Icon size={17} color={tk.fg} strokeWidth={2} />
-      </View>
+      {onVink ? (
+        <Pressable
+          onPress={onVink}
+          disabled={vinkBezig}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: klaar, disabled: !!vinkBezig }}
+          aria-checked={klaar}
+          accessibilityLabel={klaar ? `${a.title ?? 'Activiteit'} heropenen` : `${a.title ?? 'Activiteit'} markeren als gereed`}
+          style={({ pressed }) => [styles.vinkVlak, (pressed || vinkBezig) && { opacity: 0.6 }]}
+        >
+          <View style={[styles.vink, klaar && styles.vinkAan]}>
+            {klaar ? <Check size={15} color={ds.greenInk} strokeWidth={3} /> : null}
+          </View>
+        </Pressable>
+      ) : (
+        <View style={[styles.icoon, { backgroundColor: tk.bg }]}>
+          <Icon size={17} color={tk.fg} strokeWidth={2} />
+        </View>
+      )}
       <View style={[styles.midden, klaar && { opacity: 0.62 }]}>
         <Text
           style={[
@@ -151,21 +169,6 @@ export function ActiviteitRij({
           <Text style={[styles.badgeTekst, { color: sk.fg }]}>{STATUS_LABEL[status]}</Text>
         </View>
       </View>
-      {onVink ? (
-        <Pressable
-          onPress={onVink}
-          disabled={vinkBezig}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: klaar, disabled: !!vinkBezig }}
-          aria-checked={klaar}
-          accessibilityLabel={klaar ? `${a.title ?? 'Activiteit'} heropenen` : `${a.title ?? 'Activiteit'} markeren als gereed`}
-          style={({ pressed }) => [styles.vinkVlak, (pressed || vinkBezig) && { opacity: 0.6 }]}
-        >
-          <View style={[styles.vink, klaar && styles.vinkAan]}>
-            {klaar ? <Check size={15} color={ds.greenInk} strokeWidth={3} /> : null}
-          </View>
-        </Pressable>
-      ) : null}
     </View>
   );
 
@@ -189,7 +192,7 @@ const makeStyles = (t: ThemeColors) =>
       alignItems: 'center',
       gap: 12,
       paddingLeft: 14,
-      paddingRight: 6,
+      paddingRight: 14,
       paddingVertical: 12,
       minHeight: 64,
     },
@@ -218,11 +221,12 @@ const makeStyles = (t: ThemeColors) =>
     },
     badgeStip: { width: 6, height: 6, borderRadius: 3 },
     badgeTekst: { fontSize: 11.5, fontWeight: '700' },
-    vinkVlak: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    vinkVlak: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
     vink: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      // Vierkant met ronde hoeken, zelfde vakje als in het dashboard.
+      width: 24,
+      height: 24,
+      borderRadius: 7,
       borderWidth: 1.6,
       borderColor: t.lineStrong,
       alignItems: 'center',

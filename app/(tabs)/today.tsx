@@ -59,6 +59,7 @@ import { useLaden } from '@/lib/useLaden';
 import { telDagenOp, urenPerDag, type DagUren } from '@/lib/urenTotalen';
 import { formatEUR, formatPlanningTime } from '@/lib/format';
 import { avatarKleuren, initialen } from '@/lib/avatar';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
@@ -762,7 +763,9 @@ export default function TodayScreen() {
                   <View style={styles.lijstKaart}>
                     {aanvragen.lijst.map((d, i) => {
                       const naam = d.customer?.name || 'Onbekende klant';
-                      const kleur = avatarKleuren(naam, colorMode === 'dark');
+                      const kleur = d.customer
+                        ? klantAvatarKleuren(d.customer, colorMode === 'dark')
+                        : avatarKleuren(naam, colorMode === 'dark');
                       return (
                         <AppListItem
                           key={d.id ?? i}
@@ -818,7 +821,7 @@ export default function TodayScreen() {
                   tablet={tablet}
                   label="Open pipeline"
                   waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).open.waarde) : '—'}
-                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).open.aantal} deals` : undefined}
+                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).open.aantal} ${pipelineWaarden(overzicht.deals).open.aantal === 1 ? 'aanvraag' : 'aanvragen'}` : undefined}
                   onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}
@@ -828,7 +831,7 @@ export default function TodayScreen() {
                   tablet={tablet}
                   label="Geaccepteerd"
                   waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).geaccepteerd.waarde) : '—'}
-                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).geaccepteerd.aantal} deals` : undefined}
+                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).geaccepteerd.aantal} ${pipelineWaarden(overzicht.deals).geaccepteerd.aantal === 1 ? 'project' : 'projecten'}` : undefined}
                   onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}

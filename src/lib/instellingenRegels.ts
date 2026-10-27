@@ -12,8 +12,11 @@ export type InstellingenTab =
   | 'profiel'
   | 'bedrijf'
   | 'standaard'
+  | 'eenheden'
   | 'templates'
   | 'pipeline'
+  | 'agenda'
+  | 'herinneringen'
   | 'voertuigen'
   | 'abonnement'
   | 'integraties';
@@ -21,15 +24,23 @@ export type InstellingenTab =
 export const INSTELLINGEN_TAB_IDS: readonly InstellingenTab[] = [
   'profiel',
   'bedrijf',
+  'abonnement',
   'standaard',
+  'eenheden',
   'templates',
   'pipeline',
+  'agenda',
+  'herinneringen',
   'voertuigen',
-  'abonnement',
   'integraties',
 ];
 
-/** Welke tabs iemand ziet — `TABS` in het dashboard. */
+/**
+ * Welke tabs iemand ziet, met dezelfde namen en volgorde als `TAB_GROEPEN` in
+ * het dashboard (Account · Bedrijf · Offertes en facturen · Klanten en
+ * aanvragen · Planning en uren · Koppelingen). Het websiteformulier staat
+ * alleen in het dashboard.
+ */
 export function zichtbareTabs(stand: {
   instellingen: boolean;
   isAdmin: boolean;
@@ -37,14 +48,17 @@ export function zichtbareTabs(stand: {
 }): { id: InstellingenTab; label: string }[] {
   const tabs: { id: InstellingenTab; label: string }[] = [{ id: 'profiel', label: 'Mijn profiel' }];
   if (!stand.instellingen) return tabs;
+  tabs.push({ id: 'bedrijf', label: 'Bedrijfsprofiel' });
+  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
   tabs.push(
-    { id: 'bedrijf', label: 'Bedrijfsprofiel' },
-    { id: 'standaard', label: 'Standaardwaarden' },
+    { id: 'standaard', label: 'Tarieven en termijnen' },
+    { id: 'eenheden', label: 'Eigen prijzen' },
     { id: 'templates', label: 'E-mailtemplates' },
     { id: 'pipeline', label: 'Pipeline' },
+    { id: 'agenda', label: 'Agenda' },
+    { id: 'herinneringen', label: 'Urenherinnering' },
   );
   if (stand.isAdmin && stand.voertuigen) tabs.push({ id: 'voertuigen', label: 'Voertuigen' });
-  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
   tabs.push({ id: 'integraties', label: 'Integraties' });
   return tabs;
 }
@@ -194,12 +208,13 @@ export function tekstNaarEditorHtml(tekst: string): string {
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
 export const PIPELINE_MOMENTEN = [
+  { key: 'offerte_verstuurd', label: 'Offerte verstuurd', uitleg: 'Zodra een offerte voor deze aanvraag is verstuurd, vanuit het dashboard of de app.' },
   { key: 'akkoord', label: 'Akkoord', uitleg: 'Vanaf deze fase telt de aanvraag in de cijfers als binnengehaald. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
   { key: 'gepland', label: 'Werkbon gepland', uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
   { key: 'in_uitvoering', label: 'Klus gestart', uitleg: 'Zodra iemand op "Start klus" drukt.' },
   { key: 'gefactureerd', label: 'Factuur verstuurd', uitleg: 'Zodra een factuur voor dit project is verstuurd.' },
   { key: 'betaald', label: 'Factuur betaald', uitleg: 'Zodra de factuur als betaald is gemarkeerd.' },
-  { key: 'verloren', label: 'Verloren', uitleg: 'Een deal die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },
+  { key: 'verloren', label: 'Verloren', uitleg: 'Een aanvraag die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },
 ];
 
 export const FASE_KLEUREN = [
@@ -212,6 +227,37 @@ export const FASE_KLEUREN = [
   { label: 'Roze', value: '#ec4899' },
   { label: 'Grijs', value: '#6b7280' },
 ];
+
+/**
+ * Het volledige palet voor pipelinefasen, op kleurvolgorde
+ * (`STAGE_COLOR_OPTIONS` in het dashboard). Alles wat de pipeline kan tonen,
+ * kun je kiezen.
+ */
+export const FASE_KLEUR_OPTIES = [
+  { label: 'Rood', value: '#ef4444' },
+  { label: 'Roze-rood', value: '#f43f5e' },
+  { label: 'Roze', value: '#ec4899' },
+  { label: 'Paars', value: '#a855f7' },
+  { label: 'Violet', value: '#8b5cf6' },
+  { label: 'Indigo', value: '#6366f1' },
+  { label: 'Blauw', value: '#3b82f6' },
+  { label: 'Hemelsblauw', value: '#0ea5e9' },
+  { label: 'Cyaan', value: '#06b6d4' },
+  { label: 'Groenblauw', value: '#14b8a6' },
+  { label: 'Smaragd', value: '#10b981' },
+  { label: 'Groen', value: '#1DDB62' },
+  { label: 'Limoen', value: '#84cc16' },
+  { label: 'Geel', value: '#eab308' },
+  { label: 'Oker', value: '#a16207' },
+  { label: 'Oranje', value: '#f97316' },
+  { label: 'Grijs', value: '#6b7280' },
+];
+
+/** Naam van een getoonde fasekleur (`kleurNaam` in Instellingen van het dashboard). */
+export function faseKleurNaam(hex: string | null | undefined): string {
+  const h = String(hex ?? '').toLowerCase();
+  return FASE_KLEUR_OPTIES.find((k) => k.value.toLowerCase() === h)?.label ?? 'Eigen kleur';
+}
 
 export const STANDAARD_FASE_KLEUR = '#6b7280';
 

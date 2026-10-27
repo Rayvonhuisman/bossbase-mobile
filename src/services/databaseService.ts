@@ -171,7 +171,7 @@ export async function laadDatabase(): Promise<{
   meld(projRes, 'Projecten');
   meld(factRes, 'Facturen');
   meld(offRes, 'Offertes');
-  meld(dealRes, 'Deals');
+  meld(dealRes, 'Aanvragen');
   meld(actRes, 'Activiteiten');
   meld(mailRes, 'Verstuurde mails');
   meld(urenRes, 'Werkbonuren');

@@ -9,10 +9,17 @@
  * (tests/werkbonLogica.test.mjs). Rijen hebben de databasevorm (snake_case).
  */
 
+import { leesGetalNl } from './getalNl';
+
 // ── Statussen ───────────────────────────────────────────────────────────────
 
-export type WerkbonStatusKey = 'gepland' | 'in_uitvoering' | 'afgerond';
+export type WerkbonStatusKey = 'gepland' | 'in_uitvoering' | 'afgerond' | 'geannuleerd';
 
+/**
+ * De statussen die je in het formulier kiest. `geannuleerd` (dashboard,
+ * migratie 20261026121700) staat er bewust niet in: annuleren gaat met de knop
+ * op de werkbon in het dashboard, met de controle op uren en handtekening.
+ */
 export const WERKBON_STATUSSEN: readonly WerkbonStatusKey[] = ['gepland', 'in_uitvoering', 'afgerond'];
 
 /** Kleuren uit het dashboard (statusColors.js: blue / orange / green). */
@@ -23,6 +30,8 @@ export const WERKBON_STATUS_STIJL: Record<
   gepland: { label: 'Gepland', kleur: '#2563eb', bg: '#eff6ff', dot: '#2563eb' },
   in_uitvoering: { label: 'In uitvoering', kleur: '#e8784a', bg: '#fff4ec', dot: '#e8784a' },
   afgerond: { label: 'Afgerond', kleur: '#15A34A', bg: '#ecfdf5', dot: '#15A34A' },
+  // Grijs, zoals statusColors.js: gaat niet door.
+  geannuleerd: { label: 'Geannuleerd', kleur: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
 };
 
 /** Aliassen zoals het dashboard ze accepteert; onbekend → gepland. */
@@ -30,6 +39,7 @@ export function normaliseerStatus(status: string | null | undefined): WerkbonSta
   const s = String(status ?? '').toLowerCase();
   if (s === 'in_uitvoering' || s === 'in_progress' || s === 'bezig') return 'in_uitvoering';
   if (s === 'afgerond' || s === 'done' || s === 'completed' || s === 'voltooid') return 'afgerond';
+  if (s === 'geannuleerd') return 'geannuleerd';
   return 'gepland';
 }
 
@@ -526,13 +536,19 @@ export function matchtZoekterm(w: WerkbonZoekbaar, q: string): boolean {
 
 export type StatusFilter = 'alle' | WerkbonStatusKey;
 
+/** "Alle" is alles wat doorgaat; een geannuleerde werkbon staat alleen onder zijn eigen filter. */
 export function matchtStatus(w: WerkbonZoekbaar, filter: StatusFilter): boolean {
-  return filter === 'alle' || normaliseerStatus(w.status) === filter;
+  const s = normaliseerStatus(w.status);
+  return filter === 'alle' ? s !== 'geannuleerd' : s === filter;
 }
 
 export function telStatussen(lijst: WerkbonZoekbaar[]): Record<StatusFilter, number> {
-  const tel: Record<StatusFilter, number> = { alle: lijst.length, gepland: 0, in_uitvoering: 0, afgerond: 0 };
-  for (const w of lijst) tel[normaliseerStatus(w.status)]++;
+  const tel: Record<StatusFilter, number> = { alle: 0, gepland: 0, in_uitvoering: 0, afgerond: 0, geannuleerd: 0 };
+  for (const w of lijst) {
+    const s = normaliseerStatus(w.status);
+    tel[s]++;
+    if (s !== 'geannuleerd') tel.alle++;
+  }
   return tel;
 }
 
@@ -573,11 +589,8 @@ export function marge(
 
 /** "12,50" of "" → getal of null. */
 export function leesBedrag(v: string | number | null | undefined): number | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim().replace(/\s/g, '').replace('€', '');
-  if (!s) return null;
-  const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
-  return Number.isFinite(n) ? n : null;
+  const n = leesGetalNl(v);
+  return n === null || Number.isNaN(n) ? null : n;
 }
 
 // ── Foto's ──────────────────────────────────────────────────────────────────
@@ -929,7 +942,7 @@ export function voertuigDubbel(o: {
   const e = naarMin(o.eindtijd);
   const uit: { titel: string; starttijd: string; eindtijd: string }[] = [];
   for (const w of o.werkbonnen) {
-    if (!w || w.id === o.werkbonId || w.status === 'afgerond') continue;
+    if (!w || w.id === o.werkbonId || w.status === 'afgerond' || w.status === 'geannuleerd') continue;
     for (const dag of werkbonDagen(w)) {
       if (dag.datum !== o.datum || !voertuigenOpDag(w, dag).includes(o.vid)) continue;
       const t = tijdVanVoertuig(w, dag, o.vid);
@@ -940,4 +953,87 @@ export function voertuigDubbel(o: {
     }
   }
   return uit;
+}
+
+// ── Verslepen/verzetten in de planning ──────────────────────────────────────
+
+const minutenNaarTijd = (m: number) => {
+  const k = Math.max(0, Math.min(24 * 60 - 1, m));
+  return `${String(Math.floor(k / 60)).padStart(2, '0')}:${String(k % 60).padStart(2, '0')}`;
+};
+
+/**
+ * De bus volgt bij verzetten (audit G-10) — `voertuigTijdenNaVerzetten` van het
+ * dashboard (utils/voertuigDagen.js). Geeft de nieuwe `voertuig_tijden` van díé
+ * dag, of `undefined` als er geen voertuig meeschuift (dan gaat de sleutel niet
+ * mee en laat de RPC het voertuig staan).
+ *
+ * Persoonsblok: de bus van die persoon schuift evenveel mee; zitten er anderen
+ * in, dan loopt hij van het vroegste begin tot het laatste eind van wie erin
+ * zit. Hele dag: een bus met een eigen tijd schuift evenveel mee; zonder eigen
+ * tijd volgt hij de dag al. Een tijd gelijk aan de dagtijd wordt geen eigen tijd.
+ */
+export function voertuigTijdenNaVerzetten(
+  werkbon: WerkbonPlanbaar & { dagen?: readonly object[] | null; voertuig_ids?: string[] | null },
+  datum: string,
+  pid: string | null,
+  nieuw: { starttijd: string; eindtijd: string },
+): Record<string, { starttijd: string; eindtijd: string }> | null | undefined {
+  const w = {
+    ...werkbon,
+    werkbon_dagen: werkbon.werkbon_dagen ?? ((werkbon.dagen as WerkbonDag[] | null | undefined) ?? null),
+  };
+  const dag = werkbonDagen(w).find((d) => d.datum === datum);
+  if (!dag || !heeftTijd(nieuw)) return undefined;
+  const vids = voertuigenOpDag(w, dag);
+  if (!vids.length) return undefined;
+
+  const oud = pid ? tijdenVoorPersoon(w, dag, pid) : tijdenOpDag(w, dag);
+  if (!heeftTijd(oud)) return undefined;
+  const dStart = naarMin(nieuw.starttijd) - naarMin(oud.starttijd);
+  const dEind = naarMin(nieuw.eindtijd) - naarMin(oud.eindtijd);
+  const schuif = (t: Tijdvak) => ({
+    starttijd: minutenNaarTijd(naarMin(t.starttijd) + dStart),
+    eindtijd: minutenNaarTijd(naarMin(t.eindtijd) + dEind),
+  });
+
+  const eigen = dag.voertuig_tijden ?? {};
+  const nieuweTijden: Record<string, { starttijd: string; eindtijd: string }> = {};
+  let geraakt = false;
+  for (const vid of vids) {
+    const huidig = tijdVanVoertuig(w, dag, vid);
+    let t: { starttijd: string; eindtijd: string } | null = heeftTijd(eigen[vid])
+      ? { starttijd: hhmm(huidig.starttijd), eindtijd: hhmm(huidig.eindtijd) }
+      : null;
+    if (pid) {
+      const zitErIn = dag.medewerker_voertuig?.[pid] === vid && ploegOpDag(w, dag).includes(pid);
+      if (zitErIn && heeftTijd(huidig)) {
+        geraakt = true;
+        const anderen = ploegOpDag(w, dag)
+          .filter((x) => x !== pid && dag.medewerker_voertuig?.[x] === vid)
+          .map((x) => tijdenVoorPersoon(w, dag, x))
+          .filter(heeftTijd);
+        if (anderen.length) {
+          const alle = [nieuw, ...anderen];
+          t = {
+            starttijd: alle.map((x) => hhmm(x.starttijd)).sort()[0]!,
+            eindtijd: alle.map((x) => hhmm(x.eindtijd)).sort().at(-1)!,
+          };
+        } else {
+          t = schuif(huidig);
+        }
+      }
+    } else if (t) {
+      geraakt = true;
+      t = schuif(t);
+    }
+    if (t && heeftTijd(t) && t.starttijd < t.eindtijd) nieuweTijden[vid] = t;
+  }
+  if (!geraakt) return undefined;
+
+  const dagTijd = pid ? tijdenOpDag(w, dag) : { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };
+  const afwijkend = Object.entries(nieuweTijden).filter(
+    ([, t]) => t.starttijd !== hhmm(dagTijd.starttijd) || t.eindtijd !== hhmm(dagTijd.eindtijd),
+  );
+  return afwijkend.length ? Object.fromEntries(afwijkend) : null;
 }

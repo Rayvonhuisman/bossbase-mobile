@@ -67,6 +67,7 @@ import { DocumentStatusBadge, TegelRaster } from '@/components/DocumentOnderdele
 import { useOnthouden } from '@/lib/useOnthouden';
 import { FotoViewer } from '@/components/FotoViewer';
 import { kiesFotoBron, maakOfKiesFoto, type GekozenFoto } from '@/lib/kiesFoto';
+import { getalOfNul } from '@/lib/getalNl';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
@@ -336,7 +337,7 @@ function ExpensesScreenInhoud() {
     if (!concept) return;
     const invoer = {
       description: concept.description,
-      amount: Number(concept.bedrag.replace(',', '.') || 0),
+      amount: getalOfNul(concept.bedrag),
       category: concept.category,
       cost_date: concept.datum || null,
       leverancier_id: concept.leverancierId,
@@ -419,7 +420,7 @@ function ExpensesScreenInhoud() {
   const toontMateriaal = weergave === 'materiaal';
   const btwOverzicht = concept
     ? calcBtw(
-        Number(concept.bedrag.replace(',', '.') || 0),
+        getalOfNul(concept.bedrag),
         Number(concept.btwPct.replace(',', '.') || 0),
         concept.btwInclusief ? 'incl' : 'excl',
       )

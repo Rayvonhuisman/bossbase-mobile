@@ -25,7 +25,7 @@ const DEAL_COLUMNS = `
   id, company_id, customer_id, stage_id, title, description,
   expected_revenue, final_revenue, status, priority, lost_reason,
   assigned_to, assigned_to_ids, afgerond_op, created_at,
-  customer:customers!deals_customer_id_fkey ( id, name, city, email, phone )
+  customer:customers!deals_customer_id_fkey ( id, name, city, email, phone, kleur )
 `;
 
 const STAGE_COLUMNS = 'id, company_id, name, position, color_class';
@@ -54,6 +54,7 @@ export type DealRow = {
     city: string | null;
     email: string | null;
     phone: string | null;
+    kleur?: string | null;
   } | null;
 };
 
@@ -105,7 +106,7 @@ export async function listDeals(): Promise<{ data: DealRow[]; error: string | nu
 
   if (error) {
     console.warn('[dealService.listDeals]', error.message);
-    return { data: [], error: 'Deals konden niet worden geladen.' };
+    return { data: [], error: 'Aanvragen konden niet worden geladen.' };
   }
   return { data: (data as unknown as DealRow[]) ?? [], error: null };
 }
@@ -207,7 +208,7 @@ export async function createDeal(input: DealInput): Promise<WriteResult<DealRow>
       'De aanvraag is niet opgeslagen. Je hebt het recht Verkooppijplijn nodig om aanvragen aan te maken.',
   });
   if (res.ok) {
-    void logTijdlijn(res.data.customer_id, 'deal_aangemaakt', `Deal aangemaakt: ${res.data.title ?? ''}`, {
+    void logTijdlijn(res.data.customer_id, 'deal_aangemaakt', `Aanvraag aangemaakt: ${res.data.title ?? ''}`, {
       dealId: res.data.id,
     });
   }
@@ -255,7 +256,7 @@ export async function updateDealStage(
     { context: 'dealService.updateDealStage', bedrijfReadonly: isReadonly() },
   );
   if (res.ok) {
-    void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Deal fase gewijzigd: ${res.data.title ?? ''}`, {
+    void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Fase gewijzigd: ${res.data.title ?? ''}`, {
       dealId: res.data.id,
       // De database zet een heropende deal terug in de fase van vóór het
       // verlies (trigger bb_deal_fase_voor_verlies, migratie 20261002182736);
@@ -308,7 +309,7 @@ export async function markDealLost(
     void logTijdlijn(
       res.data.customer_id,
       'deal_verloren',
-      `Deal verloren: ${res.data.title ?? ''}${label ? ` (${label})` : ''}`,
+      `Aanvraag verloren: ${res.data.title ?? ''}${label ? ` (${label})` : ''}`,
       { dealId: res.data.id, stageId, reason: lost_reason, note: noot || null },
     );
   }
@@ -328,7 +329,7 @@ export async function heropenVerlorenDeal(id: string, stageId: string): Promise<
     { context: 'dealService.heropenVerlorenDeal', bedrijfReadonly: isReadonly() },
   );
   if (res.ok) {
-    void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Deal heropend: ${res.data.title ?? ''}`, {
+    void logTijdlijn(res.data.customer_id, 'deal_fase_gewijzigd', `Aanvraag heropend: ${res.data.title ?? ''}`, {
       dealId: res.data.id,
       // De database zet een heropende deal terug in de fase van vóór het
       // verlies (trigger bb_deal_fase_voor_verlies, migratie 20261002182736);
@@ -346,7 +347,7 @@ export async function deleteDeal(id: string): Promise<WriteStatus> {
       context: 'dealService.deleteDeal',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Alleen een beheerder kan een deal verwijderen.',
+      leegMelding: 'Alleen een beheerder kan een aanvraag verwijderen.',
     },
   );
   return res.ok ? { ok: true, data: null } : res;

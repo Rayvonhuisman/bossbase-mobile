@@ -10,7 +10,6 @@ import {
 import { Dialog } from '@/lib/dialog';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Calendar,
   Download,
@@ -40,7 +39,7 @@ import {
   LoadingScreen,
   SelectField,
   StatusBadge,
-  StatusBarScrim,
+  OnderStatusbalk,
   conceptVanActiviteit,
   leegConcept,
   type ActivityConcept,
@@ -56,6 +55,7 @@ import {
   KaartRij,
 } from '@/components/RelatieKaart';
 import { useAuth, usePermissions, useTheme } from '@/providers';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import {
   deleteCustomer,
   getCustomer,
@@ -186,7 +186,6 @@ export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { companyId, profile } = useAuth();
   const { colors: th, colorMode } = useTheme();
-  const insets = useSafeAreaInsets();
   const { loaded: rechtenGeladen, mag, can, readonly } = usePermissions();
 
   const magOffertes = rechtenGeladen && can('offertes');
@@ -344,6 +343,8 @@ export default function CustomerDetailScreen() {
   }
 
   const name = customer.name ?? '—';
+  // Zelfde vaste kleur als het rondje in het dashboard (customers.kleur of uit het id).
+  const heroKleur = klantAvatarKleuren(customer, colorMode === 'dark');
   // Opgeslagen klanttype (dashboard 1-10), anders afgeleid van het KvK-nummer.
   const tag = klantType(customer);
   const fullAddress = [customer.address, customer.postcode, customer.city]
@@ -815,6 +816,7 @@ export default function CustomerDetailScreen() {
 
       <View style={{ flex: 1, backgroundColor: th.bg }}>
         <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
+        <OnderStatusbalk>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 40 }}
@@ -830,7 +832,7 @@ export default function CustomerDetailScreen() {
               onRefresh={onRefresh}
               tintColor={th.green}
               colors={[th.green]}
-              progressViewOffset={insets.top}
+              progressViewOffset={0}
             />
           }
         >
@@ -872,8 +874,8 @@ export default function CustomerDetailScreen() {
           <AnimatedScreen>
             {/* Hero */}
             <View style={styles.hero}>
-              <View style={styles.heroAvatar}>
-                <Text style={styles.heroAvatarText}>{initials(name)}</Text>
+              <View style={[styles.heroAvatar, { backgroundColor: heroKleur.bg }]}>
+                <Text style={[styles.heroAvatarText, { color: heroKleur.fg }]}>{initials(name)}</Text>
               </View>
               <Text style={[styles.heroName, { color: th.ink }]} numberOfLines={2}>
                 {name}
@@ -930,7 +932,7 @@ export default function CustomerDetailScreen() {
             <KaartKolommen links={linkerKolom} rechts={rechterKolom} />
           </AnimatedScreen>
         </ScrollView>
-        <StatusBarScrim />
+        </OnderStatusbalk>
 
         <ActivityFormSheet
           concept={activiteitConcept}

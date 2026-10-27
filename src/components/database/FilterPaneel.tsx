@@ -201,8 +201,8 @@ export function FilterPaneel({
           </>
         ) : null}
         <View style={s.rij}>
-          <View style={{ flex: 1 }}>{getal('Dealwaarde min (€)', f.dealWaardeMin, 'dealWaardeMin')}</View>
-          <View style={{ flex: 1 }}>{getal('Dealwaarde max (€)', f.dealWaardeMax, 'dealWaardeMax')}</View>
+          <View style={{ flex: 1 }}>{getal('Waarde min (€)', f.dealWaardeMin, 'dealWaardeMin')}</View>
+          <View style={{ flex: 1 }}>{getal('Waarde max (€)', f.dealWaardeMax, 'dealWaardeMax')}</View>
         </View>
         {vinkje('Open activiteiten', f.heeftOpenActiviteiten, (v) => zet('heeftOpenActiviteiten', v))}
         <Text style={s.label}>Activiteitstype</Text>

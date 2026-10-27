@@ -26,6 +26,7 @@ import {
   createProject,
   getFactuurBedragenPerProject,
   getProjectUrenMap,
+  getProjectUrenTussen,
   listProjects,
   type ProjectRow,
 } from '@/services/projectService';
@@ -36,8 +37,11 @@ import {
   filterProjecten,
   formatUren,
   isVerlopen,
+  periodeGrenzen,
+  periodeJaren,
   projectCijfers,
-  projectKpi,
+  projectKpiPeriode,
+  type FactuurBedrag,
   type FacturatieFilter,
   type ProjectCijfers,
   type ProjectStatusFilter,
@@ -71,7 +75,14 @@ export default function ProjectsScreen() {
 }
 
 type Item = ProjectRow &
-  ProjectCijfers & { customerName: string | null; dealTitle: string | null; offerteNummer: string | null };
+  ProjectCijfers & {
+    customerName: string | null;
+    dealTitle: string | null;
+    offerteNummer: string | null;
+    facturen: FactuurBedrag[];
+  };
+
+const MAANDEN = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
 type Concept = {
   name: string;
@@ -166,6 +177,7 @@ function ProjectsInhoud() {
         customerName: p.customer?.name ?? null,
         dealTitle: p.deal?.title ?? null,
         offerteNummer: p.offerte?.nummer ?? null,
+        facturen: facturen[p.id] ?? [],
       })),
     );
   }, []);
@@ -176,7 +188,23 @@ function ProjectsInhoud() {
     () => filterProjecten(items, status, facturatie, zoek),
     [items, status, facturatie, zoek],
   );
-  const kpi = useMemo(() => projectKpi(items), [items]);
+  // Tellers over een periode, zoals het dashboard: standaard deze maand, of een
+  // andere maand of een heel jaar (maand 0).
+  const [perJaar, setPerJaar] = useState(() => new Date().getFullYear());
+  const [perMaand, setPerMaand] = useState(() => new Date().getMonth() + 1);
+  const periode = useMemo(() => periodeGrenzen(perJaar, perMaand), [perJaar, perMaand]);
+  const jaren = useMemo(() => periodeJaren(items), [items]);
+  const kpi = useMemo(() => projectKpiPeriode(items, periode), [items, periode]);
+  const [urenPeriode, setUrenPeriode] = useState<number | null>(null);
+  useEffect(() => {
+    let weg = false;
+    getProjectUrenTussen(periode.van, periode.tot).then((u) => {
+      if (!weg) setUrenPeriode(u);
+    });
+    return () => {
+      weg = true;
+    };
+  }, [periode.van, periode.tot, items]);
   const tellingen = useMemo(() => {
     const tel = (s: string) => items.filter((p) => (p.status || 'gepland') === s).length;
     return { gepland: tel('gepland'), in_uitvoering: tel('in_uitvoering'), afgerond: tel('afgerond') };
@@ -275,27 +303,47 @@ function ProjectsInhoud() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       >
-        {/* KPI's */}
+        {/* Periode van de tellers (maand of heel jaar), zoals het dashboard. */}
+        <View style={styles.periode}>
+          <View style={{ flex: 1 }}>
+            <SelectField
+              label="Maand"
+              options={[
+                { id: '0', label: 'Hele jaar' },
+                ...MAANDEN.map((m, i) => ({ id: String(i + 1), label: m })),
+              ]}
+              value={String(perMaand)}
+              onChange={(v) => setPerMaand(Number(v ?? perMaand))}
+              searchable={false}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <SelectField
+              label="Jaar"
+              options={jaren.map((j) => ({ id: String(j), label: String(j) }))}
+              value={String(perJaar)}
+              onChange={(v) => setPerJaar(Number(v ?? perJaar))}
+              searchable={false}
+            />
+          </View>
+        </View>
+        {/* Tellers over de periode */}
         <View style={[styles.kpis, tablet && styles.kpisTablet]}>
           <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-            <AppKpiCard label="Actieve projecten" value={String(kpi.actief)} />
+            <AppKpiCard label="Nieuwe projecten" value={String(kpi.nieuw)} />
           </View>
           {magBedragen ? (
             <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-              <AppKpiCard label="Totale projectwaarde" value={formatEUR(kpi.totaleWaarde)} valueTone="good" />
+              <AppKpiCard label="Projectwaarde" value={formatEUR(kpi.waarde)} />
             </View>
           ) : null}
           {magBedragen ? (
             <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-              <AppKpiCard
-                label="Te factureren"
-                value={formatEUR(kpi.teFactureren)}
-                valueTone={kpi.teFactureren > 0 ? 'warn' : 'default'}
-              />
+              <AppKpiCard label="Gefactureerd" value={formatEUR(kpi.gefactureerd)} />
             </View>
           ) : null}
           <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-            <AppKpiCard label="Gewerkte uren" value={formatUren(kpi.uren)} />
+            <AppKpiCard label="Gewerkte uren" value={urenPeriode == null ? '–' : formatUren(urenPeriode)} />
           </View>
         </View>
 
@@ -509,6 +557,7 @@ function ProjectsInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+    periode: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.sm },
     kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.md },
     kpisTablet: { flexWrap: 'nowrap' },
     kpi: { flexBasis: '45%', flexGrow: 1 },

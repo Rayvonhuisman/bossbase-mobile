@@ -43,7 +43,7 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
       {
         key: 'verkoop',
         label: 'Verkooppijplijn',
-        kort: 'Deals en leads bekijken en beheren',
+        kort: 'Aanvragen en projecten in de pipeline bekijken en beheren',
       },
     ],
   },
@@ -131,3 +131,22 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
 export const ALLE_PERMISSION_KEYS: Permission[] = PERMISSION_GROEPEN.flatMap((g) =>
   g.subs.map((s) => s.key),
 );
+
+/**
+ * Voorinstellingen in "Rechten instellen": één tik zet precies deze rechten aan
+ * (de rest uit); daarna is elk recht nog los aan te passen. Zelfde lijst als
+ * `RECHTENSETS` in `src/config/permissions.js` van het dashboard (G-31).
+ */
+export type Rechtenset = { key: string; label: string; rechten: Permission[] };
+
+export const RECHTENSETS: Rechtenset[] = [
+  {
+    key: 'kantoor',
+    label: 'Kantoor/administratie',
+    rechten: [
+      'klanten_bewerken', 'verkoop', 'agenda_inzien',
+      'offertes', 'facturen', 'kosten', 'projectbedragen', 'bedrijfsfinancien',
+      'database',
+    ],
+  },
+];

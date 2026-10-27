@@ -26,19 +26,21 @@ export type FactuurBedrag = {
   status: string | null;
   totaal_incl: number | null;
   totaal_excl: number | null;
+  /** Factuurdatum (anders de aanmaakdag), voor de tellers per periode. */
+  datum?: string | null;
 };
 
 /** Gefactureerd (incl. btw): alles behalve concepten; credit trekt zichzelf af. */
 export function sumGefactureerd(f: FactuurBedrag[]): number {
   return f
-    .filter((x) => x.status !== 'concept')
+    .filter((x) => x.status !== 'concept' && x.status !== 'vervallen')
     .reduce((s, x) => s + (Number(x.totaal_incl) || 0), 0);
 }
 
 /** Omzet excl. btw, zelfde selectie als hierboven. */
 export function sumOmzetExclBtw(f: FactuurBedrag[]): number {
   return f
-    .filter((x) => x.status !== 'concept')
+    .filter((x) => x.status !== 'concept' && x.status !== 'vervallen')
     .reduce((s, x) => s + (Number(x.totaal_excl) || 0), 0);
 }
 
@@ -104,6 +106,52 @@ export function filterProjecten<P extends ProjectLijstItem>(
       .toLowerCase();
     return hooi.includes(q);
   });
+}
+
+// ── Tellers per periode (ProjectsPage.jsx in het dashboard) ────────────────
+
+/** Begin en eind (tot en met) van een periode: maand 1–12, of 0 voor het hele jaar. */
+export function periodeGrenzen(jaar: number, maand: number): { van: string; tot: string } {
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  if (!maand) return { van: `${jaar}-01-01`, tot: `${jaar}-12-31` };
+  const laatste = new Date(jaar, maand, 0).getDate();
+  return { van: `${jaar}-${pad2(maand)}-01`, tot: `${jaar}-${pad2(maand)}-${pad2(laatste)}` };
+}
+
+/**
+ * De tellers boven de projectenlijst over een periode: nieuwe projecten (op
+ * startdatum, anders de aanmaakdag), hun projectwaarde, en de omzet excl. btw
+ * van facturen met een factuurdatum in de periode. Gewerkte uren komen los uit
+ * `getProjectUrenTussen`.
+ */
+export function projectKpiPeriode(
+  lijst: {
+    start_date?: string | null;
+    created_at?: string | null;
+    project_value: number | null;
+    facturen?: FactuurBedrag[];
+  }[],
+  periode: { van: string; tot: string },
+): { nieuw: number; waarde: number; gefactureerd: number } {
+  const binnen = (d: string | null | undefined) => !!d && d >= periode.van && d <= periode.tot;
+  const nieuw = lijst.filter((p) => binnen(String(p.start_date || p.created_at || '').slice(0, 10)));
+  return {
+    nieuw: nieuw.length,
+    waarde: nieuw.reduce((s, p) => s + (Number(p.project_value) || 0), 0),
+    gefactureerd: lijst.reduce((s, p) => s + sumOmzetExclBtw((p.facturen ?? []).filter((f) => binnen(f.datum))), 0),
+  };
+}
+
+/** Jaren voor de periodekeuze: van het eerste project tot dit jaar, nieuwste eerst. */
+export function periodeJaren(lijst: { start_date?: string | null; created_at?: string | null }[], nu = new Date()): number[] {
+  const ditJaar = nu.getFullYear();
+  const eerste = lijst.reduce((min, p) => {
+    const j = Number(String(p.start_date || p.created_at || '').slice(0, 4));
+    return j && j < min ? j : min;
+  }, ditJaar);
+  const uit: number[] = [];
+  for (let j = ditJaar; j >= eerste; j--) uit.push(j);
+  return uit;
 }
 
 export function projectKpi(lijst: ProjectLijstItem[]) {

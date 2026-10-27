@@ -64,6 +64,7 @@ import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
 import { formatDateNL, formatEUR, formatEURCent } from '@/lib/format';
 import { Dialog } from '@/lib/dialog';
+import { factuurnummersPerOfferte } from '@/services/factuurService';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
@@ -227,6 +228,8 @@ function OffersScreenInhoud() {
 
   // Detailweergave
   const [detail, setDetail] = useState<OfferteRow | null>(null);
+  /** offerte-id → nummers van de facturen die eruit gemaakt zijn */
+  const [factuurPerOfferte, setFactuurPerOfferte] = useState<Map<string, string[]>>(() => new Map());
   const [detailData, setDetailData] = useState<OfferteDetail | null>(null);
   const [detailRegels, setDetailRegels] = useState<OfferteItem[]>([]);
   const [detailLaden, setDetailLaden] = useState(false);
@@ -262,6 +265,7 @@ function OffersScreenInhoud() {
 
   const load = useCallback(async () => {
     setError(null);
+    void factuurnummersPerOfferte().then(setFactuurPerOfferte);
 
     const [offRes, klantRes, instRes, eenheidRes, dealRes] = await Promise.all([
       listOffertes(),
@@ -295,7 +299,7 @@ function OffersScreenInhoud() {
     // formulier werken met de vaste regeltypes en zonder deal.
     if (!eenheidRes.error) setEenheden(eenheidRes.data);
     if (!dealRes.error) {
-      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Deal' })));
+      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Aanvraag' })));
     }
   }, []);
 
@@ -703,8 +707,18 @@ function OffersScreenInhoud() {
 
   /** Een nieuwe factuur met de klant en de regels van deze offerte (handleMaakFactuur). */
   const maakFactuur = (o: OfferteRow) => {
-    setDetail(null);
-    router.push({ pathname: '/invoices', params: { vanOfferte: o.id } });
+    const naarFactuur = () => {
+      setDetail(null);
+      router.push({ pathname: '/invoices', params: { vanOfferte: o.id } });
+    };
+    // Al gefactureerd: eerst vragen of er echt nog een factuur bij moet.
+    const al = factuurPerOfferte.get(o.id);
+    if (!al?.length) return naarFactuur();
+    const welke = al.length === 1 ? `factuur ${al[0]}` : `${al.length} facturen (${al.join(', ')})`;
+    Dialog.alert('Al gefactureerd', `Van deze offerte is al ${welke} gemaakt. Wil je nog een factuur maken?`, [
+      { text: 'Annuleren', style: 'cancel' },
+      { text: 'Nog een factuur maken', onPress: naarFactuur },
+    ]);
   };
 
   if (loading || !rechtenGeladen) return <LoadingScreen label="Offertes laden..." />;
@@ -876,7 +890,11 @@ function OffersScreenInhoud() {
             <View style={styles.knoppen}>
               {/* Eén primaire actie die de status volgt, zoals het dashboard. */}
               {isGeaccepteerd && magWijzigen && magFactuurMaken ? (
-                <Button label="Maak factuur" onPress={() => maakFactuur(detail)} style={styles.knop} />
+                <Button
+                  label={factuurPerOfferte.has(detail.id) ? 'Gefactureerd' : 'Maak factuur'}
+                  onPress={() => maakFactuur(detail)}
+                  style={styles.knop}
+                />
               ) : null}
               {magWijzigen ? (
                 <Button
@@ -1089,13 +1107,13 @@ function OffersScreenInhoud() {
         />
         {deals.length > 0 && !concept?.herzien ? (
           <SelectField
-            label="Deal"
+            label="Aanvraag"
             value={concept?.dealId ?? null}
             options={deals}
             onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
             allowEmpty
-            emptyLabel="Geen deal"
-            placeholder="Geen deal"
+            emptyLabel="Geen aanvraag"
+            placeholder="Geen aanvraag"
             disabled={!conceptBewerkbaar}
           />
         ) : null}
@@ -1205,6 +1223,15 @@ function OffersScreenInhoud() {
             : mail
               ? 'De offerte gaat als PDF mee. Digitaal ondertekenen zit niet in je abonnement, dus er gaat geen ondertekenlink mee.'
               : null
+        }
+        kop={
+          // Zonder IBAN kan de offerte weg, de factuur straks niet (besluit 26-10).
+          mail && !mail.laden && mail.bedrijf && !String(mail.bedrijf.iban || '').trim() ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message="Let op: het IBAN van je bedrijf ontbreekt. De offerte kun je gewoon versturen, maar een factuur pas als het IBAN is ingevuld (Instellingen › Bedrijfsprofiel)."
+            />
+          ) : null
         }
         saving={mailBezig}
         error={mailFout}

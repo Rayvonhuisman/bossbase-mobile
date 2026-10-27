@@ -76,12 +76,14 @@ test('instellingen: tabs zoals het dashboard', () => {
   const ids = (x) => inst.zichtbareTabs(x).map((t) => t.id);
   assert.deepEqual(ids({ instellingen: false, isAdmin: true, voertuigen: true }), ['profiel']);
   assert.deepEqual(ids({ instellingen: true, isAdmin: false, voertuigen: true }), [
-    'profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'integraties',
+    'profiel', 'bedrijf', 'standaard', 'eenheden', 'templates', 'pipeline', 'agenda', 'herinneringen', 'integraties',
   ]);
   assert.deepEqual(ids({ instellingen: true, isAdmin: true, voertuigen: false }), [
-    'profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'abonnement', 'integraties',
+    'profiel', 'bedrijf', 'abonnement', 'standaard', 'eenheden', 'templates', 'pipeline', 'agenda', 'herinneringen',
+    'integraties',
   ]);
-  assert.equal(ids({ instellingen: true, isAdmin: true, voertuigen: true }).length, 8);
+  assert.equal(ids({ instellingen: true, isAdmin: true, voertuigen: true }).length, 11);
+  assert.equal(inst.zichtbareTabs({ instellingen: true, isAdmin: false, voertuigen: false })[2].label, 'Tarieven en termijnen');
   const zicht = inst.zichtbareTabs({ instellingen: false, isAdmin: false, voertuigen: false });
   assert.equal(inst.kiesTab('abonnement', zicht), 'profiel');
 });

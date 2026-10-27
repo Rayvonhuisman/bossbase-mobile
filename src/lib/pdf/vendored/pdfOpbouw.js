@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/pdfOpbouw.js
-// Dashboardcommit: 20a5e68
+// Dashboardcommit: 93c03ae
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -135,6 +135,50 @@ function ondertekeningKenmerk(doc, extra, x, yOnder, breedte) {
     'Dit exemplaar is bij het ondertekenen door BossBase op de server opgemaakt uit de gegevens van het document.',
   ].filter(Boolean).flatMap(t => doc.splitTextToSize(t, breedte - 10));
   doc.text(regels, x + 5, yOnder);
+}
+
+// Extra regels in het handtekeningvak: hoe er is getekend en of de klant als
+// particulier tekende (_shared/ondertekenKeuzes.js). Alleen de server geeft dit
+// mee, en alleen bij ondertekeningen van na 26 oktober 2026.
+function ondertekeningKeuzeVelden(extra) {
+  if (!extra) return [];
+  return [
+    ...(extra.methode ? [['Handtekening', extra.methode === 'getypt' ? 'Naam getypt' : 'Getekend met muis of vinger']] : []),
+    ...(extra.particulier ? [['Getekend als', 'Particulier (consument)']] : []),
+  ];
+}
+
+// De bedenktijdtekst die de klant bij het tekenen als particulier zag, onder het
+// handtekeningvak. `y` en `ruimte` zijn die van het document zelf; ruimte()
+// springt zo nodig naar een nieuwe pagina en zet y dan op 17.
+function bedenktijdBlok(doc, bedenktijd, { M, CW, krijgY, zetY, ruimte }) {
+  if (!bedenktijd?.alineas?.length) return;
+  const breedte = CW;
+  ruimte(12);
+  let y = krijgY();
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.dark);
+  doc.text(bedenktijd.titel || 'Bedenktijd voor consumenten', M, y + 4);
+  y += 8;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.soft);
+  for (const alinea of bedenktijd.alineas) {
+    const lijnen = doc.splitTextToSize(alinea, breedte);
+    // Per lijn, zodat een lange alinea over de paginagrens mag lopen.
+    for (const lijn of lijnen) {
+      zetY(y);
+      if (ruimte(3.6)) {
+        y = krijgY();
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.soft);
+      }
+      doc.text(lijn, M, y + 3);
+      y += 3.6;
+    }
+    y += 1.8;
+  }
+  doc.setFontSize(6.5); doc.setTextColor(...C.muted);
+  zetY(y);
+  if (ruimte(4)) y = krijgY();
+  doc.text(`Getoond bij het ondertekenen (tekstversie ${bedenktijd.versie || 'onbekend'}).`, M, y + 3);
+  zetY(y + 8);
 }
 
 export async function buildPdf(doc, type, document, regels, customer, company, omgeving = {}) {
@@ -480,7 +524,10 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
   if (noteText) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(noteText, CW - 22);
+    // Hooguit 25 regels: genoeg voor een opmerking voor de klant, en het vak
+    // en de tekst gebruiken hetzelfde aantal (voorheen werd na 5 regels stil
+    // afgekapt terwijl het vak voor alles werd berekend).
+    const noteLines = doc.splitTextToSize(noteText, CW - 22).slice(0, 25);
     const noteH = Math.max(13, noteLines.length * 4 + 10);
     ruimte(noteH + 8);
 
@@ -503,7 +550,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(noteLines.slice(0, 5), M + 11.5, noteTextY);
+    doc.text(noteLines, M + 11.5, noteTextY);
 
     y += noteH + 8;
   }
@@ -565,7 +612,8 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
 
     const hasImg = Boolean(sigImgData);
     const extra = document.ondertekeningExtra || null;
-    const signBlockH = (hasImg ? 52 : 42) + (extra ? 16 : 0);
+    const keuzeVelden = ondertekeningKeuzeVelden(extra);
+    const signBlockH = (hasImg ? 52 : 42) + (extra ? 16 : 0) + keuzeVelden.length * 5.5;
 
     // Nieuwe pagina als handtekening vak niet past
     ruimte(signBlockH + 20, 270);
@@ -613,6 +661,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
       ['E-mailadres', signedByEmail || ''],
       ['Datum en tijd', fmtDateTime(signedAt)],
       ...(extra?.ip ? [['IP-adres', extra.ip]] : []),
+      ...keuzeVelden,
     ];
     fields.forEach(([label, val]) => {
       doc.setFont('helvetica', 'normal');
@@ -653,6 +702,9 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
 
     if (extra) ondertekeningKenmerk(doc, extra, M, y + signBlockH - 13, CW);
     y += signBlockH + 8;
+    if (extra?.particulier) {
+      bedenktijdBlok(doc, extra.bedenktijd, { M, CW, krijgY: () => y, zetY: v => { y = v; }, ruimte });
+    }
   }
 
   // ── FOOTER ────────────────────────────────────────────────────
@@ -1125,7 +1177,8 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
 
     const hasImg = Boolean(sigData);
     const extra = werkbon.ondertekeningExtra || null;
-    const blokH = (hasImg ? 52 : 42) + (extra ? 16 : 0);
+    const keuzeVelden = ondertekeningKeuzeVelden(extra);
+    const blokH = (hasImg ? 52 : 42) + (extra ? 16 : 0) + keuzeVelden.length * 5.5;
     ruimte(blokH + 6);
 
     dc(C.lineStr); doc.setLineWidth(0.4);
@@ -1149,7 +1202,8 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
     [['Ondertekend door', naam || ''],
      ['E-mailadres', email || ''],
      ['Datum en tijd', fmtDateTime(ondertekendOp)],
-     ...(extra?.ip ? [['IP-adres', extra.ip]] : [])].forEach(([label, val]) => {
+     ...(extra?.ip ? [['IP-adres', extra.ip]] : []),
+     ...keuzeVelden].forEach(([label, val]) => {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(C.muted);
       doc.text(label, M + 5, fy);
       doc.setFont('helvetica', 'bold'); tc(C.dark);
@@ -1177,6 +1231,9 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
     }
     if (extra) ondertekeningKenmerk(doc, extra, M, y + blokH - 13, CW);
     y += blokH + 8;
+    if (extra?.particulier) {
+      bedenktijdBlok(doc, extra.bedenktijd, { M, CW, krijgY: () => y, zetY: v => { y = v; }, ruimte });
+    }
   } else {
     // Nog niet getekend: een leeg vak, zodat een uitgeprinte bon ter plekke met
     // pen kan worden afgetekend als de telefoon leeg is.

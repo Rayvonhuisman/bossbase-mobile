@@ -28,6 +28,7 @@ import {
   type Werkbon,
 } from '@/services/workOrderService';
 import { avatarKleuren, initialen } from '@/lib/avatar';
+import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { alsTekst } from '@/lib/notitieTekst';
@@ -66,7 +67,7 @@ function worksOn(wo: Werkbon, userId: string): boolean {
 }
 
 function matchesChip(wo: Werkbon, chip: ChipKey, userId: string | null): boolean {
-  if (chip === 'mij') return userId ? worksOn(wo, userId) : true;
+  if (chip === 'mij') return wo.status !== 'geannuleerd' && (userId ? worksOn(wo, userId) : true);
   return matchtStatus(wo, chip);
 }
 
@@ -103,6 +104,7 @@ export default function WorkOrdersScreen() {
     'mij',
     'alle',
     ...WERKBON_STATUSSEN,
+    'geannuleerd',
   ]);
 
   const load = useCallback(
@@ -174,6 +176,7 @@ export default function WorkOrdersScreen() {
       { id: 'gepland', label: WERKBON_STATUS_STIJL.gepland.label, count: counts.gepland },
       { id: 'in_uitvoering', label: WERKBON_STATUS_STIJL.in_uitvoering.label, count: counts.in_uitvoering },
       { id: 'afgerond', label: WERKBON_STATUS_STIJL.afgerond.label, count: counts.afgerond },
+      { id: 'geannuleerd', label: WERKBON_STATUS_STIJL.geannuleerd.label, count: counts.geannuleerd },
       { id: 'mij', label: 'Mijn werkbonnen' },
     ],
     [counts],
@@ -385,7 +388,10 @@ function WerkbonKaart({
         : `${namen[assignees[0]!] ?? 'Toegewezen'} +${assignees.length - 1}`;
 
   const klant = wo.customer?.name ?? null;
-  const av = avatarKleuren(klant ?? wo.titel, donker);
+  // Zelfde vaste klantkleur als het dashboard; zonder klant uit de titel.
+  const av = wo.customer || wo.customer_id
+    ? klantAvatarKleuren({ id: wo.customer_id, ...wo.customer }, donker)
+    : avatarKleuren(wo.titel, donker);
   const adres = wo.locatie || [wo.customer?.address, wo.customer?.city].filter(Boolean).join(', ') || null;
   const meta = [wo.nummer ?? '—', datumLabel(wo)].join(' · ');
   const pct = taken && taken.total > 0 ? Math.round((taken.done / taken.total) * 100) : null;

@@ -51,6 +51,8 @@ import {
   zichtbareFasen,
   type PipelineFilter,
   type VervolgActiviteit,
+  telAanvragenProjecten,
+  pipelineFaseKleuren,
 } from '@/lib/pipelineLogica';
 import { useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
@@ -147,6 +149,8 @@ function PipelineScreenInhoud() {
   const perFase = useMemo(() => dealsPerFase(gefilterd, kolommen), [gefilterd, kolommen]);
   const sleutels = useMemo(() => vervolgSleutels(vervolg, vandaagIso()), [vervolg]);
   const verloren = useMemo(() => verlorenFase(stages), [stages]);
+  // Eén kleur per fase, dezelfde als de stip in de pipeline van het dashboard.
+  const faseKleur = useMemo(() => pipelineFaseKleuren(stages), [stages]);
   const totaal = totaalWaarde(gefilterd, filter);
 
   const faseOpties = useMemo<SelectOption[]>(
@@ -232,7 +236,7 @@ function PipelineScreenInhoud() {
           >
             <Plus size={16} color={t.muted} />
             <Text style={styles.leadTekst} numberOfLines={1}>
-              {tablet ? 'Lead toevoegen' : `Lead toevoegen aan ${faseNaam}`}
+              {tablet ? 'Aanvraag toevoegen' : `Aanvraag toevoegen aan ${faseNaam}`}
             </Text>
           </Pressable>
         ) : null}
@@ -250,7 +254,7 @@ function PipelineScreenInhoud() {
           <AppTopBar
             variant="detail"
             title="Pipeline"
-            subtitle={`${n} ${n === 1 ? 'traject' : 'trajecten'} · ${formatEUR(totaal)} totaal`}
+            subtitle={`${n} ${n === 1 ? 'aanvraag of project' : 'aanvragen en projecten'} · ${formatEUR(totaal)} totaal`}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
@@ -346,7 +350,7 @@ function PipelineScreenInhoud() {
           <View>
             <EmptyState
               icon={<FolderKanban size={40} color={ds.green} strokeWidth={1.6} />}
-              title="Geen trajecten gevonden"
+              title="Geen aanvragen gevonden"
               message={actief ? 'Pas je filter aan of voeg een nieuwe aanvraag toe.' : 'Begin met je eerste aanvraag.'}
             />
             <View style={styles.legeKnoppen}>
@@ -387,7 +391,7 @@ function PipelineScreenInhoud() {
                 <View key={k.id} style={styles.kolom}>
                   <View style={styles.kolomKop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <FaseBadge label={k.name ?? 'Fase'} colorClass={k.color_class} positie={k.position} />
+                      <FaseBadge label={k.name ?? 'Fase'} colorClass={faseKleur[k.id] ?? k.color_class} positie={k.position} />
                       <Text style={styles.kolomSom}>{formatEUR(som)}</Text>
                     </View>
                     <View style={styles.tel}>
@@ -427,12 +431,12 @@ function PipelineScreenInhoud() {
                 <View style={styles.telefoonKop}>
                   <FaseBadge
                     label={telefoonKolom.name ?? 'Fase'}
-                    colorClass={telefoonKolom.color_class}
+                    colorClass={faseKleur[telefoonKolom.id] ?? telefoonKolom.color_class}
                     positie={telefoonKolom.position}
                     groot
                   />
                   <Text style={styles.kolomSom}>
-                    {telefoonRijen.length} {telefoonRijen.length === 1 ? 'lead' : 'leads'} ·{' '}
+                    {telAanvragenProjecten(telefoonRijen)} ·{' '}
                     {formatEUR(telefoonRijen.reduce((s, d) => s + dealWaarde(d), 0))}
                   </Text>
                 </View>
@@ -473,7 +477,7 @@ function PipelineScreenInhoud() {
                 accessibilityLabel={`Verplaats naar ${s.name ?? 'fase'}`}
                 style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
               >
-                <FaseBadge label={s.name ?? 'Fase'} colorClass={s.color_class} positie={s.position} />
+                <FaseBadge label={s.name ?? 'Fase'} colorClass={faseKleur[s.id] ?? s.color_class} positie={s.position} />
                 {menuDeal.stage_id === s.id ? <Check size={18} color={t.green700} /> : null}
               </Pressable>
             ))}

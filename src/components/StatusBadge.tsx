@@ -4,12 +4,13 @@ import { useTheme } from '@/providers';
 import type { WorkOrderStatus } from '@/types/domain';
 
 /**
- * Status palette aligned with the Werkbonnen design.
- *   - in_progress / "In uitvoering"  → green (active, doing-well)
- *   - gepland / "Gepland"             → blue
- *   - completed / "Afgerond"          → neutral gray
- *   - cancelled / "Geannuleerd"       → red
- *   - concept / open / fallback       → amber / slate
+ * Statuskleuren van werkbonnen en projecten, gelijk aan het dashboard
+ * (`statusColors.js`, domeinen werkbon en project):
+ *   - gepland / "Gepland"             → blauw
+ *   - in_progress / "In uitvoering"  → oranje
+ *   - completed / "Afgerond"          → groen
+ *   - cancelled / "Geannuleerd"       → grijs (gaat niet door)
+ *   - concept / open / fallback       → grijs / amber
  *
  * Backend statuses arrive in Dutch (`in_uitvoering`, `afgerond`,
  * `geannuleerd`) OR English (`in_progress`, `completed`, `cancelled`)
@@ -58,8 +59,8 @@ export type StatusTone = { bg: string; fg: string; dot: string };
  * palet meedroeg. Nu volgt hij het thema.
  *
  * Eén betekenis per kleur, overal in de app hetzelfde:
- *   blauw = onderweg · groen = goed · grijs = concept/afgerond
- *   rood  = te laat/geannuleerd · amber = open/verlopen
+ *   blauw = gepland · oranje = in uitvoering · groen = afgerond
+ *   grijs = concept/geannuleerd · amber = open
  *
  * De punt is dezelfde kleur als de tekst: het ontwerp gebruikt geen derde
  * tint, en zo blijft een badge ook leesbaar als iemand alleen de punt ziet.
@@ -67,9 +68,9 @@ export type StatusTone = { bg: string; fg: string; dot: string };
 function variantsFor(t: ThemeColors): Record<CanonicalKey, StatusTone> {
   return {
     gepland: { bg: t.statusSubmitBg, fg: t.statusSubmitFg, dot: t.statusSubmitFg },
-    in_progress: { bg: t.statusApproveBg, fg: t.statusApproveFg, dot: t.statusApproveFg },
-    completed: { bg: t.statusDraftBg, fg: t.statusDraftFg, dot: t.statusDraftFg },
-    cancelled: { bg: t.statusRejectBg, fg: t.statusRejectFg, dot: t.statusRejectFg },
+    in_progress: { bg: t.statusBezigBg, fg: t.statusBezigFg, dot: t.statusBezigFg },
+    completed: { bg: t.statusApproveBg, fg: t.statusApproveFg, dot: t.statusApproveFg },
+    cancelled: { bg: t.statusDraftBg, fg: t.statusDraftFg, dot: t.statusDraftFg },
     concept: { bg: t.statusDraftBg, fg: t.statusDraftFg, dot: t.statusDraftFg },
     open: { bg: t.statusWarnBg, fg: t.statusWarnFg, dot: t.statusWarnFg },
   };

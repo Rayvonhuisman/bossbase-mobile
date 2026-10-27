@@ -85,16 +85,23 @@ const naarInvoer = (f: Form, perMedewerker: boolean): SettingsInput => ({
   agenda_eind_uur: f.agendaEind,
 });
 
+/** Welk deel deze tab toont; elk is een eigen tab, net als in het dashboard. */
+export type StandaardDeel = 'standaard' | 'eenheden' | 'agenda' | 'herinneringen';
+
 /**
- * Standaardwaarden — tabel `bedrijfsinstellingen` (vier kaarten, één
- * formulier, zoals het dashboard) en tabel `eigen_eenheden`. Het veld
+ * Tabel `bedrijfsinstellingen` en tabel `eigen_eenheden`, verdeeld over vier
+ * tabs zoals het dashboard: Tarieven en termijnen (`standaard`), Eigen prijzen
+ * (`eenheden`), Agenda en Urenherinnering (`herinneringen`). Eén formulier
+ * onder water; elke tab schrijft alleen wat er gewijzigd is. Het veld
  * standaardmarge staat er bewust niet: het dashboard toont het ook niet meer.
  */
 export function StandaardTab({
+  deel = 'standaard',
   instellingen,
   magWijzigen,
   onGewijzigd,
 }: {
+  deel?: StandaardDeel;
   instellingen: CompanySettings;
   magWijzigen: boolean;
   onGewijzigd: () => Promise<void>;
@@ -140,7 +147,7 @@ export function StandaardTab({
     }
     return save(() => upsertCompanySettings(wijzigingen), {
       onSuccess: () => onGewijzigd(),
-      succesMelding: 'Standaardwaarden opgeslagen',
+      succesMelding: 'Instellingen opgeslagen',
     });
   };
 
@@ -186,11 +193,12 @@ export function StandaardTab({
     <>
       {!magWijzigen ? (
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <Uitleg>Je kunt de standaardwaarden bekijken. Wijzigen kan alleen een beheerder.</Uitleg>
+          <Uitleg>Je kunt deze instellingen bekijken. Wijzigen kan alleen een beheerder.</Uitleg>
         </View>
       ) : null}
 
-      <Kaart titel="Standaardwaarden" sub="Wordt vooringevuld bij nieuwe offertes en werkbonnen.">
+      {deel === 'standaard' ? (
+      <Kaart titel="Tarieven en termijnen" sub="Wordt vooringevuld bij nieuwe offertes en werkbonnen.">
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
@@ -256,7 +264,9 @@ export function StandaardTab({
         />
         {opslaanKnop}
       </Kaart>
+      ) : null}
 
+      {deel === 'herinneringen' ? (
       <Kaart
         titel="Herinneringen"
         sub="Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen."
@@ -358,7 +368,9 @@ export function StandaardTab({
         ) : null}
         {opslaanKnop}
       </Kaart>
+      ) : null}
 
+      {deel === 'agenda' ? (
       <Kaart
         titel="Agenda"
         sub="Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster."
@@ -384,7 +396,9 @@ export function StandaardTab({
         />
         {opslaanKnop}
       </Kaart>
+      ) : null}
 
+      {deel === 'eenheden' ? (
       <Kaart
         titel="Eigen prijzen / eenheden"
         sub="Verschijnen als regeltype naast Uren, Km en Overig in offertes en facturen."
@@ -440,6 +454,7 @@ export function StandaardTab({
           </View>
         ))}
       </Kaart>
+      ) : null}
 
       <FormSheet
         visible={eenheid !== null}

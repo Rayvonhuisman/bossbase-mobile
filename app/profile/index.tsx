@@ -17,7 +17,7 @@ import {
 } from 'lucide-react-native';
 import { AnimatedScreen, AppTopBar, FormField, FormSheet,
   LoadingScreen,
-  StatusBarScrim,
+  OnderStatusbalk,
 } from '@/components';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import { updateEigenProfiel, wijzigWachtwoordMetHuidig } from '@/services/profileService';
@@ -79,6 +79,7 @@ export default function ProfileScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: th.bg }}>
       <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
+      <OnderStatusbalk>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -243,7 +244,7 @@ export default function ProfileScreen() {
         <Text style={styles.version}>BossBase Mobile · v{appVersion}</Text>
         </AnimatedScreen>
       </ScrollView>
-      <StatusBarScrim />
+      </OnderStatusbalk>
 
       {/* Eigen naam wijzigen. De policy op `profiles` is `id = auth.uid()`:
           alleen je eigen rij, en dat is precies wat dit formulier doet. */}

@@ -38,7 +38,8 @@ const getal = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const isGefactureerd = (f: FactuurVoorTotaal) => f.status !== 'concept';
+// Vervallen = concept met een bewaard nummer: telt net als een concept niet mee.
+const isGefactureerd = (f: FactuurVoorTotaal) => f.status !== 'concept' && f.status !== 'vervallen';
 const isBetaald = (f: FactuurVoorTotaal) =>
   !f.is_credit && !f.gecrediteerd && f.status === 'betaald';
 

@@ -320,7 +320,7 @@ export async function getFactuurBedragenPerProject(): Promise<Record<string, Fac
   const { data, error } = await haalInStukken((van, tot) =>
     supabase
       .from('facturen')
-      .select('id, project_id, status, totaal_incl, totaal_excl')
+      .select('id, project_id, status, totaal_incl, totaal_excl, factuurdatum, created_at')
       .not('project_id', 'is', null)
       .order('id', { ascending: true })
       .range(van, tot),
@@ -330,10 +330,35 @@ export async function getFactuurBedragenPerProject(): Promise<Record<string, Fac
     return {};
   }
   const uit: Record<string, FactuurBedrag[]> = {};
-  for (const f of (data as (FactuurBedrag & { project_id: string })[]) ?? []) {
-    (uit[f.project_id] ??= []).push(f);
+  type Rij = FactuurBedrag & { project_id: string; factuurdatum: string | null; created_at: string | null };
+  for (const f of (data as Rij[]) ?? []) {
+    // Datum voor de tellers per periode, zoals het dashboard: factuurdatum, anders de aanmaakdag.
+    (uit[f.project_id] ??= []).push({ ...f, datum: f.factuurdatum || (f.created_at ? f.created_at.slice(0, 10) : null) });
   }
   return uit;
+}
+
+/**
+ * Gewerkte uren op projecten tussen twee datums (yyyy-mm-dd, tot en met):
+ * werkbonuren via de werkbon, zoals `getProjectUrenTussen` in het dashboard.
+ * RLS bepaalt welke regels meetellen. `null` als het niet lukte.
+ */
+export async function getProjectUrenTussen(van: string, tot: string): Promise<number | null> {
+  const { data, error } = await haalInStukken((a, b) =>
+    supabase
+      .from('werkbon_uren')
+      .select('id, uren, werkbonnen!inner(project_id)')
+      .not('werkbonnen.project_id', 'is', null)
+      .gte('datum', van)
+      .lte('datum', tot)
+      .order('id', { ascending: true })
+      .range(a, b),
+  );
+  if (error) {
+    if (__DEV__) console.log('[projectService.getProjectUrenTussen]', error.message);
+    return null;
+  }
+  return ((data as { uren: number | null }[]) ?? []).reduce((s, r) => s + (Number(r.uren) || 0), 0);
 }
 
 // ── Projectdetail ──────────────────────────────────────────────────────────

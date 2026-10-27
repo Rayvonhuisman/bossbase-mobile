@@ -31,6 +31,7 @@ import {
   bewaarFactuurPdf,
   createFactuurRegel,
   deleteFactuur,
+  zetFactuurVervallen,
   deleteFactuurRegel,
   FACTUUR_STATUS_OPTIES,
   createCreditFactuur,
@@ -122,6 +123,7 @@ import {
 } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
 import { aankoopTekst } from '@/lib/aankoopInfo';
+import { getalOfNul } from '@/lib/getalNl';
 
 /**
  * Facturen — dezelfde `facturen` + `factuur_regels` als het dashboard.
@@ -163,6 +165,8 @@ type Concept = {
   id: string | null;
   customerId: string | null;
   projectId: string | null;
+  /** Bij "Maak factuur" vanuit een offerte: die offerte (kolom offerte_id). */
+  offerteId: string | null;
   factuurdatum: string;
   betaaltermijn: string;
   vervaldatum: string;
@@ -393,7 +397,12 @@ function InvoicesScreenInhoud() {
    * een geaccepteerde offerte). De betaaltermijn is die van de klant, anders
    * die uit Instellingen, anders 14 dagen; de vervaldatum volgt daaruit.
    */
-  const openNieuw = (prefill?: { customerId: string | null; projectId?: string | null; regels?: Regel[] }) => {
+  const openNieuw = (prefill?: {
+    customerId: string | null;
+    projectId?: string | null;
+    offerteId?: string | null;
+    regels?: Regel[];
+  }) => {
     if (limietBereikt()) return;
     setSaveError(null);
     const factuurdatum = vandaagIso();
@@ -401,6 +410,7 @@ function InvoicesScreenInhoud() {
       id: null,
       customerId: prefill?.customerId ?? null,
       projectId: prefill?.projectId ?? null,
+      offerteId: prefill?.offerteId ?? null,
       factuurdatum,
       betaaltermijn: '14',
       vervaldatum: berekenVervaldatum(factuurdatum, 14),
@@ -446,6 +456,7 @@ function InvoicesScreenInhoud() {
       }
       openNieuw({
         customerId: o.data.customer_id,
+        offerteId: o.data.id,
         regels: r.data.map((it) => regelUitOfferteItem(it, o.data!)),
       });
     })();
@@ -473,6 +484,7 @@ function InvoicesScreenInhoud() {
       id: f.id,
       customerId: f.customer_id,
       projectId: f.project_id,
+      offerteId: null,
       factuurdatum: f.factuurdatum,
       betaaltermijn: String(f.betaaltermijn_dagen ?? 14),
       vervaldatum: f.vervaldatum ?? '',
@@ -530,7 +542,7 @@ function InvoicesScreenInhoud() {
         if (!magRegels) return createFactuur(invoer);
         const totalen = berekenTotalen(c.regels);
         const res = await createFactuurMetRegels(
-          { ...invoer, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
+          { ...invoer, offerte_id: c.offerteId, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
           c.regels.map((r) => factuurRegelVoorOpslag(r, eenheden)),
         );
         return res.ok ? { ok: true, data: res.data.factuur } : res;
@@ -606,7 +618,11 @@ function InvoicesScreenInhoud() {
     bevestigVerwijderen(
       'Factuur',
       () => {
-        save(() => deleteFactuur(id), {
+        save(async () => {
+          const r = await deleteFactuur(id);
+          if (!r.ok && r.technisch === 'vervallen_ipv_verwijderen') setTimeout(() => vraagVervallen(id), 0);
+          return r;
+        }, {
           onSuccess: async (_data, extra) => {
             setConcept(null);
             // De factuur is weg; lukte de prullenbak niet, dan komt hij bij de
@@ -622,6 +638,28 @@ function InvoicesScreenInhoud() {
         : 'Dit kan niet ongedaan worden gemaakt.',
     );
   };
+
+  // Een ouder concept kan niet weg (gat in de nummering): op Vervallen zetten.
+  const vraagVervallen = (id: string) =>
+    Dialog.alert(
+      'Op Vervallen zetten?',
+      'Deze factuur heeft al een nummer in de reeks. Op Vervallen blijft hij in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+      [
+        { text: 'Annuleren', style: 'cancel' },
+        {
+          text: 'Op Vervallen zetten',
+          style: 'destructive',
+          onPress: () =>
+            save(() => zetFactuurVervallen(id), {
+              onSuccess: async () => {
+                setConcept(null);
+                await herlaad();
+              },
+              succesMelding: 'Factuur op Vervallen gezet',
+            }),
+        },
+      ],
+    );
 
   // ── Regels van een concept ────────────────────────────────────────────────
 
@@ -648,8 +686,8 @@ function InvoicesScreenInhoud() {
         createFactuurRegel({
           factuur_id: factuurId,
           omschrijving: nieuweRegel.omschrijving,
-          aantal: Number(nieuweRegel.aantal.replace(',', '.') || 0),
-          eenheidsprijs: Number(nieuweRegel.prijs.replace(',', '.') || 0),
+          aantal: getalOfNul(nieuweRegel.aantal),
+          eenheidsprijs: getalOfNul(nieuweRegel.prijs),
           btw_pct: Number(nieuweRegel.btw.replace(',', '.') || 21),
           volgorde: regels.length,
         }),
@@ -1006,7 +1044,7 @@ function InvoicesScreenInhoud() {
           .filter((k) => k.gekozen)
           .reduce(
             (s, k) =>
-              s + Number(k.aantal.replace(',', '.') || 0) * Math.abs(Number(k.prijs.replace(',', '.') || 0)),
+              s + getalOfNul(k.aantal) * Math.abs(getalOfNul(k.prijs)),
             0,
           )
       : null;

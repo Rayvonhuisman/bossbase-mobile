@@ -3,6 +3,7 @@
  * - offerte_items/factuur_regels_verlegd_nul_check: verlegd/vrijgesteld = 0%.
  * - Een creditnota van een verlegde of vrijgestelde regel houdt 0%.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

@@ -2,6 +2,7 @@
  * Offertes, facturen en kosten: de pure logica achter lijsten, KPI's,
  * nummering, totalen en de kostenpagina. Zelfde regels als het dashboard.
  */
+import './hulp/tsPaden.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

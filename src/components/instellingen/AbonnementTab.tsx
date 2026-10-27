@@ -122,6 +122,15 @@ export function AbonnementTab() {
               />
             );
           })}
+          {/* Zelfde uitleg als het dashboard: de teller telt uitnodigingen mee
+              (pakketlimiet), het bedrag niet (G-22). */}
+          {stand.gebruikers && stand.gebruikers.uitgenodigd > 0 ? (
+            <Text style={s.hint}>
+              {`${stand.gebruikers.actief} actief en ${stand.gebruikers.uitgenodigd} ${
+                stand.gebruikers.uitgenodigd === 1 ? 'openstaande uitnodiging' : 'openstaande uitnodigingen'
+              }. Een uitnodiging telt mee voor het maximum van je pakket, maar je betaalt pas voor iemand als hij de uitnodiging heeft geaccepteerd.`}
+            </Text>
+          ) : null}
         </Kaart>
       ) : null}
 
