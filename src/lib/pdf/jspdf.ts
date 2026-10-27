@@ -1,6 +1,8 @@
 import { base64NaarBytes } from '../base64';
 import { bytesNaarBase64 } from './afbeelding';
 import type { JsPDFKlasse } from './bouwPdf';
+import { zorgVoorLatin1Decoder } from './latin1Decoder';
+import { PdfFout } from './pdfData';
 
 /**
  * jsPDF pas laden als er een PDF gemaakt wordt (net als het dashboard): de
@@ -42,13 +44,63 @@ function zorgVoorBase64Globals() {
   }
 }
 
+type FoutHandler = (fout: unknown, isFatal?: boolean) => void;
+type ErrorUtilsT = { getGlobalHandler: () => FoutHandler; setGlobalHandler: (h: FoutHandler) => void };
+
+/**
+ * Importeren zonder dat een fout bij het laden de app afsluit.
+ *
+ * Gooit een module tijdens het laden een fout, dan vangt Metro die in een
+ * release-build zelf af (guardedLoadModule in metro-runtime) en meldt hem als
+ * fatale fout via `ErrorUtils.reportFatalError`: React Native sluit dan de
+ * app. Een try/catch om `import()` ziet er niets van; het import geeft alleen
+ * een lege module terug. Het laden zelf gebeurt synchroon binnen de aanroep
+ * van `import()` (alles zit in één bundel), dus zetten we zolang een eigen
+ * handler neer die die ene fatale fout opvangt, en daarna meteen de oude terug.
+ * Waar ErrorUtils niet bestaat (web, Node) is dit een gewone import.
+ */
+export async function importeerZonderAfsluiten<T>(importeer: () => Promise<T>): Promise<T> {
+  const eu = (globalThis as unknown as { ErrorUtils?: ErrorUtilsT }).ErrorUtils;
+  const vorige = eu?.getGlobalHandler?.();
+  if (!eu || !vorige) return importeer();
+
+  let laadFout: unknown;
+  let gevangen = false;
+  eu.setGlobalHandler((fout, isFatal) => {
+    if (isFatal && !gevangen) {
+      gevangen = true;
+      laadFout = fout;
+    } else {
+      vorige(fout, isFatal);
+    }
+  });
+  let belofte: Promise<T>;
+  try {
+    belofte = importeer();
+  } finally {
+    eu.setGlobalHandler(vorige);
+  }
+  const mod = await belofte;
+  if (gevangen) {
+    console.warn('[pdf] PDF-bibliotheek laden mislukt', laadFout);
+    throw new PdfFout('De PDF kan op dit toestel niet worden gemaakt. Bekijk hem in de webversie.');
+  }
+  return mod;
+}
+
 let geladen: JsPDFKlasse | null = null;
 
 export async function laadJsPDF(): Promise<JsPDFKlasse> {
   if (!geladen) {
     zorgVoorBase64Globals();
-    const mod = await import('jspdf');
-    geladen = (mod.jsPDF || (mod as unknown as { default: JsPDFKlasse }).default) as JsPDFKlasse;
+    // fast-png (PNG-afbeeldingen in jsPDF) vraagt bij het laden om 'latin1'.
+    if (!zorgVoorLatin1Decoder()) {
+      throw new PdfFout('De PDF kan op dit toestel niet worden gemaakt. Bekijk hem in de webversie.');
+    }
+    const mod = await importeerZonderAfsluiten(() => import('jspdf'));
+    const Klasse = mod?.jsPDF || (mod as unknown as { default?: JsPDFKlasse } | undefined)?.default;
+    if (!Klasse) throw new PdfFout('De PDF kan op dit toestel niet worden gemaakt. Bekijk hem in de webversie.');
+    geladen = Klasse as JsPDFKlasse;
   }
   return geladen;
 }
