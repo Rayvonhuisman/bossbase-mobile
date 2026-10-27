@@ -42,11 +42,13 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BossBase" />
     <!--
-      "default": een gewone statusbalk boven de app. "black-translucent" zou de
-      app eronder laten doorlopen, maar dan staat witte statustekst op de lichte
-      achtergrond van de app — onleesbaar.
+      "black-translucent", net als de superadmin-app: iOS tekent zelf niets achter
+      klok en Dynamic Island, de pagina loopt erachter door (viewport-fit=cover)
+      en de app vult die strook met een effen vlak in de paginakleur (AppScreen,
+      OnderStatusbalk). Met "default" legde nieuwere iOS een eigen vervaging
+      over de bovenkant van de pagina, over dag en datum heen.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
