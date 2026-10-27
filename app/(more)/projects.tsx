@@ -557,7 +557,7 @@ function ProjectsInhoud() {
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
-    periode: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 16 },
+    periode: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.sm },
     kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, marginBottom: spacing.md },
     kpisTablet: { flexWrap: 'nowrap' },
     kpi: { flexBasis: '45%', flexGrow: 1 },
