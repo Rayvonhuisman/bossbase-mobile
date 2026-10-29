@@ -45,3 +45,22 @@ export function base64NaarBytes(base64: string): Uint8Array {
   }
   return bytes;
 }
+
+/** Bytes naar base64 (voor een bestand of foto die naar Boss gaat), zonder `btoa` of Buffer. */
+export function bytesNaarBase64(bytes: Uint8Array): string {
+  let uit = '';
+  let i = 0;
+  for (; i + 2 < bytes.length; i += 3) {
+    const n = (bytes[i]! << 16) | (bytes[i + 1]! << 8) | bytes[i + 2]!;
+    uit += ALFABET[(n >> 18) & 63]! + ALFABET[(n >> 12) & 63]! + ALFABET[(n >> 6) & 63]! + ALFABET[n & 63]!;
+  }
+  const rest = bytes.length - i;
+  if (rest === 1) {
+    const n = bytes[i]! << 16;
+    uit += ALFABET[(n >> 18) & 63]! + ALFABET[(n >> 12) & 63]! + '==';
+  } else if (rest === 2) {
+    const n = (bytes[i]! << 16) | (bytes[i + 1]! << 8);
+    uit += ALFABET[(n >> 18) & 63]! + ALFABET[(n >> 12) & 63]! + ALFABET[(n >> 6) & 63]! + '=';
+  }
+  return uit;
+}

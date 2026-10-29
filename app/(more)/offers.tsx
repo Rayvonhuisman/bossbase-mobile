@@ -27,11 +27,10 @@ import {
 import { usePermissions, useTheme, useToast } from '@/providers';
 import {
   createOfferte,
-  createOfferteMetRegels,
   deleteOfferte,
   getOfferteDetail,
+  getOfferteGroepen,
   getOfferteItems,
-  herzieOfferte,
   inhoudLigtVast,
   kopieerOfferte,
   listOffertes,
@@ -39,11 +38,11 @@ import {
   OFFERTE_STATUS_OPTIES,
   stuurGetekendePdfNa,
   updateOfferte,
-  vervangOfferteRegels,
   type OfferteDetail,
   type OfferteInput,
   type OfferteItem,
   type OfferteRow,
+  slaOfferteOp,
 } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
 import { getCompanySettings } from '@/services/settingsService';
@@ -57,8 +56,9 @@ import {
   verstuurMail,
 } from '@/services/documentMailService';
 import { logTijdlijn } from '@/services/klantTijdlijnService';
-import { berekenTotalen, legeRegel, type EigenEenheid, type Regel } from '@/lib/regels';
-import { offerteRegelVoorOpslag, regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { legeRegel, nieuweId, type EigenEenheid, type Groep, type Regel } from '@/lib/regels';
+import { regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { groepUitRij, naarOpslag, offerteVeldenUitItem } from '@/lib/boss/offerteRegels';
 import { isoVanDatum } from '@/lib/datum';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
@@ -151,7 +151,11 @@ type Concept = {
   /** Afgewezen of vervangen: alleen de status. */
   alleenStatus: boolean;
   regels: Regel[];
+  /** Groepen, zoals in het dashboard; regels verwijzen ernaar met `groepId`. */
+  groepen: Groep[];
   regelsLaden: boolean;
+  /** `inhoud_versie` bij het openen; de database weigert een verouderde opslag. */
+  versie: number | null;
 };
 
 type MailStand = {
@@ -394,8 +398,10 @@ function OffersScreenInhoud() {
       herzien: false,
       volledigVast: false,
       alleenStatus: false,
-      regels: [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+      regels: [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }],
+      groepen: [],
       regelsLaden: false,
+      versie: null,
     });
   };
 
@@ -437,23 +443,35 @@ function OffersScreenInhoud() {
       volledigVast,
       alleenStatus: !bewerkbaar && !volledigVast,
       regels: [],
+      groepen: [],
       regelsLaden: bewerkbaar,
+      versie: o.inhoud_versie ?? 1,
     });
     if (!bewerkbaar) return;
-    const { data, error: fout } = await getOfferteItems(o.id);
+    const [{ data, error: fout }, { data: groepRijen, error: groepFout }] = await Promise.all([
+      getOfferteItems(o.id),
+      getOfferteGroepen(o.id),
+    ]);
+    const groepen = groepRijen.map(groepUitRij);
+    const bekend = new Set(groepen.map((g) => g.id));
     setConcept((c) =>
       c && c.id === o.id
         ? {
             ...c,
+            // Id, groep, eenheid en herkomst mee, zodat opslaan ze niet kwijtraakt.
             regels:
               data.length > 0
-                ? data.map((it) => regelUitOfferteItem(it, o))
-                : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+                ? data.map((it) => {
+                    const r = offerteVeldenUitItem(it, regelUitOfferteItem(it, o));
+                    return r.groepId && !bekend.has(r.groepId) ? { ...r, groepId: null } : r;
+                  })
+                : [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }],
+            groepen,
             regelsLaden: false,
           }
         : c,
     );
-    if (fout) setSaveError(fout);
+    if (fout || groepFout) setSaveError(fout || groepFout);
   };
 
   // ── Versturen per mail ────────────────────────────────────────────────────
@@ -512,64 +530,62 @@ function OffersScreenInhoud() {
   const opslaan = (enVersturen = false) => {
     if (!concept) return;
     const c = concept;
-    const regels = c.regels.map((r) => offerteRegelVoorOpslag(r, eenheden));
-    const totalen = berekenTotalen(c.regels);
+    const opslag = naarOpslag({ regels: c.regels, groepen: c.groepen }, eenheden);
+    const kop = {
+      customer_id: c.customerId,
+      deal_id: c.dealId,
+      omschrijving: c.omschrijving,
+      geldig_tot: c.geldigTot || null,
+      notes: c.notes,
+      btw_pct: Number(c.btwPct.replace(',', '.') || 21),
+    };
 
     save(
       async (): Promise<WriteResult<OfferteRow>> => {
-        // Nieuwe offerte: kop én regels in één handeling, met de totalen uit
-        // de regels — zelfde volgorde en bedragen als de offertemodal.
+        // Kop, groepen en regels in één transactie via bb_offerte_opslaan,
+        // dezelfde route als het dashboard: groepen, eenheden en de herkomst
+        // van regels van Boss blijven zo bewaard.
         if (!c.id) {
-          const invoer: OfferteInput = {
-            customer_id: c.customerId,
-            deal_id: c.dealId,
-            omschrijving: c.omschrijving,
-            geldig_tot: c.geldigTot || null,
-            btw_pct: Number(c.btwPct.replace(',', '.') || 21),
-            notes: c.notes,
-          };
-          if (!magRegels) return createOfferte(invoer);
-          const res = await createOfferteMetRegels(
-            { ...invoer, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
-            regels,
-          );
-          return res.ok ? { ok: true, data: res.data.offerte } : res;
+          if (!magRegels) {
+            const invoer: OfferteInput = {
+              customer_id: c.customerId,
+              deal_id: c.dealId,
+              omschrijving: c.omschrijving,
+              geldig_tot: c.geldigTot || null,
+              btw_pct: kop.btw_pct,
+              notes: c.notes,
+            };
+            return createOfferte(invoer);
+          }
+          return slaOfferteOp({ id: null, versie: null, kop, ...opslag });
         }
 
         if (c.volledigVast) {
           return writeFout('op-slot', 'Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.');
         }
 
-        // Verstuurd en nog niet getekend: een nieuwe versie met deze regels.
+        // Verstuurd en nog niet getekend: een nieuwe versie met deze regels; de
+        // oude wordt in dezelfde transactie als vervangen gemarkeerd.
         if (c.herzien && c.bron) {
-          const res = await herzieOfferte(
-            c.bron,
-            { customer_id: c.customerId, omschrijving: c.omschrijving, geldig_tot: c.geldigTot || null, notes: c.notes },
-            regels,
-            { totaal_excl: totalen.excl, totaal_incl: totalen.incl },
-          );
-          return res.ok ? { ok: true, data: res.data.offerte } : res;
+          return slaOfferteOp({ id: null, versie: null, kop, ...opslag, vervangt: c.bron });
         }
 
         // Afgewezen of vervangen: alleen de status.
         if (c.alleenStatus) return updateOfferte(c.id, { status: c.status });
 
-        // Concept: eerst de regels (alles weg en opnieuw, zoals het
-        // dashboard), dan de kop — zo staat een statuswissel nooit vóór de
-        // regels die erbij horen.
-        if (magRegels) {
-          const r = await vervangOfferteRegels(c.id, regels);
-          if (!r.ok) return r;
+        if (!magRegels) {
+          return updateOfferte(c.id, { ...kop, status: c.status });
         }
-        return updateOfferte(c.id, {
-          customer_id: c.customerId,
-          deal_id: c.dealId,
-          omschrijving: c.omschrijving,
-          geldig_tot: c.geldigTot || null,
-          btw_pct: Number(c.btwPct.replace(',', '.') || 21),
-          notes: c.notes,
-          status: c.status,
-        });
+        // Concept: inhoud via de databasefunctie; aanvraag, btw en status
+        // kent die niet, dus die daarna alleen als ze veranderd zijn.
+        const res = await slaOfferteOp({ id: c.id, versie: c.versie, kop, ...opslag });
+        if (!res.ok) return res;
+        const bron = c.bron;
+        const extra: Record<string, unknown> = {};
+        if ((c.dealId || null) !== (bron?.deal_id || null)) extra.deal_id = c.dealId;
+        if (kop.btw_pct !== Number(bron?.btw_pct ?? 21)) extra.btw_pct = kop.btw_pct;
+        if (c.status !== (bron?.status ?? 'concept')) extra.status = c.status;
+        return Object.keys(extra).length ? updateOfferte(c.id, extra) : res;
       },
       {
         onSuccess: async (data) => {
@@ -1168,6 +1184,8 @@ function OffersScreenInhoud() {
             <RegelEditor
               regels={concept.regels}
               onChange={(regels) => setConcept((c) => (c ? { ...c, regels } : c))}
+              groepen={concept.groepen}
+              onGroepenChange={(groepen) => setConcept((c) => (c ? { ...c, groepen } : c))}
               standaard={{
                 uurtarief: instellingen.uurtarief,
                 reiskostenPerKm: instellingen.reiskostenPerKm,
