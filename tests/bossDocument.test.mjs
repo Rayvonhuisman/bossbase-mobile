@@ -109,3 +109,34 @@ test('metOndertekenplek zet {{link}} na de knopzin en vóór de groet', async ()
   assert.equal(metOndertekenplek('A\n\n{{ link }}\n\nB', true), 'A\n\n{{ link }}\n\nB');
   assert.equal(metOndertekenplek(tekst, false), tekst);
 });
+
+test('factuurregels: groep gaat mee naar de database en terug in het formulier', async () => {
+  const Z = await import('../src/lib/regelOmzetting.ts');
+  const kop = { totaal_excl: 100, totaal_incl: 121 };
+  const uitDb = Z.regelUitFactuurRegel(
+    { id: 'r1', omschrijving: 'Tegelwerk', type: 'uren', aantal: 2.5, eenheidsprijs: 58, btw_pct: 21, btw_regime: 'normaal', groep: { id: 'g1', naam: 'Badkamer', werkzaamheden: 'Betegelen' } },
+    kop,
+  );
+  assert.equal(uitDb.id, 'r1');
+  assert.equal(uitDb.aantal, '2,5');
+  assert.deepEqual(uitDb.groep, { sleutel: 'g1', naam: 'Badkamer', werkzaamheden: 'Betegelen' });
+  const opslag = Z.factuurRegelVoorOpslag(uitDb);
+  assert.equal(opslag.aantal, 2.5);
+  assert.deepEqual(opslag.groep, { sleutel: 'g1', naam: 'Badkamer', werkzaamheden: 'Betegelen' });
+  const zonder = Z.factuurRegelVoorOpslag({ ...uitDb, groep: null });
+  assert.equal('groep' in zonder, false);
+});
+
+test('offerte → factuur: regels krijgen de groep van de offerte', async () => {
+  const Z = await import('../src/lib/regelOmzetting.ts');
+  const regels = Z.factuurRegelsUitOfferte(
+    [
+      { omschrijving: 'Arbeid', type: 'uren', aantal: 6, prijs_per: 58, btw_pct: 21, btw_regime: 'normaal', groep_id: 'wc' },
+      { omschrijving: 'Voorrijden', type: 'vast', aantal: 1, prijs_per: 35, btw_pct: 21, btw_regime: 'normaal', groep_id: null },
+    ],
+    { totaal_excl: 383, totaal_incl: 463.43 },
+    [{ id: 'wc', naam: 'Toilet', werkzaamheden: 'Vloer betegelen' }],
+  );
+  assert.equal(regels[0].groep.naam, 'Toilet');
+  assert.equal(regels[1].groep, null);
+});

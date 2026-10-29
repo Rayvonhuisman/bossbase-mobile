@@ -37,6 +37,7 @@ import {
   createCreditFactuur,
   getFactuurDetail,
   getFactuurRegels,
+  slaFactuurConceptOp,
   kopieerFactuur,
   listFacturenMetDocument,
   markeerFactuurVerstuurd,
@@ -57,7 +58,7 @@ import {
   createFactuur,
   createFactuurMetRegels,
 } from '@/services/factuurService';
-import { getOfferteDetail, getOfferteItems, listOffertes, type OfferteRow } from '@/services/offerteService';
+import { getOfferteDetail, getOfferteGroepen, getOfferteItems, listOffertes, type OfferteRow } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
 import { listProjects, type ProjectRow } from '@/services/projectService';
 import { getCompanySettings } from '@/services/settingsService';
@@ -73,13 +74,13 @@ import {
 import { logTijdlijn } from '@/services/klantTijdlijnService';
 import { berekenTotalen, legeRegel, nieuweId, type EigenEenheid, type Regel } from '@/lib/regels';
 import { heeftConcept, leesConcept, wisConcept, bewaarConceptDeel, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
-import { aantalZonderPrijs, metRefs } from '@/lib/boss/factuurRegels';
+import { aantalZonderPrijs, isLegeFactuurRegel, metRefs } from '@/lib/boss/factuurRegels';
 import { bossStatus } from '@/services/bossDocumentService';
 import { Werkruimte, type Aandachtspunt } from '@/components/boss/Werkruimte';
 import { FactuurGesprek, type FactuurGesprekBewaard } from '@/components/boss/FactuurGesprek';
 import { DocumentVoorbeeld } from '@/components/boss/DocumentVoorbeeld';
 import { BossIngang } from '@/components/boss/BossIngang';
-import { factuurRegelVoorOpslag, regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { factuurRegelsUitOfferte, factuurRegelVoorOpslag, regelUitFactuurRegel } from '@/lib/regelOmzetting';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
 import { vandaagIso } from '@/lib/nlTijd';
@@ -186,6 +187,14 @@ type Concept = {
   opSlot: boolean;
   geimporteerd: boolean;
   regels: Regel[];
+  /**
+   * Regels in dit formulier: altijd bij een nieuwe factuur, bij een bestaande
+   * alleen bij een concept (zoals `EditFactuurModal`). 'laden' en 'fout' bij
+   * een concept zolang de regels er niet (goed) zijn.
+   */
+  regelsStand: 'nieuw' | 'laden' | 'fout' | 'klaar' | 'geen';
+  /** De regels zoals ze opgeslagen waren: alleen bij een wijziging gaan ze opnieuw mee. */
+  regelsOrigineel: string;
   /** Waar Boss concept en gesprek bewaart als je sluit zonder opslaan (lib/boss/werkruimteConcept). */
   bossSleutel: string;
 };
@@ -473,6 +482,8 @@ function InvoicesScreenInhoud() {
       regels: prefill?.regels?.length
         ? prefill.regels
         : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+      regelsStand: 'nieuw',
+      regelsOrigineel: '',
       bossSleutel: `factuur:nieuw:${prefill?.offerteId || prefill?.projectId || prefill?.customerId || ''}`,
     });
     bossVoorConcept(`factuur:nieuw:${prefill?.offerteId || prefill?.projectId || prefill?.customerId || ''}`);
@@ -500,7 +511,7 @@ function InvoicesScreenInhoud() {
     offerteVerwerkt.current = vanOfferte;
     router.setParams({ vanOfferte: undefined });
     void (async () => {
-      const [o, r] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte)]);
+      const [o, r, g] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte), getOfferteGroepen(vanOfferte)]);
       if (!o.data) {
         Dialog.alert('Offerte niet gevonden', o.error ?? 'De offerte kon niet worden geladen.');
         return;
@@ -508,7 +519,8 @@ function InvoicesScreenInhoud() {
       openNieuw({
         customerId: o.data.customer_id,
         offerteId: o.data.id,
-        regels: r.data.map((it) => regelUitOfferteItem(it, o.data!)),
+        // Met de groepen (ruimte, onderdeel) van de offerte, zoals het dashboard.
+        regels: factuurRegelsUitOfferte(r.data, o.data, g.data),
       });
     })();
     // openNieuw hangt af van state die hier niet hoort te herstarten.
@@ -531,6 +543,9 @@ function InvoicesScreenInhoud() {
   const openBewerk = (f: FactuurRow) => {
     if (!magWijzigen) return;
     setSaveError(null);
+    // Een concept: regels in het formulier, zoals het dashboard. Verstuurd of
+    // uit de boekhouding: de regels liggen vast (ook in de database).
+    const regelsHier = f.status === 'concept' && !isGeimporteerd(f) && magRegels;
     setConcept({
       id: f.id,
       customerId: f.customer_id,
@@ -547,9 +562,27 @@ function InvoicesScreenInhoud() {
       opSlot: inhoudLigtVast(f),
       geimporteerd: isGeimporteerd(f),
       regels: [],
+      regelsStand: regelsHier ? 'laden' : 'geen',
+      regelsOrigineel: '',
       bossSleutel: `factuur:${f.id}`,
     });
     bossVoorConcept(`factuur:${f.id}`);
+    if (!regelsHier) return;
+    void getFactuurRegels(f.id).then(({ data, error: fout }) => {
+      const vorm = data.map((r) => regelUitFactuurRegel(r, f));
+      setConcept((c) =>
+        c && c.id === f.id
+          ? fout
+            ? { ...c, regelsStand: 'fout' }
+            : {
+                ...c,
+                regels: vorm.length ? vorm : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+                regelsStand: 'klaar',
+                regelsOrigineel: JSON.stringify(vorm.map((r) => factuurRegelVoorOpslag(r, eenheden))),
+              }
+          : c,
+      );
+    });
   };
 
   const opslaan = (enVersturen = false) => {
@@ -558,6 +591,28 @@ function InvoicesScreenInhoud() {
     const termijn = Number(c.betaaltermijn || 14);
     save(
       async (): Promise<WriteResult<FactuurRow>> => {
+        if (c.id && c.regelsStand === 'laden') {
+          return writeFout('validatie', 'De regels zijn nog niet geladen. Wacht even en probeer het opnieuw.');
+        }
+        if (c.id && c.regelsStand === 'fout') {
+          return writeFout('validatie', 'De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast.');
+        }
+        if (c.id && c.regelsStand === 'klaar') {
+          // Concept: regels (alleen als ze veranderd zijn) en kop in één
+          // transactie (bb_factuur_regels_vervangen), daarna de rest van de kop.
+          const zonderPrijs = aantalZonderPrijs(c.regels);
+          if (zonderPrijs) {
+            return writeFout('validatie', `Vul eerst de prijs in bij ${zonderPrijs} ${zonderPrijs === 1 ? 'regel' : 'regels'}.`);
+          }
+          const nieuw = c.regels.filter((r) => !isLegeFactuurRegel(r)).map((r) => factuurRegelVoorOpslag(r, eenheden));
+          const gewijzigd = JSON.stringify(nieuw) !== c.regelsOrigineel;
+          const inhoud = await slaFactuurConceptOp(c.id, gewijzigd ? nieuw : null, {
+            vervaldatum: c.vervaldatum || null,
+            betalingskenmerk: c.betalingskenmerk,
+            notities: c.notities,
+          });
+          if (!inhoud.ok) return inhoud;
+        }
         if (c.id) {
           const invoer: Partial<FactuurInput> & { status?: string } =
             c.opSlot || c.geimporteerd
@@ -1075,7 +1130,9 @@ function InvoicesScreenInhoud() {
         variant: 'secondary',
       });
     }
-    if (!detailGeimporteerd && !inhoudLigtVast(f)) {
+    // Bij een concept staan de regels in Bewerken (met Boss), zoals het
+    // dashboard; het losse regelblad blijft voor de status Aangemaakt.
+    if (!detailGeimporteerd && !inhoudLigtVast(f) && !(f.status === 'concept' && magRegels && magWijzigen)) {
       acties.push({ id: 'regels', label: 'Regels', onPress: sluitEn(() => void openRegels(f)), variant: 'ghost' });
     }
     if (magMaken && !detailGeimporteerd) {
@@ -1098,7 +1155,7 @@ function InvoicesScreenInhoud() {
     !concept?.id && (!concept?.customerId || (magRegels && (concept?.regels.length ?? 0) === 0) || ontbreekt.length > 0);
 
   // ── Boss in dit formulier ─────────────────────────────────────────────────
-  const bossKan = Boolean(bossFunctie && magRegels && concept && !concept.id);
+  const bossKan = Boolean(bossFunctie && magRegels && concept && (!concept.id || concept.regelsStand === 'klaar'));
   const bossOpenen = () => {
     if (!concept) return;
     if (vorigConcept) { wisConcept(concept.bossSleutel); setVorigConcept(null); }
@@ -1226,9 +1283,9 @@ function InvoicesScreenInhoud() {
               editable={!concept.opSlot && !concept.geimporteerd}
             />
           ) : null}
-          {/* Regels horen bij het aanmaken: één handeling, één set totalen — net
-              als in het dashboard. Bij een bestaande factuur blijven de regels in
-              hun eigen blad staan. */}
+          {/* Regels bij het aanmaken en bij een concept: één handeling, één set
+              totalen, net als in het dashboard. Bij een verstuurde factuur liggen
+              ze vast. */}
           {concept && !concept.id && !magRegels ? (
             <NoticeBanner
               toon="waarschuwing"
@@ -1239,7 +1296,14 @@ function InvoicesScreenInhoud() {
             />
           ) : null}
 
-          {concept && !concept.id && magRegels ? (
+          {concept?.regelsStand === 'laden' ? <Text style={styles.hint}>Regels laden…</Text> : null}
+          {concept?.regelsStand === 'fout' ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message="De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast."
+            />
+          ) : null}
+          {concept && ((!concept.id && magRegels) || concept.regelsStand === 'klaar') ? (
             <RegelEditor
               regels={concept.regels}
               onChange={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
@@ -1587,9 +1651,9 @@ function InvoicesScreenInhoud() {
       {concept && bossGebruikt && wrOpen ? (
         <Werkruimte
           open={wrOpen}
-          titel="Factuur opstellen"
-          nummer={null}
-          status={{ label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
+          titel={concept.id ? 'Factuur aanpassen' : 'Factuur opstellen'}
+          nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
+          status={concept.id ? { label: 'Concept', toon: 'concept' } : { label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
           bossBezig={bossStand.bezig}
           bossWacht={bossStand.wacht}
           onTerug={() => { if (!bossStand.bezig) setWrOpen(false); }}
@@ -1618,6 +1682,7 @@ function InvoicesScreenInhoud() {
           voorbeeld={
             <DocumentVoorbeeld
               soort="factuur"
+              nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
               klant={conceptKlant ?? null}
               datums={[
                 { label: 'Factuurdatum', waarde: concept.factuurdatum ? formatDateNL(concept.factuurdatum) : '' },

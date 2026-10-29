@@ -11,6 +11,7 @@ import {
   volgendVersieNummer,
 } from '@/lib/documentLogica';
 import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
+import { nieuweId as uuid, type BtwRegime, type Herkomst } from '@/lib/regels';
 import type { OfferteOpslagGroep, OfferteOpslagRegel, GroepRij } from '@/lib/boss/offerteRegels';
 
 /**
@@ -830,47 +831,64 @@ export async function kopieerOfferte(
     nummer = v.nummer;
   }
 
-  const kop = await createOfferte({
-    customer_id: customerId || bron.customer_id,
-    deal_id: alsVersie ? bron.deal_id || null : null,
-    nummer,
-    omschrijving: bron.omschrijving,
-    arbeidsuren: Number(bron.arbeidsuren || 0),
-    uurtarief: Number(bron.uurtarief || 55),
-    materiaalkosten: Number(bron.materiaalkosten || 0),
-    reiskosten: Number(bron.reiskosten || 0),
-    marge_pct: Number(bron.marge_pct ?? 25),
-    btw_pct: Number(bron.btw_pct || 21),
-    totaal_excl: Number(bron.totaal_excl || 0),
-    totaal_incl: Number(bron.totaal_incl || 0),
-    geldig_tot: bron.geldig_tot,
-    notes: bron.notes,
-  });
-  if (!kop.ok) return kop;
-
-  const mislukt: string[] = [];
-  for (const it of items.data) {
-    const res = await createOfferteItem({
-      offerte_id: kop.data.id,
-      omschrijving: it.omschrijving,
-      eenheid: it.eenheid,
-      type: it.type,
-      btw_pct: it.btw_pct,
-      btw_regime: it.btw_regime || regimeVanPct(it.btw_pct),
-      aantal: Number(it.aantal || 1),
-      prijs_per: Number(it.prijs_per || 0),
-      volgorde: Number(it.volgorde || 0),
+  // Een offerte zonder regels (oud model) kan niet via bb_offerte_opslaan, die
+  // wil minstens één regel: dan alleen de kop, zoals het dashboard.
+  if (items.data.length === 0) {
+    return createOfferte({
+      customer_id: customerId || bron.customer_id,
+      deal_id: alsVersie ? bron.deal_id || null : null,
+      nummer,
+      omschrijving: bron.omschrijving,
+      arbeidsuren: Number(bron.arbeidsuren || 0),
+      uurtarief: Number(bron.uurtarief || 55),
+      materiaalkosten: Number(bron.materiaalkosten || 0),
+      reiskosten: Number(bron.reiskosten || 0),
+      marge_pct: Number(bron.marge_pct ?? 25),
+      btw_pct: Number(bron.btw_pct || 21),
+      totaal_excl: Number(bron.totaal_excl || 0),
+      totaal_incl: Number(bron.totaal_incl || 0),
+      geldig_tot: bron.geldig_tot,
+      notes: bron.notes,
     });
-    if (!res.ok) mislukt.push(res.melding);
   }
-  if (mislukt.length > 0) {
-    return writeFout(
-      'onbekend',
-      `Offerte ${kop.data.nummer ?? ''} is aangemaakt, maar ${mislukt.length} van de ${items.data.length} ` +
-        `regels zijn niet gekopieerd. ${mislukt[0]}`,
-    );
-  }
-  return kop;
+
+  // Nieuwe ids voor groepen en regels; groepen, eenheid en herkomst gaan mee,
+  // in één transactie (`copyOfferte` in het dashboard).
+  const groepen = await getOfferteGroepen(bronId);
+  if (groepen.error) return writeFout('onbekend', groepen.error);
+  const nieuweId = new Map(groepen.data.map((g) => [g.id, uuid()]));
+  return slaOfferteOp({
+    id: null,
+    versie: null,
+    nummer: nummer ?? null,
+    kop: {
+      customer_id: customerId || bron.customer_id,
+      deal_id: alsVersie ? bron.deal_id || null : null,
+      omschrijving: bron.omschrijving ?? '',
+      btw_pct: Number(bron.btw_pct || 21),
+      geldig_tot: bron.geldig_tot,
+      notes: bron.notes ?? '',
+    },
+    groepen: groepen.data.map((g) => ({
+      id: nieuweId.get(g.id)!,
+      naam: g.naam ?? '',
+      werkzaamheden: g.werkzaamheden,
+      herkomst: (g.herkomst as Herkomst | null) ?? null,
+    })),
+    regels: items.data.map((it) => ({
+      id: uuid(),
+      groep_id: it.groep_id ? nieuweId.get(it.groep_id) ?? null : null,
+      type: it.type,
+      omschrijving: it.omschrijving ?? '',
+      eenheid: it.eenheid ?? null,
+      aantal: Number(it.aantal ?? 1),
+      prijs_per: Number(it.prijs_per ?? 0),
+      btw_pct: Number(it.btw_pct ?? 21),
+      btw_regime: (it.btw_regime || regimeVanPct(Number(it.btw_pct ?? 21))) as BtwRegime,
+      sleutel: it.sleutel ?? null,
+      herkomst: (it.herkomst as Herkomst | null) ?? null,
+    })),
+  });
 }
 
 /**
@@ -977,6 +995,8 @@ export async function slaOfferteOp(input: {
   groepen: OfferteOpslagGroep[];
   regels: OfferteOpslagRegel[];
   vervangt?: Pick<OfferteRow, 'id' | 'nummer' | 'deal_id' | 'btw_pct'> | null;
+  /** Vast nummer voor een nieuwe offerte (een kopie als versie); anders het volgende. */
+  nummer?: string | null;
 }): Promise<WriteResult<OfferteRow>> {
   if (input.regels.length === 0) return writeFout('validatie', 'Voeg minimaal één regel toe.');
   if (isReadonly()) return writeFout('readonly');
@@ -997,9 +1017,12 @@ export async function slaOfferteOp(input: {
       kop.btw_pct = Number(input.vervangt.btw_pct || 21);
       kop.vervangt_id = input.vervangt.id;
     } else {
-      const n = await volgendOfferteNummer();
-      if (!n.ok) return writeFout('onbekend', n.melding);
-      nummer = n.nummer;
+      if (input.nummer) nummer = input.nummer;
+      else {
+        const n = await volgendOfferteNummer();
+        if (!n.ok) return writeFout('onbekend', n.melding);
+        nummer = n.nummer;
+      }
       kop.deal_id = input.kop.deal_id || null;
       kop.btw_pct = input.kop.btw_pct ?? 21;
     }
