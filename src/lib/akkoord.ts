@@ -13,7 +13,7 @@
 export const AKKOORD_VERSIES = {
   algemene_voorwaarden: '2026-12',
   verwerkersovereenkomst: '2026-12',
-  privacyverklaring: '2026-11a',
+  privacyverklaring: '2026-11b',
 } as const;
 
 export type AkkoordDocument = 'algemene_voorwaarden' | 'verwerkersovereenkomst';
