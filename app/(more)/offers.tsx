@@ -1369,7 +1369,6 @@ function OffersScreenInhoud() {
           }
           document={
             <View style={{ gap: spacing.lg }}>
-              {saveError ? <NoticeBanner toon="waarschuwing" message={saveError} /> : null}
               {formulierVelden(true)}
             </View>
           }
@@ -1387,6 +1386,7 @@ function OffersScreenInhoud() {
             />
           }
           aandachtspunten={aandachtspunten}
+          fout={saveError}
           totaal={{ excl: conceptTotalen.excl, incl: conceptTotalen.incl }}
           acties={
             <>

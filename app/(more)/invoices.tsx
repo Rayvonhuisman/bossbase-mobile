@@ -1680,7 +1680,6 @@ function InvoicesScreenInhoud() {
           }
           document={
             <View style={{ gap: spacing.lg }}>
-              {saveError ? <NoticeBanner toon="waarschuwing" message={saveError} /> : null}
               {formulierVelden(true)}
             </View>
           }
@@ -1698,6 +1697,7 @@ function InvoicesScreenInhoud() {
             />
           }
           aandachtspunten={aandachtspunten}
+          fout={saveError}
           totaal={{ excl: conceptTotalen.excl, incl: conceptTotalen.incl }}
           acties={
             <>

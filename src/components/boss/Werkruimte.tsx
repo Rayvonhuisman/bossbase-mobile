@@ -16,10 +16,11 @@
  * Beide panelen blijven gemount; wisselen verliest niets.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronUp, Eye, FileText, MessageSquare, Pencil } from 'lucide-react-native';
 import { useTheme } from '@/providers';
+import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { formatEURCent } from '@/lib/format';
 import { NAAST_ELKAAR_VANAF, WERKRUIMTE_MAX } from '@/lib/schermklasseRegels';
 import { spacing, type ThemeColors } from '@/theme';
@@ -68,10 +69,12 @@ type Props = {
   aandachtspunten: Aandachtspunt[];
   totaal: { excl: number; incl: number };
   acties: ReactNode;
+  /** Opslaan lukte niet: vast boven de knoppen, ook als het document gescrold is. */
+  fout?: string | null;
 };
 
 export function Werkruimte({
-  open, titel, nummer, status, bossBezig, bossWacht, onTerug, gesprek, document, voorbeeld, aandachtspunten, totaal, acties,
+  open, titel, nummer, status, bossBezig, bossWacht, onTerug, gesprek, document, voorbeeld, aandachtspunten, totaal, acties, fout,
 }: Props) {
   const { colors: t } = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
@@ -84,6 +87,19 @@ export function Werkruimte({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [documentGezien, setDocumentGezien] = useState(true);
+  // Toetsenbord open: op een telefoon de voet weg (anders blijft er op een
+  // kleine telefoon nauwelijks document over) en geen ruimte voor de homebalk.
+  const webToetsenbord = useToetsenbordOpen();
+  const [nativeToetsenbord, setNativeToetsenbord] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') return undefined;
+    const ios = Platform.OS === 'ios';
+    const aan = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setNativeToetsenbord(true));
+    const uit = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setNativeToetsenbord(false));
+    return () => { aan.remove(); uit.remove(); };
+  }, []);
+  const toetsenbord = webToetsenbord || nativeToetsenbord;
+  const onderrand = toetsenbord ? 0 : insets.bottom;
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
   const toonDocument = useCallback(() => {
@@ -169,7 +185,14 @@ export function Werkruimte({
         <View ref={docInhoud} collapsable={false} style={weergave !== 'bewerken' && s.verborgen}>{document}</View>
         {weergave === 'voorbeeld' ? voorbeeld : null}
       </ScrollView>
-      <View style={[s.voet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+      {toetsenbord && !naastElkaar ? null : (
+      <View style={[s.voet, { paddingBottom: Math.max(onderrand, 14) }]}>
+        {fout ? (
+          <View style={s.fout} accessibilityRole="alert">
+            <AlertTriangle size={15} color={t.statusRejectFg} />
+            <Text style={s.foutTekst}>{fout}</Text>
+          </View>
+        ) : null}
         <View style={s.voetTotaal}>
           <Text style={s.voetLabel}>Totaal incl. btw</Text>
           <Text style={s.voetBedrag}>{formatEURCent(totaal.incl)}</Text>
@@ -177,17 +200,18 @@ export function Werkruimte({
         </View>
         <View style={s.voetKnoppen}>{acties}</View>
       </View>
+      )}
     </View>
   );
 
   const gesprekVlak = (
-    <View style={[s.vlak, naastElkaar && s.gesprekNaast, !naastElkaar && tab !== 'gesprek' && s.verborgen, { paddingBottom: insets.bottom }]}>
+    <View style={[s.vlak, naastElkaar && s.gesprekNaast, !naastElkaar && tab !== 'gesprek' && s.verborgen, { paddingBottom: onderrand }]}>
       {naastElkaar ? (
         <View style={s.gesprekKop}><MessageSquare size={16} color={t.green700} /><Text style={s.gesprekKopTekst}>Boss</Text><Text style={s.gesprekKopSub}>AI-assistent · doet een voorstel, jij beslist</Text></View>
       ) : null}
       {gesprek}
       {toast && !naastElkaar && tab === 'gesprek' ? (
-        <Pressable onPress={toonDocument} accessibilityRole="button" style={[s.toast, { bottom: 96 + insets.bottom }]}>
+        <Pressable onPress={toonDocument} accessibilityRole="button" style={[s.toast, { bottom: 96 + onderrand }]}>
           <Text style={s.toastTekst} numberOfLines={2}>{toast}</Text>
           <Text style={s.toastActie}>Bekijk document ›</Text>
         </Pressable>
@@ -288,6 +312,8 @@ const makeStyles = (t: ThemeColors) =>
     docScroll: { padding: spacing.lg, gap: spacing.lg, paddingBottom: 32 },
     voet: { backgroundColor: t.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: spacing.lg, paddingTop: 14, gap: 10, shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: -6 }, elevation: 8 },
     voetTotaal: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+    fout: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: t.statusRejectBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+    foutTekst: { flex: 1, fontSize: 13.5, lineHeight: 19, color: t.statusRejectFg, fontWeight: '600' },
     voetLabel: { fontSize: 12.5, color: t.muted },
     voetBedrag: { fontSize: 20, fontWeight: '700', color: t.ink, fontVariant: ['tabular-nums'] },
     voetSub: { fontSize: 12, color: t.muted2, fontVariant: ['tabular-nums'] },

@@ -192,7 +192,7 @@ export function BossMailHulp({
                   </View>
                   <Knoppen>
                     {['Duidelijker', 'Korter', 'Persoonlijker', 'Zakelijker'].map((m) => (
-                      <KleineKnop key={m} label={m} variant="secundair" disabled={busy} onPress={() => { push({ t: 'ik', tekst: `Maak deze tekst ${m.toLowerCase()}.` }); void vraag(`Maak deze tekst ${m.toLowerCase()}.`, { sel: it.sel, kaartId: it.id }); }} />
+                      <KleineKnop key={m} label={m} variant="secundair" disabled={busy} onPress={() => void vraag(`Maak deze tekst ${m.toLowerCase()}.`, { sel: it.sel, kaartId: it.id })} />
                     ))}
                   </Knoppen>
                   {it.voorstel ? (

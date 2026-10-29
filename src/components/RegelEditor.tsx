@@ -248,8 +248,18 @@ export function RegelEditor({
     );
   };
 
+  // Factuur: de groep uit de offerte staat op de regel. Net als het dashboard
+  // een kop (naam en werkzaamheden) boven de eerste regel van elke groep.
+  const factuurGroepKop = (r: Regel, vorige: Regel | undefined) =>
+    !metGroepen && r.groep?.naam && vorige?.groep?.naam !== r.groep.naam ? (
+      <View key={`kop-${r.sleutel}`} style={styles.factuurGroep} accessibilityRole="header">
+        <Text style={styles.factuurGroepNaam}>{r.groep.naam}</Text>
+        {r.groep.werkzaamheden ? <Text style={styles.factuurGroepWerk}>{r.groep.werkzaamheden}</Text> : null}
+      </View>
+    ) : null;
+
   const reeks = (lijst: Regel[], startNr: number) =>
-    lijst.map((r, i) => kaart(r, startNr + i, i === 0, i === lijst.length - 1));
+    lijst.flatMap((r, i) => [factuurGroepKop(r, lijst[i - 1]), kaart(r, startNr + i, i === 0, i === lijst.length - 1)]);
 
   const voegToeKnop = (groepId: string | null, label = 'Regel toevoegen') => (
     <Pressable
@@ -447,6 +457,9 @@ const makeStyles = (t: ThemeColors) =>
     herkomst: { fontSize: 11.5, fontWeight: '600', color: t.green700 },
     groep: { backgroundColor: t.card, borderRadius: t.rLg, padding: spacing.md, gap: spacing.md, borderWidth: 1.5, borderColor: t.line },
     groepKop: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+    factuurGroep: { paddingTop: spacing.sm, gap: 2 },
+    factuurGroepNaam: { fontSize: 15, fontWeight: '700', color: t.ink },
+    factuurGroepWerk: { fontSize: 13, color: t.muted },
     groepKnop: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 42,
       borderRadius: t.rMd, backgroundColor: t.bgAlt,
