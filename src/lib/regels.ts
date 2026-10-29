@@ -150,7 +150,72 @@ export type Regel = {
   btwRegime: BtwRegime;
   /** Percentage; volgt het regime, behalve bij een afwijkend tarief uit oude data. */
   btwPct: number;
+
+  // ── Alleen bij offertes (en regels die Boss maakte) ──
+  // Dezelfde velden als het venster in het dashboard (`lib/offerteRegels.js`).
+  // Ze gaan via `bb_offerte_opslaan` mee, zodat een offerte met groepen uit het
+  // dashboard in de app niet zijn groepen of herkomst verliest.
+  /** Id van de regel in de database (uuid); daarmee wijzigt Boss een bestaande regel. */
+  id?: string;
+  /** De groep waarin de regel staat, of null. */
+  groepId?: string | null;
+  /** Bijvoorbeeld m² of zak, vooral bij materiaal. */
+  eenheid?: string;
+  /** Waar de regel voor staat (`mat:<id>`, `eigen:<id>`, `uren:<soort>`); in de database `sleutel`. */
+  bronSleutel?: string | null;
+  /** Intern: bron van hoeveelheid en prijs, handmatig aangepaste velden. Niet voor de klant. */
+  herkomst?: Herkomst | null;
+
+  // ── Alleen bij facturen die Boss maakte ──
+  /** Het nummer van de werkbon of offerte waar de regel vandaan komt. */
+  bossBron?: string | null;
+  /** De omschrijving is door Boss geschreven. */
+  bossTekst?: boolean;
+  /** Boss vond geen prijs: de gebruiker moet hem invullen. */
+  bossPrijsOntbreekt?: boolean;
+  /** Groep uit de offerte, zoals hij in `factuur_regels.groep` staat. */
+  groep?: { sleutel?: string; naam: string; werkzaamheden?: string | null } | null;
 };
+
+/** Een bron van een hoeveelheid of prijs (`herkomst.aantal`, `herkomst.prijs`). */
+export type HerkomstBron = {
+  soort: string;
+  toelichting?: string | null;
+  waarde?: number;
+  formule?: string;
+  uitkomst?: number;
+  offerte?: string;
+  [k: string]: unknown;
+};
+
+/** Zelfde vorm als `herkomst` in `offerte_items` (dashboard `schoneHerkomst`). */
+export type Herkomst = {
+  aantal?: HerkomstBron | null;
+  prijs?: HerkomstBron | null;
+  hand?: Partial<Record<'omschrijving' | 'aantal' | 'prijs' | 'naam' | 'werkzaamheden', true>>;
+  ontbreekt?: ('aantal' | 'prijs')[];
+  aanvulling?: { reden: string };
+  tekst_door_boss?: true;
+};
+
+/** Een groep in een offerte (`offerte_groepen`). */
+export type Groep = {
+  id: string;
+  naam: string;
+  /** Komt op de offerte, onder de naam. */
+  werkzaamheden: string;
+  herkomst?: Herkomst | null;
+};
+
+/** Een uuid voor een nieuwe regel of groep (Hermes kent geen `crypto.randomUUID`). */
+export function nieuweId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (t) => {
+    const r = (Math.random() * 16) | 0;
+    return (t === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 let teller = 0;
 export function nieuweSleutel(): string {

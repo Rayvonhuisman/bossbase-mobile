@@ -27,11 +27,10 @@ import {
 import { usePermissions, useTheme, useToast } from '@/providers';
 import {
   createOfferte,
-  createOfferteMetRegels,
   deleteOfferte,
   getOfferteDetail,
+  getOfferteGroepen,
   getOfferteItems,
-  herzieOfferte,
   inhoudLigtVast,
   kopieerOfferte,
   listOffertes,
@@ -39,11 +38,11 @@ import {
   OFFERTE_STATUS_OPTIES,
   stuurGetekendePdfNa,
   updateOfferte,
-  vervangOfferteRegels,
   type OfferteDetail,
   type OfferteInput,
   type OfferteItem,
   type OfferteRow,
+  slaOfferteOp,
 } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
 import { getCompanySettings } from '@/services/settingsService';
@@ -57,8 +56,16 @@ import {
   verstuurMail,
 } from '@/services/documentMailService';
 import { logTijdlijn } from '@/services/klantTijdlijnService';
-import { berekenTotalen, legeRegel, type EigenEenheid, type Regel } from '@/lib/regels';
-import { offerteRegelVoorOpslag, regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { berekenTotalen, legeRegel, nieuweId, type EigenEenheid, type Groep, type Regel } from '@/lib/regels';
+import { regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { heeftConcept, leesConcept, wisConcept, bewaarConceptDeel, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
+import { bossStatus } from '@/services/bossDocumentService';
+import { Werkruimte, WerkruimteVeld, type Aandachtspunt } from '@/components/boss/Werkruimte';
+import { OfferteGesprek, type OfferteGesprekBewaard } from '@/components/boss/OfferteGesprek';
+import { DocumentVoorbeeld } from '@/components/boss/DocumentVoorbeeld';
+import { BossIngang } from '@/components/boss/BossIngang';
+import type { Customer } from '@/types/domain';
+import { groepUitRij, naarOpslag, offerteVeldenUitItem, ontbreektIn } from '@/lib/boss/offerteRegels';
 import { isoVanDatum } from '@/lib/datum';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
@@ -151,7 +158,13 @@ type Concept = {
   /** Afgewezen of vervangen: alleen de status. */
   alleenStatus: boolean;
   regels: Regel[];
+  /** Groepen, zoals in het dashboard; regels verwijzen ernaar met `groepId`. */
+  groepen: Groep[];
   regelsLaden: boolean;
+  /** `inhoud_versie` bij het openen; de database weigert een verouderde opslag. */
+  versie: number | null;
+  /** Waar Boss concept en gesprek bewaart als je sluit zonder opslaan (lib/boss/werkruimteConcept). */
+  bossSleutel: string;
 };
 
 type MailStand = {
@@ -253,6 +266,42 @@ function OffersScreenInhoud() {
   const [kopie, setKopie] = useState<KopieStand | null>(null);
 
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
+
+  // ── Boss: de werkruimte bij een offerte ──────────────────────────────────
+  // "Maak met Boss" opent de werkruimte (components/boss/Werkruimte): het
+  // formulier en het gesprek, zoals in het dashboard. Terug brengt je naar het
+  // formulier; sluit je zonder opslaan, dan staan concept en gesprek bij het
+  // opnieuw openen klaar.
+  const [bossFunctie, setBossFunctie] = useState(false);
+  const [wrOpen, setWrOpen] = useState(false);
+  const [bossGebruikt, setBossGebruikt] = useState(false);
+  const [bossStand, setBossStand] = useState({ bezig: false, wacht: 0 });
+  const [bewaardGesprek, setBewaardGesprek] = useState<OfferteGesprekBewaard | null>(null);
+  const [vorigConcept, setVorigConcept] = useState<BewaardConcept | null>(null);
+  const [flitsIds, setFlitsIds] = useState<string[]>([]);
+  const [klantRijen, setKlantRijen] = useState<Customer[]>([]);
+  useEffect(() => {
+    let weg = false;
+    void bossStatus('boss-offerte').then((st) => { if (!weg) setBossFunctie(st.mag && st.beschikbaar); });
+    return () => { weg = true; };
+  }, []);
+  useEffect(() => {
+    if (!flitsIds.length) return undefined;
+    const id = setTimeout(() => setFlitsIds([]), 6000);
+    return () => clearTimeout(id);
+  }, [flitsIds]);
+  // Het document bewaren zolang er met Boss gewerkt wordt, niet zolang er nog
+  // een vorig concept klaarstaat (dat zou het overschrijven).
+  useEffect(() => {
+    if (concept && bossGebruikt && !vorigConcept) bewaarConceptDeel(concept.bossSleutel, 'document', concept);
+  }, [concept, bossGebruikt, vorigConcept]);
+  const bossVoorConcept = (sleutel: string) => {
+    setWrOpen(false);
+    setBossGebruikt(false);
+    setBewaardGesprek(null);
+    setBossStand({ bezig: false, wacht: 0 });
+    setVorigConcept(heeftConcept(sleutel) ? leesConcept(sleutel) : null);
+  };
   const { save: saveMail, saving: mailBezig, error: mailFout, setError: setMailFout } = useSave<unknown>();
   const { save: saveKopie, saving: kopieBezig, error: kopieFout, setError: setKopieFout } = useSave<unknown>();
 
@@ -278,6 +327,7 @@ function OffersScreenInhoud() {
     if (offRes.error) setError(offRes.error);
     else setItems(offRes.data);
     if (!klantRes.error) {
+      setKlantRijen(klantRes.data as Customer[]);
       setKlanten(
         klantRes.data
           .map((k) => ({ id: k.id, label: k.name ?? 'Klant' }))
@@ -394,9 +444,13 @@ function OffersScreenInhoud() {
       herzien: false,
       volledigVast: false,
       alleenStatus: false,
-      regels: [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+      regels: [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }],
+      groepen: [],
       regelsLaden: false,
+      versie: null,
+      bossSleutel: `offerte:nieuw:${vooraf?.dealId || vooraf?.customerId || ''}`,
     });
+    bossVoorConcept(`offerte:nieuw:${vooraf?.dealId || vooraf?.customerId || ''}`);
   };
 
   // Nieuw vanaf de projectkaart: pas openen als de instellingen er zijn, anders
@@ -437,23 +491,37 @@ function OffersScreenInhoud() {
       volledigVast,
       alleenStatus: !bewerkbaar && !volledigVast,
       regels: [],
+      groepen: [],
       regelsLaden: bewerkbaar,
+      versie: o.inhoud_versie ?? 1,
+      bossSleutel: `offerte:${o.id}`,
     });
+    bossVoorConcept(`offerte:${o.id}`);
     if (!bewerkbaar) return;
-    const { data, error: fout } = await getOfferteItems(o.id);
+    const [{ data, error: fout }, { data: groepRijen, error: groepFout }] = await Promise.all([
+      getOfferteItems(o.id),
+      getOfferteGroepen(o.id),
+    ]);
+    const groepen = groepRijen.map(groepUitRij);
+    const bekend = new Set(groepen.map((g) => g.id));
     setConcept((c) =>
       c && c.id === o.id
         ? {
             ...c,
+            // Id, groep, eenheid en herkomst mee, zodat opslaan ze niet kwijtraakt.
             regels:
               data.length > 0
-                ? data.map((it) => regelUitOfferteItem(it, o))
-                : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+                ? data.map((it) => {
+                    const r = offerteVeldenUitItem(it, regelUitOfferteItem(it, o));
+                    return r.groepId && !bekend.has(r.groepId) ? { ...r, groepId: null } : r;
+                  })
+                : [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }],
+            groepen,
             regelsLaden: false,
           }
         : c,
     );
-    if (fout) setSaveError(fout);
+    if (fout || groepFout) setSaveError(fout || groepFout);
   };
 
   // ── Versturen per mail ────────────────────────────────────────────────────
@@ -512,68 +580,70 @@ function OffersScreenInhoud() {
   const opslaan = (enVersturen = false) => {
     if (!concept) return;
     const c = concept;
-    const regels = c.regels.map((r) => offerteRegelVoorOpslag(r, eenheden));
-    const totalen = berekenTotalen(c.regels);
+    const opslag = naarOpslag({ regels: c.regels, groepen: c.groepen }, eenheden);
+    const kop = {
+      customer_id: c.customerId,
+      deal_id: c.dealId,
+      omschrijving: c.omschrijving,
+      geldig_tot: c.geldigTot || null,
+      notes: c.notes,
+      btw_pct: Number(c.btwPct.replace(',', '.') || 21),
+    };
 
     save(
       async (): Promise<WriteResult<OfferteRow>> => {
-        // Nieuwe offerte: kop én regels in één handeling, met de totalen uit
-        // de regels — zelfde volgorde en bedragen als de offertemodal.
+        // Kop, groepen en regels in één transactie via bb_offerte_opslaan,
+        // dezelfde route als het dashboard: groepen, eenheden en de herkomst
+        // van regels van Boss blijven zo bewaard.
         if (!c.id) {
-          const invoer: OfferteInput = {
-            customer_id: c.customerId,
-            deal_id: c.dealId,
-            omschrijving: c.omschrijving,
-            geldig_tot: c.geldigTot || null,
-            btw_pct: Number(c.btwPct.replace(',', '.') || 21),
-            notes: c.notes,
-          };
-          if (!magRegels) return createOfferte(invoer);
-          const res = await createOfferteMetRegels(
-            { ...invoer, totaal_excl: totalen.excl, totaal_incl: totalen.incl },
-            regels,
-          );
-          return res.ok ? { ok: true, data: res.data.offerte } : res;
+          if (!magRegels) {
+            const invoer: OfferteInput = {
+              customer_id: c.customerId,
+              deal_id: c.dealId,
+              omschrijving: c.omschrijving,
+              geldig_tot: c.geldigTot || null,
+              btw_pct: kop.btw_pct,
+              notes: c.notes,
+            };
+            return createOfferte(invoer);
+          }
+          return slaOfferteOp({ id: null, versie: null, kop, ...opslag });
         }
 
         if (c.volledigVast) {
           return writeFout('op-slot', 'Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.');
         }
 
-        // Verstuurd en nog niet getekend: een nieuwe versie met deze regels.
+        // Verstuurd en nog niet getekend: een nieuwe versie met deze regels; de
+        // oude wordt in dezelfde transactie als vervangen gemarkeerd.
         if (c.herzien && c.bron) {
-          const res = await herzieOfferte(
-            c.bron,
-            { customer_id: c.customerId, omschrijving: c.omschrijving, geldig_tot: c.geldigTot || null, notes: c.notes },
-            regels,
-            { totaal_excl: totalen.excl, totaal_incl: totalen.incl },
-          );
-          return res.ok ? { ok: true, data: res.data.offerte } : res;
+          return slaOfferteOp({ id: null, versie: null, kop, ...opslag, vervangt: c.bron });
         }
 
         // Afgewezen of vervangen: alleen de status.
         if (c.alleenStatus) return updateOfferte(c.id, { status: c.status });
 
-        // Concept: eerst de regels (alles weg en opnieuw, zoals het
-        // dashboard), dan de kop — zo staat een statuswissel nooit vóór de
-        // regels die erbij horen.
-        if (magRegels) {
-          const r = await vervangOfferteRegels(c.id, regels);
-          if (!r.ok) return r;
+        if (!magRegels) {
+          return updateOfferte(c.id, { ...kop, status: c.status });
         }
-        return updateOfferte(c.id, {
-          customer_id: c.customerId,
-          deal_id: c.dealId,
-          omschrijving: c.omschrijving,
-          geldig_tot: c.geldigTot || null,
-          btw_pct: Number(c.btwPct.replace(',', '.') || 21),
-          notes: c.notes,
-          status: c.status,
-        });
+        // Concept: inhoud via de databasefunctie; aanvraag, btw en status
+        // kent die niet, dus die daarna alleen als ze veranderd zijn.
+        const res = await slaOfferteOp({ id: c.id, versie: c.versie, kop, ...opslag });
+        if (!res.ok) return res;
+        const bron = c.bron;
+        const extra: Record<string, unknown> = {};
+        if ((c.dealId || null) !== (bron?.deal_id || null)) extra.deal_id = c.dealId;
+        if (kop.btw_pct !== Number(bron?.btw_pct ?? 21)) extra.btw_pct = kop.btw_pct;
+        if (c.status !== (bron?.status ?? 'concept')) extra.status = c.status;
+        return Object.keys(extra).length ? updateOfferte(c.id, extra) : res;
       },
       {
         onSuccess: async (data) => {
           const opgeslagen = data as OfferteRow;
+          // Opgeslagen: niets meer om op terug te komen.
+          wisConcept(c.bossSleutel);
+          setWrOpen(false);
+          setBossGebruikt(false);
           setConcept(null);
           const naar = terugNaarProject.current;
           if (!c.id && naar) {
@@ -781,6 +851,150 @@ function OffersScreenInhoud() {
   const pdfOntbreekt = Boolean(detailData?.signed_at && !detailData.signed_pdf_url);
 
   const conceptBewerkbaar = concept ? !concept.id || concept.status === 'concept' || concept.herzien : false;
+
+  // ── Boss in dit formulier ─────────────────────────────────────────────────
+  const bossKan = Boolean(bossFunctie && magRegels && concept && conceptBewerkbaar && !concept.regelsLaden && !concept.volledigVast && !concept.alleenStatus);
+  const bossOpenen = () => {
+    if (!concept) return;
+    if (vorigConcept) { wisConcept(concept.bossSleutel); setVorigConcept(null); }
+    // Na Terug ging het gesprek dicht; het staat in de bewaarplaats.
+    setBewaardGesprek((leesConcept(concept.bossSleutel)?.gesprek as OfferteGesprekBewaard | undefined) ?? null);
+    setBossGebruikt(true);
+    setWrOpen(true);
+  };
+  const bossVerder = () => {
+    if (!vorigConcept || !concept) return;
+    const doc = vorigConcept.document as Concept | undefined;
+    if (doc) setConcept({ ...doc, versie: concept.versie, bron: concept.bron });
+    setBewaardGesprek((vorigConcept.gesprek as OfferteGesprekBewaard | undefined) ?? null);
+    setVorigConcept(null);
+    setBossGebruikt(true);
+    setWrOpen(true);
+  };
+  const klantVanConcept = klantRijen.find((k) => k.id === concept?.customerId) ?? null;
+  const conceptTotalen = berekenTotalen(concept?.regels ?? []);
+  const aandachtspunten: Aandachtspunt[] = concept
+    ? ([
+        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'offerteregels', veld: 'regels' } : null,
+        (() => {
+          const mist = concept.regels.filter((r) => ontbreektIn(r).length);
+          const n = mist.length;
+          return n ? { tekst: `hoeveelheid of prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: `regel:${mist[0]!.sleutel}` } : null;
+        })(),
+      ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
+    : [];
+  const kanOpslaan = Boolean(concept && !concept.volledigVast && !concept.regelsLaden && !(!concept.id && (!concept.customerId || (magRegels && concept.regels.length === 0))));
+  const formulierVelden = (inWerkruimte: boolean) => (
+    <>
+          <WerkruimteVeld naam="klant">
+          <SelectField
+            label="Klant"
+            value={concept?.customerId ?? null}
+            options={klanten}
+            onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
+            allowEmpty
+            emptyLabel="Geen klant"
+            placeholder="Geen klant"
+            disabled={!conceptBewerkbaar}
+          />
+          </WerkruimteVeld>
+          {deals.length > 0 && !concept?.herzien ? (
+            <SelectField
+              label="Aanvraag"
+              value={concept?.dealId ?? null}
+              options={deals}
+              onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
+              allowEmpty
+              emptyLabel="Geen aanvraag"
+              placeholder="Geen aanvraag"
+              disabled={!conceptBewerkbaar}
+            />
+          ) : null}
+          <FormField
+            label="Omschrijving"
+            value={concept?.omschrijving ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, omschrijving: v } : c))}
+            placeholder="Waar gaat de offerte over?"
+            editable={conceptBewerkbaar}
+          />
+          <View style={styles.rij}>
+            <View style={{ flex: 1.4 }}>
+              <DateField
+                label="Geldig tot"
+                value={concept?.geldigTot || null}
+                onChange={(v) => setConcept((c) => (c ? { ...c, geldigTot: v } : c))}
+                placeholder="Kies"
+                disabled={!conceptBewerkbaar}
+              />
+            </View>
+            {!concept?.herzien ? (
+              <View style={{ flex: 1 }}>
+                <FormField
+                  label="Btw %"
+                  value={concept?.btwPct ?? ''}
+                  onChangeText={(v) => setConcept((c) => (c ? { ...c, btwPct: v } : c))}
+                  placeholder="21"
+                  keyboardType="decimal-pad"
+                  editable={conceptBewerkbaar}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          {/* Regels horen bij de offerte, net als in het dashboard: één
+              handeling, één set totalen. Bij een concept vervangt opslaan alle
+              regels; bij herzien komen ze op de nieuwe versie. */}
+          {concept && conceptBewerkbaar && !magRegels ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message={
+                waaromNiet('offerteRegels', 'maken') ??
+                'Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.'
+              }
+            />
+          ) : null}
+
+          {concept && conceptBewerkbaar && magRegels ? (
+            concept.regelsLaden ? (
+              <Text style={styles.uitleg}>Regels laden…</Text>
+            ) : (
+              <WerkruimteVeld naam="regels">
+                <RegelEditor
+                regels={concept.regels}
+                onChange={(regels) => setConcept((c) => (c ? { ...c, regels } : c))}
+                groepen={concept.groepen}
+                onGroepenChange={(groepen) => setConcept((c) => (c ? { ...c, groepen } : c))}
+                standaard={{
+                  uurtarief: instellingen.uurtarief,
+                  reiskostenPerKm: instellingen.reiskostenPerKm,
+                  btwPct: instellingen.btwPct,
+                }}
+                eenheden={eenheden}
+                flitsIds={flitsIds}
+                metTotalen={!inWerkruimte}
+                />
+              </WerkruimteVeld>
+            )
+          ) : null}
+
+          {concept && !conceptBewerkbaar && concept.bron ? (
+            <Text style={styles.uitleg}>
+              {`Totaal ${formatEURCent(Number(concept.bron.totaal_incl ?? 0))} incl. btw.`}
+            </Text>
+          ) : null}
+
+          <FormField
+            label="Opmerking voor de klant"
+            value={concept?.notes ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, notes: v } : c))}
+            placeholder="Staat op de offerte die de klant ontvangt"
+            multiline
+            editable={conceptBewerkbaar}
+          />
+    </>
+  );
+
   const conceptBron = concept?.bron;
   const conceptMagWeg =
     Boolean(concept?.id) && magVerwijderen && (conceptBron ? magOfferteVerwijderen(conceptBron) : false);
@@ -1024,7 +1238,7 @@ function OffersScreenInhoud() {
 
       {/* Offerte aanmaken / bewerken / herzien */}
       <FormSheet
-        visible={concept !== null}
+        visible={concept !== null && !wrOpen}
         title={concept?.id ? (concept.herzien ? 'Offerte herzien' : 'Offerte bewerken') : 'Nieuwe offerte'}
         subtitle={concept?.id ? (concept.bron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
         error={saveError}
@@ -1095,103 +1309,18 @@ function OffersScreenInhoud() {
           </View>
         ) : null}
 
-        <SelectField
-          label="Klant"
-          value={concept?.customerId ?? null}
-          options={klanten}
-          onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
-          allowEmpty
-          emptyLabel="Geen klant"
-          placeholder="Geen klant"
-          disabled={!conceptBewerkbaar}
-        />
-        {deals.length > 0 && !concept?.herzien ? (
-          <SelectField
-            label="Aanvraag"
-            value={concept?.dealId ?? null}
-            options={deals}
-            onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
-            allowEmpty
-            emptyLabel="Geen aanvraag"
-            placeholder="Geen aanvraag"
-            disabled={!conceptBewerkbaar}
+        {bossKan ? (
+          <BossIngang
+            soort="offerte"
+            vorig={vorigConcept}
+            gebruikt={bossGebruikt}
+            sub="Inspreken, foto of eerdere offerte"
+            onOpen={bossOpenen}
+            onVerder={bossVerder}
+            onOpnieuw={() => { wisConcept(concept!.bossSleutel); setVorigConcept(null); }}
           />
         ) : null}
-        <FormField
-          label="Omschrijving"
-          value={concept?.omschrijving ?? ''}
-          onChangeText={(v) => setConcept((c) => (c ? { ...c, omschrijving: v } : c))}
-          placeholder="Waar gaat de offerte over?"
-          editable={conceptBewerkbaar}
-        />
-        <View style={styles.rij}>
-          <View style={{ flex: 1.4 }}>
-            <DateField
-              label="Geldig tot"
-              value={concept?.geldigTot || null}
-              onChange={(v) => setConcept((c) => (c ? { ...c, geldigTot: v } : c))}
-              placeholder="Kies"
-              disabled={!conceptBewerkbaar}
-            />
-          </View>
-          {!concept?.herzien ? (
-            <View style={{ flex: 1 }}>
-              <FormField
-                label="Btw %"
-                value={concept?.btwPct ?? ''}
-                onChangeText={(v) => setConcept((c) => (c ? { ...c, btwPct: v } : c))}
-                placeholder="21"
-                keyboardType="decimal-pad"
-                editable={conceptBewerkbaar}
-              />
-            </View>
-          ) : null}
-        </View>
-
-        {/* Regels horen bij de offerte, net als in het dashboard: één
-            handeling, één set totalen. Bij een concept vervangt opslaan alle
-            regels; bij herzien komen ze op de nieuwe versie. */}
-        {concept && conceptBewerkbaar && !magRegels ? (
-          <NoticeBanner
-            toon="waarschuwing"
-            message={
-              waaromNiet('offerteRegels', 'maken') ??
-              'Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.'
-            }
-          />
-        ) : null}
-
-        {concept && conceptBewerkbaar && magRegels ? (
-          concept.regelsLaden ? (
-            <Text style={styles.uitleg}>Regels laden…</Text>
-          ) : (
-            <RegelEditor
-              regels={concept.regels}
-              onChange={(regels) => setConcept((c) => (c ? { ...c, regels } : c))}
-              standaard={{
-                uurtarief: instellingen.uurtarief,
-                reiskostenPerKm: instellingen.reiskostenPerKm,
-                btwPct: instellingen.btwPct,
-              }}
-              eenheden={eenheden}
-            />
-          )
-        ) : null}
-
-        {concept && !conceptBewerkbaar && concept.bron ? (
-          <Text style={styles.uitleg}>
-            {`Totaal ${formatEURCent(Number(concept.bron.totaal_incl ?? 0))} incl. btw.`}
-          </Text>
-        ) : null}
-
-        <FormField
-          label="Opmerking voor de klant"
-          value={concept?.notes ?? ''}
-          onChangeText={(v) => setConcept((c) => (c ? { ...c, notes: v } : c))}
-          placeholder="Staat op de offerte die de klant ontvangt"
-          multiline
-          editable={conceptBewerkbaar}
-        />
+        {formulierVelden(false)}
 
         {/* "Opslaan en versturen", zoals de offertemodal: alleen als er nog
             iets op te slaan valt. */}
@@ -1209,6 +1338,67 @@ function OffersScreenInhoud() {
         ) : null}
       </FormSheet>
 
+      {/* De Boss-werkruimte bij deze offerte */}
+      {concept && bossGebruikt && wrOpen ? (
+        <Werkruimte
+          open={wrOpen}
+          titel={concept.id ? (concept.herzien ? 'Offerte herzien' : 'Offerte aanpassen') : 'Offerte opstellen'}
+          nummer={concept.bron?.nummer ?? null}
+          status={concept.herzien
+            ? { label: 'Verstuurd · opslaan maakt een nieuwe versie', toon: 'versie' }
+            : concept.id ? { label: 'Concept', toon: 'concept' } : { label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
+          bossBezig={bossStand.bezig}
+          bossWacht={bossStand.wacht}
+          onTerug={() => { if (!bossStand.bezig) setWrOpen(false); }}
+          gesprek={
+            <OfferteGesprek
+              klantId={concept.customerId}
+              offerteId={concept.id}
+              klanten={klantRijen}
+              offertes={items}
+              stand={{ regels: concept.regels, groepen: concept.groepen }}
+              setStand={(st) => setConcept((c) => (c ? { ...c, regels: st.regels, groepen: st.groepen } : c))}
+              maakRegel={() => ({ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() })}
+              standaardPct={instellingen.btwPct}
+              onToegepast={setFlitsIds}
+              onKlant={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
+              bewaard={bewaardGesprek}
+              bewaarSleutel={concept.bossSleutel}
+              onStand={setBossStand}
+            />
+          }
+          document={
+            <View style={{ gap: spacing.lg }}>
+              {formulierVelden(true)}
+            </View>
+          }
+          voorbeeld={
+            <DocumentVoorbeeld
+              soort="offerte"
+              nummer={concept.bron?.nummer ?? null}
+              klant={klantVanConcept}
+              datums={[{ label: 'Geldig tot', waarde: concept.geldigTot ? formatDateNL(concept.geldigTot) : '' }]}
+              omschrijving={concept.omschrijving}
+              regels={concept.regels}
+              groepen={concept.groepen}
+              opmerking={concept.notes}
+              eenheden={eenheden}
+            />
+          }
+          aandachtspunten={aandachtspunten}
+          fout={saveError}
+          totaal={{ excl: conceptTotalen.excl, incl: conceptTotalen.incl }}
+          acties={
+            <>
+              {magWijzigen ? (
+                <Button label="Opslaan en versturen" variant="secondary" disabled={saving || !kanOpslaan} onPress={() => opslaan(true)} style={{ flex: 1 }} />
+              ) : null}
+              <Button label={concept.herzien ? 'Nieuwe versie opslaan' : 'Opslaan als concept'} loading={saving} disabled={saving || !kanOpslaan} onPress={() => opslaan(false)} style={{ flex: 1 }} />
+            </>
+          }
+        />
+      ) : null}
+
       {/* Versturen per mail */}
       <DocumentMailSheet
         visible={mail !== null}
@@ -1217,6 +1407,7 @@ function OffersScreenInhoud() {
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
         onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
+        boss={mail ? { functie: 'boss-offerte', documentId: mail.offerte.id, klantId: mail.offerte.customer_id ?? null, kanOndertekenen: mail.kanOndertekenen } : null}
         melding={
           mail && mail.kanOndertekenen
             ? `Ondertekeningslink: ${ondertekenLink(APP_URL, mail.signToken)}. In de mail staat {{link}} als knop "Offerte bekijken & ondertekenen". De offerte gaat als PDF mee.`
