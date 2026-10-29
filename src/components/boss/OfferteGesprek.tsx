@@ -591,6 +591,7 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
               onPress={() => onKeuze(i, !it.keuze[i])}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: Boolean(it.keuze[i]), disabled: !open }}
+              aria-checked={Boolean(it.keuze[i])}
               style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}
             >
               <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: it.keuze[i] ? t.green : t.lineStrong, backgroundColor: it.keuze[i] ? t.green : 'transparent', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>

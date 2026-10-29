@@ -1747,6 +1747,7 @@ function InvoicesScreenInhoud() {
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
         onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
+        boss={mail ? { functie: 'boss-factuur', documentId: mail.factuur.id, klantId: mail.factuur.customer_id ?? null } : null}
         saving={mailBezig}
         error={mailFout}
         onVerstuur={verstuurFactuur}

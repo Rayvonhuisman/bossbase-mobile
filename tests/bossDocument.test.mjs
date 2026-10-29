@@ -96,3 +96,16 @@ test('factuurvoorstel: bestaande regel aangepast, nieuwe erbij, prijs ontbreekt 
   assert.equal(F.aantalZonderPrijs(res.regels), 1);
   assert.equal(res.gewijzigd.length, 2);
 });
+
+test('metOndertekenplek zet {{link}} na de knopzin en vóór de groet', async () => {
+  const { metOndertekenplek } = await import('../src/lib/boss/gesprek.ts');
+  const tekst = 'Beste Jan,\n\nIn de bijlage de offerte. Met de knop hieronder kunt u ondertekenen.\n\nMet vriendelijke groet,\nPiet';
+  assert.equal(
+    metOndertekenplek(tekst, true),
+    'Beste Jan,\n\nIn de bijlage de offerte. Met de knop hieronder kunt u ondertekenen.\n\n{{link}}\n\nMet vriendelijke groet,\nPiet',
+  );
+  assert.equal(metOndertekenplek('Beste Jan,\n\nHier de offerte.\n\nMet vriendelijke groet', true), 'Beste Jan,\n\nHier de offerte.\n\n{{link}}\n\nMet vriendelijke groet');
+  assert.equal(metOndertekenplek('Kort.', true), 'Kort.\n\n{{link}}');
+  assert.equal(metOndertekenplek('A\n\n{{ link }}\n\nB', true), 'A\n\n{{ link }}\n\nB');
+  assert.equal(metOndertekenplek(tekst, false), tekst);
+});

@@ -142,7 +142,7 @@ export function BossGesprek({
           </Pressable>
         ) : null}
         {dicteerHint && Platform.OS !== 'web' ? (
-          <Pressable onPress={() => setDicteerHint(false)} style={[s.melding, s.hint]}>
+          <Pressable onPress={() => setDicteerHint(false)} accessibilityRole="button" accessibilityHint="Tik om deze uitleg te sluiten" style={[s.melding, s.hint]}>
             <Mic size={14} color={t.green700} />
             <Text style={[s.meldingTekst, { color: t.ink2 }]}>{DICTEER_HINT}</Text>
           </Pressable>
@@ -383,7 +383,7 @@ export function Opties({ opties, gekozen, onKies }: { opties: { waarde: string; 
   return (
     <View style={s.opties}>
       {opties.map((o) => (
-        <Pressable key={o.waarde} onPress={() => onKies(o.waarde)} accessibilityRole="radio" accessibilityState={{ checked: gekozen === o.waarde }} style={[s.optie, gekozen === o.waarde && s.optieAan]}>
+        <Pressable key={o.waarde} onPress={() => onKies(o.waarde)} accessibilityRole="radio" accessibilityState={{ checked: gekozen === o.waarde }} aria-checked={gekozen === o.waarde} style={[s.optie, gekozen === o.waarde && s.optieAan]}>
           <Text style={[s.optieTekst, gekozen === o.waarde && s.optieTekstAan]}>{o.label}</Text>
         </Pressable>
       ))}

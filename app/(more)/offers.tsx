@@ -1402,6 +1402,7 @@ function OffersScreenInhoud() {
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
         onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
+        boss={mail ? { functie: 'boss-offerte', documentId: mail.offerte.id, klantId: mail.offerte.customer_id ?? null, kanOndertekenen: mail.kanOndertekenen } : null}
         melding={
           mail && mail.kanOndertekenen
             ? `Ondertekeningslink: ${ondertekenLink(APP_URL, mail.signToken)}. In de mail staat {{link}} als knop "Offerte bekijken & ondertekenen". De offerte gaat als PDF mee.`
