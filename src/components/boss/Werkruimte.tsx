@@ -25,16 +25,33 @@ import { NAAST_ELKAAR_VANAF, WERKRUIMTE_MAX } from '@/lib/schermklasseRegels';
 import { spacing, type ThemeColors } from '@/theme';
 import { MobielKader } from '../MobielKader';
 
-export type Aandachtspunt = { tekst: string; actie?: { label: string; onPress: () => void } };
+/**
+ * Wat nog ontbreekt. Met `veld` springt "Ga naar" naar het veld of de regel
+ * die zich met `WerkruimteVeld` onder die naam heeft aangemeld.
+ */
+export type Aandachtspunt = { tekst: string; veld?: string; actie?: { label: string; onPress: () => void } };
 
 type Ctx = {
   naastElkaar: boolean;
   toonDocument: () => void;
   /** Na toepassen: een melding met "Bekijk document" (alleen als het document niet in beeld is). */
   meldToegepast: (tekst: string) => void;
+  /** Een veld in het document aanmelden, zodat "Ga naar" erheen kan scrollen. */
+  registreerVeld: (naam: string, el: View | null) => void;
 };
 const WerkruimteCtx = createContext<Ctx | null>(null);
 export const useWerkruimte = () => useContext(WerkruimteCtx);
+
+/**
+ * Een plek in het document waar "Nog nodig" naartoe kan springen. Buiten de
+ * werkruimte (het gewone formulier) doet hij niets bijzonders.
+ */
+export function WerkruimteVeld({ naam, children }: { naam: string; children: ReactNode }) {
+  const wr = useContext(WerkruimteCtx);
+  const registreer = wr?.registreerVeld;
+  const ref = useCallback((el: View | null) => registreer?.(naam, el), [registreer, naam]);
+  return <View ref={ref} collapsable={false}>{children}</View>;
+}
 
 type Props = {
   open: boolean;
@@ -82,7 +99,24 @@ export function Werkruimte({
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 6000);
   }, [naastElkaar]);
-  const ctx = useMemo(() => ({ naastElkaar, toonDocument, meldToegepast }), [naastElkaar, toonDocument, meldToegepast]);
+  const velden = useRef(new Map<string, View>());
+  const docScroll = useRef<ScrollView | null>(null);
+  const docInhoud = useRef<View | null>(null);
+  const registreerVeld = useCallback((naam: string, el: View | null) => {
+    if (el) velden.current.set(naam, el);
+    else velden.current.delete(naam);
+  }, []);
+  const naarVeld = useCallback((naam: string) => {
+    toonDocument();
+    // Eerst het document in beeld, dan meten en scrollen.
+    setTimeout(() => {
+      const el = velden.current.get(naam);
+      const inhoud = docInhoud.current;
+      if (!el || !inhoud) return;
+      el.measureLayout(inhoud, (_x, y) => docScroll.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }), () => {});
+    }, 80);
+  }, [toonDocument]);
+  const ctx = useMemo(() => ({ naastElkaar, toonDocument, meldToegepast, registreerVeld }), [naastElkaar, toonDocument, meldToegepast, registreerVeld]);
 
   const docVlak = (
     <View style={[s.vlak, !naastElkaar && tab !== 'document' && s.verborgen]}>
@@ -112,17 +146,27 @@ export function Werkruimte({
           {aandachtspunten.map((a) => (
             <View key={a.tekst} style={s.aandachtRij}>
               <Text style={s.aandachtTekst}>{a.tekst}</Text>
-              {a.actie ? (
-                <Pressable onPress={() => { setAandachtOpen(false); setWeergave('bewerken'); a.actie!.onPress(); }} accessibilityRole="button" hitSlop={6}>
-                  <Text style={s.aandachtActie}>{a.actie.label}</Text>
+              {a.actie || a.veld ? (
+                <Pressable
+                  onPress={() => {
+                    setAandachtOpen(false);
+                    setWeergave('bewerken');
+                    if (a.actie) a.actie.onPress();
+                    else naarVeld(a.veld!);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${a.actie?.label ?? 'Ga naar'}: ${a.tekst}`}
+                  hitSlop={6}
+                >
+                  <Text style={s.aandachtActie}>{a.actie?.label ?? 'Ga naar'}</Text>
                 </Pressable>
               ) : null}
             </View>
           ))}
         </View>
       ) : null}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.docScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}>
-        <View style={weergave !== 'bewerken' && s.verborgen}>{document}</View>
+      <ScrollView ref={docScroll} style={{ flex: 1 }} contentContainerStyle={s.docScroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}>
+        <View ref={docInhoud} collapsable={false} style={weergave !== 'bewerken' && s.verborgen}>{document}</View>
         {weergave === 'voorbeeld' ? voorbeeld : null}
       </ScrollView>
       <View style={[s.voet, { paddingBottom: Math.max(insets.bottom, 14) }]}>

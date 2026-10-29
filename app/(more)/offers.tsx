@@ -60,7 +60,7 @@ import { berekenTotalen, legeRegel, nieuweId, type EigenEenheid, type Groep, typ
 import { regelUitOfferteItem } from '@/lib/regelOmzetting';
 import { heeftConcept, leesConcept, wisConcept, bewaarConceptDeel, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
 import { bossStatus } from '@/services/bossDocumentService';
-import { Werkruimte, type Aandachtspunt } from '@/components/boss/Werkruimte';
+import { Werkruimte, WerkruimteVeld, type Aandachtspunt } from '@/components/boss/Werkruimte';
 import { OfferteGesprek, type OfferteGesprekBewaard } from '@/components/boss/OfferteGesprek';
 import { DocumentVoorbeeld } from '@/components/boss/DocumentVoorbeeld';
 import { BossIngang } from '@/components/boss/BossIngang';
@@ -874,18 +874,20 @@ function OffersScreenInhoud() {
   const klantVanConcept = klantRijen.find((k) => k.id === concept?.customerId) ?? null;
   const conceptTotalen = berekenTotalen(concept?.regels ?? []);
   const aandachtspunten: Aandachtspunt[] = concept
-    ? [
-        !concept.customerId ? { tekst: 'een klant' } : null,
-        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'offerteregels' } : null,
+    ? ([
+        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'offerteregels', veld: 'regels' } : null,
         (() => {
-          const n = concept.regels.filter((r) => ontbreektIn(r).length).length;
-          return n ? { tekst: `hoeveelheid of prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}` } : null;
+          const mist = concept.regels.filter((r) => ontbreektIn(r).length);
+          const n = mist.length;
+          return n ? { tekst: `hoeveelheid of prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: `regel:${mist[0]!.sleutel}` } : null;
         })(),
-      ].filter((x): x is Aandachtspunt => x !== null)
+      ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
     : [];
   const kanOpslaan = Boolean(concept && !concept.volledigVast && !concept.regelsLaden && !(!concept.id && (!concept.customerId || (magRegels && concept.regels.length === 0))));
   const formulierVelden = (inWerkruimte: boolean) => (
     <>
+          <WerkruimteVeld naam="klant">
           <SelectField
             label="Klant"
             value={concept?.customerId ?? null}
@@ -896,6 +898,7 @@ function OffersScreenInhoud() {
             placeholder="Geen klant"
             disabled={!conceptBewerkbaar}
           />
+          </WerkruimteVeld>
           {deals.length > 0 && !concept?.herzien ? (
             <SelectField
               label="Aanvraag"
@@ -956,7 +959,8 @@ function OffersScreenInhoud() {
             concept.regelsLaden ? (
               <Text style={styles.uitleg}>Regels laden…</Text>
             ) : (
-              <RegelEditor
+              <WerkruimteVeld naam="regels">
+                <RegelEditor
                 regels={concept.regels}
                 onChange={(regels) => setConcept((c) => (c ? { ...c, regels } : c))}
                 groepen={concept.groepen}
@@ -969,7 +973,8 @@ function OffersScreenInhoud() {
                 eenheden={eenheden}
                 flitsIds={flitsIds}
                 metTotalen={!inWerkruimte}
-              />
+                />
+              </WerkruimteVeld>
             )
           ) : null}
 

@@ -140,3 +140,15 @@ test('offerte → factuur: regels krijgen de groep van de offerte', async () => 
   assert.equal(regels[0].groep.naam, 'Toilet');
   assert.equal(regels[1].groep, null);
 });
+
+test('vervangSelectie: op dezelfde plek, anders de enige plek, anders niet', async () => {
+  const { vervangSelectie } = await import('../src/lib/boss/gesprek.ts');
+  const tekst = 'Beste Jan,\n\nHierbij de factuur voor het werk.\n\nGroet';
+  const sel = { origineel: 'Hierbij de factuur voor het werk.', start: 12, end: 46 };
+  assert.equal(vervangSelectie(tekst, sel, 'Hier is de factuur.'), 'Beste Jan,\n\nHier is de factuur.\n\nGroet');
+  // Tekst ervoor gewijzigd: verschoven, maar nog één keer aanwezig.
+  assert.equal(vervangSelectie('Hoi Jan,\n\nHierbij de factuur voor het werk.\n\nGroet', sel, 'X'), 'Hoi Jan,\n\nX\n\nGroet');
+  // Weg of dubbel: niet raden.
+  assert.equal(vervangSelectie('Beste Jan, groet', sel, 'X'), null);
+  assert.equal(vervangSelectie('Hierbij de factuur voor het werk. Hierbij de factuur voor het werk.', { ...sel, start: 0, end: 3 }, 'X'), null);
+});

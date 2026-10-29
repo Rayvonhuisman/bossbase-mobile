@@ -56,3 +56,17 @@ export function metOndertekenplek(tekst: string, kanOndertekenen: boolean): stri
   alineas.splice(plek, 0, '{{link}}');
   return alineas.join('\n\n');
 }
+
+/** Een stuk geselecteerde tekst uit het bericht, met waar het stond. */
+export type MailSelectie = { sleutel: string; tekst: string; origineel: string; start: number; end: number };
+
+/**
+ * Het geselecteerde stuk vervangen. Staat het nog op dezelfde plek, dan daar;
+ * anders op de enige plek waar het nog voorkomt. Null als dat niet kan.
+ */
+export function vervangSelectie(tekst: string, sel: Pick<MailSelectie, 'origineel' | 'start' | 'end'>, nieuw: string): string | null {
+  if (tekst.slice(sel.start, sel.end) === sel.origineel) return tekst.slice(0, sel.start) + nieuw + tekst.slice(sel.end);
+  const i = tekst.indexOf(sel.origineel);
+  if (i < 0 || tekst.indexOf(sel.origineel, i + 1) >= 0) return null;
+  return tekst.slice(0, i) + nieuw + tekst.slice(i + sel.origineel.length);
+}

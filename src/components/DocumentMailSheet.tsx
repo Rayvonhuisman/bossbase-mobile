@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { Sparkles } from 'lucide-react-native';
+import { PenLine, Sparkles } from 'lucide-react-native';
 import { bossStatus, type BossFunctie } from '@/services/bossDocumentService';
-import { BossMailHulp } from './boss/BossMailHulp';
+import { BossMailHulp, type MailSelectie } from './boss/BossMailHulp';
 import { FormField } from './FormField';
 import { FormSheet } from './FormSheet';
 import { NoticeBanner } from './NoticeBanner';
@@ -57,6 +57,10 @@ export function DocumentMailSheet({
   const { colors: t } = useTheme();
   const [bossAan, setBossAan] = useState(false);
   const [hulpOpen, setHulpOpen] = useState(false);
+  // Geselecteerde tekst in het bericht: alleen dat stuk laat je Boss herschrijven.
+  const [selectie, setSelectie] = useState<{ start: number; end: number } | null>(null);
+  const [bossSelectie, setBossSelectie] = useState<MailSelectie | null>(null);
+  const selectieTekst = selectie ? concept.tekst.slice(selectie.start, selectie.end).trim() : '';
   const functie = boss?.functie;
   useEffect(() => {
     if (!functie || !visible) return;
@@ -100,6 +104,7 @@ export function DocumentMailSheet({
             onChangeText={(onderwerp) => onWijzig({ ...concept, onderwerp })}
           />
           {toonBoss ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pressable
               onPress={() => setHulpOpen(true)}
               accessibilityRole="button"
@@ -113,15 +118,41 @@ export function DocumentMailSheet({
               <Sparkles size={15} color={t.green700} />
               <Text style={{ fontSize: 14, fontWeight: '600', color: t.green700 }}>Help met schrijven</Text>
             </Pressable>
+            {selectieTekst.length > 12 && selectie ? (
+              <Pressable
+                onPress={() => {
+                  setBossSelectie({ sleutel: `s${Date.now()}`, tekst: selectieTekst, start: selectie.start, end: selectie.end, origineel: concept.tekst.slice(selectie.start, selectie.end) });
+                  setSelectie(null);
+                  setHulpOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityHint="Boss herschrijft alleen de geselecteerde tekst"
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14,
+                  borderRadius: 999, backgroundColor: pressed ? t.bgAlt : t.card, borderWidth: 1, borderColor: t.lineStrong,
+                })}
+              >
+                <PenLine size={15} color={t.ink} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>Herschrijf selectie</Text>
+              </Pressable>
+            ) : null}
+            </View>
           ) : null}
           <FormField
             label="Bericht"
             value={concept.tekst}
-            onChangeText={(tekst) => onWijzig({ ...concept, tekst })}
+            onChangeText={(tekst) => { setSelectie(null); onWijzig({ ...concept, tekst }); }}
+            onSelectionChange={toonBoss ? (e) => {
+              const { start, end } = e.nativeEvent.selection;
+              setSelectie(end > start ? { start, end } : null);
+            } : undefined}
             placeholder="Schrijf uw bericht hier..."
             multiline
             style={{ minHeight: 220 }}
           />
+          {toonBoss ? (
+            <Text style={{ fontSize: 12, color: t.muted }}>Selecteer een stuk tekst om alleen dat door Boss te laten herschrijven.</Text>
+          ) : null}
         </>
       )}
       {boss && toonBoss ? (
@@ -135,6 +166,7 @@ export function DocumentMailSheet({
           kanOndertekenen={Boolean(boss.kanOndertekenen)}
           concept={concept}
           onWijzig={onWijzig}
+          selectie={bossSelectie}
         />
       ) : null}
     </FormSheet>

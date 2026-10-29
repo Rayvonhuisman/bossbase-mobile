@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, ChevronUp, Layers, Plus, Trash2 } from 'lucide-react-native';
+import { WerkruimteVeld } from './boss/Werkruimte';
 import { useTheme } from '@/providers';
 import { formatEURCent } from '@/lib/format';
 import {
@@ -146,7 +147,8 @@ export function RegelEditor({
     const herkomst = herkomstTekst(r);
     const flits = Boolean(r.id && flitsIds.includes(r.id));
     return (
-      <View key={r.sleutel} style={[styles.kaart, flits && styles.flits]}>
+      <WerkruimteVeld key={r.sleutel} naam={`regel:${r.sleutel}`}>
+      <View style={[styles.kaart, flits && styles.flits]}>
         <View style={styles.kaartKop}>
           <Text style={styles.kaartNr}>Regel {nr}</Text>
           <View style={styles.knoppen}>
@@ -242,6 +244,7 @@ export function RegelEditor({
           <Text style={styles.regelTotaalBedrag}>{formatEURCent(regelprijs(r))}</Text>
         </View>
       </View>
+      </WerkruimteVeld>
     );
   };
 

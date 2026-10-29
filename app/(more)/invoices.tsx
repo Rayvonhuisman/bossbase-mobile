@@ -74,9 +74,9 @@ import {
 import { logTijdlijn } from '@/services/klantTijdlijnService';
 import { berekenTotalen, legeRegel, nieuweId, type EigenEenheid, type Regel } from '@/lib/regels';
 import { heeftConcept, leesConcept, wisConcept, bewaarConceptDeel, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
-import { aantalZonderPrijs, isLegeFactuurRegel, metRefs } from '@/lib/boss/factuurRegels';
+import { aantalZonderPrijs, isLegeFactuurRegel, metRefs, prijsOntbreekt } from '@/lib/boss/factuurRegels';
 import { bossStatus } from '@/services/bossDocumentService';
-import { Werkruimte, type Aandachtspunt } from '@/components/boss/Werkruimte';
+import { Werkruimte, WerkruimteVeld, type Aandachtspunt } from '@/components/boss/Werkruimte';
 import { FactuurGesprek, type FactuurGesprekBewaard } from '@/components/boss/FactuurGesprek';
 import { DocumentVoorbeeld } from '@/components/boss/DocumentVoorbeeld';
 import { BossIngang } from '@/components/boss/BossIngang';
@@ -1176,18 +1176,20 @@ function InvoicesScreenInhoud() {
   };
   const conceptTotalen = berekenTotalen(concept?.regels ?? []);
   const aandachtspunten: Aandachtspunt[] = concept
-    ? [
-        !concept.customerId ? { tekst: 'een klant' } : null,
+    ? ([
+        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
         ontbreekt.length ? { tekst: `${ontbreekt.join(', ')} van de klant` } : null,
-        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'factuurregels' } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'factuurregels', veld: 'regels' } : null,
         (() => {
           const n = aantalZonderPrijs(concept.regels);
-          return n ? { tekst: `een prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}` } : null;
+          const eerste = concept.regels.find((r) => prijsOntbreekt(r));
+          return n ? { tekst: `een prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: eerste ? `regel:${eerste.sleutel}` : 'regels' } : null;
         })(),
-      ].filter((x): x is Aandachtspunt => x !== null)
+      ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
     : [];
   const formulierVelden = (inWerkruimte: boolean) => (
     <>
+          <WerkruimteVeld naam="klant">
           <SelectField
             label="Klant"
             value={concept?.customerId ?? null}
@@ -1201,6 +1203,7 @@ function InvoicesScreenInhoud() {
             placeholder="Selecteer klant"
             disabled={concept?.opSlot || concept?.geimporteerd}
           />
+          </WerkruimteVeld>
           {ontbreekt.length > 0 ? (
             <NoticeBanner
               toon="waarschuwing"
@@ -1304,6 +1307,7 @@ function InvoicesScreenInhoud() {
             />
           ) : null}
           {concept && ((!concept.id && magRegels) || concept.regelsStand === 'klaar') ? (
+            <WerkruimteVeld naam="regels">
             <RegelEditor
               regels={concept.regels}
               onChange={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
@@ -1316,6 +1320,7 @@ function InvoicesScreenInhoud() {
               flitsIds={flitsIds}
               metTotalen={!inWerkruimte}
             />
+            </WerkruimteVeld>
           ) : null}
 
           <FormField
