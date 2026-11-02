@@ -16,6 +16,13 @@ import { env } from '@/lib/env';
  * streams), dan lezen we het in één keer en verwerken we dezelfde events.
  */
 
+/**
+ * Nieuwere functies in deze app-versie die Boss mag uitleggen. Komt er een
+ * functie bij die Boss in de app beschrijft, zet hem dan hier én in
+ * `APP_FUNCTIES` in boss-chat (dashboard-repo).
+ */
+export const APP_FUNCTIES = ['boss_werkruimte'] as const;
+
 export type BossBericht = { rol: 'gebruiker' | 'boss'; tekst: string };
 
 export type BossUitkomst =
@@ -75,6 +82,9 @@ export async function vraagBoss({
       body: JSON.stringify({
         messages: berichten,
         bron: 'app',
+        // Wat deze app-versie kan (whitelist in boss-chat, _shared/bossGebruiker.ts).
+        // Een oudere app stuurt dit niet; dan vertelt Boss dat het met een update komt.
+        app_functies: APP_FUNCTIES,
         ...(gesprekId ? { conversation_id: gesprekId } : {}),
       }),
       signal,

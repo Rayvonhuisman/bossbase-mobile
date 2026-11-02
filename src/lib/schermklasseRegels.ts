@@ -49,12 +49,23 @@ export function bepaalSchermklasse(breedte: number, _platform?: string): Schermk
  * Een telefoonvenster tot 700 breed (ook iPad Split View) vult het venster;
  * pas daarboven telt de telefoonmaat niet meer en wordt het de tabletkolom.
  */
-export function kolomMax(klasse: Schermklasse, soort: 'app' | 'formulier' = 'app'): number {
+/**
+ * De Boss-werkruimte (document en gesprek): breed genoeg om op een iPad of
+ * desktop beide naast elkaar te zetten.
+ */
+export const WERKRUIMTE_MAX = 1280;
+/** Vanaf deze breedte staan document en gesprek naast elkaar in plaats van in tabs. */
+export const NAAST_ELKAAR_VANAF = 900;
+
+export type KaderSoort = 'app' | 'formulier' | 'werkruimte';
+
+export function kolomMax(klasse: Schermklasse, soort: KaderSoort = 'app'): number {
   if (soort === 'formulier') return FORMULIER_MAX;
+  if (soort === 'werkruimte') return WERKRUIMTE_MAX;
   return klasse === 'tablet' ? KOLOM_MAX_TABLET : TABLET_VANAF;
 }
 
 /** De werkelijke breedte van de kolom in een venster van deze breedte. */
-export function kolomBreedte(breedte: number, klasse: Schermklasse, soort: 'app' | 'formulier' = 'app'): number {
+export function kolomBreedte(breedte: number, klasse: Schermklasse, soort: KaderSoort = 'app'): number {
   return Math.min(breedte, kolomMax(klasse, soort));
 }

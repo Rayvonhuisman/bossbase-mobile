@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/btwRegime.js
-// Dashboardcommit: a75f674
+// Dashboardcommit: 4f36bec
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.

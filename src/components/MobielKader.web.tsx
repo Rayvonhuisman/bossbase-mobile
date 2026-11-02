@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '@/providers';
 import { useZichtbareViewport } from '@/lib/zichtbareViewport';
-import { bepaalSchermklasse, kolomMax } from '@/lib/schermklasseRegels';
+import { bepaalSchermklasse, kolomMax, type KaderSoort } from '@/lib/schermklasseRegels';
 
 /**
  * Houdt de app in de browser op een passende breedte.
@@ -36,7 +36,7 @@ export function MobielKader({
   soort = 'app',
 }: {
   children: ReactNode;
-  soort?: 'app' | 'formulier';
+  soort?: KaderSoort;
 }) {
   const { colors: t, colorMode } = useTheme();
   const { width } = useWindowDimensions();

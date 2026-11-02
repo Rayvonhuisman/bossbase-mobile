@@ -69,6 +69,8 @@ const REGEL_COLUMNS = `
   id, factuur_id, company_id, type, omschrijving, aantal, eenheidsprijs,
   btw_pct, btw_regime, regelprijs, volgorde
 `;
+/** Met de groep (ruimte, onderdeel) uit de offerte; `factuur_groepen` bestaat sinds 27-10. */
+const REGEL_COLUMNS_MET_GROEP = `${REGEL_COLUMNS}, groep:factuur_groepen ( id, naam, werkzaamheden, volgorde )`;
 
 export type FactuurRow = {
   id: string;
@@ -108,7 +110,12 @@ export type FactuurRegel = {
   btw_regime: string;
   regelprijs: number;
   volgorde: number;
+  /** Groep uit de offerte; ontbreekt als de database hem (nog) niet kent. */
+  groep?: { id: string; naam: string; werkzaamheden: string | null; volgorde: number | null } | null;
 };
+
+/** De groep zoals `bb_factuur_aanmaken` en `bb_factuur_regels_vervangen` hem verwachten. */
+export type FactuurRegelGroep = { sleutel: string; naam: string; werkzaamheden: string | null };
 
 /**
  * Een verstuurde of betaalde factuur is alleen-lezen: de inhoud ligt vast.
@@ -207,11 +214,13 @@ export async function listFacturenMetDocument(): Promise<Set<string>> {
 export async function getFactuurRegels(
   factuurId: string,
 ): Promise<{ data: FactuurRegel[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('factuur_regels')
-    .select(REGEL_COLUMNS)
-    .eq('factuur_id', factuurId)
-    .order('volgorde', { ascending: true });
+  const lees = (kolommen: string) =>
+    supabase.from('factuur_regels').select(kolommen).eq('factuur_id', factuurId).order('volgorde', { ascending: true });
+  let { data, error } = await lees(REGEL_COLUMNS_MET_GROEP);
+  // Relatie nog niet in de schemacache: zonder groepen, zoals het dashboard.
+  if (error && (['PGRST200', 'PGRST204', '42703'].includes(error.code ?? '') || /factuur_groepen|schema cache/i.test(error.message ?? ''))) {
+    ({ data, error } = await lees(REGEL_COLUMNS));
+  }
   if (error) {
     console.warn('[factuurService.getFactuurRegels]', error.message);
     return { data: [], error: 'Factuurregels konden niet worden geladen.' };
@@ -784,7 +793,20 @@ type RpcRegel = {
   btw_pct: number;
   btw_regime: string;
   volgorde: number;
+  groep?: FactuurRegelGroep;
 };
+
+const naarRpcRegels = (regels: NieuweFactuurRegelInvoer[]): RpcRegel[] =>
+  regels.map((r, i) => ({
+    type: r.type || 'stuks',
+    omschrijving: r.omschrijving.trim(),
+    aantal: Number(r.aantal),
+    eenheidsprijs: Number(r.eenheidsprijs),
+    btw_pct: r.btw_pct,
+    btw_regime: r.btw_regime || (r.btw_pct === 0 ? 'vrijgesteld' : 'normaal'),
+    volgorde: i,
+    ...(r.groep?.naam ? { groep: r.groep } : {}),
+  }));
 
 /**
  * Kop en regels in één transactie via de RPC `bb_factuur_aanmaken` — dezelfde
@@ -842,6 +864,8 @@ export type NieuweFactuurRegelInvoer = {
   eenheidsprijs: number;
   btw_pct: number;
   btw_regime: string;
+  /** Groep uit de offerte: de database maakt per sleutel één factuurgroep. */
+  groep?: FactuurRegelGroep;
 };
 
 /**
@@ -887,15 +911,7 @@ export async function createFactuurMetRegels(
       betalingskenmerk: nummerRes.nummer,
       notities: input.notities?.trim() || null,
     },
-    regels.map((r, i) => ({
-      type: r.type || 'stuks',
-      omschrijving: r.omschrijving.trim(),
-      aantal: Number(r.aantal),
-      eenheidsprijs: Number(r.eenheidsprijs),
-      btw_pct: r.btw_pct,
-      btw_regime: r.btw_regime || (r.btw_pct === 0 ? 'vrijgesteld' : 'normaal'),
-      volgorde: i,
-    })),
+    naarRpcRegels(regels),
     'factuurService.createFactuurMetRegels',
   );
   if (!kop.ok) return kop;
@@ -922,6 +938,44 @@ export async function createFactuurMetRegels(
   return { ok: true, data: { factuur, regels: terug.data } };
 }
 
+
+/**
+ * Regels en kop van een concept in één transactie opslaan (RPC
+ * `bb_factuur_regels_vervangen`, zoals `slaConceptOp` in het dashboard): alles
+ * of niets. `regels` null laat de regels ongemoeid. Bedragen en btw rekent de
+ * database; de status gaat hier niet mee. De functie weigert zelf een factuur
+ * die geen concept meer is, zonder recht Facturen of op alleen-lezen.
+ */
+export async function slaFactuurConceptOp(
+  factuurId: string,
+  regels: NieuweFactuurRegelInvoer[] | null,
+  kop: { vervaldatum: string | null; betalingskenmerk: string; notities: string } | null,
+): Promise<WriteStatus> {
+  if (regels) {
+    if (regels.length === 0) return writeFout('validatie', 'Een factuur heeft minstens één regel nodig.');
+    for (const [i, r] of regels.entries()) {
+      if (!r.omschrijving.trim()) return writeFout('validatie', `Regel ${i + 1}: vul een omschrijving in.`);
+      if (!Number.isFinite(r.aantal) || !Number.isFinite(r.eenheidsprijs)) {
+        return writeFout('validatie', `Regel ${i + 1}: vul een geldig aantal en een geldige prijs in.`);
+      }
+    }
+  }
+  const { error } = await supabase.rpc('bb_factuur_regels_vervangen', {
+    p_factuur_id: factuurId,
+    p_regels: regels
+      ? naarRpcRegels(regels).map((r) => ({ ...r, btw_pct: btwPctVoorOpslag(r.btw_pct, r.btw_regime) }))
+      : null,
+    p_kop: kop,
+  });
+  if (error) {
+    const hint = String((error as { hint?: string }).hint ?? '');
+    if (hint === 'readonly') return writeFout('readonly', error.message);
+    if (hint === 'geen_recht') return writeFout('geen-rechten', error.message);
+    if (error.code === '22023' || error.code === '23514') return writeFout('validatie', error.message);
+    return classificeerFout(error, 'factuurService.slaFactuurConceptOp', isReadonly());
+  }
+  return { ok: true, data: null };
+}
 
 // ── Creditfactuur ──────────────────────────────────────────────────────────
 
@@ -1156,6 +1210,8 @@ export async function kopieerFactuur(bronId: string): Promise<WriteResult<Factuu
       btw_pct: Number(r.btw_pct ?? 21),
       btw_regime: r.btw_regime || (Number(r.btw_pct) === 0 ? 'vrijgesteld' : 'normaal'),
       volgorde: Number(r.volgorde ?? 0),
+      // Groepen gaan mee: de database maakt per sleutel één nieuwe factuurgroep.
+      ...(r.groep?.naam ? { groep: { sleutel: r.groep.id, naam: r.groep.naam, werkzaamheden: r.groep.werkzaamheden } } : {}),
     })),
     'factuurService.kopieerFactuur',
   );

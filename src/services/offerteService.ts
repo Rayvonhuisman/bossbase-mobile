@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
-import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
+import { classificeerFout, schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { haalInStukken } from '@/lib/inStukken';
 import {
   btwPctVoorOpslag,
@@ -11,6 +11,8 @@ import {
   volgendVersieNummer,
 } from '@/lib/documentLogica';
 import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
+import { nieuweId as uuid, type BtwRegime, type Herkomst } from '@/lib/regels';
+import type { OfferteOpslagGroep, OfferteOpslagRegel, GroepRij } from '@/lib/boss/offerteRegels';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -39,13 +41,14 @@ const OFFERTE_COLUMNS = `
   id, company_id, customer_id, deal_id, nummer, omschrijving, status,
   arbeidsuren, uurtarief, materiaalkosten, reiskosten, marge_pct, btw_pct,
   totaal_excl, totaal_incl, geldig_tot, verzonden_op, geaccepteerd_op,
-  signed_at, notes, created_at, vervangen_op, vervangen_door_nummer,
+  signed_at, notes, created_at, vervangen_op, vervangen_door_nummer, inhoud_versie,
   customer:customers ( id, name )
 `;
 
 const ITEM_COLUMNS = `
   id, offerte_id, company_id, omschrijving, eenheid, type,
-  aantal, prijs_per, subtotaal, btw_pct, btw_regime, volgorde
+  aantal, prijs_per, subtotaal, btw_pct, btw_regime, volgorde,
+  groep_id, sleutel, herkomst
 `;
 
 export type OfferteRow = {
@@ -73,6 +76,8 @@ export type OfferteRow = {
   /** Gezet zodra een nieuwere versie deze offerte vervangt (versiebeheer). */
   vervangen_op: string | null;
   vervangen_door_nummer: string | null;
+  /** Gaat bij elke opslag via `bb_offerte_opslaan` omhoog; zo weigert de database een verouderde opslag. */
+  inhoud_versie?: number | null;
   customer: { id: string; name: string | null } | null;
 };
 
@@ -89,6 +94,12 @@ export type OfferteItem = {
   btw_pct: number | null;
   btw_regime: string;
   volgorde: number;
+  /** Groep in `offerte_groepen`, of null. */
+  groep_id?: string | null;
+  /** Waar de regel voor staat (`mat:<id>`, `uren:<soort>`). */
+  sleutel?: string | null;
+  /** Intern: bron van hoeveelheid en prijs (Boss). */
+  herkomst?: unknown;
 };
 
 /**
@@ -749,70 +760,6 @@ export type NieuweRegelInvoer = {
   btw_regime: string;
 };
 
-/**
- * Maakt een offerte met al zijn regels, zoals de offertemodal van het dashboard
- * dat doet: eerst de kop (met de totalen uit de regels), daarna de regels op
- * volgorde.
- *
- * Wat de app hier extra doet, en waarom:
- *
- * - **Terugleescontrole.** Na afloop halen we de regels op en tellen we ze.
- *   PostgREST geeft bij een door RLS geweigerde insert geen fout maar een lege
- *   uitkomst; zonder deze controle zou "offerte aangemaakt" kunnen verschijnen
- *   bij een offerte zonder enkele regel.
- * - **Geen halve waarheid.** Mislukt een regel, dan blijft de offerte staan
- *   (niet automatisch weggooien: de oorzaak kan ook het verwijderen raken) en
- *   krijgt de gebruiker te zien wélke regel niet is opgeslagen, met het nummer
- *   van de aangemaakte offerte erbij. Beter een eerlijke halve uitkomst dan een
- *   groen vinkje op een document dat niet klopt.
- */
-export async function createOfferteMetRegels(
-  input: OfferteInput,
-  regels: NieuweRegelInvoer[],
-): Promise<WriteResult<{ offerte: OfferteRow; regels: OfferteItem[] }>> {
-  if (regels.length === 0) {
-    return writeFout('validatie', 'Voeg minimaal één regel toe.');
-  }
-
-  const kop = await createOfferte(input);
-  if (!kop.ok) return kop;
-
-  const mislukt: string[] = [];
-  for (let i = 0; i < regels.length; i++) {
-    const r = regels[i]!;
-    const res = await createOfferteItem({
-      offerte_id: kop.data.id,
-      omschrijving: r.omschrijving,
-      type: r.type,
-      aantal: r.aantal,
-      prijs_per: r.prijs_per,
-      btw_pct: r.btw_pct,
-      btw_regime: r.btw_regime,
-      volgorde: i,
-    });
-    if (!res.ok) mislukt.push(`regel ${i + 1}: ${res.melding}`);
-  }
-
-  // Teruglezen: alleen wat de database daadwerkelijk teruggeeft telt.
-  const terug = await getOfferteItems(kop.data.id);
-  if (terug.error) {
-    return writeFout(
-      'onbekend',
-      `Offerte ${kop.data.nummer ?? ''} is aangemaakt, maar de regels konden niet worden ` +
-        'gecontroleerd. Open de offerte om te kijken wat erin staat.',
-    );
-  }
-  if (mislukt.length > 0 || terug.data.length !== regels.length) {
-    return writeFout(
-      'onbekend',
-      `Offerte ${kop.data.nummer ?? ''} is aangemaakt, maar ${terug.data.length} van de ` +
-        `${regels.length} regels zijn opgeslagen. ${mislukt[0] ?? ''}`.trim(),
-    );
-  }
-
-  return { ok: true, data: { offerte: kop.data, regels: terug.data } };
-}
-
 // ── Versies en kopieën ─────────────────────────────────────────────────────
 
 /** `nextOfferteVersionNumber`: BB-005 → BB-005-v2 → BB-005-v3. */
@@ -860,103 +807,6 @@ export async function markeerOfferteVervangen(
 }
 
 /**
- * De regels van een concept vervangen, zoals "Opslaan" in de bewerkmodal van
- * het dashboard: alle regels weg en opnieuw opbouwen. Daarna de totalen
- * opnieuw laten rekenen (de databasetrigger zet ze uit de regels) en
- * teruglezen: alleen wat er echt staat telt.
- */
-export async function vervangOfferteRegels(
-  offerteId: string,
-  regels: NieuweRegelInvoer[],
-): Promise<WriteResult<OfferteItem[]>> {
-  if (regels.length === 0) return writeFout('validatie', 'Voeg minimaal één regel toe.');
-  const weg = await schrijfLeegVerwijderen(offerteId);
-  if (!weg.ok) return weg;
-
-  const mislukt: string[] = [];
-  for (let i = 0; i < regels.length; i++) {
-    const r = regels[i]!;
-    const res = await createOfferteItem({
-      offerte_id: offerteId,
-      omschrijving: r.omschrijving,
-      type: r.type,
-      aantal: r.aantal,
-      prijs_per: r.prijs_per,
-      btw_pct: r.btw_pct,
-      btw_regime: r.btw_regime,
-      volgorde: i,
-    });
-    if (!res.ok) mislukt.push(`regel ${i + 1}: ${res.melding}`);
-  }
-  await herberekenOfferteTotalen(offerteId);
-
-  const terug = await getOfferteItems(offerteId);
-  if (terug.error) return writeFout('onbekend', 'De regels konden niet worden gecontroleerd. Open de offerte opnieuw.');
-  if (mislukt.length > 0 || terug.data.length !== regels.length) {
-    return writeFout(
-      'onbekend',
-      `${terug.data.length} van de ${regels.length} regels zijn opgeslagen. ${mislukt[0] ?? ''}`.trim(),
-    );
-  }
-  return { ok: true, data: terug.data };
-}
-
-async function schrijfLeegVerwijderen(offerteId: string): Promise<WriteStatus> {
-  const { error } = await supabase.from('offerte_items').delete().eq('offerte_id', offerteId);
-  if (error) {
-    console.warn('[offerteService.vervangOfferteRegels]', error.message);
-    return writeFout(
-      /row-level|permission|42501/i.test(`${error.code} ${error.message}`) ? 'geen-rechten' : 'onbekend',
-      'De oude regels konden niet worden verwijderd. Er is niets gewijzigd aan de regels.',
-    );
-  }
-  return { ok: true, data: null };
-}
-
-/**
- * Herzien als nieuwe versie (bewerkmodal van het dashboard bij een verstuurde,
- * nog niet getekende offerte): een nieuwe conceptofferte met het volgende
- * versienummer, dezelfde klant-aanvraag (deal) en de aangepaste regels; de
- * oude krijgt `vervangen_op`, waarmee zijn ondertekenlink vervalt. De oude
- * blijft bewaard.
- */
-export async function herzieOfferte(
-  bron: Pick<OfferteRow, 'id' | 'nummer' | 'deal_id' | 'btw_pct'>,
-  kop: { customer_id: string | null; omschrijving: string; geldig_tot: string | null; notes: string },
-  regels: NieuweRegelInvoer[],
-  totalen: { totaal_excl: number; totaal_incl: number },
-): Promise<WriteResult<{ offerte: OfferteRow; regels: OfferteItem[] }>> {
-  const versie = await volgendOfferteVersieNummer(bron.nummer);
-  if (!versie.ok) return writeFout('onbekend', versie.melding);
-  const nieuw = await createOfferteMetRegels(
-    {
-      customer_id: kop.customer_id,
-      omschrijving: kop.omschrijving,
-      geldig_tot: kop.geldig_tot || null,
-      notes: kop.notes,
-      marge_pct: 0,
-      btw_pct: Number(bron.btw_pct || 21),
-      ...totalen,
-      nummer: versie.nummer,
-      // Zonder deal_id schoof de deal niet naar Akkoord als de klant de nieuwe
-      // versie tekende (zelfde opmerking als in het dashboard).
-      deal_id: bron.deal_id || null,
-    },
-    regels,
-  );
-  if (!nieuw.ok) return nieuw;
-  const vervangen = await markeerOfferteVervangen(bron.id, versie.nummer);
-  if (!vervangen.ok) {
-    return writeFout(
-      'onbekend',
-      `Versie ${versie.nummer} is aangemaakt, maar ${bron.nummer} kon niet als vervangen worden gemarkeerd: ` +
-        `${vervangen.melding} De oude ondertekenlink werkt daardoor nog.`,
-    );
-  }
-  return nieuw;
-}
-
-/**
  * `copyOfferte`: een bewerkbare conceptkopie met dezelfde regels.
  * - als versie (zelfde klant): versienummer, zelfde deal; telt niet mee voor
  *   de offertelimiet (`bb_offerte_telt_mee`);
@@ -981,47 +831,64 @@ export async function kopieerOfferte(
     nummer = v.nummer;
   }
 
-  const kop = await createOfferte({
-    customer_id: customerId || bron.customer_id,
-    deal_id: alsVersie ? bron.deal_id || null : null,
-    nummer,
-    omschrijving: bron.omschrijving,
-    arbeidsuren: Number(bron.arbeidsuren || 0),
-    uurtarief: Number(bron.uurtarief || 55),
-    materiaalkosten: Number(bron.materiaalkosten || 0),
-    reiskosten: Number(bron.reiskosten || 0),
-    marge_pct: Number(bron.marge_pct ?? 25),
-    btw_pct: Number(bron.btw_pct || 21),
-    totaal_excl: Number(bron.totaal_excl || 0),
-    totaal_incl: Number(bron.totaal_incl || 0),
-    geldig_tot: bron.geldig_tot,
-    notes: bron.notes,
-  });
-  if (!kop.ok) return kop;
-
-  const mislukt: string[] = [];
-  for (const it of items.data) {
-    const res = await createOfferteItem({
-      offerte_id: kop.data.id,
-      omschrijving: it.omschrijving,
-      eenheid: it.eenheid,
-      type: it.type,
-      btw_pct: it.btw_pct,
-      btw_regime: it.btw_regime || regimeVanPct(it.btw_pct),
-      aantal: Number(it.aantal || 1),
-      prijs_per: Number(it.prijs_per || 0),
-      volgorde: Number(it.volgorde || 0),
+  // Een offerte zonder regels (oud model) kan niet via bb_offerte_opslaan, die
+  // wil minstens één regel: dan alleen de kop, zoals het dashboard.
+  if (items.data.length === 0) {
+    return createOfferte({
+      customer_id: customerId || bron.customer_id,
+      deal_id: alsVersie ? bron.deal_id || null : null,
+      nummer,
+      omschrijving: bron.omschrijving,
+      arbeidsuren: Number(bron.arbeidsuren || 0),
+      uurtarief: Number(bron.uurtarief || 55),
+      materiaalkosten: Number(bron.materiaalkosten || 0),
+      reiskosten: Number(bron.reiskosten || 0),
+      marge_pct: Number(bron.marge_pct ?? 25),
+      btw_pct: Number(bron.btw_pct || 21),
+      totaal_excl: Number(bron.totaal_excl || 0),
+      totaal_incl: Number(bron.totaal_incl || 0),
+      geldig_tot: bron.geldig_tot,
+      notes: bron.notes,
     });
-    if (!res.ok) mislukt.push(res.melding);
   }
-  if (mislukt.length > 0) {
-    return writeFout(
-      'onbekend',
-      `Offerte ${kop.data.nummer ?? ''} is aangemaakt, maar ${mislukt.length} van de ${items.data.length} ` +
-        `regels zijn niet gekopieerd. ${mislukt[0]}`,
-    );
-  }
-  return kop;
+
+  // Nieuwe ids voor groepen en regels; groepen, eenheid en herkomst gaan mee,
+  // in één transactie (`copyOfferte` in het dashboard).
+  const groepen = await getOfferteGroepen(bronId);
+  if (groepen.error) return writeFout('onbekend', groepen.error);
+  const nieuweId = new Map(groepen.data.map((g) => [g.id, uuid()]));
+  return slaOfferteOp({
+    id: null,
+    versie: null,
+    nummer: nummer ?? null,
+    kop: {
+      customer_id: customerId || bron.customer_id,
+      deal_id: alsVersie ? bron.deal_id || null : null,
+      omschrijving: bron.omschrijving ?? '',
+      btw_pct: Number(bron.btw_pct || 21),
+      geldig_tot: bron.geldig_tot,
+      notes: bron.notes ?? '',
+    },
+    groepen: groepen.data.map((g) => ({
+      id: nieuweId.get(g.id)!,
+      naam: g.naam ?? '',
+      werkzaamheden: g.werkzaamheden,
+      herkomst: (g.herkomst as Herkomst | null) ?? null,
+    })),
+    regels: items.data.map((it) => ({
+      id: uuid(),
+      groep_id: it.groep_id ? nieuweId.get(it.groep_id) ?? null : null,
+      type: it.type,
+      omschrijving: it.omschrijving ?? '',
+      eenheid: it.eenheid ?? null,
+      aantal: Number(it.aantal ?? 1),
+      prijs_per: Number(it.prijs_per ?? 0),
+      btw_pct: Number(it.btw_pct ?? 21),
+      btw_regime: (it.btw_regime || regimeVanPct(Number(it.btw_pct ?? 21))) as BtwRegime,
+      sleutel: it.sleutel ?? null,
+      herkomst: (it.herkomst as Herkomst | null) ?? null,
+    })),
+  });
 }
 
 /**
@@ -1082,4 +949,126 @@ export async function stuurGetekendePdfNa(
   } catch {
     return { ok: false, melding: 'De ontbrekende PDF kon niet worden nagestuurd.' };
   }
+}
+
+// ── Opslaan met groepen (bb_offerte_opslaan) ───────────────────────────────
+
+/** De groepen van een offerte, in volgorde. */
+export async function getOfferteGroepen(offerteId: string): Promise<{ data: GroepRij[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('offerte_groepen')
+    .select('id, naam, werkzaamheden, herkomst, volgorde')
+    .eq('offerte_id', offerteId)
+    .order('volgorde', { ascending: true });
+  if (error) {
+    console.warn('[offerteService.getOfferteGroepen]', error.message);
+    return { data: [], error: 'De groepen van de offerte konden niet worden geladen.' };
+  }
+  return { data: (data as unknown as GroepRij[]) ?? [], error: null };
+}
+
+export type OfferteKop = {
+  customer_id: string | null;
+  deal_id?: string | null;
+  omschrijving: string;
+  geldig_tot: string | null;
+  notes: string;
+  btw_pct?: number;
+};
+
+/**
+ * Kop, groepen en regels in één transactie, via dezelfde databasefunctie als
+ * het dashboard (`bb_offerte_opslaan`, migratie 20261027160000). Daarmee
+ * blijven groepen, eenheden en de herkomst van regels van Boss bewaard; de
+ * oude route (alle regels weg en opnieuw) liet die vallen.
+ *
+ * - `id` leeg: nieuwe conceptofferte met een nieuw nummer, of met `vervangt`
+ *   een nieuwe versie van een verstuurde offerte (de oude wordt in dezelfde
+ *   transactie als vervangen gemarkeerd).
+ * - `id` gezet: een concept bijwerken. Met `versie` (inhoud_versie bij het
+ *   openen) weigert de database als iemand anders hem intussen opsloeg.
+ */
+export async function slaOfferteOp(input: {
+  id: string | null;
+  versie: number | null;
+  kop: OfferteKop;
+  groepen: OfferteOpslagGroep[];
+  regels: OfferteOpslagRegel[];
+  vervangt?: Pick<OfferteRow, 'id' | 'nummer' | 'deal_id' | 'btw_pct'> | null;
+  /** Vast nummer voor een nieuwe offerte (een kopie als versie); anders het volgende. */
+  nummer?: string | null;
+}): Promise<WriteResult<OfferteRow>> {
+  if (input.regels.length === 0) return writeFout('validatie', 'Voeg minimaal één regel toe.');
+  if (isReadonly()) return writeFout('readonly');
+
+  let nummer: string | null = null;
+  const kop: Record<string, unknown> = {
+    customer_id: input.kop.customer_id || null,
+    omschrijving: input.kop.omschrijving.trim(),
+    geldig_tot: input.kop.geldig_tot || null,
+    notes: input.kop.notes.trim(),
+  };
+  if (!input.id) {
+    if (input.vervangt) {
+      const v = await volgendOfferteVersieNummer(input.vervangt.nummer);
+      if (!v.ok) return writeFout('onbekend', v.melding);
+      nummer = v.nummer;
+      kop.deal_id = input.vervangt.deal_id || null;
+      kop.btw_pct = Number(input.vervangt.btw_pct || 21);
+      kop.vervangt_id = input.vervangt.id;
+    } else {
+      if (input.nummer) nummer = input.nummer;
+      else {
+        const n = await volgendOfferteNummer();
+        if (!n.ok) return writeFout('onbekend', n.melding);
+        nummer = n.nummer;
+      }
+      kop.deal_id = input.kop.deal_id || null;
+      kop.btw_pct = input.kop.btw_pct ?? 21;
+    }
+    kop.nummer = nummer;
+  }
+
+  const { data, error } = await supabase.rpc('bb_offerte_opslaan', {
+    p_offerte_id: input.id,
+    p_versie: input.id ? input.versie : null,
+    p_kop: kop,
+    p_groepen: input.groepen,
+    p_regels: input.regels,
+  });
+  if (error) {
+    // De functie geeft zelf leesbare meldingen bij een tussentijdse wijziging,
+    // een vastliggende offerte of ongeldige regels.
+    if (error.hint === 'gewijzigd' || error.code === '40001') {
+      return writeFout('conflict', error.message || 'Deze offerte is intussen gewijzigd. Open hem opnieuw.');
+    }
+    if (error.code === '22023' || error.code === 'P0002' || error.code === '23503') {
+      return writeFout('validatie', error.message);
+    }
+    return classificeerFout(error, 'offerteService.slaOfferteOp', isReadonly());
+  }
+  const id = (data as { id?: string } | null)?.id ?? input.id;
+  if (!id) return writeFout('onbekend', 'De offerte is opgeslagen, maar kon niet worden teruggelezen.');
+  const { data: rij, error: leesFout } = await supabase.from('offertes').select(OFFERTE_COLUMNS).eq('id', id).maybeSingle();
+  if (leesFout || !rij) return writeFout('onbekend', 'De offerte is opgeslagen, maar kon niet worden teruggelezen. Ververs het scherm.');
+  const opgeslagen = rij as unknown as OfferteRow;
+
+  // Op de tijdlijn van de klant, zoals het dashboard.
+  if (!input.id && opgeslagen.customer_id) {
+    void logTijdlijn(
+      opgeslagen.customer_id,
+      'offerte_aangemaakt',
+      `Offerte ${opgeslagen.nummer} aangemaakt (€${tijdlijnBedrag(opgeslagen.totaal_incl)})`,
+      { nummer: opgeslagen.nummer, totaalIncl: Number(opgeslagen.totaal_incl ?? 0) },
+    );
+    if (input.vervangt) {
+      void logTijdlijn(
+        opgeslagen.customer_id,
+        'offerte_verzonden',
+        `Offerte ${input.vervangt.nummer} vervangen door nieuwe versie ${opgeslagen.nummer}`,
+        { nummer: input.vervangt.nummer, vervangenDoor: opgeslagen.nummer },
+      );
+    }
+  }
+  return { ok: true, data: opgeslagen };
 }

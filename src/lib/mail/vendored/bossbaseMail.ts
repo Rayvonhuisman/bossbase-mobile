@@ -1,7 +1,7 @@
 // @ts-nocheck
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/bossbaseMail.ts
-// Dashboardcommit: d961d3f
+// Dashboardcommit: e2e1115
 // Bijwerken: node scripts/mail-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/mailOpmaak.test.mjs
 // vergelijkt het met het dashboard.
@@ -57,8 +57,18 @@ export const NIELS = {
   naam: 'Niels Grevink',
   telefoonLeesbaar: '085 200 9404',
   telefoon: '+31852009404',
-  whatsapp: 'https://wa.me/31642005889',
+  // WhatsApp op het algemene 085-nummer, voor Niels en Rayvon gelijk (besluit Niels 29-10).
+  whatsapp: 'https://wa.me/31852009404',
   mail: 'info@bossbase.nl',
+}
+
+// Afzender van een mail: Niels of Rayvon, met foto (public/brand, via de
+// website). De knoppen zijn voor beiden gelijk: Mail naar info@bossbase.nl,
+// Bel en WhatsApp naar 085 200 9404.
+export type Persoon = { naam: string; foto?: string | null; initiaal?: string; telefoon: string; telefoonLeesbaar: string; whatsapp?: string | null; mail: string }
+export const PERSONEN: Record<'Niels' | 'Rayvon', Persoon> = {
+  Niels: { ...NIELS, foto: NIELS_FOTO_URL },
+  Rayvon: { naam: 'Rayvon Huisman', foto: 'https://www.bossbase.nl/brand/rayvon.jpg', initiaal: 'R', telefoon: NIELS.telefoon, telefoonLeesbaar: NIELS.telefoonLeesbaar, whatsapp: NIELS.whatsapp, mail: NIELS.mail },
 }
 
 // ── Bouwstenen ──────────────────────────────────────────────────────────────
@@ -145,6 +155,25 @@ export const bbStappen = (stappen: { kop: string; tekst: string }[]) => `
     </tr>
   </table>`
 
+// Stappen onder elkaar: voor meer dan drie stappen, waar kaartjes naast elkaar
+// te smal worden. Zelfde rondje als bbStappen; de lijn ertussen laat zien dat
+// het één verloop is.
+export const bbStappenOnder = (stappen: { kop: string; tekst: string }[]) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+    ${stappen.map((st, i) => `
+    <tr>
+      <td valign="top" width="30" style="width:30px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td width="30" height="30" align="center" valign="middle" bgcolor="${BB.groen}" style="width:30px;height:30px;background:${BB.groen};border-radius:15px;font-size:14px;line-height:30px;font-weight:800;color:${BB.zwart};mso-line-height-rule:exactly;">${i + 1}</td>
+        </tr></table>
+      </td>
+      <td valign="top" style="padding:4px 0 ${i < stappen.length - 1 ? '18px' : '0'} 14px;">
+        <div style="font-size:16px;line-height:1.3;font-weight:800;color:${BB.zwart};">${st.kop}</div>
+        <div style="margin-top:4px;font-size:15px;line-height:1.5;color:${BB.tekst};">${st.tekst}</div>
+      </td>
+    </tr>`).join('')}
+  </table>`
+
 export const bbVinkjes = (regels: string[]) => `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
     ${regels.map(r => `
@@ -197,21 +226,23 @@ export const bbUitgelicht = (bovenkop: string, kop: string, tekst: string, badge
 // De knop. Outlook krijgt een VML-vorm (anders alleen een groen randje om de
 // tekst), de rest een gewone link met padding. Breedte voor VML geschat op de
 // tekstlengte; Outlook rekt hem niet zelf op.
-export function bbKnop(tekst: string, url: string, o: { marge?: string } = {}) {
+// `licht`: een tweede knop naast de groene, wit met een zwarte rand.
+export function bbKnop(tekst: string, url: string, o: { marge?: string; licht?: boolean } = {}) {
   const href = veiligeUrl(url)
   const t = esc(tekst)
   const breed = Math.max(180, Math.round(tekst.length * 9.2 + 72))
+  const vlak = o.licht ? '#ffffff' : BB.groen
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:${o.marge ?? '8px 0 24px'};">
     <tr><td align="left">
       <!--[if mso]>
-      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${href}" style="height:52px;v-text-anchor:middle;width:${breed}px;" arcsize="20%" stroke="f" fillcolor="${BB.groen}">
+      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${href}" style="height:52px;v-text-anchor:middle;width:${breed}px;" arcsize="20%" ${o.licht ? `strokecolor="${BB.zwart}" strokeweight="2px"` : 'stroke="f"'} fillcolor="${vlak}">
         <w:anchorlock/>
         <center style="color:${BB.zwart};font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${t} &rarr;</center>
       </v:roundrect>
       <![endif]-->
       <!--[if !mso]><!-- -->
-      <a href="${href}" style="display:inline-block;background:${BB.groen};border-radius:10px;padding:16px 28px;font-size:16px;line-height:20px;font-weight:700;color:${BB.zwart};text-decoration:none;mso-hide:all;">${t}&nbsp;&rarr;</a>
+      <a href="${href}" style="display:inline-block;background:${vlak};border-radius:10px;${o.licht ? `border:2px solid ${BB.zwart};padding:14px 26px;` : 'padding:16px 28px;'}font-size:16px;line-height:20px;font-weight:700;color:${BB.zwart};text-decoration:none;mso-hide:all;">${t}&nbsp;&rarr;</a>
       <!--<![endif]-->
     </td></tr>
   </table>`
@@ -222,10 +253,14 @@ export function bbKnop(tekst: string, url: string, o: { marge?: string } = {}) {
 // aanbod (bbUitgelicht) dat er vaak vlak boven staat. Korte knopteksten, zodat ze ook op een
 // telefoon naast de foto passen. Er is (nog) geen agendalink; antwoorden of bellen is de uitnodiging. Reply-to van deze mails
 // staat op info@bossbase.nl.
-export function bbHandtekening(o: { titel?: string; tekst?: string } = {}) {
+export function bbHandtekening(o: { titel?: string; tekst?: string; persoon?: Persoon } = {}) {
+  const p = o.persoon ?? PERSONEN.Niels
   const knopje = (href: string, tekst: string) =>
     `<a class="bb-knopje" href="${href}" style="display:inline-block;margin:0 6px 6px 0;padding:8px 13px;background:${BB.groen};border-radius:999px;font-size:14px;line-height:18px;font-weight:700;color:${BB.zwart};text-decoration:none;white-space:nowrap;">${tekst}</a>`
-  const knoppen = knopje(`mailto:${NIELS.mail}`, 'Mail') + knopje(`tel:${NIELS.telefoon}`, 'Bel') + knopje(NIELS.whatsapp, 'WhatsApp')
+  const knoppen = knopje(`mailto:${p.mail}`, 'Mail') + knopje(`tel:${p.telefoon}`, 'Bel') + (p.whatsapp ? knopje(p.whatsapp, 'WhatsApp') : '')
+  const foto = p.foto
+    ? `<img class="bb-foto" src="${p.foto}" alt="${esc(p.naam)}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:32px;border:0;outline:none;">`
+    : `<div class="bb-foto" style="width:64px;height:64px;border-radius:32px;background:${BB.groen};color:${BB.zwart};font-size:26px;line-height:64px;font-weight:800;text-align:center;">${esc(p.initiaal ?? p.naam[0])}</div>`
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0;">
     <tr><td class="bb-hand" bgcolor="${BB.zwart}" style="${donkerVlak(BB.zwart)}border-radius:16px;padding:22px 24px 6px;">
@@ -235,10 +270,10 @@ export function bbHandtekening(o: { titel?: string; tekst?: string } = {}) {
         <tr><td class="bb-hand-wit" bgcolor="#ffffff" style="background:#ffffff;border-radius:14px;padding:16px 16px 10px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td valign="top" width="64" style="width:64px;">
-              <img class="bb-foto" src="${NIELS_FOTO_URL}" alt="${NIELS.naam}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:32px;border:0;outline:none;">
+              ${foto}
             </td>
             <td class="bb-naast" valign="top" style="padding-left:14px;">
-              <div style="font-size:17px;line-height:1.3;font-weight:800;color:${BB.zwart};">${NIELS.naam}</div>
+              <div style="font-size:17px;line-height:1.3;font-weight:800;color:${BB.zwart};">${esc(p.naam)}</div>
               <div style="margin:1px 0 10px;font-size:14px;line-height:1.4;color:${BB.grijs};">BossBase</div>
               ${knoppen}
             </td>

@@ -37,6 +37,7 @@ import {
   createCreditFactuur,
   getFactuurDetail,
   getFactuurRegels,
+  slaFactuurConceptOp,
   kopieerFactuur,
   listFacturenMetDocument,
   markeerFactuurVerstuurd,
@@ -57,7 +58,7 @@ import {
   createFactuur,
   createFactuurMetRegels,
 } from '@/services/factuurService';
-import { getOfferteDetail, getOfferteItems } from '@/services/offerteService';
+import { getOfferteDetail, getOfferteGroepen, getOfferteItems, listOffertes, type OfferteRow } from '@/services/offerteService';
 import { listCustomers } from '@/services/customerService';
 import { listProjects, type ProjectRow } from '@/services/projectService';
 import { getCompanySettings } from '@/services/settingsService';
@@ -71,8 +72,15 @@ import {
   verstuurMail,
 } from '@/services/documentMailService';
 import { logTijdlijn } from '@/services/klantTijdlijnService';
-import { berekenTotalen, legeRegel, type EigenEenheid, type Regel } from '@/lib/regels';
-import { factuurRegelVoorOpslag, regelUitOfferteItem } from '@/lib/regelOmzetting';
+import { berekenTotalen, legeRegel, nieuweId, type EigenEenheid, type Regel } from '@/lib/regels';
+import { heeftConcept, leesConcept, wisConcept, bewaarConceptDeel, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
+import { aantalZonderPrijs, isLegeFactuurRegel, metRefs, prijsOntbreekt } from '@/lib/boss/factuurRegels';
+import { bossStatus } from '@/services/bossDocumentService';
+import { Werkruimte, WerkruimteVeld, type Aandachtspunt } from '@/components/boss/Werkruimte';
+import { FactuurGesprek, type FactuurGesprekBewaard } from '@/components/boss/FactuurGesprek';
+import { DocumentVoorbeeld } from '@/components/boss/DocumentVoorbeeld';
+import { BossIngang } from '@/components/boss/BossIngang';
+import { factuurRegelsUitOfferte, factuurRegelVoorOpslag, regelUitFactuurRegel } from '@/lib/regelOmzetting';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { writeFout, type WriteResult } from '@/lib/writeResult';
 import { vandaagIso } from '@/lib/nlTijd';
@@ -179,6 +187,16 @@ type Concept = {
   opSlot: boolean;
   geimporteerd: boolean;
   regels: Regel[];
+  /**
+   * Regels in dit formulier: altijd bij een nieuwe factuur, bij een bestaande
+   * alleen bij een concept (zoals `EditFactuurModal`). 'laden' en 'fout' bij
+   * een concept zolang de regels er niet (goed) zijn.
+   */
+  regelsStand: 'nieuw' | 'laden' | 'fout' | 'klaar' | 'geen';
+  /** De regels zoals ze opgeslagen waren: alleen bij een wijziging gaan ze opnieuw mee. */
+  regelsOrigineel: string;
+  /** Waar Boss concept en gesprek bewaart als je sluit zonder opslaan (lib/boss/werkruimteConcept). */
+  bossSleutel: string;
 };
 
 type RegelConcept = { omschrijving: string; aantal: string; prijs: string; btw: string };
@@ -287,6 +305,47 @@ function InvoicesScreenInhoud() {
   const [credit, setCredit] = useState<CreditStand | null>(null);
 
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
+
+  // ── Boss: de werkruimte bij een nieuwe factuur ───────────────────────────
+  // Zoals in het dashboard (components/boss/Werkruimte). In de app maak je
+  // regels alleen bij een nieuwe factuur; daar hoort Boss dus bij.
+  const [bossFunctie, setBossFunctie] = useState(false);
+  const [wrOpen, setWrOpen] = useState(false);
+  const [bossGebruikt, setBossGebruikt] = useState(false);
+  const [bossStand, setBossStand] = useState({ bezig: false, wacht: 0 });
+  const [bewaardGesprek, setBewaardGesprek] = useState<FactuurGesprekBewaard | null>(null);
+  const [vorigConcept, setVorigConcept] = useState<BewaardConcept | null>(null);
+  const [flitsIds, setFlitsIds] = useState<string[]>([]);
+  const [bossOffertes, setBossOffertes] = useState<OfferteRow[]>([]);
+  useEffect(() => {
+    let weg = false;
+    void bossStatus('boss-factuur').then((st) => { if (!weg) setBossFunctie(st.mag && st.beschikbaar); });
+    return () => { weg = true; };
+  }, []);
+  useEffect(() => {
+    if (!flitsIds.length) return undefined;
+    const id = setTimeout(() => setFlitsIds([]), 6000);
+    return () => clearTimeout(id);
+  }, [flitsIds]);
+  // Offertes om uit te kiezen, pas als Boss in gebruik is.
+  useEffect(() => {
+    if (!bossGebruikt || bossOffertes.length) return undefined;
+    let weg = false;
+    void listOffertes().then(({ data }) => { if (!weg) setBossOffertes(data); });
+    return () => { weg = true; };
+  }, [bossGebruikt, bossOffertes.length]);
+  // Het document bewaren zolang er met Boss gewerkt wordt, niet zolang er nog
+  // een vorig concept klaarstaat (dat zou het overschrijven).
+  useEffect(() => {
+    if (concept && bossGebruikt && !vorigConcept) bewaarConceptDeel(concept.bossSleutel, 'document', concept);
+  }, [concept, bossGebruikt, vorigConcept]);
+  const bossVoorConcept = (sleutel: string) => {
+    setWrOpen(false);
+    setBossGebruikt(false);
+    setBewaardGesprek(null);
+    setBossStand({ bezig: false, wacht: 0 });
+    setVorigConcept(heeftConcept(sleutel) ? leesConcept(sleutel) : null);
+  };
   const { save: saveRegel, saving: regelBezig, error: regelFout } = useSave<unknown>();
   const { save: saveMail, saving: mailBezig, error: mailFout, setError: setMailFout } = useSave<unknown>();
   const { save: saveCredit, saving: creditBezig, error: creditFout, setError: setCreditFout } = useSave<unknown>();
@@ -423,7 +482,11 @@ function InvoicesScreenInhoud() {
       regels: prefill?.regels?.length
         ? prefill.regels
         : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+      regelsStand: 'nieuw',
+      regelsOrigineel: '',
+      bossSleutel: `factuur:nieuw:${prefill?.offerteId || prefill?.projectId || prefill?.customerId || ''}`,
     });
+    bossVoorConcept(`factuur:nieuw:${prefill?.offerteId || prefill?.projectId || prefill?.customerId || ''}`);
     void zetTermijn(prefill?.customerId ?? null);
   };
 
@@ -448,7 +511,7 @@ function InvoicesScreenInhoud() {
     offerteVerwerkt.current = vanOfferte;
     router.setParams({ vanOfferte: undefined });
     void (async () => {
-      const [o, r] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte)]);
+      const [o, r, g] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte), getOfferteGroepen(vanOfferte)]);
       if (!o.data) {
         Dialog.alert('Offerte niet gevonden', o.error ?? 'De offerte kon niet worden geladen.');
         return;
@@ -456,7 +519,8 @@ function InvoicesScreenInhoud() {
       openNieuw({
         customerId: o.data.customer_id,
         offerteId: o.data.id,
-        regels: r.data.map((it) => regelUitOfferteItem(it, o.data!)),
+        // Met de groepen (ruimte, onderdeel) van de offerte, zoals het dashboard.
+        regels: factuurRegelsUitOfferte(r.data, o.data, g.data),
       });
     })();
     // openNieuw hangt af van state die hier niet hoort te herstarten.
@@ -479,6 +543,9 @@ function InvoicesScreenInhoud() {
   const openBewerk = (f: FactuurRow) => {
     if (!magWijzigen) return;
     setSaveError(null);
+    // Een concept: regels in het formulier, zoals het dashboard. Verstuurd of
+    // uit de boekhouding: de regels liggen vast (ook in de database).
+    const regelsHier = f.status === 'concept' && !isGeimporteerd(f) && magRegels;
     setConcept({
       id: f.id,
       customerId: f.customer_id,
@@ -495,6 +562,26 @@ function InvoicesScreenInhoud() {
       opSlot: inhoudLigtVast(f),
       geimporteerd: isGeimporteerd(f),
       regels: [],
+      regelsStand: regelsHier ? 'laden' : 'geen',
+      regelsOrigineel: '',
+      bossSleutel: `factuur:${f.id}`,
+    });
+    bossVoorConcept(`factuur:${f.id}`);
+    if (!regelsHier) return;
+    void getFactuurRegels(f.id).then(({ data, error: fout }) => {
+      const vorm = data.map((r) => regelUitFactuurRegel(r, f));
+      setConcept((c) =>
+        c && c.id === f.id
+          ? fout
+            ? { ...c, regelsStand: 'fout' }
+            : {
+                ...c,
+                regels: vorm.length ? vorm : [legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct })],
+                regelsStand: 'klaar',
+                regelsOrigineel: JSON.stringify(vorm.map((r) => factuurRegelVoorOpslag(r, eenheden))),
+              }
+          : c,
+      );
     });
   };
 
@@ -504,6 +591,28 @@ function InvoicesScreenInhoud() {
     const termijn = Number(c.betaaltermijn || 14);
     save(
       async (): Promise<WriteResult<FactuurRow>> => {
+        if (c.id && c.regelsStand === 'laden') {
+          return writeFout('validatie', 'De regels zijn nog niet geladen. Wacht even en probeer het opnieuw.');
+        }
+        if (c.id && c.regelsStand === 'fout') {
+          return writeFout('validatie', 'De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast.');
+        }
+        if (c.id && c.regelsStand === 'klaar') {
+          // Concept: regels (alleen als ze veranderd zijn) en kop in één
+          // transactie (bb_factuur_regels_vervangen), daarna de rest van de kop.
+          const zonderPrijs = aantalZonderPrijs(c.regels);
+          if (zonderPrijs) {
+            return writeFout('validatie', `Vul eerst de prijs in bij ${zonderPrijs} ${zonderPrijs === 1 ? 'regel' : 'regels'}.`);
+          }
+          const nieuw = c.regels.filter((r) => !isLegeFactuurRegel(r)).map((r) => factuurRegelVoorOpslag(r, eenheden));
+          const gewijzigd = JSON.stringify(nieuw) !== c.regelsOrigineel;
+          const inhoud = await slaFactuurConceptOp(c.id, gewijzigd ? nieuw : null, {
+            vervaldatum: c.vervaldatum || null,
+            betalingskenmerk: c.betalingskenmerk,
+            notities: c.notities,
+          });
+          if (!inhoud.ok) return inhoud;
+        }
         if (c.id) {
           const invoer: Partial<FactuurInput> & { status?: string } =
             c.opSlot || c.geimporteerd
@@ -537,6 +646,11 @@ function InvoicesScreenInhoud() {
           vervaldatum: c.vervaldatum || null,
           notities: c.notities,
         };
+        // Een regel die Boss zonder prijs neerzette, mag niet stil als € 0 de factuur op.
+        const zonderPrijs = aantalZonderPrijs(c.regels);
+        if (zonderPrijs) {
+          return writeFout('validatie', `Vul eerst de prijs in bij ${zonderPrijs} ${zonderPrijs === 1 ? 'regel' : 'regels'}.`);
+        }
         // Nieuwe factuur: kop én regels in één transactie, zoals het dashboard.
         if (!magRegels) return createFactuur(invoer);
         const totalen = berekenTotalen(c.regels);
@@ -549,6 +663,10 @@ function InvoicesScreenInhoud() {
       {
         onSuccess: async (data) => {
           const f = data as FactuurRow;
+          // Opgeslagen: niets meer om op terug te komen.
+          wisConcept(c.bossSleutel);
+          setWrOpen(false);
+          setBossGebruikt(false);
           setConcept(null);
           const naar = terugNaarProject.current;
           if (!c.id && naar) {
@@ -1012,7 +1130,9 @@ function InvoicesScreenInhoud() {
         variant: 'secondary',
       });
     }
-    if (!detailGeimporteerd && !inhoudLigtVast(f)) {
+    // Bij een concept staan de regels in Bewerken (met Boss), zoals het
+    // dashboard; het losse regelblad blijft voor de status Aangemaakt.
+    if (!detailGeimporteerd && !inhoudLigtVast(f) && !(f.status === 'concept' && magRegels && magWijzigen)) {
       acties.push({ id: 'regels', label: 'Regels', onPress: sluitEn(() => void openRegels(f)), variant: 'ghost' });
     }
     if (magMaken && !detailGeimporteerd) {
@@ -1033,6 +1153,187 @@ function InvoicesScreenInhoud() {
   const conceptMagWeg = Boolean(concept?.id) && magVerwijderen && (conceptBron ? magFactuurVerwijderen(conceptBron) : false);
   const nieuwOngeldig =
     !concept?.id && (!concept?.customerId || (magRegels && (concept?.regels.length ?? 0) === 0) || ontbreekt.length > 0);
+
+  // ── Boss in dit formulier ─────────────────────────────────────────────────
+  const bossKan = Boolean(bossFunctie && magRegels && concept && (!concept.id || concept.regelsStand === 'klaar'));
+  const bossOpenen = () => {
+    if (!concept) return;
+    if (vorigConcept) { wisConcept(concept.bossSleutel); setVorigConcept(null); }
+    // Elke regel een vaste ref, zodat Boss een bestaande regel aanpast in plaats van er een bij te zetten.
+    setConcept((c) => (c ? { ...c, regels: metRefs(c.regels) } : c));
+    setBewaardGesprek((leesConcept(concept.bossSleutel)?.gesprek as FactuurGesprekBewaard | undefined) ?? null);
+    setBossGebruikt(true);
+    setWrOpen(true);
+  };
+  const bossVerder = () => {
+    if (!vorigConcept || !concept) return;
+    const doc = vorigConcept.document as Concept | undefined;
+    if (doc) setConcept(doc);
+    setBewaardGesprek((vorigConcept.gesprek as FactuurGesprekBewaard | undefined) ?? null);
+    setVorigConcept(null);
+    setBossGebruikt(true);
+    setWrOpen(true);
+  };
+  const conceptTotalen = berekenTotalen(concept?.regels ?? []);
+  const aandachtspunten: Aandachtspunt[] = concept
+    ? ([
+        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
+        ontbreekt.length ? { tekst: `${ontbreekt.join(', ')} van de klant` } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'factuurregels', veld: 'regels' } : null,
+        (() => {
+          const n = aantalZonderPrijs(concept.regels);
+          const eerste = concept.regels.find((r) => prijsOntbreekt(r));
+          return n ? { tekst: `een prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: eerste ? `regel:${eerste.sleutel}` : 'regels' } : null;
+        })(),
+      ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
+    : [];
+  const formulierVelden = (inWerkruimte: boolean) => (
+    <>
+          <WerkruimteVeld naam="klant">
+          <SelectField
+            label="Klant"
+            value={concept?.customerId ?? null}
+            options={klanten}
+            onChange={(id) => {
+              setConcept((c) => (c ? { ...c, customerId: id, projectId: null } : c));
+              if (concept && !concept.id) void zetTermijn(id);
+            }}
+            allowEmpty
+            emptyLabel="Geen klant"
+            placeholder="Selecteer klant"
+            disabled={concept?.opSlot || concept?.geimporteerd}
+          />
+          </WerkruimteVeld>
+          {ontbreekt.length > 0 ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              title="Klantgegevens onvolledig"
+              message={`Ontbrekend: ${ontbreekt.join(', ')}. Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.`}
+            />
+          ) : null}
+          {projectOpties.length > 0 || concept?.projectId ? (
+            <SelectField
+              label="Project (optioneel)"
+              value={concept?.projectId ?? null}
+              options={projectOpties}
+              onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
+              allowEmpty
+              emptyLabel="Geen project"
+              placeholder="Geen project"
+              disabled={concept?.opSlot || concept?.geimporteerd}
+            />
+          ) : null}
+          <View style={styles.rij}>
+            <View style={{ flex: 1.4 }}>
+              <DateField
+                label="Factuurdatum"
+                value={concept?.factuurdatum || null}
+                onChange={(v) =>
+                  setConcept((c) =>
+                    c
+                      ? {
+                          ...c,
+                          factuurdatum: v,
+                          vervaldatum: c.vervalHandmatig
+                            ? c.vervaldatum
+                            : berekenVervaldatum(v, Number(c.betaaltermijn || 14)),
+                        }
+                      : c,
+                  )
+                }
+                placeholder="Kies"
+                disabled={concept?.opSlot || concept?.geimporteerd}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <FormField
+                label="Termijn"
+                value={concept?.betaaltermijn ?? ''}
+                onChangeText={(v) =>
+                  setConcept((c) =>
+                    c
+                      ? {
+                          ...c,
+                          betaaltermijn: v,
+                          vervaldatum:
+                            c.vervalHandmatig || !c.factuurdatum
+                              ? c.vervaldatum
+                              : berekenVervaldatum(c.factuurdatum, Number(v || 14)),
+                        }
+                      : c,
+                  )
+                }
+                placeholder="14"
+                keyboardType="number-pad"
+                hint="dagen"
+                editable={!concept?.opSlot && !concept?.geimporteerd}
+              />
+            </View>
+          </View>
+          <DateField
+            label="Vervaldatum"
+            value={concept?.vervaldatum || null}
+            onChange={(v) => setConcept((c) => (c ? { ...c, vervaldatum: v, vervalHandmatig: true } : c))}
+            placeholder="Kies"
+            disabled={concept?.opSlot || concept?.geimporteerd}
+          />
+          {concept?.id ? (
+            <FormField
+              label="Betalingskenmerk"
+              value={concept.betalingskenmerk}
+              onChangeText={(v) => setConcept((c) => (c ? { ...c, betalingskenmerk: v } : c))}
+              placeholder={conceptBron?.nummer ?? ''}
+              editable={!concept.opSlot && !concept.geimporteerd}
+            />
+          ) : null}
+          {/* Regels bij het aanmaken en bij een concept: één handeling, één set
+              totalen, net als in het dashboard. Bij een verstuurde factuur liggen
+              ze vast. */}
+          {concept && !concept.id && !magRegels ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message={
+                waaromNiet('factuurRegels', 'maken') ??
+                'Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder om het recht Facturen.'
+              }
+            />
+          ) : null}
+
+          {concept?.regelsStand === 'laden' ? <Text style={styles.hint}>Regels laden…</Text> : null}
+          {concept?.regelsStand === 'fout' ? (
+            <NoticeBanner
+              toon="waarschuwing"
+              message="De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast."
+            />
+          ) : null}
+          {concept && ((!concept.id && magRegels) || concept.regelsStand === 'klaar') ? (
+            <WerkruimteVeld naam="regels">
+            <RegelEditor
+              regels={concept.regels}
+              onChange={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
+              standaard={{
+                uurtarief: instellingen.uurtarief,
+                reiskostenPerKm: instellingen.reiskostenPerKm,
+                btwPct: instellingen.btwPct,
+              }}
+              eenheden={eenheden}
+              flitsIds={flitsIds}
+              metTotalen={!inWerkruimte}
+            />
+            </WerkruimteVeld>
+          ) : null}
+
+          <FormField
+            label="Interne notitie"
+            value={concept?.notities ?? ''}
+            onChangeText={(v) => setConcept((c) => (c ? { ...c, notities: v } : c))}
+            placeholder="Alleen voor jou en je collega's — niet op de factuur of in de mail"
+            multiline
+            editable={!concept?.opSlot && !concept?.geimporteerd}
+          />
+    </>
+  );
+
 
   const creditTotaal =
     credit?.modus === 'gedeeltelijk'
@@ -1248,7 +1549,7 @@ function InvoicesScreenInhoud() {
 
       {/* Factuur aanmaken / bewerken */}
       <FormSheet
-        visible={concept !== null}
+        visible={concept !== null && !wrOpen}
         title={concept?.id ? 'Factuur bewerken' : 'Nieuwe factuur'}
         subtitle={concept?.id ? (conceptBron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
         error={saveError}
@@ -1326,135 +1627,18 @@ function InvoicesScreenInhoud() {
           </View>
         ) : null}
 
-        <SelectField
-          label="Klant"
-          value={concept?.customerId ?? null}
-          options={klanten}
-          onChange={(id) => {
-            setConcept((c) => (c ? { ...c, customerId: id, projectId: null } : c));
-            if (concept && !concept.id) void zetTermijn(id);
-          }}
-          allowEmpty
-          emptyLabel="Geen klant"
-          placeholder="Selecteer klant"
-          disabled={concept?.opSlot || concept?.geimporteerd}
-        />
-        {ontbreekt.length > 0 ? (
-          <NoticeBanner
-            toon="waarschuwing"
-            title="Klantgegevens onvolledig"
-            message={`Ontbrekend: ${ontbreekt.join(', ')}. Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.`}
+        {bossKan ? (
+          <BossIngang
+            soort="factuur"
+            vorig={vorigConcept}
+            gebruikt={bossGebruikt}
+            sub="Uit een werkbon, offerte of in je eigen woorden"
+            onOpen={bossOpenen}
+            onVerder={bossVerder}
+            onOpnieuw={() => { wisConcept(concept!.bossSleutel); setVorigConcept(null); }}
           />
         ) : null}
-        {projectOpties.length > 0 || concept?.projectId ? (
-          <SelectField
-            label="Project (optioneel)"
-            value={concept?.projectId ?? null}
-            options={projectOpties}
-            onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
-            allowEmpty
-            emptyLabel="Geen project"
-            placeholder="Geen project"
-            disabled={concept?.opSlot || concept?.geimporteerd}
-          />
-        ) : null}
-        <View style={styles.rij}>
-          <View style={{ flex: 1.4 }}>
-            <DateField
-              label="Factuurdatum"
-              value={concept?.factuurdatum || null}
-              onChange={(v) =>
-                setConcept((c) =>
-                  c
-                    ? {
-                        ...c,
-                        factuurdatum: v,
-                        vervaldatum: c.vervalHandmatig
-                          ? c.vervaldatum
-                          : berekenVervaldatum(v, Number(c.betaaltermijn || 14)),
-                      }
-                    : c,
-                )
-              }
-              placeholder="Kies"
-              disabled={concept?.opSlot || concept?.geimporteerd}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <FormField
-              label="Termijn"
-              value={concept?.betaaltermijn ?? ''}
-              onChangeText={(v) =>
-                setConcept((c) =>
-                  c
-                    ? {
-                        ...c,
-                        betaaltermijn: v,
-                        vervaldatum:
-                          c.vervalHandmatig || !c.factuurdatum
-                            ? c.vervaldatum
-                            : berekenVervaldatum(c.factuurdatum, Number(v || 14)),
-                      }
-                    : c,
-                )
-              }
-              placeholder="14"
-              keyboardType="number-pad"
-              hint="dagen"
-              editable={!concept?.opSlot && !concept?.geimporteerd}
-            />
-          </View>
-        </View>
-        <DateField
-          label="Vervaldatum"
-          value={concept?.vervaldatum || null}
-          onChange={(v) => setConcept((c) => (c ? { ...c, vervaldatum: v, vervalHandmatig: true } : c))}
-          placeholder="Kies"
-          disabled={concept?.opSlot || concept?.geimporteerd}
-        />
-        {concept?.id ? (
-          <FormField
-            label="Betalingskenmerk"
-            value={concept.betalingskenmerk}
-            onChangeText={(v) => setConcept((c) => (c ? { ...c, betalingskenmerk: v } : c))}
-            placeholder={conceptBron?.nummer ?? ''}
-            editable={!concept.opSlot && !concept.geimporteerd}
-          />
-        ) : null}
-        {/* Regels horen bij het aanmaken: één handeling, één set totalen — net
-            als in het dashboard. Bij een bestaande factuur blijven de regels in
-            hun eigen blad staan. */}
-        {concept && !concept.id && !magRegels ? (
-          <NoticeBanner
-            toon="waarschuwing"
-            message={
-              waaromNiet('factuurRegels', 'maken') ??
-              'Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder om het recht Facturen.'
-            }
-          />
-        ) : null}
-
-        {concept && !concept.id && magRegels ? (
-          <RegelEditor
-            regels={concept.regels}
-            onChange={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
-            standaard={{
-              uurtarief: instellingen.uurtarief,
-              reiskostenPerKm: instellingen.reiskostenPerKm,
-              btwPct: instellingen.btwPct,
-            }}
-            eenheden={eenheden}
-          />
-        ) : null}
-
-        <FormField
-          label="Interne notitie"
-          value={concept?.notities ?? ''}
-          onChangeText={(v) => setConcept((c) => (c ? { ...c, notities: v } : c))}
-          placeholder="Alleen voor jou en je collega's — niet op de factuur of in de mail"
-          multiline
-          editable={!concept?.opSlot && !concept?.geimporteerd}
-        />
+        {formulierVelden(false)}
 
         {/* "Opslaan en versturen", zoals de factuurmodal: niet bij een
             verstuurde of geïmporteerde factuur. */}
@@ -1467,6 +1651,64 @@ function InvoicesScreenInhoud() {
           />
         ) : null}
       </FormSheet>
+
+      {/* De Boss-werkruimte bij deze factuur */}
+      {concept && bossGebruikt && wrOpen ? (
+        <Werkruimte
+          open={wrOpen}
+          titel={concept.id ? 'Factuur aanpassen' : 'Factuur opstellen'}
+          nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
+          status={concept.id ? { label: 'Concept', toon: 'concept' } : { label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
+          bossBezig={bossStand.bezig}
+          bossWacht={bossStand.wacht}
+          onTerug={() => { if (!bossStand.bezig) setWrOpen(false); }}
+          gesprek={
+            <FactuurGesprek
+              klantId={concept.customerId}
+              projectId={concept.projectId}
+              klanten={klantenLijst}
+              offertes={bossOffertes}
+              regels={concept.regels}
+              setRegels={(r) => setConcept((c) => (c ? { ...c, regels: r } : c))}
+              maakRegel={() => ({ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() })}
+              standaardPct={instellingen.btwPct}
+              onToegepast={setFlitsIds}
+              bewaard={bewaardGesprek}
+              bewaarSleutel={concept.bossSleutel}
+              onStand={setBossStand}
+            />
+          }
+          document={
+            <View style={{ gap: spacing.lg }}>
+              {formulierVelden(true)}
+            </View>
+          }
+          voorbeeld={
+            <DocumentVoorbeeld
+              soort="factuur"
+              nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
+              klant={conceptKlant ?? null}
+              datums={[
+                { label: 'Factuurdatum', waarde: concept.factuurdatum ? formatDateNL(concept.factuurdatum) : '' },
+                { label: 'Vervaldatum', waarde: concept.vervaldatum ? formatDateNL(concept.vervaldatum) : '' },
+              ]}
+              regels={concept.regels}
+              eenheden={eenheden}
+            />
+          }
+          aandachtspunten={aandachtspunten}
+          fout={saveError}
+          totaal={{ excl: conceptTotalen.excl, incl: conceptTotalen.incl }}
+          acties={
+            <>
+              {magWijzigen ? (
+                <Button label="Opslaan en versturen" variant="secondary" disabled={saving || nieuwOngeldig} onPress={() => opslaan(true)} style={{ flex: 1 }} />
+              ) : null}
+              <Button label="Opslaan als concept" loading={saving} disabled={saving || nieuwOngeldig} onPress={() => opslaan(false)} style={{ flex: 1 }} />
+            </>
+          }
+        />
+      ) : null}
 
       {/* Factuurregels */}
       <FormSheet
@@ -1575,6 +1817,7 @@ function InvoicesScreenInhoud() {
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
         onWijzig={(c) => setMail((m) => (m ? { ...m, concept: c } : m))}
+        boss={mail ? { functie: 'boss-factuur', documentId: mail.factuur.id, klantId: mail.factuur.customer_id ?? null } : null}
         saving={mailBezig}
         error={mailFout}
         onVerstuur={verstuurFactuur}

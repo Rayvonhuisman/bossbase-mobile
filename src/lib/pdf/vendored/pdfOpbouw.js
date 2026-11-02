@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/pdfOpbouw.js
-// Dashboardcommit: 93c03ae
+// Dashboardcommit: 30af578
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -419,7 +419,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
   // Rijen. Vroeger stopte de tabel stil bij y > 238 ("if (y > 238) return"):
   // een offerte met veel regels verloor alles na de eerste pagina. Nu een
   // vervolgpagina met dezelfde kolomkoppen.
-  (regels || []).forEach((r, idx) => {
+  const tekenRegel = (r, idx) => {
     if (ruimte(11)) kolomKoppen();
     else if (idx > 0) {
       dc(C.line);
@@ -460,7 +460,60 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     doc.text(euro(bedrag), COL_X[4] + COL_W[4] - 1, y, { align: 'right' });
 
     y += 11;
-  });
+  };
+
+  // Groepen (ruimtes, onderdelen): regels zonder groep eerst, dan per groep
+  // de naam, de werkzaamheden, de regels en een subtotaal excl. btw. Het
+  // eindoverzicht hieronder (btw per tarief, totaal) blijft over alle regels.
+  // Een regel draagt zijn groep mee als `groep` ({ id, naam, werkzaamheden,
+  // volgorde }); zonder groepen is de tabel zoals altijd.
+  const metGroep = (regels || []).filter(r => r.groep?.naam);
+  if (!metGroep.length) {
+    (regels || []).forEach(tekenRegel);
+  } else {
+    const los = (regels || []).filter(r => !r.groep?.naam);
+    los.forEach(tekenRegel);
+    const groepen = [];
+    for (const r of metGroep) {
+      const sleutel = r.groep.id || r.groep.naam;
+      let g = groepen.find(x => x.sleutel === sleutel);
+      if (!g) { g = { sleutel, groep: r.groep, regels: [] }; groepen.push(g); }
+      g.regels.push(r);
+    }
+    groepen.sort((a, b) => Number(a.groep.volgorde ?? 0) - Number(b.groep.volgorde ?? 0));
+    groepen.forEach((g, gi) => {
+      const werk = g.groep.werkzaamheden ? doc.splitTextToSize(String(g.groep.werkzaamheden), CW - 4).slice(0, 12) : [];
+      if (ruimte(14 + werk.length * 4)) kolomKoppen();
+      else if (los.length || gi > 0) y += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      tc(C.dark);
+      doc.text(String(g.groep.naam), M, y);
+      y += 5;
+      if (werk.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        tc(C.soft);
+        doc.text(werk, M, y);
+        y += werk.length * 4 + 1;
+      }
+      y += 4;
+      g.regels.forEach((r, i) => tekenRegel(r, i));
+      const sub = Math.round(g.regels.reduce((t, r) => t + Number((type === 'factuur' ? r.regelprijs : r.subtotaal) || 0), 0) * 100) / 100;
+      if (ruimte(9)) kolomKoppen();
+      dc(C.line);
+      doc.setLineWidth(0.3);
+      doc.line(COL_X[2], y - 3, W - M, y - 3);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      tc(C.muted);
+      doc.text(`Subtotaal ${g.groep.naam} excl. btw`, COL_X[3] + COL_W[3] - 1, y + 1, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      tc(C.dark);
+      doc.text(euro(sub), COL_X[4] + COL_W[4] - 1, y + 1, { align: 'right' });
+      y += 10;
+    });
+  }
 
   // Lijn na laatste rij
   dc(C.line);

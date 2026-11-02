@@ -85,6 +85,8 @@ export type PdfOfferte = Snapshot & {
   signatureUrl: string | null;
 };
 
+export type PdfGroep = { id: string; naam: string; werkzaamheden: string | null; volgorde: number };
+
 export type PdfOfferteItem = {
   id: string;
   omschrijving: string;
@@ -96,6 +98,8 @@ export type PdfOfferteItem = {
   prijsPer: number;
   subtotaal: number;
   volgorde: number;
+  /** Groep (ruimte, onderdeel); de PDF tekent per groep een kop en subtotaal. */
+  groep?: PdfGroep | null;
 };
 
 export type PdfFactuur = Snapshot & {
@@ -124,6 +128,8 @@ export type PdfFactuurRegel = {
   btwRegime: string;
   regelprijs: number;
   volgorde: number;
+  /** Groep (ruimte, onderdeel); de PDF tekent per groep een kop en subtotaal. */
+  groep?: PdfGroep | null;
 };
 
 export type PdfInvoer =
@@ -207,6 +213,7 @@ export function naarOfferteItem(row: Rij): PdfOfferteItem {
     prijsPer: Number(row.prijs_per || 0),
     subtotaal: Number(row.subtotaal || 0),
     volgorde: Number(row.volgorde || 0),
+    groep: groepUit(row),
   };
 }
 
@@ -242,6 +249,7 @@ export function naarFactuurRegel(row: Rij): PdfFactuurRegel {
     btwRegime: (row.btw_regime as string) || regimeVanPct(row.btw_pct),
     regelprijs: Number(row.regelprijs || 0),
     volgorde: Number(row.volgorde || 0),
+    groep: groepUit(row),
   };
 }
 
@@ -334,6 +342,28 @@ async function bedrijfOphalen(client: SupabaseClient, id: string): Promise<PdfBe
   return data ? naarBedrijf(data as Rij) : null;
 }
 
+/**
+ * Regels met hun groep (ruimte, onderdeel), zoals `getOfferteItems` en
+ * `getFactuurRegels` in het dashboard: de PDF tekent dan per groep een kop en
+ * een subtotaal. Kent de schemacache de relatie nog niet, dan zonder groepen.
+ */
+async function regelsMetGroep(client: SupabaseClient, tabel: 'offerte_items' | 'factuur_regels', groepTabel: string, kolom: string, id: string) {
+  const lees = async (select: string) => {
+    const { data, error } = await client.from(tabel).select(select).eq(kolom, id).order('volgorde', { ascending: true });
+    return { data: data as unknown as Rij[] | null, error };
+  };
+  const res = await lees(`*, groep:${groepTabel}(id, naam, werkzaamheden, volgorde)`);
+  if (res.error && (['PGRST200', 'PGRST204', '42703'].includes(res.error.code ?? '') || /groep|schema cache/i.test(res.error.message ?? ''))) {
+    return lees('*');
+  }
+  return res;
+}
+
+const groepUit = (row: Rij) => {
+  const g = row.groep as { id?: string; naam?: string; werkzaamheden?: string | null; volgorde?: number | null } | null | undefined;
+  return g?.naam ? { id: s(g.id), naam: g.naam, werkzaamheden: g.werkzaamheden ?? null, volgorde: Number(g.volgorde ?? 0) } : null;
+};
+
 export async function laadOfferteInvoer(client: SupabaseClient, offerteId: string): Promise<PdfInvoer> {
   const { data: row, error } = await client.from('offertes').select('*').eq('id', offerteId).maybeSingle();
   if (error) throw new PdfFout('De offerte kon niet worden geladen.');
@@ -341,7 +371,7 @@ export async function laadOfferteInvoer(client: SupabaseClient, offerteId: strin
   const offerte = naarOfferte(row as Rij);
 
   const [regelsRes, customer, live] = await Promise.all([
-    client.from('offerte_items').select('*').eq('offerte_id', offerteId).order('volgorde', { ascending: true }),
+    regelsMetGroep(client, 'offerte_items', 'offerte_groepen', 'offerte_id', offerteId),
     klantOphalen(client, offerte.customerId),
     bedrijfOphalen(client, offerte.companyId),
   ]);
@@ -367,7 +397,7 @@ export async function laadFactuurInvoer(client: SupabaseClient, factuurId: strin
   }
 
   const [regelsRes, customer, live] = await Promise.all([
-    client.from('factuur_regels').select('*').eq('factuur_id', factuurId).order('volgorde', { ascending: true }),
+    regelsMetGroep(client, 'factuur_regels', 'factuur_groepen', 'factuur_id', factuurId),
     klantOphalen(client, factuur.customerId),
     bedrijfOphalen(client, factuur.companyId),
   ]);

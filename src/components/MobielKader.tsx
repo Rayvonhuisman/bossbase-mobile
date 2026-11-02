@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '@/providers';
-import { bepaalSchermklasse, kolomMax } from '@/lib/schermklasseRegels';
+import { bepaalSchermklasse, kolomMax, type KaderSoort } from '@/lib/schermklasseRegels';
 
 /**
  * Het kader waarbinnen de app staat, in de iOS- en Android-app. Op een
@@ -10,7 +10,7 @@ import { bepaalSchermklasse, kolomMax } from '@/lib/schermklasseRegels';
  * breed, formulieren 600, zodat kaarten en regels niet over het hele scherm
  * uitrekken — staand en liggend.
  */
-export function MobielKader({ children, soort = 'app' }: { children: ReactNode; soort?: 'app' | 'formulier' }) {
+export function MobielKader({ children, soort = 'app' }: { children: ReactNode; soort?: KaderSoort }) {
   const { colors: t, colorMode } = useTheme();
   const { width } = useWindowDimensions();
   const maxBreedte = kolomMax(bepaalSchermklasse(width), soort);

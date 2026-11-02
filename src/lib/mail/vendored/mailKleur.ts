@@ -1,7 +1,7 @@
 // @ts-nocheck
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/mailKleur.ts
-// Dashboardcommit: 71066c0
+// Dashboardcommit: 4f36bec
 // Bijwerken: node scripts/mail-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/mailOpmaak.test.mjs
 // vergelijkt het met het dashboard.
