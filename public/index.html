@@ -118,6 +118,24 @@
         background-color: inherit;
         z-index: 2147483000;
       }
+      /* Alleen iOS/iPadOS (Safari en beginscherm-app). iOS kijkt een paar pixels
+         onder de bovenrand of daar een vast element staat van bijna de volle
+         breedte en meer dan 10px hoog; zo niet, dan vervaagt het de inhoud
+         eronder. Is de veilige zone 0 (een gewoon Safari-tabblad, en in
+         beginscherm-apps sinds iOS 26.1 soms ook), dan was de balk hierboven
+         0px hoog en telde hij niet. Daarom minstens 12px, en schuift de app
+         het verschil omlaag zodat de balk niets van de inhoud afdekt. Met een
+         veilige zone van 12px of meer verandert er niets. De superadmin-app
+         heeft hier geen last van door zijn sticky kopbalk. */
+      @supports (-webkit-touch-callout: none) {
+        #bb-statusbalk {
+          height: max(env(safe-area-inset-top, 0px), 12px);
+        }
+        #root {
+          box-sizing: border-box;
+          padding-top: max(0px, calc(12px - env(safe-area-inset-top, 0px)));
+        }
+      }
     </style>
   </head>
 
