@@ -5,6 +5,7 @@ import { isGeldigeDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { PROJECT_STATUS, projectStatusLabel, type FactuurBedrag } from '@/lib/projectLogica';
 import { idBatches, PROJECT_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
+import { kostprijsVanUurRij, UUR_KOSTPRIJS } from '@/lib/projectKostenLogica';
 
 export { PROJECT_STATUS, projectStatusLabel };
 
@@ -24,6 +25,11 @@ export { PROJECT_STATUS, projectStatusLabel };
  * Projectwaarde: met `waarde_bron` ('offertes' | 'aanvraag' | 'handmatig').
  * Een zelf getypte waarde zet 'handmatig'; terug naar automatisch = 'aanvraag'.
  *
+ * Begrote uren: met `uren_bron` ('offertes' | 'handmatig', migratie
+ * 20261107143517). De database vult `quoted_hours` uit de geaccepteerde
+ * offertes; een andere waarde typen maakt hem 'handmatig' (trigger
+ * `bb_project_uren_handmatig`), terug naar de offertes = 'offertes'.
+ *
  * RLS: SELECT is breed (gedeelde werkruimte, `alles_inzien`, of zelf gekoppeld);
  * INSERT/UPDATE vragen `projecten_bewerken`; DELETE vraagt rol admin.
  *
@@ -34,14 +40,30 @@ export { PROJECT_STATUS, projectStatusLabel };
  * `projectbedragen` (admin of recht; niet via de gedeelde werkruimte). Schrijven mag nog.
  */
 
-const PROJECT_COLUMNS = `
+const kolommen = (metUrenBron: boolean) => `
   id, company_id, customer_id, deal_id, offerte_id, name, description, status,
-  waarde_bron, quoted_hours, start_date, deadline,
+  waarde_bron, quoted_hours, ${metUrenBron ? 'uren_bron, ' : ''}start_date, deadline,
   owner_id, assigned_to, created_by, created_at,
   customer:customers ( id, name ),
   deal:deals ( title ),
   offerte:offertes ( nummer )
 `;
+
+// Kent de API `uren_bron` nog niet (migratie nog niet gedraaid), dan weigert
+// hij de hele select. Eén keer zonder proberen en dat onthouden: liever een
+// project zonder herkomst van de begrote uren dan geen project.
+let urenBronBekend = true;
+const projectKolommen = () => kolommen(urenBronBekend);
+async function leesProjecten<R extends { error: { message?: string } | null }>(
+  haal: (kolommen: string) => PromiseLike<R>,
+): Promise<R> {
+  const res = await haal(projectKolommen());
+  if (res.error && urenBronBekend && /uren_bron/.test(res.error.message ?? '')) {
+    urenBronBekend = false;
+    return haal(projectKolommen());
+  }
+  return res;
+}
 
 export type ProjectRow = {
   id: string;
@@ -56,6 +78,8 @@ export type ProjectRow = {
   waarde_bron: string | null;
   geschatte_waarde: number | null;
   quoted_hours: number | null;
+  /** Waar `quoted_hours` vandaan komt; undefined zolang de kolom nog niet bestaat. */
+  uren_bron?: 'offertes' | 'handmatig' | null;
   start_date: string | null;
   deadline: string | null;
   owner_id: string | null;
@@ -96,13 +120,15 @@ async function schrijfMetBedragen<R extends WriteResult<ProjectRow>>(res: R): Pr
 }
 
 export async function listProjects(): Promise<{ data: ProjectRow[]; error: string | null }> {
-  const { data, error } = await haalInStukken((van, tot) =>
-    supabase
-      .from('projects')
-      .select(PROJECT_COLUMNS)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: true })
-      .range(van, tot),
+  const { data, error } = await leesProjecten((k) =>
+    haalInStukken((van, tot) =>
+      supabase
+        .from('projects')
+        .select(k)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(van, tot),
+    ),
   );
 
   if (error) {
@@ -115,11 +141,7 @@ export async function listProjects(): Promise<{ data: ProjectRow[]; error: strin
 export async function getProject(
   id: string,
 ): Promise<{ data: ProjectRow | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select(PROJECT_COLUMNS)
-    .eq('id', id)
-    .maybeSingle();
+  const { data, error } = await leesProjecten((k) => supabase.from('projects').select(k).eq('id', id).maybeSingle());
   if (error) {
     console.warn('[projectService.getProject]', error.message);
     return { data: null, error: 'Project kon niet worden geladen.' };
@@ -133,12 +155,9 @@ export async function getProject(
 export async function getProjectByDeal(
   dealId: string,
 ): Promise<{ data: ProjectRow | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select(PROJECT_COLUMNS)
-    .eq('deal_id', dealId)
-    .order('created_at', { ascending: true })
-    .limit(1);
+  const { data, error } = await leesProjecten((k) =>
+    supabase.from('projects').select(k).eq('deal_id', dealId).order('created_at', { ascending: true }).limit(1),
+  );
   if (error) {
     console.warn('[projectService.getProjectByDeal]', error.message);
     return { data: null, error: 'Project kon niet worden geladen.' };
@@ -158,6 +177,8 @@ export type ProjectInput = {
   project_value?: number | null;
   waarde_bron?: 'offertes' | 'aanvraag' | 'handmatig';
   quoted_hours?: number | null;
+  /** 'offertes' = begrote uren weer uit de geaccepteerde offertes halen. */
+  uren_bron?: 'offertes' | 'handmatig';
   start_date?: string | null;
   deadline?: string | null;
   assigned_to?: string | null;
@@ -199,6 +220,7 @@ function mapProject(input: Partial<ProjectInput>): Record<string, unknown> {
   if (input.project_value !== undefined) p.project_value = Number(input.project_value ?? 0);
   if (input.waarde_bron !== undefined) p.waarde_bron = input.waarde_bron;
   if (input.quoted_hours !== undefined) p.quoted_hours = Number(input.quoted_hours ?? 0);
+  if (input.uren_bron !== undefined) p.uren_bron = input.uren_bron;
   if (input.start_date !== undefined) p.start_date = input.start_date || null;
   if (input.deadline !== undefined) p.deadline = input.deadline || null;
   if (input.assigned_to !== undefined) p.assigned_to = input.assigned_to || null;
@@ -232,7 +254,7 @@ export async function createProject(
       }
       if (!patch.quoted_hours) delete patch.quoted_hours;
       const res = await schrijf<ProjectRow>(
-        () => supabase.from('projects').update(patch).eq('id', bestaand.id).select(PROJECT_COLUMNS),
+        () => supabase.from('projects').update(patch).eq('id', bestaand.id).select(projectKolommen()),
         { context: 'projectService.createProject(bestaand)', bedrijfReadonly: isReadonly() },
       );
       return res.ok ? { ...(await schrijfMetBedragen(res)), bestond: true } : res;
@@ -250,7 +272,7 @@ export async function createProject(
 
   return schrijfMetBedragen(
     await schrijf<ProjectRow>(
-      () => supabase.from('projects').insert(payload).select(PROJECT_COLUMNS),
+      () => supabase.from('projects').insert(payload).select(projectKolommen()),
       {
         context: 'projectService.createProject',
         bedrijfReadonly: isReadonly(),
@@ -274,7 +296,7 @@ export async function updateProject(
 
   return schrijfMetBedragen(
     await schrijf<ProjectRow>(
-      () => supabase.from('projects').update(updates).eq('id', id).select(PROJECT_COLUMNS),
+      () => supabase.from('projects').update(updates).eq('id', id).select(projectKolommen()),
       {
         context: 'projectService.updateProject',
         bedrijfReadonly: isReadonly(),
@@ -374,25 +396,39 @@ export type ProjectUur = {
   notitie: string | null;
   werkbon_id: string | null;
   medewerker: { full_name: string | null } | null;
+  /** Kostprijs per uur die gold bij het boeken; null zonder recht of zonder ingestelde kostprijs. */
+  kostprijsPerUur: number | null;
 };
 
+const PROJECT_UREN =
+  'id, datum, uren, start_tijd, eind_tijd, pauze_minuten, reis_km, notitie, werkbon_id, medewerker:profiles!werkbon_uren_profile_id_fkey ( full_name ), werkbonnen!inner ( project_id )';
+
 export async function listProjectUren(projectId: string): Promise<ProjectUur[]> {
-  const { data, error } = await haalInStukken((van, tot) =>
-    supabase
-      .from('werkbon_uren')
-      .select(
-        'id, datum, uren, start_tijd, eind_tijd, pauze_minuten, reis_km, notitie, werkbon_id, medewerker:profiles!werkbon_uren_profile_id_fkey ( full_name ), werkbonnen!inner ( project_id )',
-      )
-      .eq('werkbonnen.project_id', projectId)
-      .order('datum', { ascending: false })
-      .order('id', { ascending: true })
-      .range(van, tot),
-  );
+  const haal = (select: string) =>
+    haalInStukken((van, tot) =>
+      supabase
+        .from('werkbon_uren')
+        .select(select)
+        .eq('werkbonnen.project_id', projectId)
+        .order('datum', { ascending: false })
+        .order('id', { ascending: true })
+        .range(van, tot),
+    );
+  // Met de kostprijs per uur voor de nacalculatie; kent de API die relatie
+  // nog niet, dan zonder: liever uren zonder bedrag dan geen uren.
+  let { data, error } = await haal(`${PROJECT_UREN}, ${UUR_KOSTPRIJS}`);
+  if (error) ({ data, error } = await haal(PROJECT_UREN));
   if (error) {
     if (__DEV__) console.log('[projectService.listProjectUren]', error.message);
     return [];
   }
-  return ((data as unknown as ProjectUur[]) ?? []).map((u) => ({ ...u, uren: Number(u.uren) || 0 }));
+  return ((data as unknown as (ProjectUur & { werkbon_uren_kostprijs?: unknown })[]) ?? []).map(
+    ({ werkbon_uren_kostprijs, ...u }) => ({
+      ...u,
+      uren: Number(u.uren) || 0,
+      kostprijsPerUur: kostprijsVanUurRij({ werkbon_uren_kostprijs }),
+    }),
+  );
 }
 
 export type ProjectFactuur = {

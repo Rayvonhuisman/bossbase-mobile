@@ -103,8 +103,8 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
       { key: 'facturen', label: 'Facturen', kort: 'Facturen maken, versturen en inzien' },
       {
         key: 'inkoopprijzen',
-        label: 'Inkoopprijzen zien',
-        kort: 'Inkoopprijs en marge op materialen',
+        label: 'Inkoop- en kostprijzen zien',
+        kort: 'Inkoopprijzen, kostprijs per uur, calculatie en nacalculatie',
       },
       { key: 'kosten', label: 'Kosten', kort: 'Kosten en inkoop registreren en inzien' },
     ],

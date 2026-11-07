@@ -299,6 +299,16 @@ export default function WorkOrderDetailScreen() {
   const canNote = editDetail && !readonly && !opSlot;
   const magInkoop = can('inkoopprijzen');
   const magBedragen = can('projectbedragen');
+  // De kostprijs per uur zet de database bij het opslaan van een uur (trigger
+  // bb_werkbon_uren_kostprijs); de opgeslagen rij heeft hem nog niet. Opnieuw
+  // ophalen haalt hem binnen, anders telt het nieuwe uur in het kostenblok
+  // als "zonder kostprijs".
+  const herlaadKostprijzen = () => {
+    if (!magInkoop || !id) return;
+    void listWerkbonUren(id).then((r) => {
+      if (!r.error) setUren(r.data);
+    });
+  };
   // Notitie voor-klant/intern wisselen: policy `werkbon_notities_update` —
   // schrijver, of admin/planning/`werkbonnen_bewerken` (20261026121548).
   const magNotitiesBeheren = role === 'admin' || can('planning') || can('werkbonnen_bewerken');
@@ -1305,6 +1315,7 @@ export default function WorkOrderDetailScreen() {
                 <KostenInhoud
                   werkbon={workOrder}
                   uren={uren}
+                  isAdmin={role === 'admin'}
                   materiaalSleutel={materials.map((m) => `${m.id}:${m.aantal}`).join(',')}
                   magInkoop={kosten.inkoop}
                   kanBewerken={kosten.bewerken}
@@ -1604,6 +1615,7 @@ export default function WorkOrderDetailScreen() {
             });
             if (!res.ok) return { error: res.melding };
             setUren((prev) => prev.map((x) => (x.id === res.data.id ? res.data : x)));
+            herlaadKostprijzen();
             return { error: null };
           }}
         />
@@ -1632,6 +1644,7 @@ export default function WorkOrderDetailScreen() {
             });
             if (!res.ok) return { error: res.melding };
             setUren((prev) => [res.data, ...prev]);
+            herlaadKostprijzen();
             return { error: null };
           }}
         />

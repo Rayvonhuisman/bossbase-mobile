@@ -1,32 +1,48 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Info } from 'lucide-react-native';
+import { Text, View } from 'react-native';
 import { FormField, FormSheet, NoticeBanner, SelectField } from '@/components';
 import { formatDateNL, formatEUR, formatEURCent } from '@/lib/format';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
-import { bouwKostenOverzicht, kostBedrag, materiaalNaam, type ProjectJobCost, type ProjectKost } from '@/lib/projectKostenLogica';
+import {
+  bouwKostenOverzicht,
+  bouwNacalculatie,
+  kostBedrag,
+  materiaalNaam,
+  type Begroting,
+  type ProjectJobCost,
+  type ProjectKost,
+} from '@/lib/projectKostenLogica';
 import { listLeveranciers } from '@/services/jobCostService';
 import {
   createProjectKost,
   deleteProjectKost,
+  getProjectBegroting,
   listProjectJobCosts,
   listProjectKosten,
   updateProjectKost,
 } from '@/services/projectKostenService';
 import type { ProjectUur } from '@/services/projectService';
 import { Blok, KleineKnop, Rij, useStijl, Veld } from './bouwstenen';
+import { NacalculatieTabel } from './NacalculatieTabel';
 import { getalOfNul } from '@/lib/getalNl';
 
 /**
- * De Kosten-tab (`KostenTab` in het dashboard): wat deze klus gekost heeft.
- * Materiaal van de werkbonnen (op inkoopprijs) plus de inkopen die hier worden
- * ingevoerd; boekingen van de Kosten-pagina tellen niet mee (dat is de
- * boekhouding). Arbeid telt bewust niet mee: er is geen kostprijs per uur.
+ * De Nacalculatie-tab (`KostenTab` in het dashboard): wat deze klus kost
+ * tegenover wat begroot was. Arbeid (uren × de kostprijs per uur die gold bij
+ * het boeken), het materiaal van de werkbonnen (op inkoopprijs) en de inkopen
+ * die hier worden ingevoerd; boekingen van de Kosten-pagina tellen niet mee
+ * (dat is de boekhouding). Begroot komt uit de geaccepteerde offertes en hun
+ * calculatie (`bb_project_begroting`).
  *
  * Rechten zoals het dashboard: de tab vraagt `kosten` + pakket
- * `kosten_nacalculatie`; gefactureerd en brutowinst `projectbedragen`; het
- * materiaal en de brutowinst ook `inkoopprijzen` (anders zou de winst te hoog
- * uitvallen); inkopen bewerken `projecten_bewerken` (RLS: `kosten`).
+ * `kosten_nacalculatie`; opbrengst en resultaat `projectbedragen`. Arbeid en
+ * materiaal staan op kostprijs en komen zonder `inkoopprijzen` niet uit de
+ * database (RLS); een resultaat zonder die kosten zou te hoog uitvallen, dus
+ * dan blijft de hele nacalculatie weg en staan alleen de inkopen er. Inkopen
+ * bewerken `projecten_bewerken` (RLS: `kosten`).
+ *
+ * Excl. btw aan beide kanten: rekenen met een bedrag inclusief zou het
+ * resultaat structureel te laag maken.
  */
 
 type Concept = { id: string | null; naam: string; aantal: string; eenheid: string; prijs: string; leverancierId: string | null };
@@ -41,6 +57,7 @@ export function KostenTab({
   magBedragen,
   magInkoop,
   magBewerken,
+  isAdmin,
 }: {
   projectId: string;
   omzetExclBtw: number;
@@ -48,6 +65,7 @@ export function KostenTab({
   magBedragen: boolean;
   magInkoop: boolean;
   magBewerken: boolean;
+  isAdmin: boolean;
 }) {
   const { t, styles } = useStijl();
   const [kosten, setKosten] = useState<ProjectJobCost[]>([]);
@@ -55,31 +73,45 @@ export function KostenTab({
   const [leveranciers, setLeveranciers] = useState<{ id: string; naam: string }[]>([]);
   const [laden, setLaden] = useState(true);
   const [laadFout, setLaadFout] = useState<string | null>(null);
-  const [winstUitleg, setWinstUitleg] = useState(false);
+  const [begroting, setBegroting] = useState<Begroting | null>(null);
   const [concept, setConcept] = useState<Concept | null>(null);
   const { save, saving, error, setError } = useSave<unknown>();
 
   const laad = useCallback(async () => {
-    const [jc, pk, lv] = await Promise.all([listProjectJobCosts(projectId), listProjectKosten(projectId), listLeveranciers()]);
+    const [jc, pk, lv, b] = await Promise.all([
+      listProjectJobCosts(projectId),
+      listProjectKosten(projectId),
+      listLeveranciers(),
+      magInkoop ? getProjectBegroting(projectId) : Promise.resolve(null),
+    ]);
     setKosten(jc.data);
     setInkopen(pk.data);
     setLeveranciers(lv.data);
+    setBegroting(b);
     setLaadFout(jc.error ?? pk.error);
     setLaden(false);
-  }, [projectId]);
+  }, [projectId, magInkoop]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void laad();
   }, [laad]);
 
+  // Werkelijk uit bouwKostenOverzicht, opgebouwd uit de losse stukken en niet
+  // uit een tweede fetch, zodat een net toegevoegde inkoop meteen meetelt.
   const overzicht = useMemo(
-    () => bouwKostenOverzicht({ jobCosts: kosten, projectKosten: inkopen, urenRegels: uren }),
+    () =>
+      bouwKostenOverzicht({
+        jobCosts: kosten,
+        projectKosten: inkopen,
+        urenRegels: uren,
+      }),
     [kosten, inkopen, uren],
   );
-  const kostprijs = overzicht.totaal;
-  const brutowinst = omzetExclBtw - kostprijs;
-  const toonWinst = magBedragen && magInkoop;
+  const nc = useMemo(
+    () => bouwNacalculatie({ overzicht, begroting, gefactureerdExcl: omzetExclBtw }),
+    [overzicht, begroting, omzetExclBtw],
+  );
   const leverancierNaam = (id: string | null) => leveranciers.find((l) => l.id === id)?.naam ?? null;
 
   const opslaan = () => {
@@ -134,59 +166,33 @@ export function KostenTab({
 
   return (
     <>
-      <Blok titel="Kosten">
-        <View style={styles.raster}>
-          {magBedragen ? (
-            <Veld label="Gefactureerd (excl. btw)">
-              <Text style={styles.tegelWaarde}>{formatEUR(omzetExclBtw)}</Text>
-            </Veld>
-          ) : null}
-          <Veld label={magInkoop ? 'Kostprijs' : 'Inkopen'}>
-            <Text style={styles.tegelWaarde}>{formatEUR(magInkoop ? kostprijs : overzicht.inkopen.bedrag)}</Text>
-            {magInkoop && (overzicht.materiaal.bedrag > 0 || overzicht.inkopen.bedrag > 0) ? (
-              <Text style={styles.klein}>
-                materiaal {formatEUR(overzicht.materiaal.bedrag)} · inkopen {formatEUR(overzicht.inkopen.bedrag)}
-              </Text>
-            ) : null}
-          </Veld>
-          {toonWinst ? (
-            <Veld label="">
-              <Pressable
-                onPress={() => setWinstUitleg((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel="Uitleg over brutowinst"
-                accessibilityState={{ expanded: winstUitleg }}
-                hitSlop={8}
-                style={styles.rijMidden}
-              >
-                <Text style={styles.veldLabel}>Brutowinst vóór arbeid</Text>
-                <Info size={13} color={winstUitleg ? t.green700 : t.muted2} />
-              </Pressable>
-              <Text style={[styles.tegelWaarde, { color: brutowinst < 0 ? t.statusRejectFg : t.green700 }]}>
-                {formatEUR(brutowinst)}
-              </Text>
-            </Veld>
-          ) : null}
-        </View>
-        {toonWinst && winstUitleg ? (
-          <Text style={styles.klein}>
-            Brutowinst is het gefactureerde bedrag min de kostprijs: materiaal op inkoopprijs plus inkopen. Arbeid
-            telt niet mee.
-          </Text>
-        ) : null}
-        {!magInkoop ? (
-          <Text style={styles.klein}>
-            Geen brutowinst zichtbaar: het materiaal van de werkbonnen telt ook mee in de kosten, maar staat op
-            inkoopprijs en die is voor jou afgeschermd.
-          </Text>
-        ) : null}
+      <Blok titel="Nacalculatie">
+        {laden ? (
+          <Text style={styles.leeg}>Laden…</Text>
+        ) : magInkoop ? (
+          <NacalculatieTabel nc={nc} magBedragen={magBedragen} isAdmin={isAdmin} />
+        ) : (
+          <>
+            <View style={styles.raster}>
+              <Veld label="Inkopen">
+                <Text style={styles.tegelWaarde}>{formatEUR(overzicht.inkopen.bedrag)}</Text>
+              </Veld>
+            </View>
+            <Text style={styles.klein}>
+              Geen nacalculatie zichtbaar: de arbeid en het materiaal tellen mee tegen hun kostprijs, en die is voor
+              jou afgeschermd (recht ‘Inkoop- en kostprijzen zien’). Daarom zie je hier alleen de inkopen.
+            </Text>
+          </>
+        )}
+        {/* Geen stil verkeerd getal: als de inkoopprijs ontbreekt is de
+            verkoopprijs gebruikt, en dan is het resultaat een ondergrens. */}
         {magInkoop && overzicht.materiaal.zonderInkoopprijs > 0 ? (
           <NoticeBanner
             message={`${
               overzicht.materiaal.zonderInkoopprijs === 1
                 ? '1 materiaalregel heeft geen inkoopprijs'
                 : `${overzicht.materiaal.zonderInkoopprijs} materiaalregels hebben geen inkoopprijs`
-            } (${formatEUR(overzicht.materiaal.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus de werkelijke brutowinst ligt hoger. Vul de inkoopprijs in op de werkbon.`}
+            } (${formatEUR(overzicht.materiaal.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus het werkelijke resultaat ligt hoger. Vul de inkoopprijs in op de werkbon.`}
           />
         ) : null}
       </Blok>
@@ -259,7 +265,7 @@ export function KostenTab({
           toon="info"
           message={`${boekingen.length === 1 ? '1 boeking' : `${boekingen.length} boekingen`} op de Kosten-pagina ${
             boekingen.length === 1 ? 'hangt' : 'hangen'
-          } aan dit project (${formatEURCent(overzicht.boekingen.bedrag)}). Dat is de boekhouding en telt niet mee in de marge: het materiaal zelf staat hierboven al via de werkbon. Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.`}
+          } aan dit project (${formatEURCent(overzicht.boekingen.bedrag)}). Dat is de boekhouding en telt niet mee in de nacalculatie: het materiaal zelf staat hierboven al via de werkbon. Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.`}
         />
       ) : null}
 

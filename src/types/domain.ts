@@ -239,6 +239,12 @@ export type WerkbonUur = {
   created_at: string;
   updated_at: string;
   medewerker?: ProfileSummary | null;
+  /**
+   * Kostprijs per uur die gold bij het boeken (`werkbon_uren_kostprijs`).
+   * Alleen met het recht op inkoop- en kostprijzen; anders null. Ontbreekt bij
+   * een net opgeslagen rij tot de lijst opnieuw geladen is.
+   */
+  kostprijsPerUur?: number | null;
 };
 
 export type TimeEntryType = 'arbeid' | 'reistijd' | 'overhead' | 'overig';

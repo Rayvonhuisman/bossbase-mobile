@@ -31,7 +31,7 @@ export const RECHT_UITLEG: Record<string, string> = {
   facturen:
     'Geeft toegang tot de Facturen-pagina: facturen aanmaken, versturen en de betaalstatus bijhouden. Ook het facturen-tabblad op de klantkaart en de facturatie-widgets op het dashboard worden zichtbaar.',
   inkoopprijzen:
-    'Toont de inkoopprijs van materialen — in de materialenbibliotheek, op werkbonregels en in de marge-kolom. Zonder dit recht ziet de gebruiker alleen de verkoopprijs. Dit wordt server-side afgedwongen: de inkoopprijs komt zonder dit recht niet uit de database, ook niet via een directe API-call. Standaard alleen voor admins.',
+    'Toont de inkoopprijs van materialen (materialenbibliotheek, werkbonregels, marge-kolom), de kostprijs per uur op geboekte uren, de calculatie van offertes en daarmee de nacalculatie: begroot tegenover werkelijk en het resultaat per project en klant. Zonder dit recht ziet de gebruiker alleen verkoopprijzen en inkopen. Dit wordt server-side afgedwongen: deze prijzen komen zonder dit recht niet uit de database, ook niet via een directe API-call. Kostprijzen per uur instellen kan alleen een admin. Standaard alleen voor admins.',
   kosten:
     'Geeft toegang tot de Kosten-pagina om kosten en inkoop vast te leggen en te bekijken, plus het kosten-tabblad op de klantkaart en de kosten-widgets. Materiaalkosten die op een werkbon worden geboekt vallen onder ‘Werkbonnen bewerken’, niet onder dit recht.',
   team:

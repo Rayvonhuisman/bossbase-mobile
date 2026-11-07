@@ -100,9 +100,11 @@ test('kostenblok gelijk aan bouwKostenOverzicht van het dashboard', async (t) =>
     { werkbon_materiaal_id: null, amount: 99.99 },
   ];
   const inkopen = [K.naarInkoop({ id: 'i1', naam: 'Steiger', aantal: 2, prijs_per: 45.5, bedrag: null })];
-  const uren = [{ uren: 3.5, reis_km: 12 }, { uren: 1.25, reis_km: null }];
+  // 3,5 uur à € 45 telt mee in de arbeid; 1,25 uur zonder kostprijs niet.
+  const uren = [{ uren: 3.5, reis_km: 12, kostprijsPerUur: 45 }, { uren: 1.25, reis_km: null, kostprijsPerUur: null }];
   const app = K.bouwKostenOverzicht({ jobCosts: rijen.map(K.naarKostBron), inkopen, uren });
-  assert.equal(app.totaal, 25 + 30 + 91);
+  assert.deepEqual(app.arbeid, { uren: 4.75, km: 12, bedrag: 157.5, urenZonderKostprijs: 1.25 });
+  assert.equal(app.totaal, 157.5 + 25 + 30 + 91);
   assert.deepEqual(app.boekingen, { aantal: 1, bedrag: 99.99 });
   if (!lader) return t.skip('dashboardrepo niet gevonden');
   const O = await lader.importeer('src/services/kostenOverzichtService.js');
@@ -113,13 +115,21 @@ test('kostenblok gelijk aan bouwKostenOverzicht van het dashboard', async (t) =>
     inkoopprijsPer: r.werkbon_materialen?.werkbon_materiaal_inkoop?.[0]?.inkoopprijs_per ?? null,
   }));
   const dash = O.bouwKostenOverzicht({ jobCosts: dashKosten, projectKosten: inkopen, urenRegels: uren });
+  // Een dashboard van vóór de nacalculatie (arbeid zonder kostprijs per uur)
+  // rekent anders; daar valt niets te vergelijken.
+  if (!dash.arbeid) return t.skip('dashboard zonder arbeid in het kostenoverzicht (vóór migratie 20261107143517)');
   assert.equal(app.totaal, dash.totaal);
   assert.equal(app.materiaal.bedrag, dash.materiaal.bedrag);
   assert.equal(app.materiaal.zonderInkoopprijs, dash.materiaal.zonderInkoopprijs);
   assert.equal(app.inkopen.bedrag, dash.inkopen.bedrag);
   assert.equal(app.boekingen.bedrag, dash.boekingen.bedrag);
   assert.equal(app.boekingen.aantal, dash.boekingen.regels.length);
-  assert.deepEqual(app.uren, { uren: dash.uren.uren, km: dash.uren.km });
+  assert.deepEqual(app.arbeid, {
+    uren: dash.arbeid.uren,
+    km: dash.arbeid.km,
+    bedrag: dash.arbeid.bedrag,
+    urenZonderKostprijs: dash.arbeid.urenZonderKostprijs,
+  });
 });
 
 test('kostenrechten: kosten + module om te zien, admin of projecten_bewerken om te bewerken', () => {

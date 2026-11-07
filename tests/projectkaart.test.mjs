@@ -65,8 +65,8 @@ test('kosten: materiaal op inkoop, inkopen erbij, boekingen apart', () => {
   assert.equal(o.inkopen.bedrag, 25);
   assert.equal(o.boekingen.bedrag, 420);
   assert.equal(o.boekingen.regels.length, 1);
-  assert.equal(o.totaal, 75); // boekingen tellen niet mee
-  assert.deepEqual(o.uren, { uren: 7.5, km: 12 });
+  assert.equal(o.totaal, 75); // boekingen tellen niet mee; uren zonder kostprijs ook niet
+  assert.deepEqual(o.arbeid, { uren: 7.5, km: 12, bedrag: 0, urenZonderKostprijs: 7.5 });
 });
 
 test('kosten: projectkost uit de database en het subtotaal', () => {

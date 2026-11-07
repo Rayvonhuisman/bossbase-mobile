@@ -553,7 +553,8 @@ function ExpensesScreenInhoud() {
               message={
                 'Materiaal en inkopen die op werkbonnen staan. Ze tellen niet mee in je kosten en ' +
                 'je btw — in je boekhouding is de factuur van je leverancier de kostenpost. Ze ' +
-                'tellen wél mee in de brutowinst van een project.'
+                'tellen wél mee in de nacalculatie van een project, samen met de arbeid (uren × kostprijs per uur). ' +
+                'Die staat op het project, onder Nacalculatie.'
               }
             />
           ) : pagina.zonderLeverancier > 0 ? (

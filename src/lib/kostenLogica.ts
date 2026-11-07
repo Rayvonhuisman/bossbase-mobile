@@ -8,7 +8,7 @@
  *   de boekhouding gaat;
  * - **Kosten op werkbonnen**: de spiegelregels van werkbonmateriaal (`job_costs`
  *   mét `werkbon_materiaal_id`) plus de inkopen op een werkbon (`project_kosten`
- *   met `werkbon_id`). Geen boeking; telt alleen in de projectmarge.
+ *   met `werkbon_id`). Geen boeking; telt alleen in de nacalculatie van een project.
  *
  * Bewust zonder imports: de tests draaien dit bestand rechtstreeks in Node.
  */
@@ -206,7 +206,7 @@ export function bouwKostenPagina({
           id: 'totaal',
           label: 'Kosten op werkbonnen',
           bedrag: totaal,
-          uitleg: 'Geen boeking · telt in de marge van een project',
+          uitleg: 'Geen boeking · telt in de nacalculatie van een project',
         }
       : { id: 'totaal', label: 'Geboekte kosten', bedrag: totaal, uitleg: 'Wat naar de boekhouding gaat' },
     { id: 'materiaal', label: 'Materiaalkosten', bedrag: groepen.materiaal },

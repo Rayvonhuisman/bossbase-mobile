@@ -28,7 +28,7 @@ import { Dialog } from '@/lib/dialog';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import { toewijzingMeldingen } from '@/lib/collegaMeldingen';
 import { pushNotificaties } from '@/services/collegaMeldingService';
-import { usePermissions, useTheme } from '@/providers';
+import { useAuth, usePermissions, useTheme } from '@/providers';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { formatDateNL, formatEUR, formatEURCent } from '@/lib/format';
 import { lokaleDatum, vandaagIso } from '@/lib/nlTijd';
@@ -55,6 +55,7 @@ import {
   projectCijfers,
   projectStatusLabel,
   urenToon,
+  urenBronUitleg,
   waardeBronUitleg,
   wanneerLabel,
   zichtbareProjectTabs,
@@ -118,7 +119,7 @@ import { BestandenBlok } from '@/components/BestandenBlok';
  * pipeline (`/deal/<id>`): voor de gebruiker zijn aanvraag en project één ding.
  *
  * Tabs zoals het dashboard (`zichtbareTabs`): Overzicht · Offertes · Facturen ·
- * Uren · Kosten · Werkbonnen · Notities. Overzicht bevat het aanvraagblok
+ * Uren · Nacalculatie · Werkbonnen · Notities. Overzicht bevat het aanvraagblok
  * (fase, voltooien, verloren, behandelaars), de aanvraag met foto's,
  * projectinformatie, planning, werkbonnen, offertes, facturen, activiteiten en
  * klantgegevens. De tabs staan in eigen bestanden in deze map.
@@ -190,6 +191,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { loaded: rechtenGeladen, can, mag, hasFeature } = usePermissions();
+  const { role } = useAuth();
   const projectTabs = useMemo(() => zichtbareProjectTabs(can, hasFeature), [can, hasFeature]);
 
   const [data, setData] = useState<Data>(LEEG);
@@ -435,12 +437,16 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     } else if (bewerk.soort === 'info') {
       const waardeGewijzigd =
         magBedragen && getal(bewerk.waarde) !== Number(project.project_value ?? 0);
+      // Begrote uren alleen meesturen als ze echt anders zijn: een andere
+      // waarde maakt ze 'handmatig' (trigger bb_project_uren_handmatig), dan
+      // komen ze niet meer uit de offertes.
+      const urenGewijzigd = getal(bewerk.uren) !== Number(project.quoted_hours ?? 0);
       save(
         () =>
           updateProject(project.id, {
             start_date: bewerk.start || null,
             deadline: bewerk.eind || null,
-            quoted_hours: getal(bewerk.uren),
+            ...(urenGewijzigd ? { quoted_hours: getal(bewerk.uren) } : {}),
             // Een zelf getypte waarde blijft staan (waarde_bron 'handmatig').
             ...(waardeGewijzigd ? { project_value: getal(bewerk.waarde), waarde_bron: 'handmatig' as const } : {}),
           }),
@@ -467,6 +473,16 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         succesMelding: 'Klant gewijzigd',
       });
     }
+  };
+
+  // Begrote uren weer uit de geaccepteerde offertes: de database rekent ze
+  // opnieuw uit (bb_begrote_uren_bijwerken).
+  const urenUitOffertes = () => {
+    if (!project) return;
+    save(() => updateProject(project.id, { uren_bron: 'offertes' }), {
+      onSuccess: herlaad,
+      succesMelding: 'Begrote uren komen weer uit de offertes',
+    });
   };
 
   const waardeAutomatisch = () => {
@@ -952,6 +968,17 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             </Veld>
             <Veld label="Begrote uren">
               <Text style={styles.waarde}>{formatUren(project.quoted_hours)}</Text>
+              {/* Waar de begrote uren vandaan komen: de urenregels en de
+                  calculatie van de geaccepteerde offertes, of met de hand.
+                  Zonder kolom (migratie nog niet gedraaid) niets. */}
+              {project.uren_bron ? (
+                <Text style={styles.klein}>{urenBronUitleg(project.uren_bron, project.quoted_hours)}</Text>
+              ) : null}
+              {project.uren_bron === 'handmatig' && magProject ? (
+                <Pressable onPress={urenUitOffertes} accessibilityRole="link" hitSlop={8}>
+                  <Text style={styles.link}>uit de offertes halen</Text>
+                </Pressable>
+              ) : null}
             </Veld>
             <Veld label="Gewerkte uren">
               <Text style={styles.waarde}>
@@ -1259,6 +1286,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             magBedragen={magBedragen}
             magInkoop={can('inkoopprijzen')}
             magBewerken={magProject && mag('kosten', 'wijzigen')}
+            isAdmin={role === 'admin'}
           />
         );
       case 'werkbonnen':
@@ -1427,6 +1455,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               onChangeText={(v) => setBewerk({ ...bewerk, uren: v })}
               keyboardType="decimal-pad"
               placeholder="0"
+              hint="Zelf ingevulde uren komen niet meer uit de geaccepteerde offertes."
             />
             {magBedragen ? (
               <FormField

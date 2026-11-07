@@ -1,7 +1,7 @@
 /**
  * Financiën: de rekenregels van RevenuePage in het dashboard — tijdvak van de
  * tegels, de grafiek, en de tabel per klant (gefactureerd, betaald,
- * openstaand, materiaal, inkopen, uren, brutowinst vóór arbeid, marge).
+ * openstaand, arbeid, materiaal, inkopen, resultaat, marge).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -72,7 +72,7 @@ test('openstaand zoals bb_openstaand_per_factuur: deelcreditering, nooit onder 0
   );
 });
 
-test('totalen per klant: alleen facturen met klant; omzet excl. voor de brutowinst', () => {
+test('totalen per klant: alleen facturen met klant; omzet excl. voor het resultaat', () => {
   const lijst = [
     factuur({ id: 'a', klant: 'k1', status: 'betaald', incl: 121, excl: 100 }),
     factuur({ id: 'b', klant: 'k1', status: 'verzonden', incl: 242, excl: 200 }),
@@ -250,7 +250,7 @@ test('verdeelPerKlant: rechtstreeks, via project, werkbon of deal — één rij 
   );
 });
 
-test('per klant: materiaal op inkoopprijs + inkopen; uren tellen niet; brutowinst op omzet excl. btw', () => {
+test('per klant: arbeid op kostprijs per uur + materiaal op inkoopprijs + inkopen; resultaat op omzet excl. btw', () => {
   const per = F.verdeelPerKlant(['k1'], {
     ...sleutelRijen,
     jobCosts: [
@@ -258,25 +258,38 @@ test('per klant: materiaal op inkoopprijs + inkopen; uren tellen niet; brutowins
       kost({ id: 'j2', klant: 'k1', mat: 'm2', amount: 30 }), // geen inkoopprijs → verkoop
     ],
     projectKosten: [P.naarProjectKost({ id: 'i1', project_id: 'p1', aantal: 2, prijs_per: 35 })],
-    uren: [{ werkbon_id: 'w1', uren: 7.5 }],
+    // 2 uur à € 40 telt mee; 5,5 uur zonder kostprijs als uur, niet in het bedrag.
+    uren: [{ werkbon_id: 'w1', uren: 2, kostprijsPerUur: 40 }, { werkbon_id: 'w1', uren: 5.5 }],
   });
   const b = per.get('k1');
   const o = P.bouwKostenOverzicht({ jobCosts: b.jobCosts, projectKosten: b.projectKosten, urenRegels: b.uren });
   const kosten = new Map([
-    ['k1', { materiaal: o.materiaal.bedrag, inkopen: o.inkopen.bedrag, uren: o.uren.uren, totaal: o.totaal }],
+    [
+      'k1',
+      {
+        arbeid: o.arbeid.bedrag,
+        uren: o.arbeid.uren,
+        urenZonderKostprijs: o.arbeid.urenZonderKostprijs,
+        materiaal: o.materiaal.bedrag,
+        inkopen: o.inkopen.bedrag,
+        totaal: o.totaal,
+      },
+    ],
   ]);
-  assert.deepEqual(kosten.get('k1'), { materiaal: 130, inkopen: 70, uren: 7.5, totaal: 200 });
+  assert.deepEqual(kosten.get('k1'), { arbeid: 80, uren: 7.5, urenZonderKostprijs: 5.5, materiaal: 130, inkopen: 70, totaal: 280 });
 
   const facturen = [factuur({ id: 'a', klant: 'k1', status: 'betaald', incl: 605, excl: 500 })];
   const [rij] = F.klantRijen([{ id: 'k1', name: ' Jansen ', city: 'Utrecht' }], facturen, kosten);
   assert.equal(rij.naam, 'Jansen');
-  assert.equal(rij.profit, 300);
-  assert.equal(rij.margin, 60);
+  assert.equal(rij.arbeid, 80);
+  assert.equal(rij.urenZonderKostprijs, 5.5);
+  assert.equal(rij.profit, 220);
+  assert.equal(rij.margin, 44);
   assert.equal(rij.paid, 605);
 });
 
 test('per klant: zonder omzet marge 0 en negatieve winst; kosten onderweg = 0', () => {
-  const kosten = new Map([['k1', { materiaal: 50, inkopen: 0, uren: 0, totaal: 50 }]]);
+  const kosten = new Map([['k1', { arbeid: 0, uren: 0, urenZonderKostprijs: 0, materiaal: 50, inkopen: 0, totaal: 50 }]]);
   const [rij] = F.klantRijen([{ id: 'k1', name: null }], [], kosten);
   assert.deepEqual([rij.naam, rij.profit, rij.margin], ['Naamloos', -50, 0]);
   const [onderweg] = F.klantRijen([{ id: 'k1', name: 'X' }], [], null);

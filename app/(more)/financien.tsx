@@ -55,8 +55,11 @@ import { spacing, type ThemeColors } from '@/theme';
  *   tegels     periodekeuze (deze/vorige maand, dit/vorig jaar, aangepast) en
  *              zes tegels uit `bb_financien_kpi`
  *   grafiek    gefactureerd/ontvangen/kosten per week, maand, kwartaal of jaar
- *   per klant  alle periodes: gefactureerd, materiaal, inkopen, uren, betaald,
- *              openstaand, brutowinst vóór arbeid en marge, met een totaalregel
+ *   per klant  alle periodes: gefactureerd, arbeid, materiaal, inkopen, betaald,
+ *              openstaand, resultaat en marge, met een totaalregel. Arbeid,
+ *              materiaal, resultaat en marge staan op kostprijs en vragen het
+ *              recht `inkoopprijzen`; zonder staat er een streep (geen te
+ *              hoog resultaat), en bij de arbeid alleen de uren
  *
  * Bewust niet: de Excel-export (blijft in het dashboard) en het btw-blok
  * (pakketfeature `btw_overzicht`, eigen berekening; ook in het dashboard).
@@ -74,7 +77,10 @@ function FinancienInhoud() {
   const router = useRouter();
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { loaded: rechtenGeladen } = usePermissions();
+  const { loaded: rechtenGeladen, can } = usePermissions();
+  // Arbeid en materiaal staan op kostprijs; zonder dat recht komen ze niet uit
+  // de database en is een resultaat te hoog. Dan staan die kolommen leeg.
+  const magKostprijs = can('inkoopprijzen');
   const { klasse } = useSchermklasse();
   const tablet = klasse === 'tablet';
 
@@ -259,19 +265,36 @@ function FinancienInhoud() {
           {rijen.length === 0 ? (
             <KaartLeeg tekst="Nog geen klantdata beschikbaar." />
           ) : tablet ? (
-            <KlantTabel rijen={rijen} totaal={totaal} kostenKlaar={kostenKlaar} styles={styles} t={t} />
+            <KlantTabel
+              rijen={rijen}
+              totaal={totaal}
+              kostenKlaar={kostenKlaar}
+              magKostprijs={magKostprijs}
+              styles={styles}
+              t={t}
+            />
           ) : (
             <>
               {rijen.map((r, i) => (
-                <KlantKaart key={r.id} r={r} eerste={i === 0} kostenKlaar={kostenKlaar} styles={styles} t={t} />
+                <KlantKaart
+                  key={r.id}
+                  r={r}
+                  eerste={i === 0}
+                  kostenKlaar={kostenKlaar}
+                  magKostprijs={magKostprijs}
+                  styles={styles}
+                  t={t}
+                />
               ))}
-              {kostenKlaar ? <TotaalKaart totaal={totaal} styles={styles} t={t} /> : null}
+              {kostenKlaar ? <TotaalKaart totaal={totaal} magKostprijs={magKostprijs} styles={styles} t={t} /> : null}
             </>
           )}
         </KaartBlok>
         <Text style={styles.voetnoot}>
-          Brutowinst vóór arbeid is de omzet exclusief btw min materiaal (op inkoopprijs) en inkopen. Uren staan er als
-          aantal bij: er is geen kostprijs per uur, dus ze tellen niet mee. De export naar Excel staat in het dashboard.
+          Resultaat is de omzet exclusief btw min arbeid (uren × kostprijs per uur), materiaal (op inkoopprijs) en
+          inkopen. Uren zonder kostprijs per uur tellen niet mee in de arbeid.
+          {magKostprijs ? '' : ' Arbeid, materiaal en resultaat zijn afgeschermd: daarvoor is het recht Inkoop- en kostprijzen zien nodig.'}{' '}
+          De export naar Excel staat in het dashboard.
         </Text>
       </AppScreen>
     </View>
@@ -282,21 +305,31 @@ type Stijlen = ReturnType<typeof makeStyles>;
 
 const winstKleur = (t: ThemeColors, v: number) => (v >= 0 ? t.green700 : t.statusRejectFg);
 
+/** Een kostcel op kostprijs: zonder het recht een streep in plaats van een te lage € 0. */
+const AFGESCHERMD = '—';
+
+/** "12,5 uur", met de toevoeging als een deel geen kostprijs per uur heeft. */
+const urenSub = (uren: number, zonder: number) =>
+  `${formatUrenAantal(uren)}${zonder > 0 ? ' · deels zonder kostprijs' : ''}`;
+
 /** Telefoon: één kaart per klant, met de kolommen van het dashboard als cijfers. */
 function KlantKaart({
   r,
   eerste,
   kostenKlaar,
+  magKostprijs,
   styles,
   t,
 }: {
   r: KlantRij;
   eerste: boolean;
   kostenKlaar: boolean;
+  magKostprijs: boolean;
   styles: Stijlen;
   t: ThemeColors;
 }) {
   const k = (v: string) => (kostenKlaar ? v : '…');
+  const kp = (v: string) => k(magKostprijs ? v : AFGESCHERMD);
   return (
     <View style={[styles.klant, !eerste && styles.rand]}>
       <View style={styles.klantKop}>
@@ -316,9 +349,15 @@ function KlantKaart({
         </View>
       </View>
       <View style={styles.cijfers}>
-        <Cijfer label="Materiaal" waarde={k(formatEURCent(r.materiaal))} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer
+          label="Arbeid"
+          waarde={k(magKostprijs ? formatEURCent(r.arbeid) : formatUrenAantal(r.uren))}
+          sub={kostenKlaar && magKostprijs ? urenSub(r.uren, r.urenZonderKostprijs) : undefined}
+          kleur={magKostprijs ? t.statusRejectFg : t.muted}
+          styles={styles}
+        />
+        <Cijfer label="Materiaal" waarde={kp(formatEURCent(r.materiaal))} kleur={t.statusRejectFg} styles={styles} />
         <Cijfer label="Inkopen" waarde={k(formatEURCent(r.inkopen))} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Uren" waarde={k(formatUrenAantal(r.uren))} kleur={t.muted} styles={styles} />
         <Cijfer label="Betaald" waarde={formatEURCent(r.paid)} kleur={t.green700} styles={styles} />
         <Cijfer
           label="Openstaand"
@@ -326,17 +365,30 @@ function KlantKaart({
           kleur={r.openstaand > 0 ? t.statusWarnFg : t.muted}
           styles={styles}
         />
-        <Cijfer label="Marge" waarde={k(`${r.margin}%`)} kleur={t.ink} styles={styles} />
+        <Cijfer label="Marge" waarde={kp(`${r.margin}%`)} kleur={t.ink} styles={styles} />
       </View>
       <View style={styles.winstRij}>
-        <Text style={styles.cijferLabel}>Brutowinst vóór arbeid</Text>
-        <Text style={[styles.winst, { color: winstKleur(t, r.profit) }]}>{k(formatEURCent(r.profit))}</Text>
+        <Text style={styles.cijferLabel}>Resultaat</Text>
+        <Text style={[styles.winst, { color: magKostprijs ? winstKleur(t, r.profit) : t.muted }]}>
+          {kp(formatEURCent(r.profit))}
+        </Text>
       </View>
     </View>
   );
 }
 
-function TotaalKaart({ totaal, styles, t }: { totaal: ReturnType<typeof totaalRij>; styles: Stijlen; t: ThemeColors }) {
+function TotaalKaart({
+  totaal,
+  magKostprijs,
+  styles,
+  t,
+}: {
+  totaal: ReturnType<typeof totaalRij>;
+  magKostprijs: boolean;
+  styles: Stijlen;
+  t: ThemeColors;
+}) {
+  const kp = (v: string) => (magKostprijs ? v : AFGESCHERMD);
   return (
     <View style={[styles.klant, styles.rand, { backgroundColor: t.bgAlt }]}>
       <View style={styles.klantKop}>
@@ -344,21 +396,42 @@ function TotaalKaart({ totaal, styles, t }: { totaal: ReturnType<typeof totaalRi
         <Text style={styles.klantBedrag}>{formatEURCent(totaal.total)}</Text>
       </View>
       <View style={styles.cijfers}>
-        <Cijfer label="Materiaal" waarde={formatEURCent(totaal.materiaal)} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer
+          label="Arbeid"
+          waarde={magKostprijs ? formatEURCent(totaal.arbeid) : formatUrenAantal(totaal.uren)}
+          sub={magKostprijs ? urenSub(totaal.uren, totaal.urenZonderKostprijs) : undefined}
+          kleur={magKostprijs ? t.statusRejectFg : t.muted}
+          styles={styles}
+        />
+        <Cijfer label="Materiaal" waarde={kp(formatEURCent(totaal.materiaal))} kleur={t.statusRejectFg} styles={styles} />
         <Cijfer label="Inkopen" waarde={formatEURCent(totaal.inkopen)} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Uren" waarde={formatUrenAantal(totaal.uren)} kleur={t.muted} styles={styles} />
         <Cijfer label="Betaald" waarde={formatEURCent(totaal.paid)} kleur={t.green700} styles={styles} />
         <Cijfer label="Openstaand" waarde={formatEURCent(totaal.openstaand)} kleur={t.ink} styles={styles} />
+        <Cijfer label="Marge" waarde={kp(`${totaal.margin}%`)} kleur={t.ink} styles={styles} />
       </View>
       <View style={styles.winstRij}>
-        <Text style={styles.cijferLabel}>Brutowinst vóór arbeid</Text>
-        <Text style={[styles.winst, { color: winstKleur(t, totaal.profit) }]}>{formatEURCent(totaal.profit)}</Text>
+        <Text style={styles.cijferLabel}>Resultaat</Text>
+        <Text style={[styles.winst, { color: magKostprijs ? winstKleur(t, totaal.profit) : t.muted }]}>
+          {kp(formatEURCent(totaal.profit))}
+        </Text>
       </View>
     </View>
   );
 }
 
-function Cijfer({ label, waarde, kleur, styles }: { label: string; waarde: string; kleur: string; styles: Stijlen }) {
+function Cijfer({
+  label,
+  waarde,
+  sub,
+  kleur,
+  styles,
+}: {
+  label: string;
+  waarde: string;
+  sub?: string;
+  kleur: string;
+  styles: Stijlen;
+}) {
   return (
     <View style={styles.cijfer}>
       <Text style={styles.cijferLabel} numberOfLines={1}>
@@ -367,22 +440,27 @@ function Cijfer({ label, waarde, kleur, styles }: { label: string; waarde: strin
       <Text style={[styles.cijferWaarde, { color: kleur }]} numberOfLines={1}>
         {waarde}
       </Text>
+      {sub ? (
+        <Text style={styles.cijferSub} numberOfLines={2}>
+          {sub}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 // Samen 820: past in de app-kolom van een iPad (880 min de marges); smaller
 // scrolt de tabel horizontaal, zoals in het dashboard.
-const KLANT_BREEDTE = 152;
+const KLANT_BREEDTE = 144;
 const KOLOMMEN: { id: string; label: string; breedte: number }[] = [
   { id: 'klant', label: 'Klant', breedte: KLANT_BREEDTE },
-  { id: 'total', label: 'Gefactureerd', breedte: 104 },
+  { id: 'total', label: 'Gefactureerd', breedte: 100 },
+  { id: 'arbeid', label: 'Arbeid', breedte: 88 },
   { id: 'materiaal', label: 'Materiaal', breedte: 88 },
   { id: 'inkopen', label: 'Inkopen', breedte: 80 },
-  { id: 'uren', label: 'Uren', breedte: 64 },
   { id: 'paid', label: 'Betaald', breedte: 92 },
   { id: 'openstaand', label: 'Openstaand', breedte: 88 },
-  { id: 'profit', label: 'Brutowinst vóór arbeid', breedte: 100 },
+  { id: 'profit', label: 'Resultaat', breedte: 88 },
   { id: 'margin', label: 'Marge', breedte: 52 },
 ];
 
@@ -391,16 +469,35 @@ function KlantTabel({
   rijen,
   totaal,
   kostenKlaar,
+  magKostprijs,
   styles,
   t,
 }: {
   rijen: KlantRij[];
   totaal: ReturnType<typeof totaalRij>;
   kostenKlaar: boolean;
+  magKostprijs: boolean;
   styles: Stijlen;
   t: ThemeColors;
 }) {
   const k = (v: string) => (kostenKlaar ? v : '…');
+  const kp = (v: string) => k(magKostprijs ? v : AFGESCHERMD);
+  // Arbeid: het bedrag met de uren eronder; zonder het recht alleen de uren.
+  const arbeidCel = (bedrag: number, uren: number, zonder: number, vet = false) => (
+    <View style={{ width: KOLOMMEN[2]?.breedte, paddingLeft: 6 }}>
+      <Text
+        style={[styles.cel, { paddingLeft: 0, color: magKostprijs ? t.statusRejectFg : t.muted }, vet && { fontWeight: '800' }]}
+        numberOfLines={1}
+      >
+        {k(magKostprijs ? formatEURCent(bedrag) : formatUrenAantal(uren))}
+      </Text>
+      {kostenKlaar && magKostprijs ? (
+        <Text style={[styles.cijferSub, { textAlign: 'right' }]} numberOfLines={2}>
+          {urenSub(uren, zonder)}
+        </Text>
+      ) : null}
+    </View>
+  );
   const cel = (i: number, inhoud: string, kleur: string, vet = false) => (
     <Text
       style={[styles.cel, { width: KOLOMMEN[i]?.breedte, color: kleur }, vet && { fontWeight: '800' }]}
@@ -436,26 +533,26 @@ function KlantTabel({
               ) : null}
             </View>
             {cel(1, formatEURCent(r.total), t.ink)}
-            {cel(2, k(formatEURCent(r.materiaal)), t.statusRejectFg)}
-            {cel(3, k(formatEURCent(r.inkopen)), t.statusRejectFg)}
-            {cel(4, k(formatUrenAantal(r.uren)), t.muted)}
+            {arbeidCel(r.arbeid, r.uren, r.urenZonderKostprijs)}
+            {cel(3, kp(formatEURCent(r.materiaal)), magKostprijs ? t.statusRejectFg : t.muted)}
+            {cel(4, k(formatEURCent(r.inkopen)), t.statusRejectFg)}
             {cel(5, formatEURCent(r.paid), t.green700)}
             {cel(6, formatEURCent(r.openstaand), r.openstaand > 0 ? t.statusWarnFg : t.muted)}
-            {cel(7, k(formatEURCent(r.profit)), winstKleur(t, r.profit), true)}
-            {cel(8, k(`${r.margin}%`), t.ink)}
+            {cel(7, kp(formatEURCent(r.profit)), magKostprijs ? winstKleur(t, r.profit) : t.muted, true)}
+            {cel(8, kp(`${r.margin}%`), magKostprijs ? t.ink : t.muted)}
           </View>
         ))}
         {kostenKlaar ? (
           <View style={[styles.tabelRij, styles.rand, { backgroundColor: t.bgAlt }]}>
             <Text style={[styles.klantNaam, { width: KLANT_BREEDTE }]}>Totaal</Text>
             {cel(1, formatEURCent(totaal.total), t.ink, true)}
-            {cel(2, formatEURCent(totaal.materiaal), t.statusRejectFg, true)}
-            {cel(3, formatEURCent(totaal.inkopen), t.statusRejectFg, true)}
-            {cel(4, formatUrenAantal(totaal.uren), t.muted)}
+            {arbeidCel(totaal.arbeid, totaal.uren, totaal.urenZonderKostprijs, true)}
+            {cel(3, kp(formatEURCent(totaal.materiaal)), magKostprijs ? t.statusRejectFg : t.muted, true)}
+            {cel(4, formatEURCent(totaal.inkopen), t.statusRejectFg, true)}
             {cel(5, formatEURCent(totaal.paid), t.green700, true)}
             {cel(6, formatEURCent(totaal.openstaand), t.ink, true)}
-            {cel(7, formatEURCent(totaal.profit), winstKleur(t, totaal.profit), true)}
-            {cel(8, '', t.ink)}
+            {cel(7, kp(formatEURCent(totaal.profit)), magKostprijs ? winstKleur(t, totaal.profit) : t.muted, true)}
+            {cel(8, kp(`${totaal.margin}%`), magKostprijs ? t.ink : t.muted)}
           </View>
         ) : null}
       </View>
@@ -485,6 +582,7 @@ const makeStyles = (t: ThemeColors) =>
       letterSpacing: 0.5,
     },
     cijferWaarde: { fontSize: 13, fontWeight: '700', marginTop: 2 },
+    cijferSub: { fontSize: 10.5, color: t.muted, marginTop: 1 },
     winstRij: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     winst: { fontSize: 14, fontWeight: '800' },
     tabelRij: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, minHeight: 52 },

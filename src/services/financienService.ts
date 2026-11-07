@@ -2,7 +2,13 @@ import { supabase } from '@/lib/supabase';
 import { haalInStukken } from '@/lib/inStukken';
 import type { FinancienKpi, FinFactuur, FinKost, KlantKosten, KostRoute } from '@/lib/financienLogica';
 import { verdeelPerKlant } from '@/lib/financienLogica';
-import { bouwKostenOverzicht, naarProjectKost, type ProjectJobCost } from '@/lib/projectKostenLogica';
+import {
+  bouwKostenOverzicht,
+  kostprijsVanUurRij,
+  naarProjectKost,
+  UUR_KOSTPRIJS,
+  type ProjectJobCost,
+} from '@/lib/projectKostenLogica';
 
 /**
  * De bronnen van Financiën — dezelfde als `RevenuePage` in het dashboard:
@@ -126,15 +132,28 @@ function naarJobCost(r: RuweMateriaalKost): ProjectJobCost {
 }
 
 /**
- * Materiaal, inkopen en uren per klant — `getKostenOverzichtPerKlant` van het
+ * Arbeid, materiaal en inkopen per klant — `getKostenOverzichtPerKlant` van het
  * dashboard. Boekingen tellen daar niet mee in het totaal (dezelfde inkoop zit
  * al in het werkbonmateriaal), dus hier worden alleen de spiegelregels van
- * werkbonmateriaal opgehaald. Die zijn, net als in het dashboard, alleen
- * zichtbaar met het recht `inkoopprijzen` (RLS).
+ * werkbonmateriaal opgehaald. Die zijn, net als de kostprijs per uur van de
+ * werkbonuren, alleen zichtbaar met het recht `inkoopprijzen` (RLS).
  */
 export async function getKostenPerKlant(customerIds: string[]): Promise<Res<Map<string, KlantKosten> | null>> {
   const BASIS =
     'id, description, amount, cost_date, werkbon_materiaal_id, customer_id, project_id, werkbon_id, deal_id';
+  type UurRij = {
+    id: string;
+    uren: number | null;
+    reis_km: number | null;
+    werkbon_id: string | null;
+    werkbon_uren_kostprijs?: unknown;
+  };
+  // Met de kostprijs per uur; kent de API die relatie nog niet, dan zonder:
+  // liever uren zonder bedrag dan geen overzicht.
+  const leesUren = async () => {
+    const met = await lees<UurRij>('werkbon_uren', `id, uren, reis_km, werkbon_id, ${UUR_KOSTPRIJS}`, 'werkbonUren');
+    return met.error ? lees<UurRij>('werkbon_uren', 'id, uren, reis_km, werkbon_id', 'werkbonUren') : met;
+  };
   const [projecten, werkbonnen, deals, pk, uren] = await Promise.all([
     lees<{ id: string; customer_id: string | null }>('projects', 'id, customer_id', 'projecten'),
     lees<{ id: string; project_id: string | null; customer_id: string | null }>(
@@ -144,11 +163,7 @@ export async function getKostenPerKlant(customerIds: string[]): Promise<Res<Map<
     ),
     lees<{ id: string; customer_id: string | null }>('deals', 'id, customer_id', 'deals'),
     lees<Record<string, unknown>>('project_kosten', '*', 'projectKosten'),
-    lees<{ id: string; uren: number | null; reis_km: number | null; werkbon_id: string | null }>(
-      'werkbon_uren',
-      'id, uren, reis_km, werkbon_id',
-      'werkbonUren',
-    ),
+    leesUren(),
   ]);
   let jc = await lees<RuweMateriaalKost>(
     'job_costs',
@@ -170,7 +185,7 @@ export async function getKostenPerKlant(customerIds: string[]): Promise<Res<Map<
     deals: deals.data,
     jobCosts: jc.data,
     projectKosten,
-    uren: uren.data,
+    uren: uren.data.map((r) => ({ ...r, kostprijsPerUur: kostprijsVanUurRij(r) })),
   });
   const uit = new Map<string, KlantKosten>();
   for (const [cid, bron] of per) {
@@ -179,7 +194,14 @@ export async function getKostenPerKlant(customerIds: string[]): Promise<Res<Map<
       projectKosten: bron.projectKosten,
       urenRegels: bron.uren,
     });
-    uit.set(cid, { materiaal: o.materiaal.bedrag, inkopen: o.inkopen.bedrag, uren: o.uren.uren, totaal: o.totaal });
+    uit.set(cid, {
+      arbeid: o.arbeid.bedrag,
+      uren: o.arbeid.uren,
+      urenZonderKostprijs: o.arbeid.urenZonderKostprijs,
+      materiaal: o.materiaal.bedrag,
+      inkopen: o.inkopen.bedrag,
+      totaal: o.totaal,
+    });
   }
   return { data: uit, error: null };
 }

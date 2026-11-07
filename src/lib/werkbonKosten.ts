@@ -1,10 +1,15 @@
+import { arbeidUitUren, type Arbeid, type UrenRegel } from './projectKostenLogica';
+
 /**
- * Kosten op een werkbon (WerkbonKostenSection in het dashboard): het
- * werkbonmateriaal op inkoopprijs plus de inkopen (`project_kosten` met
- * `werkbon_id`). Boekingen op de Kosten-pagina staan apart en tellen niet mee;
- * uren alleen als aantal, zonder bedrag. Zie kostenOverzichtService.js.
+ * Kosten op een werkbon (WerkbonKostenSection in het dashboard): de arbeid
+ * (uren × de kostprijs per uur die gold bij het boeken), het werkbonmateriaal
+ * op inkoopprijs plus de inkopen (`project_kosten` met `werkbon_id`).
+ * Boekingen op de Kosten-pagina staan apart en tellen niet mee. Uren zonder
+ * kostprijs tellen niet mee in het bedrag; dat staat erbij. Zie
+ * kostenOverzichtService.js.
  *
- * Bewust zonder imports, zodat de tests dit rechtstreeks in Node draaien.
+ * De arbeid rekent met `arbeidUitUren` uit projectKostenLogica: één regel voor
+ * de werkbon en het project. Verder geen imports.
  */
 
 const rond = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
@@ -70,7 +75,7 @@ export type KostenOverzicht = {
   materiaal: { bedrag: number; zonderInkoopprijs: number; geschatBedrag: number };
   inkopen: { bedrag: number };
   boekingen: { aantal: number; bedrag: number };
-  uren: { uren: number; km: number };
+  arbeid: Arbeid;
   totaal: number;
 };
 
@@ -82,7 +87,7 @@ export function bouwKostenOverzicht({
 }: {
   jobCosts?: KostBron[];
   inkopen?: Pick<Inkoop, 'bedrag'>[];
-  uren?: { uren?: number | null; reis_km?: number | null }[];
+  uren?: UrenRegel[];
 }): KostenOverzicht {
   let materiaalInkoop = 0;
   let zonderInkoopprijs = 0;
@@ -105,22 +110,21 @@ export function bouwKostenOverzicht({
     }
   }
   const inkopenBedrag = rond(inkopen.reduce((s, k) => s + (Number(k.bedrag) || 0), 0));
-  const urenTotaal = uren.reduce((s, u) => s + (Number(u.uren) || 0), 0);
-  const km = uren.reduce((s, u) => s + (Number(u.reis_km) || 0), 0);
+  const arbeid = arbeidUitUren(uren);
   return {
     materiaal: { bedrag: rond(materiaalInkoop), zonderInkoopprijs, geschatBedrag: rond(geschatBedrag) },
     inkopen: { bedrag: inkopenBedrag },
     boekingen: { aantal: boekingen, bedrag: rond(boekingenBedrag) },
-    uren: { uren: Math.round(urenTotaal * 100) / 100, km: Math.round(km * 100) / 100 },
-    totaal: rond(rond(materiaalInkoop) + inkopenBedrag),
+    arbeid,
+    totaal: rond(arbeid.bedrag + rond(materiaalInkoop) + inkopenBedrag),
   };
 }
 
 /**
  * Wie de kosten ziet en wie ze bijwerkt, zoals WerkbonKostenSection: zien met
  * het recht `kosten` én de module `kosten_nacalculatie`; toevoegen en
- * bewerken voor admin of `projecten_bewerken`; de kostprijs (materiaal op
- * inkoop) alleen met `inkoopprijzen`.
+ * bewerken voor admin of `projecten_bewerken`; de kostprijs (arbeid op
+ * kostprijs per uur, materiaal op inkoop) alleen met `inkoopprijzen`.
  */
 export function kostenRechten(r: {
   role: string | null;

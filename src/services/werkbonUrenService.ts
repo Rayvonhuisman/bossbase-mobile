@@ -3,6 +3,7 @@ import { isReadonly } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { rondUrenAf } from '@/lib/urenBerekening';
 import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
+import { kostprijsVanUurRij, UUR_KOSTPRIJS } from '@/lib/projectKostenLogica';
 import type { WerkbonUur } from '@/types/domain';
 
 /**
@@ -57,21 +58,35 @@ function describeError(
   return 'De uren konden niet worden opgeslagen. Probeer het opnieuw.';
 }
 
-/** All hours booked on one work order, newest day first. */
+/**
+ * All hours booked on one work order, newest day first.
+ *
+ * Met de kostprijs per uur voor het kostenblok (`werkbon_uren_kostprijs`,
+ * alleen met het recht op inkoop- en kostprijzen; anders null). Kent de API
+ * die relatie nog niet, dan zonder: liever uren zonder bedrag dan geen uren.
+ */
 export async function listWerkbonUren(
   workOrderId: string,
 ): Promise<{ data: WerkbonUur[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('werkbon_uren')
-    .select(UREN_COLUMNS)
-    .eq('werkbon_id', workOrderId)
-    .order('datum', { ascending: false })
-    .order('created_at', { ascending: false });
+  const lees = (select: string) =>
+    supabase
+      .from('werkbon_uren')
+      .select(select)
+      .eq('werkbon_id', workOrderId)
+      .order('datum', { ascending: false })
+      .order('created_at', { ascending: false });
+  let { data, error } = await lees(`${UREN_COLUMNS}, ${UUR_KOSTPRIJS}`);
+  if (error) ({ data, error } = await lees(UREN_COLUMNS));
 
   if (error) {
     return { data: [], error: describeError('listWerkbonUren', error) };
   }
-  return { data: (data as unknown as WerkbonUur[]) ?? [], error: null };
+  return {
+    data: ((data as unknown as (WerkbonUur & { werkbon_uren_kostprijs?: unknown })[]) ?? []).map(
+      ({ werkbon_uren_kostprijs, ...u }) => ({ ...u, kostprijsPerUur: kostprijsVanUurRij({ werkbon_uren_kostprijs }) }),
+    ),
+    error: null,
+  };
 }
 
 /**

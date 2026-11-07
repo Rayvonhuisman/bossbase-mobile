@@ -274,6 +274,16 @@ export function waardeBronUitleg(bron: string | null | undefined): string {
   return 'Geschat in de aanvraag';
 }
 
+/**
+ * Uitleg onder de begrote uren (`uren_bron`, migratie 20261107143517), zoals
+ * de projectkaart van het dashboard: uit de geaccepteerde offertes (urenregels
+ * plus de begrote uren van de calculatie), of met de hand ingesteld.
+ */
+export function urenBronUitleg(bron: string | null | undefined, quotedHours: number | null | undefined): string {
+  if (bron === 'handmatig') return 'Met de hand ingesteld';
+  return Number(quotedHours) > 0 ? 'Uit de geaccepteerde offertes' : 'Komt uit de geaccepteerde offerte';
+}
+
 // ── Tabs van de projectkaart ───────────────────────────────────────────────
 
 export type ProjectTab = 'overzicht' | 'offertes' | 'facturen' | 'uren' | 'kosten' | 'werkbonnen' | 'notities';
@@ -283,7 +293,8 @@ export const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'offertes', label: 'Offertes' },
   { id: 'facturen', label: 'Facturen' },
   { id: 'uren', label: 'Uren' },
-  { id: 'kosten', label: 'Kosten' },
+  // Zelfde naam als het dashboard: begroot tegenover werkelijk.
+  { id: 'kosten', label: 'Nacalculatie' },
   { id: 'werkbonnen', label: 'Werkbonnen' },
   { id: 'notities', label: 'Notities' },
 ];

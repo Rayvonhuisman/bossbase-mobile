@@ -11,9 +11,10 @@
  *   grafiek    uit de facturen en de geboekte kosten (job_costs zonder
  *              werkbon_materiaal_id), per dag/week/maand
  *   per klant  cumulatief, alle periodes: gefactureerd, betaald, openstaand uit
- *              de facturen; materiaal, inkopen en uren uit het kostenoverzicht
- *              (zelfde toewijzing als de klantkaart); brutowinst vóór arbeid =
- *              omzet excl. btw − (materiaal + inkopen)
+ *              de facturen; arbeid, materiaal en inkopen uit het kostenoverzicht
+ *              (zelfde toewijzing als de klantkaart); resultaat = omzet excl.
+ *              btw − (arbeid + materiaal + inkopen). Arbeid is uren × de
+ *              kostprijs per uur; uren zonder kostprijs tellen niet mee.
  */
 
 const rond = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
@@ -56,7 +57,7 @@ export const sumGefactureerd = (facturen: FinFactuur[]) =>
 
 export const sumBetaald = (facturen: FinFactuur[]) => facturen.filter(isBetaald).reduce((s, f) => s + incl(f), 0);
 
-/** Zelfde selectie als gefactureerd, maar exclusief btw: de basis van de brutowinst. */
+/** Zelfde selectie als gefactureerd, maar exclusief btw: de basis van het resultaat. */
 export const sumOmzetExcl = (facturen: FinFactuur[]) =>
   facturen.filter(isGefactureerd).reduce((s, f) => s + (Number(f.totaal_excl) || 0), 0);
 
@@ -349,7 +350,7 @@ export const inkoopHoortBijKlant = (rij: { project_id: string | null; werkbon_id
 
 /**
  * De bronrijen per klant, zoals `getKostenOverzichtPerKlant`. Het optellen
- * (materiaal op inkoopprijs, inkopen, uren) doet daarna `bouwKostenOverzicht`
+ * (arbeid op kostprijs per uur, materiaal op inkoopprijs, inkopen) doet daarna `bouwKostenOverzicht`
  * uit projectKostenLogica — dezelfde som als op de projectkaart.
  */
 export function verdeelPerKlant<
@@ -374,7 +375,15 @@ export function verdeelPerKlant<
 
 // ── Tabel per klant ─────────────────────────────────────────────────────────
 
-export type KlantKosten = { materiaal: number; inkopen: number; uren: number; totaal: number };
+export type KlantKosten = {
+  /** Uren × kostprijs per uur; uren zonder kostprijs tellen niet mee. */
+  arbeid: number;
+  uren: number;
+  urenZonderKostprijs: number;
+  materiaal: number;
+  inkopen: number;
+  totaal: number;
+};
 
 export type KlantRij = {
   id: string;
@@ -384,20 +393,22 @@ export type KlantRij = {
   paid: number;
   openstaand: number;
   omzetExcl: number;
+  arbeid: number;
+  uren: number;
+  urenZonderKostprijs: number;
   materiaal: number;
   inkopen: number;
-  uren: number;
-  /** Brutowinst vóór arbeid: omzet excl. btw − (materiaal + inkopen). */
+  /** Resultaat: omzet excl. btw − (arbeid + materiaal + inkopen). */
   profit: number;
   /** Afgerond percentage; 0 zonder omzet. */
   margin: number;
 };
 
-const GEEN_KOSTEN: KlantKosten = { materiaal: 0, inkopen: 0, uren: 0, totaal: 0 };
+const GEEN_KOSTEN: KlantKosten = { arbeid: 0, uren: 0, urenZonderKostprijs: 0, materiaal: 0, inkopen: 0, totaal: 0 };
 
 /**
  * De rijen van "Per klant / opdracht", in de volgorde van de klantenlijst.
- * `kosten` mag nog null zijn (onderweg): dan staan materiaal en inkopen op 0
+ * `kosten` mag nog null zijn (onderweg): dan staan de kosten op 0
  * en hoort het scherm "…" te tonen, zoals het dashboard.
  */
 export function klantRijen(
@@ -418,26 +429,37 @@ export function klantRijen(
       paid: t.paid,
       openstaand: t.openstaand,
       omzetExcl: t.omzetExcl,
+      arbeid: c.arbeid,
+      uren: c.uren,
+      urenZonderKostprijs: c.urenZonderKostprijs,
       materiaal: c.materiaal,
       inkopen: c.inkopen,
-      uren: c.uren,
       profit,
       margin: t.omzetExcl > 0 ? Math.round((profit / t.omzetExcl) * 100) : 0,
     };
   });
 }
 
-/** De totaalregel onder de tabel: de som van de rijen, op centen afgerond. */
+/**
+ * De totaalregel onder de tabel: de som van de rijen, op centen afgerond. De
+ * marge van het totaal is gewogen (resultaat / omzet excl. btw over alle
+ * klanten samen), geen gemiddelde van de percentages per klant.
+ */
 export function totaalRij(rijen: KlantRij[]) {
   const som = (veld: keyof KlantRij) => rond(rijen.reduce((s, r) => s + (Number(r[veld]) || 0), 0));
+  const omzetExcl = rijen.reduce((s, r) => s + (Number(r.omzetExcl) || 0), 0);
+  const profit = som('profit');
   return {
     total: som('total'),
     paid: som('paid'),
     openstaand: som('openstaand'),
+    arbeid: som('arbeid'),
+    uren: som('uren'),
+    urenZonderKostprijs: som('urenZonderKostprijs'),
     materiaal: som('materiaal'),
     inkopen: som('inkopen'),
-    uren: som('uren'),
-    profit: som('profit'),
+    profit,
+    margin: omzetExcl > 0 ? Math.round((profit / omzetExcl) * 100) : 0,
   };
 }
 

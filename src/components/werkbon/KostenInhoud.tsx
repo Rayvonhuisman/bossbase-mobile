@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
 import { formatEUR } from '@/lib/format';
 import { bouwKostenOverzicht, type Inkoop, type KostBron } from '@/lib/werkbonKosten';
+import { fmtUren, type UrenRegel } from '@/lib/projectKostenLogica';
 import { createWerkbonInkoop, deleteInkoop, getWerkbonKostenBron, updateInkoop } from '@/services/werkbonKostenService';
 import { useTheme } from '@/providers';
 import { ds, spacing, type ThemeColors } from '@/theme';
@@ -10,9 +11,11 @@ import { InkoopInvoer, InkoopRegel, type InkoopPatch } from './Regels';
 
 /**
  * Kosten op de werkbon (WerkbonKostenSection): bovenaan de kostprijs
- * (materiaal op inkoop + inkopen; zonder het recht inkoopprijzen alleen de
- * inkopen), eronder de inkopen met dezelfde invoerregel als op het project.
- * Boekingen op de Kosten-pagina die aan deze werkbon hangen tellen niet mee.
+ * (arbeid op kostprijs per uur + materiaal op inkoop + inkopen; zonder het
+ * recht inkoopprijzen alleen de inkopen), eronder de inkopen met dezelfde
+ * invoerregel als op het project. Uren zonder kostprijs per uur tellen niet
+ * mee in het bedrag en dat staat erbij. Boekingen op de Kosten-pagina die aan
+ * deze werkbon hangen tellen niet mee.
  *
  * `materiaalSleutel` laat hem opnieuw laden zodra het materiaal verandert: de
  * materiaalkosten zijn spiegelregels die de database bijwerkt.
@@ -22,13 +25,16 @@ export function KostenInhoud({
   uren,
   materiaalSleutel,
   magInkoop,
+  isAdmin,
   kanBewerken,
   leveranciers,
 }: {
   werkbon: { id: string; company_id: string };
-  uren: { uren?: number | null; reis_km?: number | null }[];
+  uren: UrenRegel[];
   materiaalSleutel: string;
   magInkoop: boolean;
+  /** Verwijzing naar het instellen van de kostprijs per uur (alleen een admin kan dat). */
+  isAdmin: boolean;
   kanBewerken: boolean;
   leveranciers: { id: string; naam: string }[];
 }) {
@@ -113,9 +119,16 @@ export function KostenInhoud({
       <View>
         <Text style={styles.kopLabel}>{magInkoop ? 'Kostprijs' : 'Inkopen'}</Text>
         <Text style={styles.kopWaarde}>{formatEUR(magInkoop ? o.totaal : o.inkopen.bedrag)}</Text>
-        {magInkoop && (o.materiaal.bedrag > 0 || o.inkopen.bedrag > 0) ? (
+        {magInkoop && (o.arbeid.bedrag > 0 || o.materiaal.bedrag > 0 || o.inkopen.bedrag > 0) ? (
           <Text style={styles.kopSub}>
-            materiaal {formatEUR(o.materiaal.bedrag)} · inkopen {formatEUR(o.inkopen.bedrag)}
+            arbeid {formatEUR(o.arbeid.bedrag)} · materiaal {formatEUR(o.materiaal.bedrag)} · inkopen{' '}
+            {formatEUR(o.inkopen.bedrag)}
+          </Text>
+        ) : null}
+        {magInkoop && o.arbeid.urenZonderKostprijs > 0 ? (
+          <Text style={[styles.kopSub, styles.letOp, { marginTop: 6 }]}>
+            {fmtUren(o.arbeid.urenZonderKostprijs)} zonder kostprijs per uur: die tellen niet mee.
+            {isAdmin ? ' Stel de kostprijs in via het dashboard, bij Instellingen › Tarieven en termijnen.' : ''}
           </Text>
         ) : null}
         {o.boekingen.aantal > 0 ? (
@@ -164,6 +177,7 @@ const maakStijl = (t: ThemeColors) =>
     kopLabel: { fontSize: 11, fontWeight: '700', color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
     kopWaarde: { fontSize: 16, fontWeight: '700', color: t.ink, marginTop: 4 },
     kopSub: { fontSize: 11.5, color: t.muted, marginTop: 2, lineHeight: 17 },
+    letOp: { color: t.statusWarnFg },
     leeg: { fontSize: 13, color: t.muted },
     totaal: {
       marginTop: 4,

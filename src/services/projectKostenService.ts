@@ -2,15 +2,22 @@ import { supabase } from '@/lib/supabase';
 import { isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { haalInStukken } from '@/lib/inStukken';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
-import { naarProjectKost, type ProjectJobCost, type ProjectKost } from '@/lib/projectKostenLogica';
+import {
+  naarBegroting,
+  naarProjectKost,
+  type Begroting,
+  type ProjectJobCost,
+  type ProjectKost,
+} from '@/lib/projectKostenLogica';
 
 /**
- * De bronnen van de Kosten-tab op de projectkaart — `projectKostenService.js`
- * en `getProjectCosts` (`jobCostService.js`) van het dashboard.
+ * De bronnen van de Nacalculatie-tab op de projectkaart —
+ * `projectKostenService.js`, `getProjectCosts` (`jobCostService.js`) en
+ * `getProjectBegrotingen` (`kostenOverzichtService.js`) van het dashboard.
  *
  * `project_kosten` (inkopen): RLS vraagt het recht `kosten` voor alles, plus
  * de feature `kosten_nacalculatie` en de read-onlygate bij een insert. Ze
- * tellen mee in de marge en gaan NIET naar de boekhouding.
+ * tellen mee in de nacalculatie en gaan NIET naar de boekhouding.
  *
  * `job_costs` rond het project: de rijen van het project zelf én die van zijn
  * werkbonnen. De inkoopprijs komt mee via de materiaalregel; die tabel heeft
@@ -19,6 +26,23 @@ import { naarProjectKost, type ProjectJobCost, type ProjectKost } from '@/lib/pr
  */
 
 const rond = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * De begroting van één project uit de geaccepteerde offertes (RPC
+ * `bb_project_begroting`, migratie 20261107143517). De database geeft alleen
+ * iets terug met de rechten `kosten` en `inkoopprijzen` (of admin). Een fout —
+ * functie nog niet uitgerold — telt als "geen begroting": de rest van de
+ * nacalculatie werkt dan gewoon.
+ */
+export async function getProjectBegroting(projectId: string): Promise<Begroting | null> {
+  const { data, error } = await supabase.rpc('bb_project_begroting', { p_projecten: [projectId] });
+  if (error) {
+    if (__DEV__) console.log('[projectKostenService.getProjectBegroting]', error.message);
+    return null;
+  }
+  const rij = ((data as Record<string, unknown>[] | null) ?? []).find((r) => r.project_id === projectId);
+  return rij ? naarBegroting(rij) : null;
+}
 
 export async function listProjectKosten(
   projectId: string,
