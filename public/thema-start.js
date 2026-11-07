@@ -13,6 +13,8 @@
   var achtergrond = '#0D0D0D';
   document.documentElement.style.backgroundColor = achtergrond;
   document.documentElement.style.colorScheme = 'dark';
+  /* Vrijwel doorzichtige balk bovenin (zie index.html, #bb-statusbalk). */
+  document.documentElement.style.setProperty('--bb-statusbalk', 'rgba(13, 13, 13, 0.02)');
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', achtergrond);
   document.addEventListener('DOMContentLoaded', function () {

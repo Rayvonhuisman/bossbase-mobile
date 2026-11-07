@@ -54,6 +54,14 @@ export function MobielKader({
   useEffect(() => {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.bg);
     const donker = colorMode === 'dark';
+    // De balk bovenin (public/index.html, #bb-statusbalk): 2% van de
+    // paginakleur. Genoeg voor iOS om de statusbalk effen te kleuren, niet
+    // genoeg om hem te zien.
+    const hex = /^#([0-9a-f]{6})$/i.exec(t.bg)?.[1];
+    if (hex) {
+      const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      document.documentElement.style.setProperty('--bb-statusbalk', `rgba(${r}, ${g}, ${b}, 0.02)`);
+    }
     for (const el of [document.documentElement, document.body]) {
       el.style.backgroundColor = t.bg;
       el.style.colorScheme = donker ? 'dark' : 'light';

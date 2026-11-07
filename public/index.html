@@ -123,17 +123,17 @@
          breedte en meer dan 10px hoog; zo niet, dan vervaagt het de inhoud
          eronder. Is de veilige zone 0 (een gewoon Safari-tabblad, en in
          beginscherm-apps sinds iOS 26.1 soms ook), dan was de balk hierboven
-         0px hoog en telde hij niet. Daarom minstens 12px, en schuift de app
-         het verschil omlaag zodat de balk niets van de inhoud afdekt. Met een
-         veilige zone van 12px of meer verandert er niets. De superadmin-app
-         heeft hier geen last van door zijn sticky kopbalk. */
+         0px hoog en telde hij niet. Daarom minstens 12px.
+         De balk is hier vrijwel doorzichtig (2% van de paginakleur): iOS neemt
+         een doorschijnende kleur over als effen kleur voor de statusbalk, maar
+         je ziet de balk zelf niet en de inhoud schuift er gewoon onderdoor, tot
+         aan de rand. De kleur zet MobielKader (en thema-start.js bij openen) in
+         --bb-statusbalk. De superadmin-app heeft dit niet nodig door zijn
+         sticky kopbalk. */
       @supports (-webkit-touch-callout: none) {
         #bb-statusbalk {
           height: max(env(safe-area-inset-top, 0px), 12px);
-        }
-        #root {
-          box-sizing: border-box;
-          padding-top: max(0px, calc(12px - env(safe-area-inset-top, 0px)));
+          background-color: var(--bb-statusbalk, rgba(243, 244, 246, 0.02));
         }
       }
     </style>
