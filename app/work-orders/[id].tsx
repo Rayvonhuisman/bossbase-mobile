@@ -61,6 +61,8 @@ import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
 import { AfrondenModal, type AfrondUitkomst } from '@/components/werkbon/AfrondenModal';
 import { WaarschuwingModal } from '@/components/werkbon/WaarschuwingModal';
 import { KostenInhoud } from '@/components/werkbon/KostenInhoud';
+import { getMeerwerkPrijzen, zetMeerwerkPrijs } from '@/services/meerwerkPrijsService';
+import { meerwerkTotaal as somMeerwerk, naarInvoer, type MeerwerkPrijs } from '@/lib/meerwerkPrijs';
 import { MateriaalRegel } from '@/components/werkbon/Regels';
 import { signMelding } from '@/lib/werkbonVersturen';
 import { kostenRechten } from '@/lib/werkbonKosten';
@@ -405,6 +407,47 @@ export default function WorkOrderDetailScreen() {
 
   const gewoneTaken = useMemo(() => tasks.filter((t) => !t.is_meerwerk), [tasks]);
   const meerwerkTaken = useMemo(() => tasks.filter((t) => t.is_meerwerk), [tasks]);
+
+  // Bedrag en uren bij het meerwerk (werkbon_meerwerk_prijs, migratie
+  // 20261107170000): alleen met projectbedragen (of admin), zoals het
+  // dashboard. Eigen state, los van de taken: de werkbon-PDF en de
+  // ondertekenpagina krijgen dit nooit te zien.
+  const magMeerwerkPrijzen = magBedragen;
+  const [opgehaaldePrijzen, setMeerwerkPrijzen] = useState<Map<string, MeerwerkPrijs>>(() => new Map());
+  const meerwerkSleutel = meerwerkTaken.map((t) => t.id).join(',');
+  const toonPrijzen = magMeerwerkPrijzen && Boolean(meerwerkSleutel);
+  const meerwerkPrijzen = useMemo(
+    () => (toonPrijzen ? opgehaaldePrijzen : new Map<string, MeerwerkPrijs>()),
+    [toonPrijzen, opgehaaldePrijzen],
+  );
+  useEffect(() => {
+    if (!toonPrijzen) return undefined;
+    let actief = true;
+    void getMeerwerkPrijzen(meerwerkSleutel.split(',')).then((r) => {
+      if (!actief) return;
+      if (r.error && __DEV__) console.log('[werkbon] meerwerkbedragen laden', r.error);
+      if (!r.error) setMeerwerkPrijzen(r.data);
+    });
+    return () => {
+      actief = false;
+    };
+  }, [meerwerkSleutel, toonPrijzen]);
+  const meerwerkTotaal = useMemo(() => somMeerwerk(meerwerkPrijzen.values()), [meerwerkPrijzen]);
+  const handleMeerwerkPrijs = async (taakId: string, invoer: { bedragExcl: string; uren: string }) => {
+    if (!workOrder) return false;
+    const { data, error: e } = await zetMeerwerkPrijs(taakId, workOrder.company_id, invoer);
+    if (e) {
+      Dialog.alert('Bedrag opslaan mislukt', e);
+      return false;
+    }
+    setMeerwerkPrijzen((prev) => {
+      const n = new Map(prev);
+      if (data) n.set(taakId, data);
+      else n.delete(taakId);
+      return n;
+    });
+    return true;
+  };
   const totaalUren = useMemo(() => uren.reduce((sum, u) => sum + Number(u.uren || 0), 0), [uren]);
 
   // ── Afronden (WerkbonAfrondenModal) ──────────────────────────────────────
@@ -1320,6 +1363,7 @@ export default function WorkOrderDetailScreen() {
                   magInkoop={kosten.inkoop}
                   kanBewerken={kosten.bewerken}
                   leveranciers={leverancierLijst}
+                  meerwerkTotaal={magMeerwerkPrijzen ? meerwerkTotaal : null}
                 />
               </Section>
             ) : null}
@@ -1327,12 +1371,17 @@ export default function WorkOrderDetailScreen() {
             {/* 11. Meerwerk */}
             <Section
               styles={styles}
-              title={`Meerwerk${meerwerkTaken.length ? ` · ${meerwerkTaken.filter((t) => t.afgerond).length} / ${meerwerkTaken.length}` : ''}`}
+              title={`Meerwerk${meerwerkTaken.length ? ` · ${meerwerkTaken.filter((t) => t.afgerond).length} / ${meerwerkTaken.length}` : ''}${
+                magMeerwerkPrijzen && meerwerkTotaal > 0 ? ` · ${formatEUR(meerwerkTotaal)} excl. btw` : ''
+              }`}
               icon={<PlusCircle size={16} color={ds.green700} />}
             >
               <Text style={styles.meerwerkHint}>
                 Werk dat er tijdens de klus bij kwam en niet in de oorspronkelijke opdracht zat. Staat apart op de werkbon, telt
                 niet mee in de taakvoortgang.
+                {magMeerwerkPrijzen
+                  ? ' Vul bij elke regel het bedrag voor de klant in (excl. btw) en eventueel de uren: dat komt niet op de werkbon die de klant tekent, wel in de nacalculatie en op de factuur.'
+                  : ' Het bedrag vult kantoor in.'}
               </Text>
               {meerwerkTaken.length === 0 && !canTasks ? <Text style={styles.empty}>Geen meerwerk op deze klus.</Text> : null}
               {meerwerkTaken.map((t) => (
@@ -1345,6 +1394,16 @@ export default function WorkOrderDetailScreen() {
                   disabled={!canEdit}
                   onToggle={() => handleToggleTask(t)}
                   onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
+                  extra={
+                    magMeerwerkPrijzen && !geannuleerd && !readonly ? (
+                      <MeerwerkPrijsInvoer
+                        styles={styles}
+                        th={th}
+                        prijs={meerwerkPrijzen.get(t.id)}
+                        onOpslaan={(invoer) => handleMeerwerkPrijs(t.id, invoer)}
+                      />
+                    ) : null
+                  }
                 />
               ))}
               {canTasks ? (
@@ -1756,6 +1815,7 @@ function TaskRow({
   disabled,
   onToggle,
   onDelete,
+  extra = null,
 }: {
   styles: Styles;
   th: ThemeColors;
@@ -1764,8 +1824,10 @@ function TaskRow({
   disabled: boolean;
   onToggle: () => void;
   onDelete?: () => void;
+  /** Iets onder de regel (bij meerwerk: bedrag en uren, met projectbedragen). */
+  extra?: React.ReactNode;
 }) {
-  return (
+  const rij = (
     <View style={styles.taskRow}>
       <Pressable
         onPress={onToggle}
@@ -1796,6 +1858,94 @@ function TaskRow({
           <Trash2 size={16} color={th.muted} strokeWidth={2} />
         </Pressable>
       ) : null}
+    </View>
+  );
+  if (!extra) return rij;
+  return (
+    <View>
+      {rij}
+      {extra}
+    </View>
+  );
+}
+
+/**
+ * Bedrag (excl. btw, voor de klant) en eventueel uren bij een meerwerkregel —
+ * MeerwerkPrijs in WerkbonPageV2.jsx van het dashboard. Opslaan bij het
+ * verlaten van een veld; beide leeg haalt de rij weg. Werkt ook als de werkbon
+ * getekend is: prijzen is kantoorwerk en het bedrag staat niet op wat de klant
+ * tekende.
+ */
+function MeerwerkPrijsInvoer({
+  styles,
+  th,
+  prijs,
+  onOpslaan,
+}: {
+  styles: Styles;
+  th: ThemeColors;
+  prijs: MeerwerkPrijs | undefined;
+  onOpslaan: (invoer: { bedragExcl: string; uren: string }) => Promise<boolean>;
+}) {
+  const opgeslagenBedrag = naarInvoer(prijs?.bedragExcl);
+  const opgeslagenUren = naarInvoer(prijs?.uren);
+  const [bedrag, setBedrag] = useState(opgeslagenBedrag);
+  const [uren, setUren] = useState(opgeslagenUren);
+  const [bezig, setBezig] = useState(false);
+  // Per veld bijwerken als de opgeslagen waarde verandert (tijdens het
+  // renderen, geen effect): opslaan van de uren laat een half getypt bedrag staan.
+  const [vorigBedrag, setVorigBedrag] = useState(opgeslagenBedrag);
+  const [vorigUren, setVorigUren] = useState(opgeslagenUren);
+  if (vorigBedrag !== opgeslagenBedrag) {
+    setVorigBedrag(opgeslagenBedrag);
+    setBedrag(opgeslagenBedrag);
+  }
+  if (vorigUren !== opgeslagenUren) {
+    setVorigUren(opgeslagenUren);
+    setUren(opgeslagenUren);
+  }
+  // Getallen zoals in Nederland (leesGetalNl: "1.250" = 1250), als tekstveld.
+  // Niet uitschakelen tijdens het opslaan, anders verliest het volgende veld
+  // de focus (zoals het dashboard).
+  const opslaan = async () => {
+    if (bedrag.trim() === opgeslagenBedrag && uren.trim() === opgeslagenUren) return;
+    setBezig(true);
+    const ok = await onOpslaan({ bedragExcl: bedrag, uren });
+    setBezig(false);
+    if (!ok) {
+      setBedrag(opgeslagenBedrag);
+      setUren(opgeslagenUren);
+    }
+  };
+  return (
+    <View style={styles.meerwerkPrijs}>
+      <TextInput
+        value={uren}
+        onChangeText={setUren}
+        onBlur={opslaan}
+        onSubmitEditing={opslaan}
+        placeholder="uren"
+        placeholderTextColor={th.muted2}
+        keyboardType="decimal-pad"
+        returnKeyType="done"
+        aria-busy={bezig}
+        accessibilityLabel="Uren meerwerk"
+        style={[styles.taakInvoerVeld, styles.meerwerkPrijsUren]}
+      />
+      <TextInput
+        value={bedrag}
+        onChangeText={setBedrag}
+        onBlur={opslaan}
+        onSubmitEditing={opslaan}
+        placeholder="€ excl. btw"
+        placeholderTextColor={th.muted2}
+        keyboardType="decimal-pad"
+        returnKeyType="done"
+        aria-busy={bezig}
+        accessibilityLabel="Bedrag meerwerk excl. btw"
+        style={[styles.taakInvoerVeld, styles.meerwerkPrijsBedrag]}
+      />
+      {bezig ? <ActivityIndicator size="small" color={ds.green700} /> : null}
     </View>
   );
 }
@@ -2531,6 +2681,16 @@ const makeStyles = (t: ThemeColors) =>
       lineHeight: 18,
       color: t.muted,
     },
+    // Onder de meerwerkregel, ingesprongen tot onder de tekst (vinkje 20 + gap 10).
+    meerwerkPrijs: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingLeft: 30,
+      paddingBottom: 6,
+    },
+    meerwerkPrijsUren: { flex: 0, width: 80, minHeight: 40 },
+    meerwerkPrijsBedrag: { flex: 0, width: 120, minHeight: 40 },
     noteMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',

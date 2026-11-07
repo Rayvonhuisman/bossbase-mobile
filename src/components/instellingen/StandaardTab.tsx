@@ -90,8 +90,9 @@ export type StandaardDeel = 'standaard' | 'eenheden' | 'agenda' | 'herinneringen
 
 /**
  * Tabel `bedrijfsinstellingen` en tabel `eigen_eenheden`, verdeeld over vier
- * tabs zoals het dashboard: Tarieven en termijnen (`standaard`), Eigen prijzen
- * (`eenheden`), Agenda en Urenherinnering (`herinneringen`). Eén formulier
+ * tabs: Tarieven en termijnen (`standaard`), Eenheidsprijzen
+ * (`eenheden`; in het dashboard sinds 07-11 een tab van de pagina Prijslijst,
+ * eerder "Eigen prijzen / eenheden"), Agenda en Urenherinnering (`herinneringen`). Eén formulier
  * onder water; elke tab schrijft alleen wat er gewijzigd is. Het veld
  * standaardmarge staat er bewust niet: het dashboard toont het ook niet meer.
  */
@@ -165,13 +166,13 @@ export function StandaardTab({
         setEenheid(null);
         await laadEenheden();
       },
-      succesMelding: 'Eenheid opgeslagen',
+      succesMelding: 'Eenheidsprijs opgeslagen',
     });
   };
 
   const eenheidWeg = (e: EigenEenheid) =>
     Dialog.alert(
-      'Eigen eenheid verwijderen?',
+      'Eenheidsprijs verwijderen?',
       'Bestaande offertes/facturen behouden hun bedrag.',
       [
         { text: 'Annuleren', style: 'cancel' },
@@ -181,7 +182,7 @@ export function StandaardTab({
           onPress: () =>
             saveE(() => deleteEenheid(e.id), {
               onSuccess: () => laadEenheden(),
-              succesMelding: 'Eenheid verwijderd',
+              succesMelding: 'Eenheidsprijs verwijderd',
             }),
         },
       ],
@@ -400,8 +401,8 @@ export function StandaardTab({
 
       {deel === 'eenheden' ? (
       <Kaart
-        titel="Eigen prijzen / eenheden"
-        sub="Verschijnen als regeltype naast Uren, Km en Overig in offertes en facturen."
+        titel="Eenheidsprijzen"
+        sub="Een prijs per eenheid voor werk dat je verkoopt, zoals m² sauzen of een kozijn plaatsen. In een offerte of factuur kies je hem als regeltype."
         rechts={
           magWijzigen ? (
             <Button
@@ -412,7 +413,7 @@ export function StandaardTab({
           ) : undefined
         }
       >
-        {eenheden.length === 0 ? <Text style={s.hint}>Nog geen eigen eenheden aangemaakt.</Text> : null}
+        {eenheden.length === 0 ? <Text style={s.hint}>Nog geen eenheidsprijzen.</Text> : null}
         {eenheden.map((e) => (
           <View key={e.id} style={s.lijstRij}>
             <View style={{ flex: 1 }}>
@@ -458,7 +459,7 @@ export function StandaardTab({
 
       <FormSheet
         visible={eenheid !== null}
-        title={eenheid?.id ? 'Eenheid bewerken' : 'Nieuwe eenheid'}
+        title={eenheid?.id ? 'Eenheidsprijs bewerken' : 'Nieuwe eenheidsprijs'}
         error={eFout}
         saving={eBezig}
         submitDisabled={!eenheid?.naam.trim()}

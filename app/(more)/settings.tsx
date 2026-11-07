@@ -26,7 +26,7 @@ import { IntegratiesOverzicht } from '@/components/instellingen/IntegratiesOverz
  * dezelfde zichtbaarheid:
  *
  *   Mijn profiel       iedereen
- *   Bedrijfsprofiel, Tarieven en termijnen, Eigen prijzen, E-mailtemplates,
+ *   Bedrijfsprofiel, Tarieven en termijnen, Eenheidsprijzen, E-mailtemplates,
  *   Pipeline, Agenda, Urenherinnering, Integraties
  *                      recht `instellingen`
  *   Voertuigen         + beheerder + feature `voertuigen`

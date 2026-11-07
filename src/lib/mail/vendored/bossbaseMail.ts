@@ -1,7 +1,7 @@
 // @ts-nocheck
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/bossbaseMail.ts
-// Dashboardcommit: e2e1115
+// Dashboardcommit: 9dfb1eb
 // Bijwerken: node scripts/mail-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/mailOpmaak.test.mjs
 // vergelijkt het met het dashboard.
@@ -263,10 +263,10 @@ export function bbHandtekening(o: { titel?: string; tekst?: string; persoon?: Pe
     : `<div class="bb-foto" style="width:64px;height:64px;border-radius:32px;background:${BB.groen};color:${BB.zwart};font-size:26px;line-height:64px;font-weight:800;text-align:center;">${esc(p.initiaal ?? p.naam[0])}</div>`
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0;">
-    <tr><td class="bb-hand" bgcolor="${BB.zwart}" style="${donkerVlak(BB.zwart)}border-radius:16px;padding:22px 24px 6px;">
+    <tr><td class="bb-hand" bgcolor="${BB.zwart}" style="${donkerVlak(BB.zwart)}border-radius:16px;padding:${o.titel || o.tekst ? '22px' : '16px'} 24px 6px;">
       ${o.titel ? `<div style="font-size:22px;line-height:1.3;font-weight:800;letter-spacing:-.4px;color:#ffffff;">${gmailWit(o.titel)}</div>` : ''}
       ${o.tekst ? `<div style="margin-top:6px;font-size:15px;line-height:1.55;color:#d1d5db;">${gmailWit(o.tekst)}</div>` : ''}
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${o.titel || o.tekst ? '18px' : '0'} 0 16px;">
         <tr><td class="bb-hand-wit" bgcolor="#ffffff" style="background:#ffffff;border-radius:14px;padding:16px 16px 10px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td valign="top" width="64" style="width:64px;">
@@ -300,7 +300,7 @@ function kop(o: { label?: { tekst: string; kleur?: string }; voortgang?: number 
 
 export type BossbaseMailOpties = {
   titel: string                 // <title>; platte tekst
-  kop: string                   // de h1; HTML (escape zelf wat van buiten komt)
+  kop?: string                  // de h1; HTML (escape zelf wat van buiten komt); leeg = geen kop (eigen bericht)
   inhoud: string                // HTML
   voorvertoning?: string        // regel naast het onderwerp in de inbox
   bovenkop?: string             // klein groen label boven de h1; HTML
@@ -359,7 +359,7 @@ export function bossbaseMail(o: BossbaseMailOpties): string {
         ${kop(o)}
         <tr><td class="bb-pad" bgcolor="#ffffff" style="background:#ffffff;border-radius:0 0 18px 18px;padding:36px 40px 40px;">
           ${bovenkop ? `<div style="margin:0 0 10px;font-size:12px;line-height:1.4;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#059648;">${bovenkop}</div>` : ''}
-          <h1 class="bb-h1" style="margin:0 0 20px;font-size:30px;line-height:36px;font-weight:800;letter-spacing:-.8px;color:${BB.zwart};mso-line-height-rule:exactly;">${o.kop}</h1>
+          ${o.kop ? `<h1 class="bb-h1" style="margin:0 0 20px;font-size:30px;line-height:36px;font-weight:800;letter-spacing:-.8px;color:${BB.zwart};mso-line-height-rule:exactly;">${o.kop}</h1>` : ''}
           <div style="font-size:16px;line-height:1.6;color:${BB.tekst};">${o.inhoud}</div>
           ${o.knop ? bbKnop(o.knop.tekst, o.knop.url, { marge: '24px 0 8px' }) : ''}
           ${o.voetnoot ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.55;color:${BB.grijs};">${o.voetnoot}</p>` : ''}

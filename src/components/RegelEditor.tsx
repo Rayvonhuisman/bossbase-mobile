@@ -48,7 +48,7 @@ type Props = {
 // Waar een hoeveelheid of prijs van Boss vandaan komt, kort (dashboard `VoorstelRegel`).
 const BRON_LABEL: Record<string, string> = {
   opdracht: 'je opdracht', antwoord: 'jouw antwoord', bestand: 'gecontroleerde maat', huidig: 'stond al zo',
-  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eigen eenheden', berekening: 'berekend',
+  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eenheidsprijzen', berekening: 'berekend',
 };
 function herkomstTekst(r: Regel): string | null {
   const delen: string[] = [];

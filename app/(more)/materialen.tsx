@@ -102,7 +102,9 @@ export default function MaterialenScreen() {
   const kop = (
     <AppTopBar
       variant="detail"
-      title="Materialen"
+      // "Prijslijst" zoals het dashboard; daar staan de eenheidsprijzen in een
+      // tweede tabblad, in de app (nog) onder Instellingen › Eenheidsprijzen.
+      title="Prijslijst"
       subtitle={`${lijst.length} ${lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek`}
       onBack={() => terugOfNaar(router, '/menu')}
       rightAction={

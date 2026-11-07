@@ -480,7 +480,7 @@ function MatenKaart({ it, busy, onBevestig }: {
 // ── Het voorstel ─────────────────────────────────────────────────────────────
 const BRON: Record<string, string> = {
   opdracht: 'je opdracht', antwoord: 'jouw antwoord', bestand: 'gecontroleerde maat', huidig: 'stond al zo',
-  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eigen eenheden',
+  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eenheidsprijzen',
 };
 const bronTekst = (x?: unknown) => {
   const b = x as { soort?: string; formule?: string; offerte?: string } | null | undefined;

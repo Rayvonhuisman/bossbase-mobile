@@ -17,7 +17,9 @@ import { spacing, type ThemeColors } from '@/theme';
  *
  * Begroot = de geaccepteerde offertes met hun interne calculatie: de uren
  * (urenregels plus begrote uren per regel) × de kostprijs per uur van die
- * offerte, en de kostprijs van materiaal en inkoop per regel.
+ * offerte, en de kostprijs van materiaal en inkoop per regel. De begrote
+ * opbrengst is de opdracht plus het meerwerk met een bedrag op de werkbonnen;
+ * voor meerwerk zijn geen begrote kosten.
  * Werkelijk = de uren op de werkbonnen × de kostprijs per uur die gold bij het
  * boeken, het werkbonmateriaal op inkoopprijs en de inkopen.
  *
@@ -160,7 +162,13 @@ export function NacalculatieTabel({
           <>
             <Regel
               label="Opbrengst"
-              sub="begroot: opdracht · werkelijk: gefactureerd"
+              sub={
+                nc.meerwerk.bedrag > 0
+                  ? `begroot: opdracht ${formatEUR(opbrengst.opdracht)} + meerwerk ${formatEUR(
+                      nc.meerwerk.bedrag,
+                    )} · werkelijk: gefactureerd`
+                  : 'begroot: opdracht · werkelijk: gefactureerd'
+              }
               begroot={opbrengst.begroot}
               werkelijk={opbrengst.werkelijk}
               zonderVerschil={nc.voorlopig}

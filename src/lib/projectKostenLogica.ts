@@ -204,7 +204,11 @@ export function bouwKostenOverzicht({
 // ── Begroting: de geaccepteerde offertes van een project ──────────────────
 // Uit de RPC `bb_project_begroting` (migratie 20261107143517): dezelfde
 // offertes als de projectwaarde, met de interne calculatie per regel. Alleen
-// voor wie kosten én kostprijzen mag zien; anders komt er niets terug.
+// voor wie kosten én kostprijzen mag zien; anders komt er niets terug. Sinds
+// migratie 20261107170000 ook het meerwerk met een bedrag op de werkbonnen van
+// het project (meerwerk_excl); dan komt er ook een rij voor een project met
+// alleen meerwerk (aantal_offertes = 0). Zelfde rekenwerk als lib/nacalculatie.js
+// van het dashboard.
 
 export type Begroting = {
   aantalOffertes: number;
@@ -215,6 +219,9 @@ export type Begroting = {
   materiaal: number;
   regelsZonderCalculatie: number;
   totaal: number;
+  meerwerkExcl: number;
+  meerwerkRegels: number;
+  meerwerkZonderBedrag: number;
 };
 
 /** `naarBegroting`: één rij van `bb_project_begroting`. */
@@ -230,6 +237,10 @@ export function naarBegroting(r: Record<string, unknown>): Begroting {
     materiaal,
     regelsZonderCalculatie: Number(r.regels_zonder_calculatie) || 0,
     totaal: rond(arbeid + materiaal),
+    // Ontbreken in een database van vóór migratie 20261107170000: dan 0.
+    meerwerkExcl: Number(r.meerwerk_excl) || 0,
+    meerwerkRegels: Number(r.meerwerk_regels) || 0,
+    meerwerkZonderBedrag: Number(r.meerwerk_zonder_bedrag) || 0,
   };
 }
 
@@ -247,6 +258,9 @@ export function telBegrotingenOp(lijst: (Begroting | null | undefined)[] = []): 
     materiaal: rond(tel('materiaal')),
     regelsZonderCalculatie: tel('regelsZonderCalculatie'),
     totaal: rond(tel('totaal')),
+    meerwerkExcl: rond(tel('meerwerkExcl')),
+    meerwerkRegels: tel('meerwerkRegels'),
+    meerwerkZonderBedrag: tel('meerwerkZonderBedrag'),
   };
 }
 
@@ -270,7 +284,9 @@ export type Nacalculatie = {
     regelsZonderCalculatie: number;
   };
   kosten: { begroot: number | null; werkelijk: number };
-  opbrengst: { begroot: number | null; werkelijk: number };
+  opbrengst: { begroot: number | null; werkelijk: number; opdracht: number; meerwerk: number };
+  /** Meerwerk met een bedrag (opbrengst, geen begrote kosten) en regels zonder bedrag. */
+  meerwerk: { bedrag: number; regels: number; zonderBedrag: number };
   resultaat: {
     begroot: number | null;
     werkelijk: number;
@@ -289,9 +305,13 @@ export type Nacalculatie = {
 
 /**
  * `bouwNacalculatie`: alles excl. btw. Werkelijk resultaat = gefactureerd −
- * werkelijke kosten. Begroot resultaat = opdrachtwaarde (geaccepteerde
- * offertes) − begrote kosten. Zolang niet alles gefactureerd is, staat "nog te
- * factureren" erbij: dat is geen verlies.
+ * werkelijke kosten. Begroot resultaat = verwachte opbrengst (geaccepteerde
+ * offertes + meerwerk) − begrote kosten. Zolang niet alles gefactureerd is,
+ * staat "nog te factureren" erbij: dat is geen verlies.
+ *
+ * Een begroting met alleen meerwerk (geen geaccepteerde offerte) geeft wel een
+ * verwachte opbrengst, maar geen begrote kosten: de kolom Begroot blijft daar
+ * leeg in plaats van € 0. Gelijk aan lib/nacalculatie.js van het dashboard.
  */
 export function bouwNacalculatie({
   overzicht = LEEG_OVERZICHT,
@@ -303,38 +323,58 @@ export function bouwNacalculatie({
   gefactureerdExcl?: number;
 } = {}): Nacalculatie {
   const b = begroting;
+  const heeftBegroting = Boolean(b && b.aantalOffertes > 0);
+  const kb = heeftBegroting ? b : null;
+  const meerwerk = b ? rond(b.meerwerkExcl) : 0;
+  const verwacht = b ? rond((heeftBegroting ? b.opdrachtExcl : 0) + meerwerk) : null;
+  const heeftVerwachting = verwacht != null && (heeftBegroting || meerwerk > 0);
   const matWerkelijk = rond(overzicht.materiaal.bedrag + overzicht.inkopen.bedrag);
   const kostenWerkelijk = overzicht.totaal;
   const opbrengst = rond(gefactureerdExcl);
   const resultaat = rond(opbrengst - kostenWerkelijk);
   const pct = (deel: number, geheel: number) => (geheel > 0 ? Math.round((deel / geheel) * 1000) / 10 : null);
   return {
-    heeftBegroting: Boolean(b && b.aantalOffertes > 0),
+    heeftBegroting,
     arbeid: {
-      begroot: b ? b.arbeid : null,
+      begroot: kb ? kb.arbeid : null,
       werkelijk: overzicht.arbeid.bedrag,
-      urenBegroot: b ? b.uren : null,
+      urenBegroot: kb ? kb.uren : null,
       urenWerkelijk: overzicht.arbeid.uren,
       urenZonderKostprijs: overzicht.arbeid.urenZonderKostprijs,
-      begrootUrenZonderKostprijs: b ? b.urenZonderKostprijs : 0,
+      begrootUrenZonderKostprijs: kb ? kb.urenZonderKostprijs : 0,
     },
     materiaal: {
-      begroot: b ? b.materiaal : null,
+      begroot: kb ? kb.materiaal : null,
       werkelijk: matWerkelijk,
       materiaal: overzicht.materiaal.bedrag,
       inkopen: overzicht.inkopen.bedrag,
-      regelsZonderCalculatie: b ? b.regelsZonderCalculatie : 0,
+      regelsZonderCalculatie: kb ? kb.regelsZonderCalculatie : 0,
     },
-    kosten: { begroot: b ? b.totaal : null, werkelijk: kostenWerkelijk },
-    opbrengst: { begroot: b ? b.opdrachtExcl : null, werkelijk: opbrengst },
+    kosten: { begroot: kb ? kb.totaal : null, werkelijk: kostenWerkelijk },
+    opbrengst: {
+      begroot: heeftVerwachting ? verwacht : null,
+      werkelijk: opbrengst,
+      opdracht: kb ? kb.opdrachtExcl : 0,
+      meerwerk,
+    },
+    meerwerk: {
+      bedrag: meerwerk,
+      regels: b ? b.meerwerkRegels || 0 : 0,
+      zonderBedrag: b ? b.meerwerkZonderBedrag || 0 : 0,
+    },
     resultaat: {
-      begroot: b ? rond(b.opdrachtExcl - b.totaal) : null,
+      begroot: kb && verwacht != null ? rond(verwacht - kb.totaal) : null,
       werkelijk: resultaat,
-      margeBegroot: b ? pct(b.opdrachtExcl - b.totaal, b.opdrachtExcl) : null,
+      margeBegroot: kb && verwacht != null ? pct(verwacht - kb.totaal, verwacht) : null,
       margeWerkelijk: pct(resultaat, opbrengst),
     },
-    nogTeFactureren: b ? Math.max(0, rond(b.opdrachtExcl - opbrengst)) : 0,
-    voorlopig: Boolean(b && b.opdrachtExcl - opbrengst > 0.5),
+    nogTeFactureren: heeftVerwachting && verwacht != null ? Math.max(0, rond(verwacht - opbrengst)) : 0,
+    // Zonder offerte of meerwerk is er geen verwachting; is er dan nog niets
+    // gefactureerd maar wel kosten, dan is het resultaat ook een tussenstand
+    // (niet rood: de klus wordt waarschijnlijk nog gefactureerd).
+    voorlopig: Boolean(
+      heeftVerwachting && verwacht != null ? verwacht - opbrengst > 0.5 : opbrengst === 0 && kostenWerkelijk > 0,
+    ),
     onvolledig: overzicht.arbeid.urenZonderKostprijs > 0,
   };
 }
@@ -411,6 +451,15 @@ export function nacalculatieMeldingen(
         wat === 'klant'
           ? 'Geen geaccepteerde offertes bij de projecten van deze klant: de kolom Begroot blijft leeg.'
           : 'Nog geen geaccepteerde offerte bij dit project: de kolom Begroot blijft leeg. Een geaccepteerde offerte met calculatie wordt de begroting.',
+    });
+  }
+  if (magBedragen && nc.meerwerk.zonderBedrag > 0) {
+    const n = nc.meerwerk.zonderBedrag;
+    uit.push({
+      letOp: true,
+      tekst: `${n === 1 ? '1 meerwerkregel heeft' : `${n} meerwerkregels hebben`} nog geen bedrag en ${
+        n === 1 ? 'telt' : 'tellen'
+      } niet mee in de opbrengst. Vul het bedrag in bij het meerwerk op de werkbon.`,
     });
   }
   if (magBedragen && nc.nogTeFactureren > 0.5) {

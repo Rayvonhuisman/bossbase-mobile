@@ -98,7 +98,7 @@ export default function MenuScreen() {
         { icon: CalendarRange, title: 'Planning', sub: 'Medewerkers, voertuigen en niet ingepland', route: '/planningbord', onPress: ga('/planningbord') },
         { icon: Briefcase, title: 'Projecten', sub: 'Status, planning en notities', route: '/projects', onPress: ga('/projects') },
         { icon: ClipboardList, title: 'Werkbonnen', sub: 'Klussen en uitvoering', onPress: ga('/work-orders') },
-        { icon: Package, title: 'Materialen', sub: 'Standaardmaterialen met prijs en leverancier', onPress: ga('/materialen') },
+        { icon: Package, title: 'Prijslijst', sub: 'Materialen met prijs en leverancier', onPress: ga('/materialen') },
         { icon: Clock, title: 'Uren', sub: 'Werkdag- en werkbonuren', onPress: ga('/hours') },
       ],
     },

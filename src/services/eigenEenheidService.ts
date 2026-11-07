@@ -23,7 +23,7 @@ export async function listEigenEenheden(): Promise<{
 
   if (error) {
     console.warn('[eigenEenheidService.listEigenEenheden]', error.message);
-    return { data: [], error: 'Eigen eenheden konden niet worden geladen.' };
+    return { data: [], error: 'Eenheidsprijzen konden niet worden geladen.' };
   }
 
   const rijen = (data ?? []) as {

@@ -367,7 +367,12 @@ export async function deleteVoertuig(id: string): Promise<WriteStatus> {
   return res.ok ? { ok: true, data: null } : res;
 }
 
-// ── Eigen prijzen / eenheden ───────────────────────────────────────────────
+// ── Eenheidsprijzen (eigen_eenheden) ───────────────────────────────────────
+// Alleen naam, prijs, eenheid en btw. De standaardcalculatie (uren en
+// kostprijs per eenheid) staat in een eigen tabel eigen_eenheid_calculatie
+// (dashboard, migratie 20261107150000) en wordt hier niet gelezen of
+// geschreven: bewerken in de app laat hem staan. Verwijderen neemt hem mee
+// (on delete cascade), net als in het dashboard.
 
 export type EigenEenheid = {
   id: string;

@@ -28,6 +28,7 @@ export function KostenInhoud({
   isAdmin,
   kanBewerken,
   leveranciers,
+  meerwerkTotaal = null,
 }: {
   werkbon: { id: string; company_id: string };
   uren: UrenRegel[];
@@ -37,6 +38,11 @@ export function KostenInhoud({
   isAdmin: boolean;
   kanBewerken: boolean;
   leveranciers: { id: string; naam: string }[];
+  /**
+   * Som van de meerwerkbedragen (excl. btw), alleen met `projectbedragen`;
+   * anders null. Meerwerk is opbrengst, geen kosten: alleen ter info.
+   */
+  meerwerkTotaal?: number | null;
 }) {
   const { colors: th } = useTheme();
   const styles = useMemo(() => maakStijl(th), [th]);
@@ -129,6 +135,11 @@ export function KostenInhoud({
           <Text style={[styles.kopSub, styles.letOp, { marginTop: 6 }]}>
             {fmtUren(o.arbeid.urenZonderKostprijs)} zonder kostprijs per uur: die tellen niet mee.
             {isAdmin ? ' Stel de kostprijs in via het dashboard, bij Instellingen › Tarieven en termijnen.' : ''}
+          </Text>
+        ) : null}
+        {meerwerkTotaal != null && meerwerkTotaal > 0 ? (
+          <Text style={[styles.kopSub, { marginTop: 6 }]}>
+            Meerwerk te factureren: {formatEUR(meerwerkTotaal)} excl. btw
           </Text>
         ) : null}
         {o.boekingen.aantal > 0 ? (

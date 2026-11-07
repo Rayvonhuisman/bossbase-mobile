@@ -52,7 +52,7 @@ export function zichtbareTabs(stand: {
   if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
   tabs.push(
     { id: 'standaard', label: 'Tarieven en termijnen' },
-    { id: 'eenheden', label: 'Eigen prijzen' },
+    { id: 'eenheden', label: 'Eenheidsprijzen' },
     { id: 'templates', label: 'E-mailtemplates' },
     { id: 'pipeline', label: 'Pipeline' },
     { id: 'agenda', label: 'Agenda' },
