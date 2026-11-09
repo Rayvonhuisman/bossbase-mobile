@@ -1114,6 +1114,7 @@ export default function WorkOrderDetailScreen() {
               <ContractBlok
                 werkbonId={workOrder.id}
                 status={workOrder.status}
+                gemeldOp={workOrder.created_at}
                 ververs={[
                   workOrder.updated_at,
                   workOrder.status,

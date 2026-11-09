@@ -31,11 +31,14 @@ import { SlaBadge } from './SlaBadge';
 export function ContractBlok({
   werkbonId,
   status,
+  gemeldOp,
   ververs,
 }: {
   werkbonId: string;
   /** Werkbonstatus: een geannuleerde werkbon heeft geen SLA meer. */
   status: string | null | undefined;
+  /** werkbonnen.created_at: de norm voor "bijna" loopt van hier tot de deadline (zelfde als de lijst). */
+  gemeldOp: string | null | undefined;
   ververs: string;
 }) {
   const router = useRouter();
@@ -82,8 +85,8 @@ export function ContractBlok({
       sla_oplossen_voor: info.sla_oplossen_voor,
       gestart_op: info.gestart_op,
       afgerond_op: info.afgerond_op,
+      created_at: gemeldOp,
     },
-    info.sla,
     nu,
   );
   const prioriteit = info.prioriteit && info.prioriteit in PRIORITEIT_LABEL ? (info.prioriteit as Prioriteit) : null;

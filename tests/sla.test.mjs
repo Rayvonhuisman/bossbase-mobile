@@ -59,8 +59,9 @@ test('slaRegels: reactie op gestart_op, oplossen op afgerond_op', () => {
     sla_oplossen_voor: iso(NU + 30 * uur),
     gestart_op: iso(NU - 2 * uur),
     afgerond_op: null,
+    created_at: iso(NU - 4 * uur),
   };
-  const r = sla.slaRegels(w, { reactie_uren: 4, oplos_uren: 48 }, NU);
+  const r = sla.slaRegels(w, NU);
   assert.deepEqual(
     r.map((x) => [x.soort, x.status]),
     [
@@ -68,12 +69,12 @@ test('slaRegels: reactie op gestart_op, oplossen op afgerond_op', () => {
       ['oplossen', 'op_tijd'],
     ],
   );
-  assert.equal(sla.slaBadge(w, { reactie_uren: 4, oplos_uren: 48 }, NU), 'op_tijd');
+  assert.equal(sla.slaBadge(w, NU), 'op_tijd');
 });
 
 test('slaRegels: niet gestart en reactie voorbij → badge te laat', () => {
   const w = { status: 'gepland', sla_reactie_voor: iso(NU - 60_000), sla_oplossen_voor: iso(NU + 50 * uur) };
-  assert.equal(sla.slaBadge(w, null, NU), 'te_laat');
+  assert.equal(sla.slaBadge(w, NU), 'te_laat');
 });
 
 test('afgerond zonder gestart_op: afronding telt als reactie', () => {
@@ -84,20 +85,26 @@ test('afgerond zonder gestart_op: afronding telt als reactie', () => {
     gestart_op: null,
     afgerond_op: iso(NU - uur),
   };
-  assert.equal(sla.slaBadge(w, null, NU + 100 * uur), 'gehaald');
+  assert.equal(sla.slaBadge(w, NU + 100 * uur), 'gehaald');
 });
 
-test('zonder normen telt de tijd van melding tot deadline als norm', () => {
+test('norm voor bijna = kloktijd van melding tot deadline (lijst en detail gelijk)', () => {
   // gemeld 30 uur geleden, deadline over 8 uur → termijn 38 u, 25% = 9,5 u → bijna
   const w = { status: 'gepland', created_at: iso(NU - 30 * uur), sla_oplossen_voor: iso(NU + 8 * uur) };
-  assert.equal(sla.slaBadge(w, null, NU), 'bijna');
-  // met de echte norm (48 u, 25% = 12 u) ook bijna; met norm 24 u (25% = 6 u) op tijd
-  assert.equal(sla.slaBadge(w, { oplos_uren: 24 }, NU), 'op_tijd');
+  assert.equal(sla.slaBadge(w, NU), 'bijna');
+  // termijn 72 u (vr 20:00 → ma 20:00 bij werkuren), nog 17 u over: 25% = 18 u → bijna,
+  // ook al zou 25% van een werkurennorm (4 u → 1 u) "op tijd" zeggen
+  const wk = { status: 'gepland', created_at: iso(NU - 55 * uur), sla_reactie_voor: iso(NU + 17 * uur) };
+  assert.equal(sla.slaBadge(wk, NU), 'bijna');
+  // nog 19 u over → op tijd
+  assert.equal(sla.slaBadge({ ...wk, sla_reactie_voor: iso(NU + 19 * uur), created_at: iso(NU - 53 * uur) }, NU), 'op_tijd');
+  // zonder created_at alleen de 2-uursregel
+  assert.equal(sla.slaBadge({ status: 'gepland', sla_reactie_voor: iso(NU + 3 * uur) }, NU), 'op_tijd');
 });
 
 test('geannuleerd of zonder deadlines → geen badge', () => {
-  assert.equal(sla.slaBadge({ status: 'geannuleerd', sla_reactie_voor: iso(NU - uur) }, null, NU), null);
-  assert.equal(sla.slaBadge({ status: 'gepland' }, null, NU), null);
+  assert.equal(sla.slaBadge({ status: 'geannuleerd', sla_reactie_voor: iso(NU - uur) }, NU), null);
+  assert.equal(sla.slaBadge({ status: 'gepland' }, NU), null);
 });
 
 test('In te plannen: zonder datum en niet klaar; sortering op uiterlijk_op', () => {

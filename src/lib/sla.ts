@@ -13,9 +13,10 @@
  *   op tijd  — nog open, met meer tijd over.
  *   gehaald  — gestart/afgerond vóór of op de deadline.
  *
- * "Over" is gewone kloktijd tot de deadline. Bij de klok `werkuren` is de norm
- * in werkuren gerekend; 25% daarvan in kloktijd is dan een ruime, eenvoudige
- * vuistregel (net als in het dashboard), geen tweede deadlineberekening.
+ * "Over" is gewone kloktijd tot de deadline. De norm voor "bijna" is overal
+ * (lijst én detail, app én dashboard) de kloktijd van de melding
+ * (`created_at`) tot de deadline — niet de SLA-uren of werkuren. Zo zeggen
+ * lijst en detail altijd hetzelfde (besluit 09-11-2026).
  *
  * Geen runtime-imports: draait ook rechtstreeks in de Node-tests.
  */
@@ -86,7 +87,7 @@ export type SlaWerkbon = {
   sla_oplossen_voor?: string | null;
   gestart_op?: string | null;
   afgerond_op?: string | null;
-  /** De melding; vangnet voor de norm als die niet bekend is (zie slaRegels). */
+  /** De melding; van hier tot de deadline is de norm voor "bijna". */
   created_at?: string | null;
 };
 
@@ -101,22 +102,16 @@ export type SlaRegel = {
  * geen SLA meer (lege lijst). Een afgeronde werkbon zonder gestart_op telt de
  * afronding ook als reactie: wie klaar is, heeft gereageerd.
  *
- * Zonder `normen` (de werkbonnenlijst kent het SLA-niveau niet) geldt als norm
- * de kloktijd van de melding (`created_at`) tot de deadline. Bij de klok
- * `altijd` is dat precies de norm; bij `werkuren` is het ruimer.
+ * Norm voor "bijna": de kloktijd van `created_at` tot de deadline.
  */
-export function slaRegels(
-  w: SlaWerkbon,
-  normen: { reactie_uren?: number | string | null; oplos_uren?: number | string | null } | null = null,
-  nu?: Date | number,
-): SlaRegel[] {
+export function slaRegels(w: SlaWerkbon, nu?: Date | number): SlaRegel[] {
   if (!w || w.status === 'geannuleerd') return [];
   const regels: SlaRegel[] = [];
   if (w.sla_reactie_voor) {
     const status = slaStatus({
       deadline: w.sla_reactie_voor,
       klaarOp: w.gestart_op ?? w.afgerond_op ?? null,
-      normUren: normen?.reactie_uren ?? spanUren(w.created_at, w.sla_reactie_voor),
+      normUren: spanUren(w.created_at, w.sla_reactie_voor),
       nu,
     });
     if (status) regels.push({ soort: 'reactie', deadline: w.sla_reactie_voor, status });
@@ -125,7 +120,7 @@ export function slaRegels(
     const status = slaStatus({
       deadline: w.sla_oplossen_voor,
       klaarOp: w.afgerond_op ?? null,
-      normUren: normen?.oplos_uren ?? spanUren(w.created_at, w.sla_oplossen_voor),
+      normUren: spanUren(w.created_at, w.sla_oplossen_voor),
       nu,
     });
     if (status) regels.push({ soort: 'oplossen', deadline: w.sla_oplossen_voor, status });
@@ -146,12 +141,8 @@ const ERNST: Record<SlaStatus, number> = { gehaald: 0, op_tijd: 1, bijna: 2, te_
  * Eén badge voor de lijst: de ergste status van beide deadlines. Null als de
  * werkbon geen SLA heeft (of geannuleerd is).
  */
-export function slaBadge(
-  w: SlaWerkbon,
-  normen: { reactie_uren?: number | string | null; oplos_uren?: number | string | null } | null = null,
-  nu?: Date | number,
-): SlaStatus | null {
-  const regels = slaRegels(w, normen, nu);
+export function slaBadge(w: SlaWerkbon, nu?: Date | number): SlaStatus | null {
+  const regels = slaRegels(w, nu);
   if (!regels.length) return null;
   return regels.reduce<SlaStatus>((erg, r) => (ERNST[r.status] > ERNST[erg] ? r.status : erg), 'gehaald');
 }
