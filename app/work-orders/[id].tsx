@@ -60,6 +60,7 @@ import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
 import { PdfWeergave, type PdfDocument } from '@/components/PdfWeergave';
 import { AfrondenModal, type AfrondUitkomst } from '@/components/werkbon/AfrondenModal';
 import { WaarschuwingModal } from '@/components/werkbon/WaarschuwingModal';
+import { ContractBlok } from '@/components/werkbon/ContractBlok';
 import { KostenInhoud } from '@/components/werkbon/KostenInhoud';
 import { getMeerwerkPrijzen, zetMeerwerkPrijs } from '@/services/meerwerkPrijsService';
 import { meerwerkTotaal as somMeerwerk, naarInvoer, type MeerwerkPrijs } from '@/lib/meerwerkPrijs';
@@ -1106,6 +1107,21 @@ export default function WorkOrderDetailScreen() {
                   {formatKortMoment(workOrder.verstuurd_op)}. Nog niet getekend.
                 </Text>
               </View>
+            ) : null}
+
+            {/* 4b. Contract, installatie en SLA (onderhoudscontracten). */}
+            {workOrder.contract_id || workOrder.installatie_id ? (
+              <ContractBlok
+                werkbonId={workOrder.id}
+                status={workOrder.status}
+                ververs={[
+                  workOrder.updated_at,
+                  workOrder.status,
+                  workOrder.prioriteit,
+                  workOrder.gestart_op,
+                  workOrder.afgerond_op,
+                ].join('|')}
+              />
             ) : null}
 
             {/* 5. Omschrijving */}

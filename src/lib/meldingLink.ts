@@ -42,6 +42,11 @@ export function routeVoorLink(link: string | null | undefined): string | null {
       return '/customers';
     case 'uren':
       return '/hours';
+    // contract_afloop en contract_ondertekend (contracten, 09-11-2026). De app
+    // heeft geen contractbeheer, wel een alleen-lezen contractscherm onder de
+    // klanten; de lijst zelf staat op de klantkaart.
+    case 'contracten':
+      return id ? `/customers/contract/${id}` : '/customers';
     default:
       return null;
   }

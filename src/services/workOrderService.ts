@@ -30,6 +30,13 @@ export type Werkbon = WorkOrderWithRelations & {
   sign_token?: string | null;
   handtekening_url?: string | null;
   ondertekend_door_email?: string | null;
+  /** Onderhoudscontract (09-11-2026). De SLA-deadlines rekent de database. */
+  contract_id?: string | null;
+  installatie_id?: string | null;
+  prioriteit?: string | null;
+  uiterlijk_op?: string | null;
+  sla_reactie_voor?: string | null;
+  sla_oplossen_voor?: string | null;
 };
 
 /**
@@ -69,6 +76,7 @@ const WORK_ORDER_COLUMNS = `
   notes, werkbon_notities, gestart_op, afgerond_op,
   ondertekend_op, ondertekend_door_naam, ondertekend_door_email, ondertekende_pdf_url,
   handtekening_url, sign_token, verstuurd_naar_email, verstuurd_op, created_at, updated_at,
+  contract_id, installatie_id, prioriteit, uiterlijk_op, sla_reactie_voor, sla_oplossen_voor,
   werkbon_dagen ( id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden,
     voertuig_ids, voertuig_tijden, medewerker_voertuig ),
   customer:customers (
@@ -1178,6 +1186,12 @@ export type CreateWorkOrderInput = {
   verantwoordelijke_ids?: string[];
   /** Alleen meesturen als het formulier de voertuigen kent. */
   voertuig_ids?: string[];
+  /**
+   * Storingswerkbon onder een contract (bb_klant_contracten). Prioriteit
+   * alleen bij een contract met SLA; de deadlines rekent de database.
+   */
+  contract_id?: string | null;
+  prioriteit?: string | null;
 };
 
 /**
@@ -1228,6 +1242,10 @@ export async function createWorkOrder(
     assigned_to: uitvoerders[0] ?? null,
   };
   if (Array.isArray(input.voertuig_ids)) payload.voertuig_ids = input.voertuig_ids;
+  if (input.contract_id) {
+    payload.contract_id = input.contract_id;
+    payload.prioriteit = input.prioriteit ?? null;
+  }
   // Null-velden weglaten, zoals het dashboard: dan gelden de kolomstandaarden.
   Object.keys(payload).forEach((k) => payload[k] === null && delete payload[k]);
 

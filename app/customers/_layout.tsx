@@ -28,6 +28,7 @@ export default function CustomersStackLayout() {
       <Stack.Screen name="new" options={{ title: 'Nieuwe klant' }} />
       <Stack.Screen name="leverancier/[id]" options={{ title: 'Leverancier' }} />
       <Stack.Screen name="leverancier/new" options={{ title: 'Nieuwe leverancier' }} />
+      <Stack.Screen name="contract/[id]" options={{ title: 'Contract' }} />
     </Stack>
   );
 }

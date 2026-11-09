@@ -115,6 +115,7 @@ import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { alsTekst } from '@/lib/notitieTekst';
 import { BestandenBlok } from '@/components/BestandenBlok';
+import { KlantContractBlokken } from '@/components/KlantContractBlokken';
 import { klantTotalen, klantType, komendePlanRegels, lokaleDatumTijd, planRegels } from '@/lib/relaties';
 
 /**
@@ -223,11 +224,14 @@ export default function CustomerDetailScreen() {
   const [medewerkers, setMedewerkers] = useState<SelectOption[]>([]);
   const [activiteitConcept, setActiviteitConcept] = useState<ActivityConcept | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Contracten en installaties laden zichzelf; dit tikt mee met elke verversing.
+  const [contractVervers, setContractVervers] = useState(0);
 
   const load = useCallback(
     async () => {
       if (!id) return;
       setError(null);
+      setContractVervers((v) => v + 1);
 
       const leeg = { data: [], error: null };
       const [custResp, woResp, noteResp, actResp, offResp, facResp, projResp, teamResp, tijdResp, mailResp] =
@@ -783,6 +787,9 @@ export default function CustomerDetailScreen() {
 
       {/* Bestanden van deze klant en al zijn projecten, plus eigen uploads. */}
       <BestandenBlok klantId={customer.id} projecten={projecten} />
+
+      {/* Onderhoudscontracten (alleen-lezen) en installaties. */}
+      <KlantContractBlokken klantId={customer.id} ververs={contractVervers} />
 
       <KaartBlok
         titel="Werkbonnen"

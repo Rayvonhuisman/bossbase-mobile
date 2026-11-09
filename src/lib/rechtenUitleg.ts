@@ -10,6 +10,8 @@ export const RECHT_UITLEG: Record<string, string> = {
     'Laat de gebruiker klanten definitief verwijderen. Zonder dit recht ontbreekt de verwijder-knop in de klantenlijst en op de klantkaart.',
   verkoop:
     'Geeft toegang tot de Pipeline: aanvragen en projecten bekijken en beheren, plus de pipeline-widgets op het dashboard (nieuwe aanvragen, actieve aanvragen, conversie, funnel). Dit wordt ook server-side afgedwongen: zonder dit recht is de pipeline nergens zichtbaar.',
+  contracten:
+    'Geeft toegang tot de Contracten-pagina: onderhoudscontracten opstellen, laten ondertekenen en beheren, met de beurten, de prijs per periode, de SLA-niveaus en het SLA-rapport. Ook installaties beheren. Dit wordt server-side afgedwongen: zonder dit recht komen contracten niet uit de database. Wie een werkbon onder een contract heeft, ziet op die werkbon wel het contract, de installatie, de prioriteit en de reactietijden, maar geen prijzen.',
   projecten:
     'Geeft toegang tot de Projecten-pagina. Wélke projecten iemand daar ziet regelt de database: zonder ‘Alle projecten & werkbonnen inzien’ zijn dat alleen de projecten waaraan hij is toegewezen of waarvan hij een werkbon heeft. Bewerken vraagt apart om ‘Projecten bewerken’.',
   projecten_bewerken:
