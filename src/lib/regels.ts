@@ -175,6 +175,14 @@ export type Regel = {
   bossPrijsOntbreekt?: boolean;
   /** Groep uit de offerte, zoals hij in `factuur_regels.groep` staat. */
   groep?: { sleutel?: string; naam: string; werkzaamheden?: string | null } | null;
+
+  // ── Alleen bij offertes: de interne calculatie (lib/offerteCalculatie) ──
+  /**
+   * Uren en kostprijs per eenheid, als tekstveld ("0,25"). Undefined = in het
+   * formulier niet aangeraakt: dan gaat hij niet mee naar
+   * `bb_offerte_calculatie_opslaan` en blijft wat de database heeft staan.
+   */
+  calc?: { urenPer: string; kostprijsPer: string };
 };
 
 /** Een bron van een hoeveelheid of prijs (`herkomst.aantal`, `herkomst.prijs`). */

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { metTijdslimiet } from '@/lib/queryTijdslimiet';
+import { haalInStukken } from '@/lib/inStukken';
 
 /**
  * Materialenbibliotheek — tabel `materialen`, met de inkoopprijs apart in
@@ -172,6 +173,118 @@ export async function listLeveranciers(): Promise<{
       naam: l.naam ?? '',
       actief: l.actief !== false,
     })),
+    error: null,
+  };
+}
+
+// ── Importeren (MaterialenImporteren) ───────────────────────────────────────
+
+/**
+ * Alle materialen, in stukken van 1000 (PostgREST kapt anders stil af): de
+ * import herkent hiermee dubbele materialen. Een fout is een fout: dan mag er
+ * niet geïmporteerd worden, anders komen er dubbele bij.
+ */
+export async function alleMaterialenVoorImport(): Promise<{ data: Materiaal[]; error: string | null }> {
+  const { data, error } = await haalInStukken<Rij, { code?: string; message?: string }>((van, tot) =>
+    supabase.from('materialen').select(SELECT).order('naam', { ascending: true }).order('id', { ascending: true }).range(van, tot) as unknown as PromiseLike<{
+      data: Rij[] | null;
+      error: { code?: string; message?: string } | null;
+    }>,
+  );
+  if (error) return { data: [], error: 'De bestaande materialen konden niet worden geladen.' };
+  return { data: data.map(naarMateriaal), error: null };
+}
+
+export type ImportOpslagRegel = {
+  /** Bestaand materiaal: alleen de prijzen bijwerken. */
+  id: string | null;
+  naam: string;
+  artikelnummer: string | null;
+  eenheid: string | null;
+  inkoopprijs: number | null;
+  verkoopprijs: number | null;
+  btwPct: number | null;
+};
+
+const IMPORT_PARTIJ = 200;
+
+/**
+ * Slaat de gecontroleerde regels op in partijen (RPC `bb_materialen_importeren`,
+ * migratie 20261107160000; elke partij is één transactie). Mislukt een partij,
+ * dan staat wat eerder lukte er al in: de melding zegt hoeveel.
+ */
+export async function importeerMaterialen(
+  leverancierId: string,
+  regels: ImportOpslagRegel[],
+  onVoortgang?: (klaar: number, totaal: number) => void,
+): Promise<{ nieuw: number; bijgewerkt: number; error: string | null }> {
+  const totaal = { nieuw: 0, bijgewerkt: 0 };
+  for (let i = 0; i < regels.length; i += IMPORT_PARTIJ) {
+    const partij = regels.slice(i, i + IMPORT_PARTIJ).map((r) => ({
+      id: r.id || null,
+      naam: r.naam,
+      artikelnummer: r.artikelnummer || null,
+      eenheid: r.eenheid || null,
+      inkoopprijs: r.inkoopprijs ?? null,
+      verkoopprijs: r.verkoopprijs ?? null,
+      btw_pct: r.btwPct ?? null,
+    }));
+    const { data, error } = await supabase.rpc('bb_materialen_importeren', { p_leverancier: leverancierId, p_regels: partij });
+    if (error) {
+      const klaar = totaal.nieuw + totaal.bijgewerkt;
+      return {
+        ...totaal,
+        error: `${error.message || 'Opslaan mislukt'}${klaar ? ` (${klaar} regels waren al opgeslagen)` : ''}`,
+      };
+    }
+    const d = data as { nieuw?: number; bijgewerkt?: number } | null;
+    totaal.nieuw += Number(d?.nieuw || 0);
+    totaal.bijgewerkt += Number(d?.bijgewerkt || 0);
+    onVoortgang?.(Math.min(i + IMPORT_PARTIJ, regels.length), regels.length);
+  }
+  return { ...totaal, error: null };
+}
+
+/**
+ * Een PDF of foto van een prijslijst laten uitlezen (edge function
+ * `materialen-uitlezen`, alleen met de feature `prijslijst_uitlezen`), als
+ * base64. Slaat niets op.
+ */
+export async function leesPrijslijstUit(
+  base64: string,
+  naam: string,
+): Promise<{
+  regels: {
+    naam: string;
+    artikelnummer?: string | null;
+    eenheid?: string | null;
+    inkoopprijs?: number | null;
+    verkoopprijs?: number | null;
+    btwPct?: number | null;
+    twijfel?: boolean;
+    twijfelReden?: string;
+  }[];
+  leverancier: string;
+  melding: string;
+  error: string | null;
+}> {
+  const { data, error } = await supabase.functions.invoke('materialen-uitlezen', { body: { bestand: base64, naam } });
+  if (error) {
+    let tekst = 'Het uitlezen lukte niet. Probeer het zo nog eens.';
+    try {
+      const j = await (error as { context?: { json?: () => Promise<{ error?: string }> } })?.context?.json?.();
+      if (j?.error) tekst = j.error;
+    } catch {
+      /* geen JSON */
+    }
+    return { regels: [], leverancier: '', melding: '', error: tekst };
+  }
+  const d = data as { success?: boolean; error?: string; regels?: unknown[]; leverancier?: string; melding?: string } | null;
+  if (!d?.success) return { regels: [], leverancier: '', melding: '', error: d?.error || 'Het uitlezen lukte niet.' };
+  return {
+    regels: (d.regels as never[]) || [],
+    leverancier: d.leverancier || '',
+    melding: d.melding || '',
     error: null,
   };
 }

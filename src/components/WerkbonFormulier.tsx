@@ -50,6 +50,8 @@ import type { Customer } from '@/types/domain';
 import { PloegKeuze } from './PloegKeuze';
 import { DagKaarten, WerkbonKalender } from './WerkbonDagenVelden';
 import { Schakel } from './instellingen/Bouwstenen';
+import { getOfferteRegelsVoorWerkbon, takenUitOfferte } from '@/services/werkbonOfferteService';
+import { deelOfferteRegelsIn, offerteLabel, standaardTaakIds, type OfferteBron } from '@/lib/werkbonUitOfferte';
 
 type Collega = { id: string; full_name: string | null; role: string | null };
 type Project = { id: string; name: string | null; customer_id: string | null };
@@ -140,6 +142,31 @@ export function WerkbonFormulier({
 
   const [opslaan, setOpslaan] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+
+  // Een nieuwe werkbon bij een project met een geaccepteerde offerte: de taken
+  // daaruit overnemen (de standaardkeuze van lib/werkbonUitOfferte; op de
+  // werkbon kun je daarna nog regels bijkiezen). De database geeft alleen
+  // omschrijvingen, geen prijzen, en niets aan wie geen werkbonnen mag maken.
+  const [offerteKeuzes, setOfferteKeuzes] = useState<OfferteBron[]>([]);
+  const [overnemenUit, setOvernemenUit] = useState<string | null>(null);
+  useEffect(() => {
+    if (bewerken || !projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOfferteKeuzes([]);
+      setOvernemenUit(null);
+      return undefined;
+    }
+    let leeft = true;
+    void getOfferteRegelsVoorWerkbon({ projectId }).then((r) => {
+      if (!leeft) return;
+      const lijst = deelOfferteRegelsIn(r.data).filter((o) => standaardTaakIds(o).length);
+      setOfferteKeuzes(lijst);
+      setOvernemenUit(lijst.length === 1 ? lijst[0]!.id : null);
+    });
+    return () => {
+      leeft = false;
+    };
+  }, [bewerken, projectId]);
 
   const laadBronnen = useCallback(async () => {
     setLaden(true);
@@ -270,6 +297,8 @@ export function WerkbonFormulier({
       const res = await createWorkOrder({
         company_id: companyId,
         ...basis,
+        // De offerte waar de taken uit komen, zoals het dashboard.
+        ...(overnemenUit && offerteKeuzes.some((o) => o.id === overnemenUit) ? { offerte_id: overnemenUit } : {}),
         omschrijving: omschrijvingVeld ?? null,
       });
       if (res.error || !res.data) {
@@ -277,6 +306,11 @@ export function WerkbonFormulier({
         return setFout(res.error ?? 'De werkbon kon niet worden aangemaakt.');
       }
       opgeslagen = res.data;
+      const uitOfferte = offerteKeuzes.find((o) => o.id === overnemenUit);
+      if (uitOfferte) {
+        const tk = await takenUitOfferte(opgeslagen.id, uitOfferte.id, standaardTaakIds(uitOfferte));
+        if (tk.error) Dialog.alert('Werkbon aangemaakt', `Maar de taken uit de offerte niet: ${tk.error}`);
+      }
       // De notitie uit het aanmaakformulier wordt de eerste interne logregel.
       if (notitie.trim() && user?.id) {
         const n = await addWorkOrderNote({
@@ -432,6 +466,22 @@ export function WerkbonFormulier({
           placeholder="— Geen project —"
           options={projectOpties}
         />
+
+        {!bewerken && offerteKeuzes.length > 0 ? (
+          <SelectField
+            label="Taken uit offerte overnemen"
+            value={overnemenUit}
+            onChange={setOvernemenUit}
+            allowEmpty
+            emptyLabel="Niet overnemen"
+            placeholder="Niet overnemen"
+            options={offerteKeuzes.map((o) => {
+              const n = standaardTaakIds(o).length;
+              return { id: o.id, label: `${offerteLabel(o)} (${n === 1 ? '1 taak' : `${n} taken`})` };
+            })}
+            hint="De regels van de offerte worden taken op de werkbon (geen kilometers, geen materiaal). Op de werkbon kun je daarna nog regels bijkiezen."
+          />
+        ) : null}
 
         <AdresZoeker
           label="Locatie"

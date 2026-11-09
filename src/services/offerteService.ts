@@ -857,7 +857,7 @@ export async function kopieerOfferte(
   const groepen = await getOfferteGroepen(bronId);
   if (groepen.error) return writeFout('onbekend', groepen.error);
   const nieuweId = new Map(groepen.data.map((g) => [g.id, uuid()]));
-  return slaOfferteOp({
+  const res = await slaOfferteOp({
     id: null,
     versie: null,
     nummer: nummer ?? null,
@@ -889,6 +889,14 @@ export async function kopieerOfferte(
       herkomst: (it.herkomst as Herkomst | null) ?? null,
     })),
   });
+  // De interne calculatie gaat mee, regel voor regel op volgorde (zoals
+  // `copyOfferte` in het dashboard). Best-effort: de kopie staat er al.
+  if (res.ok) {
+    await supabase
+      .rpc('bb_offerte_calculatie_kopieren', { p_van: bronId, p_naar: res.data.id })
+      .then(() => {}, () => {});
+  }
+  return res;
 }
 
 /**
@@ -1071,4 +1079,67 @@ export async function slaOfferteOp(input: {
     }
   }
   return { ok: true, data: opgeslagen };
+}
+
+// ── Interne calculatie (offerte_calculatie, offerte_item_calculatie) ─────────
+// Migratie 20261107143517. Lezen en schrijven alleen met het recht
+// `inkoopprijzen` en de feature `kosten_nacalculatie`; de klant ziet hier
+// niets van. Zelfde als `getOfferteCalculatie`/`slaOfferteCalculatieOp` in het
+// dashboard.
+
+export type OfferteCalculatieOpgeslagen = {
+  kostprijsPerUur: number | null;
+  regels: Map<string, { urenPer: number | null; kostprijsPer: number | null }>;
+};
+
+/** Null als het lezen mislukt: dan mag het formulier de calculatie niet opslaan. */
+export async function getOfferteCalculatie(offerteId: string): Promise<OfferteCalculatieOpgeslagen | null> {
+  const [kop, regels] = await Promise.all([
+    supabase.from('offerte_calculatie').select('kostprijs_per_uur').eq('offerte_id', offerteId).maybeSingle(),
+    supabase
+      .from('offerte_item_calculatie')
+      .select('offerte_item_id, uren_per, kostprijs_per, offerte_items!inner(offerte_id)')
+      .eq('offerte_items.offerte_id', offerteId),
+  ]);
+  if (kop.error || regels.error) {
+    if (__DEV__) console.log('[offerteService.getOfferteCalculatie]', (kop.error ?? regels.error)?.message);
+    return null;
+  }
+  const getal = (v: unknown) => (v == null ? null : Number(v));
+  const rijen = (regels.data as { offerte_item_id: string; uren_per: unknown; kostprijs_per: unknown }[] | null) ?? [];
+  return {
+    kostprijsPerUur: getal((kop.data as { kostprijs_per_uur?: unknown } | null)?.kostprijs_per_uur),
+    regels: new Map(rijen.map((r) => [r.offerte_item_id, { urenPer: getal(r.uren_per), kostprijsPer: getal(r.kostprijs_per) }])),
+  };
+}
+
+/** Opslaan mag ook op een verstuurde of geaccepteerde offerte: het is intern. */
+export async function slaOfferteCalculatieOp(
+  offerteId: string,
+  kostprijsPerUur: number | null,
+  regels: { id: string; uren_per: number | null; kostprijs_per: number | null }[],
+): Promise<WriteStatus> {
+  const { error } = await supabase.rpc('bb_offerte_calculatie_opslaan', {
+    p_offerte: offerteId,
+    p_kostprijs_per_uur: kostprijsPerUur,
+    p_regels: regels,
+  });
+  if (error) {
+    if (error.code === '22023' || error.code === 'P0002') return writeFout('validatie', error.message);
+    if (error.code === '42501') return writeFout(error.hint === 'readonly' ? 'readonly' : 'geen-rechten', error.message);
+    return classificeerFout(error, 'offerteService.slaOfferteCalculatieOp', isReadonly());
+  }
+  return { ok: true, data: null };
+}
+
+/**
+ * De standaard kostprijs per uur van het bedrijf (tabel `kostprijzen_uur`, rij
+ * zonder medewerker). Géén uurtarief: dat is de verkoopprijs. Zonder recht
+ * geeft de database niets terug: null.
+ */
+export async function getStandaardKostprijsPerUur(): Promise<number | null> {
+  const { data, error } = await supabase.from('kostprijzen_uur').select('profile_id, kostprijs_per_uur');
+  if (error) return null;
+  const rij = ((data as { profile_id: string | null; kostprijs_per_uur: unknown }[] | null) ?? []).find((r) => !r.profile_id);
+  return rij?.kostprijs_per_uur != null ? Number(rij.kostprijs_per_uur) : null;
 }

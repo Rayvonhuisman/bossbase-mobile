@@ -64,6 +64,9 @@ import { KostenInhoud } from '@/components/werkbon/KostenInhoud';
 import { getMeerwerkPrijzen, zetMeerwerkPrijs } from '@/services/meerwerkPrijsService';
 import { meerwerkTotaal as somMeerwerk, naarInvoer, type MeerwerkPrijs } from '@/lib/meerwerkPrijs';
 import { MateriaalRegel } from '@/components/werkbon/Regels';
+import { OfferteOvernemen } from '@/components/werkbon/OfferteOvernemen';
+import { getOfferteRegelsVoorWerkbon, materiaalUitOfferte, takenUitOfferte } from '@/services/werkbonOfferteService';
+import { deelOfferteRegelsIn, type OfferteBron, type OfferteMateriaal, type OfferteRegelRij } from '@/lib/werkbonUitOfferte';
 import { signMelding } from '@/lib/werkbonVersturen';
 import { kostenRechten } from '@/lib/werkbonKosten';
 import { extractMentions, mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
@@ -192,6 +195,11 @@ export default function WorkOrderDetailScreen() {
   const [pdfDoc, setPdfDoc] = useState<PdfDocument | null>(null);
   const [openMateriaal, setOpenMateriaal] = useState<string | null>(null);
   const [leverancierLijst, setLeverancierLijst] = useState<{ id: string; naam: string }[]>([]);
+  // Regels van de geaccepteerde offerte(s) waar deze werkbon uit kan putten
+  // (bb_werkbon_offerte_regels). Zonder recht of zonder offerte: leeg, geen knop.
+  const [offerteRegels, setOfferteRegels] = useState<OfferteRegelRij[]>([]);
+  const [toonOvernemen, setToonOvernemen] = useState(false);
+  const [materiaalUitOfferteBezig, setMateriaalUitOfferteBezig] = useState<string | null>(null);
   // Getekend maar het ondertekende exemplaar ontbreekt: per werkbon één poging
   // om het de server alsnog te laten maken (zoals het dashboard).
   const [pdfHerstel, setPdfHerstel] = useState<null | 'bezig' | 'klaar' | 'fout'>(null);
@@ -214,7 +222,7 @@ export default function WorkOrderDetailScreen() {
     setError(null);
     const fotoStand = fotoMutatie.current;
 
-    const [woResult, urenResult, matResult, taskResult, noteResult, photoResult, levs, levLijst] = await Promise.all([
+    const [woResult, urenResult, matResult, taskResult, noteResult, photoResult, levs, levLijst, offRegels] = await Promise.all([
       getWorkOrder(id),
       listWerkbonUren(id),
       listWorkOrderMaterials(id),
@@ -223,6 +231,7 @@ export default function WorkOrderDetailScreen() {
       listWorkOrderPhotos(id),
       listLeveranciersNamen(),
       listLeveranciers(),
+      getOfferteRegelsVoorWerkbon({ werkbonId: id }),
     ]);
 
     if (woResult.error) {
@@ -257,6 +266,8 @@ export default function WorkOrderDetailScreen() {
     if (fotoMutatie.current === fotoStand) setPhotos(photoResult.data);
     setLeveranciers(levs);
     setLeverancierLijst(levLijst.data.filter((l) => l.actief).map((l) => ({ id: l.id, naam: l.naam })));
+    // Bijzaak: mislukt het, dan gewoon geen "Uit offerte".
+    setOfferteRegels(offRegels.data);
     setPartialErrors({
       uren: urenResult.error,
       materialen: matResult.error,
@@ -407,6 +418,53 @@ export default function WorkOrderDetailScreen() {
 
   const gewoneTaken = useMemo(() => tasks.filter((t) => !t.is_meerwerk), [tasks]);
   const meerwerkTaken = useMemo(() => tasks.filter((t) => t.is_meerwerk), [tasks]);
+
+  // ── Uit de offerte (werkbonOfferteService) ─────────────────────────────
+  // Taken: "Uit offerte" bij Taken. Materiaal: een keuzelijst bij Materialen,
+  // want werkbonmateriaal telt meteen als werkelijke kosten en staat op de PDF
+  // die de klant tekent; toevoegen pas als het gebruikt is.
+  const offerteBron = useMemo(
+    () => deelOfferteRegelsIn(offerteRegels, { taken: gewoneTaken, materialen: materials }),
+    [offerteRegels, gewoneTaken, materials],
+  );
+  const kanUitOfferte = canTasks && !opSlot && !readonly;
+  // Materiaal: dezelfde regel als "+ Materiaal" (canEdit), zoals het dashboard.
+  const kanMateriaalUitOfferte = canEdit;
+  const kanOvernemen = kanUitOfferte && offerteBron.some((o) => o.taken.some((x) => !x.alAanwezig));
+  const materiaalUitOfferteLijst = useMemo(
+    () =>
+      offerteBron.flatMap((o) =>
+        o.materialen.map((m) => ({ ...m, nummer: offerteBron.length > 1 ? o.nummer : '' })),
+      ),
+    [offerteBron],
+  );
+  const overnemenUitOfferte = async (o: OfferteBron, regelIds: string[]) => {
+    if (!workOrder) return 'Werkbon niet geladen.';
+    const { data: n, error: e } = await takenUitOfferte(workOrder.id, o.id, regelIds);
+    if (e) return e;
+    setToonOvernemen(false);
+    // Opnieuw laden zodat volgorde en ids kloppen.
+    const r = await listWorkOrderTasks(workOrder.id);
+    if (!r.error) setTasks(r.data);
+    Dialog.alert(
+      n === 0 ? 'Deze taken stonden er al.' : `${n === 1 ? '1 taak' : `${n} taken`} overgenomen uit ${o.nummer || 'de offerte'}`,
+    );
+    return null;
+  };
+  const voegMateriaalUitOfferteToe = async (m: OfferteMateriaal) => {
+    if (!workOrder || materiaalUitOfferteBezig) return;
+    setMateriaalUitOfferteBezig(m.id);
+    const { error: e } = await materiaalUitOfferte(workOrder.id, m.id);
+    if (e) {
+      setMateriaalUitOfferteBezig(null);
+      Dialog.alert('Toevoegen mislukt', e);
+      return;
+    }
+    const r = await listWorkOrderMaterials(workOrder.id);
+    setMateriaalUitOfferteBezig(null);
+    if (!r.error) setMaterials(r.data);
+    Dialog.alert(`${m.omschrijving} staat op de werkbon`);
+  };
 
   // Bedrag en uren bij het meerwerk (werkbon_meerwerk_prijs, migratie
   // 20261107170000): alleen met projectbedragen (of admin), zoals het
@@ -1108,6 +1166,7 @@ export default function WorkOrderDetailScreen() {
               styles={styles}
               title={`Taken${gewoneTaken.length ? ` · ${takenDone} / ${gewoneTaken.length}` : ''}`}
               icon={<ListChecks size={16} color={ds.green700} />}
+              action={kanOvernemen ? <KopKnop styles={styles} label="+ Uit offerte" onPress={() => setToonOvernemen(true)} /> : null}
             >
               {partialErrors.taken ? (
                 <Text style={styles.sectionError}>{partialErrors.taken}</Text>
@@ -1349,6 +1408,35 @@ export default function WorkOrderDetailScreen() {
                   ) : null}
                 </View>
               )}
+              {/* Materiaal uit de geaccepteerde offerte: pas toevoegen als het
+                  gebruikt is (telt meteen als kosten, staat op de PDF). */}
+              {kanMateriaalUitOfferte && !partialErrors.materialen && materiaalUitOfferteLijst.length > 0 ? (
+                <View style={styles.uitOfferte}>
+                  <Text style={styles.uitOfferteKop}>Uit de offerte</Text>
+                  <Text style={styles.photoHint}>
+                    Voeg toe als het gebruikt is: materiaal op de werkbon telt meteen als werkelijke kosten en staat op
+                    de werkbon die de klant tekent. Het aantal pas je daarna aan op de regel.
+                  </Text>
+                  {materiaalUitOfferteLijst.map((m) => (
+                    <View key={m.id} style={styles.uitOfferteRij}>
+                      <Text style={styles.uitOfferteNaam} numberOfLines={2}>
+                        {m.omschrijving}
+                        <Text style={styles.timeEntryNote}>
+                          {m.aantal != null ? ` · ${String(m.aantal).replace('.', ',')}${m.eenheid ? ` ${m.eenheid}` : ''}` : ''}
+                          {m.nummer ? ` · ${m.nummer}` : ''}
+                        </Text>
+                      </Text>
+                      {m.alAanwezig ? (
+                        <Text style={styles.timeEntryNote}>staat op de werkbon</Text>
+                      ) : materiaalUitOfferteBezig === m.id ? (
+                        <ActivityIndicator size="small" color={ds.green700} />
+                      ) : (
+                        <KopKnop styles={styles} label="+ Toevoegen" onPress={() => void voegMateriaalUitOfferteToe(m)} />
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </Section>
 
             {/* Kosten: inkopen op de werkbon (WerkbonKostenSection), met het
@@ -1745,6 +1833,14 @@ export default function WorkOrderDetailScreen() {
             setNotes((prev) => prev.map((x) => (x.id === bij.id ? { ...x, ...bij } : x)));
             setWaarschuwing(null);
           }}
+        />
+      ) : null}
+
+      {toonOvernemen ? (
+        <OfferteOvernemen
+          offertes={offerteBron.filter((o) => o.taken.length)}
+          onSluit={() => setToonOvernemen(false)}
+          onOvernemen={overnemenUitOfferte}
         />
       ) : null}
 
@@ -2570,6 +2666,10 @@ function KopFeit({
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
+    uitOfferte: { borderTopWidth: 1, borderTopColor: t.line, marginTop: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
+    uitOfferteKop: { fontSize: 12.5, fontWeight: '700', color: t.muted },
+    uitOfferteRij: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
+    uitOfferteNaam: { flex: 1, minWidth: 0, fontSize: 14, color: t.ink },
     screen: {
       flex: 1,
       backgroundColor: t.bg,
