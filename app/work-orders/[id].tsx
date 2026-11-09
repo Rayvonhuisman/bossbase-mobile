@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Dialog } from '@/lib/dialog';
+import { VerhuisSectie } from '@/components/werkbon/VerhuisSectie';
 import { openMaps } from '@/lib/linking';
 import { FotoViewer } from '@/components/FotoViewer';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -942,6 +943,10 @@ export default function WorkOrderDetailScreen() {
                 </Text>
               </View>
             ) : null}
+
+            {/* 2b. Verhuisflow: alleen als de functie 'verhuisflow' aanstaat voor het
+                bedrijf (de server beslist; anders rendert dit niets). */}
+            <VerhuisSectie werkbonId={workOrder.id} onWerkbonGewijzigd={herlaad} />
 
             {/* 3. Actierij */}
             <View style={styles.actieRij}>
