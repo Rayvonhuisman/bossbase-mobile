@@ -112,6 +112,7 @@ import { factuurStatusLabel } from '@/services/factuurService';
 import { ACTIVITEIT_TYPES, activiteitTypeLabel, createActivity } from '@/services/activityService';
 import type { Customer } from '@/types/domain';
 import { BestandenBlok } from '@/components/BestandenBlok';
+import { MetingenBlok } from './MetingenBlok';
 
 /**
  * Het projectdetail — de app-versie van `ProjectDetailDrawer` uit het
@@ -922,6 +923,11 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           </View>
         ) : null}
       </View>
+
+      {/* Metingen: de maten van de opname, zelf invullen of aan Boss vertellen
+          (inspreken). Wie mag wijzigen bepaalt de database
+          (bb_mag_metingen_beheren), net als in het dashboard. */}
+      {project ? <MetingenBlok projectId={project.id} /> : null}
 
       {/* Alles wat bij deze klus bewaard is, plus eigen uploads (tekeningen,
           certificaten). Wie wat ziet, bepaalt de database per bron. */}
