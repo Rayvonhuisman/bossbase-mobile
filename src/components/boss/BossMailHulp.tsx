@@ -117,7 +117,7 @@ export function BossMailHulp({
   const eersteKeer = !items.some((i) => i.t === 'ik');
 
   return (
-    <Paneel open={open} titel="Help met schrijven" subtitel="Boss · AI-assistent" kop={<BossAvatar />} onSluit={() => { if (!busy) onSluit(); }}>
+    <Paneel open={open} titel="Help met schrijven" subtitel="Boss · AI-assistent · beta" kop={<BossAvatar />} onSluit={() => { if (!busy) onSluit(); }}>
       <BossGesprek
         labels={[]}
         intro={eersteKeer ? (

@@ -137,7 +137,7 @@ export function BossChat({
     <Paneel
       open={open}
       titel="Boss"
-      subtitel="AI-assistent · helpt je met BossBase"
+      subtitel="AI-assistent · beta · helpt je met BossBase"
       kop={<BossAvatar />}
       onSluit={sluit}
       voet={

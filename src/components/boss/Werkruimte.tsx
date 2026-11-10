@@ -207,7 +207,7 @@ export function Werkruimte({
   const gesprekVlak = (
     <View style={[s.vlak, naastElkaar && s.gesprekNaast, !naastElkaar && tab !== 'gesprek' && s.verborgen, { paddingBottom: onderrand }]}>
       {naastElkaar ? (
-        <View style={s.gesprekKop}><MessageSquare size={16} color={t.green700} /><Text style={s.gesprekKopTekst}>Boss</Text><Text style={s.gesprekKopSub}>AI-assistent · doet een voorstel, jij beslist</Text></View>
+        <View style={s.gesprekKop}><MessageSquare size={16} color={t.green700} /><Text style={s.gesprekKopTekst}>Boss</Text><Text style={s.gesprekKopSub}>AI-assistent · beta · doet een voorstel, jij beslist</Text></View>
       ) : null}
       {gesprek}
       {toast && !naastElkaar && tab === 'gesprek' ? (
