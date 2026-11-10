@@ -20,6 +20,9 @@ export const PERMISSIONS = [
   'klanten_bewerken',
   'klanten_verwijderen',
   'verkoop',
+  // Onderhoudscontracten met SLA (dashboard origin/contracten-20261109). Wordt
+  // server-side afgedwongen; admin mag altijd.
+  'contracten',
   // Uitvoering
   'projecten',
   'projecten_bewerken',
@@ -56,6 +59,8 @@ export type Feature =
   | 'kosten_nacalculatie'
   | 'digitale_handtekening'
   | 'gedeelde_werkruimte'
+  // Onderhoudscontracten (Groei en Team, migratie 20261109150000).
+  | 'contracten'
   | (string & {});
 
 /**

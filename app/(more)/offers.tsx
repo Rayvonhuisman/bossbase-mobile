@@ -24,7 +24,7 @@ import {
   NoticeBanner,
   RegelEditor,
 } from '@/components';
-import { usePermissions, useTheme, useToast } from '@/providers';
+import { useAuth, usePermissions, useTheme, useToast } from '@/providers';
 import {
   createOfferte,
   deleteOfferte,
@@ -38,6 +38,9 @@ import {
   OFFERTE_STATUS_OPTIES,
   stuurGetekendePdfNa,
   updateOfferte,
+  getOfferteCalculatie,
+  getStandaardKostprijsPerUur,
+  slaOfferteCalculatieOp,
   type OfferteDetail,
   type OfferteInput,
   type OfferteItem,
@@ -105,6 +108,8 @@ import {
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { OfferteCalculatie } from '@/components/OfferteCalculatie';
+import { alsVeld, calculatieVoorOpslag, getalUit } from '@/lib/offerteCalculatie';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
@@ -165,6 +170,13 @@ type Concept = {
   versie: number | null;
   /** Waar Boss concept en gesprek bewaart als je sluit zonder opslaan (lib/boss/werkruimteConcept). */
   bossSleutel: string;
+  /** Interne calculatie: kostprijs per uur van deze offerte (tekstveld). */
+  kostprijsPerUur: string;
+  /**
+   * Alleen opslaan wat ook gelezen is: mislukte het lezen van de calculatie,
+   * dan zou opslaan de bestaande wissen (`calcGeladen` in het dashboard).
+   */
+  calcGeladen: boolean;
 };
 
 type MailStand = {
@@ -226,7 +238,8 @@ function OffersScreenInhoud() {
   const terugNaarProject = useRef<{ projectId: string; koppel: boolean } | null>(null);
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const { loaded: rechtenGeladen, mag, waaromNiet, hasFeature, planStatus } = usePermissions();
+  const { companyId } = useAuth();
+  const { loaded: rechtenGeladen, mag, can, waaromNiet, hasFeature, planStatus } = usePermissions();
   const { toonResultaat } = useToast();
   const { klasse } = useSchermklasse();
   const breed = klasse === 'tablet';
@@ -311,6 +324,25 @@ function OffersScreenInhoud() {
   const magRegels = mag('offerteRegels', 'maken');
   const magFactuurMaken = mag('facturen', 'maken');
   const kanOndertekenen = hasFeature('digitale_handtekening');
+  // De interne calculatie (OfferteCalculatie): met de nacalculatie in het
+  // pakket en het recht op inkoop- en kostprijzen, net als het dashboard. De
+  // database (bb_offerte_calculatie_opslaan) controleert hetzelfde.
+  const magCalculatie = can('inkoopprijzen') && hasFeature('kosten_nacalculatie');
+  const [standaardKostprijs, setStandaardKostprijs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!magCalculatie) return undefined;
+    let weg = false;
+    void getStandaardKostprijsPerUur().then((k) => {
+      if (weg) return;
+      setStandaardKostprijs(k);
+      // Een nieuwe offerte die al open staat (vanaf de projectkaart): de
+      // standaard alsnog invullen, anders slaat opslaan "geen kostprijs" op.
+      if (k != null) setConcept((c) => (c && !c.id && c.kostprijsPerUur === '' ? { ...c, kostprijsPerUur: alsVeld(k) } : c));
+    });
+    return () => {
+      weg = true;
+    };
+  }, [magCalculatie]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -449,6 +481,8 @@ function OffersScreenInhoud() {
       regelsLaden: false,
       versie: null,
       bossSleutel: `offerte:nieuw:${vooraf?.dealId || vooraf?.customerId || ''}`,
+      kostprijsPerUur: alsVeld(standaardKostprijs),
+      calcGeladen: true,
     });
     bossVoorConcept(`offerte:nieuw:${vooraf?.dealId || vooraf?.customerId || ''}`);
   };
@@ -477,6 +511,9 @@ function OffersScreenInhoud() {
     const herzien = offerteHerzienbaar(o);
     const volledigVast = offerteVolledigVast(o);
     const bewerkbaar = o.status === 'concept' || herzien;
+    // Een vastliggende offerte opent alleen nog voor de status en de interne
+    // calculatie; de regels zijn dan alleen nodig voor die calculatie.
+    const metRegels = bewerkbaar || magCalculatie;
     setConcept({
       id: o.id,
       bron: o,
@@ -492,15 +529,18 @@ function OffersScreenInhoud() {
       alleenStatus: !bewerkbaar && !volledigVast,
       regels: [],
       groepen: [],
-      regelsLaden: bewerkbaar,
+      regelsLaden: metRegels,
       versie: o.inhoud_versie ?? 1,
       bossSleutel: `offerte:${o.id}`,
+      kostprijsPerUur: '',
+      calcGeladen: false,
     });
     bossVoorConcept(`offerte:${o.id}`);
-    if (!bewerkbaar) return;
-    const [{ data, error: fout }, { data: groepRijen, error: groepFout }] = await Promise.all([
+    if (!metRegels) return;
+    const [{ data, error: fout }, { data: groepRijen, error: groepFout }, calc] = await Promise.all([
       getOfferteItems(o.id),
       getOfferteGroepen(o.id),
+      magCalculatie ? getOfferteCalculatie(o.id) : Promise.resolve(null),
     ]);
     const groepen = groepRijen.map(groepUitRij);
     const bekend = new Set(groepen.map((g) => g.id));
@@ -512,12 +552,18 @@ function OffersScreenInhoud() {
             regels:
               data.length > 0
                 ? data.map((it) => {
-                    const r = offerteVeldenUitItem(it, regelUitOfferteItem(it, o));
+                    const basis = offerteVeldenUitItem(it, regelUitOfferteItem(it, o));
+                    const cr = calc?.regels.get(it.id);
+                    const r = cr ? { ...basis, calc: { urenPer: alsVeld(cr.urenPer), kostprijsPer: alsVeld(cr.kostprijsPer) } } : basis;
                     return r.groepId && !bekend.has(r.groepId) ? { ...r, groepId: null } : r;
                   })
-                : [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }],
+                : bewerkbaar
+                  ? [{ ...legeRegel({ uurtarief: instellingen.uurtarief, btwPct: instellingen.btwPct }), id: nieuweId() }]
+                  : [],
             groepen,
             regelsLaden: false,
+            kostprijsPerUur: alsVeld(calc?.kostprijsPerUur),
+            calcGeladen: Boolean(calc) && !fout,
           }
         : c,
     );
@@ -579,8 +625,33 @@ function OffersScreenInhoud() {
 
   const opslaan = (enVersturen = false) => {
     if (!concept) return;
-    const c = concept;
-    const opslag = naarOpslag({ regels: c.regels, groepen: c.groepen }, eenheden);
+    // Elke regel een id vóór het opslaan: de calculatie verwijst ernaar.
+    const c = { ...concept, regels: concept.regels.map((r) => (r.id ? r : { ...r, id: nieuweId() })) };
+    let opslag = naarOpslag({ regels: c.regels, groepen: c.groepen }, eenheden);
+    // Een nieuwe versie is een nieuwe offerte: groepen en regels krijgen nieuwe
+    // ids. Met de ids van de verstuurde versie weigert bb_offerte_opslaan ("hoort
+    // bij een andere offerte"), want die rijen blijven bij de oude.
+    const nieuwId = new Map<string, string>();
+    if (c.herzien && c.bron) {
+      const zet = (id: string) => {
+        if (!nieuwId.has(id)) nieuwId.set(id, nieuweId());
+        return nieuwId.get(id)!;
+      };
+      opslag = {
+        groepen: opslag.groepen.map((g) => ({ ...g, id: zet(g.id) })),
+        regels: opslag.regels.map((r) => ({ ...r, id: zet(r.id), groep_id: r.groep_id ? zet(r.groep_id) : null })),
+      };
+    }
+    const idVan = (id: string) => nieuwId.get(id) ?? id;
+    // De calculatie na de offerte zelf, alleen als hij gelezen is. Mislukt die,
+    // dan is de offerte wel opgeslagen: dat zeggen we, in plaats van het hele
+    // opslaan als mislukt te melden (zoals het dashboard).
+    const calcKan = magCalculatie && c.calcGeladen;
+    const bewaarCalculatie = async (offerteId: string) => {
+      if (!calcKan) return;
+      const r = await slaOfferteCalculatieOp(offerteId, getalUit(c.kostprijsPerUur), calculatieVoorOpslag(c.regels, idVan));
+      if (!r.ok) Dialog.alert('Calculatie niet opgeslagen', `De offerte is opgeslagen, maar de calculatie niet: ${r.melding}`);
+    };
     const kop = {
       customer_id: c.customerId,
       deal_id: c.dealId,
@@ -607,29 +678,45 @@ function OffersScreenInhoud() {
             };
             return createOfferte(invoer);
           }
-          return slaOfferteOp({ id: null, versie: null, kop, ...opslag });
+          const nieuw = await slaOfferteOp({ id: null, versie: null, kop, ...opslag });
+          if (nieuw.ok) await bewaarCalculatie(nieuw.data.id);
+          return nieuw;
         }
 
         if (c.volledigVast) {
-          return writeFout('op-slot', 'Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.');
+          // Getekend of geaccepteerd: alleen de interne calculatie nog.
+          if (!calcKan || !c.bron) {
+            return writeFout('op-slot', 'Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.');
+          }
+          const r = await slaOfferteCalculatieOp(c.id, getalUit(c.kostprijsPerUur), calculatieVoorOpslag(c.regels));
+          return r.ok ? { ok: true, data: c.bron } : r;
         }
 
         // Verstuurd en nog niet getekend: een nieuwe versie met deze regels; de
         // oude wordt in dezelfde transactie als vervangen gemarkeerd.
         if (c.herzien && c.bron) {
-          return slaOfferteOp({ id: null, versie: null, kop, ...opslag, vervangt: c.bron });
+          const versie = await slaOfferteOp({ id: null, versie: null, kop, ...opslag, vervangt: c.bron });
+          if (versie.ok) await bewaarCalculatie(versie.data.id);
+          return versie;
         }
 
-        // Afgewezen of vervangen: alleen de status.
-        if (c.alleenStatus) return updateOfferte(c.id, { status: c.status });
+        // Afgewezen of vervangen: alleen de status (en de calculatie).
+        if (c.alleenStatus) {
+          const st = await updateOfferte(c.id, { status: c.status });
+          if (st.ok) await bewaarCalculatie(c.id);
+          return st;
+        }
 
         if (!magRegels) {
-          return updateOfferte(c.id, { ...kop, status: c.status });
+          const kopRes = await updateOfferte(c.id, { ...kop, status: c.status });
+          if (kopRes.ok) await bewaarCalculatie(c.id);
+          return kopRes;
         }
         // Concept: inhoud via de databasefunctie; aanvraag, btw en status
         // kent die niet, dus die daarna alleen als ze veranderd zijn.
         const res = await slaOfferteOp({ id: c.id, versie: c.versie, kop, ...opslag });
         if (!res.ok) return res;
+        await bewaarCalculatie(c.id);
         const bron = c.bron;
         const extra: Record<string, unknown> = {};
         if ((c.dealId || null) !== (bron?.deal_id || null)) extra.deal_id = c.dealId;
@@ -657,7 +744,13 @@ function OffersScreenInhoud() {
           await herlaad();
           if (enVersturen) void openMail(opgeslagen);
         },
-        succesMelding: c.herzien ? 'Nieuwe versie aangemaakt' : c.id ? 'Offerte opgeslagen' : 'Offerte aangemaakt',
+        succesMelding: c.volledigVast
+          ? 'Calculatie opgeslagen'
+          : c.herzien
+            ? 'Nieuwe versie aangemaakt'
+            : c.id
+              ? 'Offerte opgeslagen'
+              : 'Offerte aangemaakt',
       },
     );
   };
@@ -847,10 +940,22 @@ function OffersScreenInhoud() {
   const detailVast = detail ? offerteVolledigVast(detail) : false;
   const detailHerzien = detail ? offerteHerzienbaar(detail) : false;
   const bewerkLabel =
-    detail?.status === 'concept' ? 'Bewerken' : detailHerzien ? 'Herzien (nieuwe versie)' : 'Status wijzigen';
+    detail?.status === 'concept'
+      ? 'Bewerken'
+      : detailHerzien
+        ? 'Herzien (nieuwe versie)'
+        : detailVast
+          ? 'Calculatie'
+          : 'Status wijzigen';
   const pdfOntbreekt = Boolean(detailData?.signed_at && !detailData.signed_pdf_url);
 
   const conceptBewerkbaar = concept ? !concept.id || concept.status === 'concept' || concept.herzien : false;
+  // Calculatie in het formulier: met het recht, en (bij een nieuwe offerte)
+  // alleen als de regels ook worden opgeslagen. Mislukte het lezen, dan niet:
+  // wat je invult zou toch niet bewaard worden.
+  const toonCalculatie = Boolean(concept && magCalculatie && concept.calcGeladen && (concept.id || magRegels));
+  /** Een vastliggende offerte waarvan alleen de calculatie nog op te slaan is. */
+  const alleenCalculatie = Boolean(concept?.volledigVast && toonCalculatie);
 
   // ── Boss in dit formulier ─────────────────────────────────────────────────
   const bossKan = Boolean(bossFunctie && magRegels && concept && conceptBewerkbaar && !concept.regelsLaden && !concept.volledigVast && !concept.alleenStatus);
@@ -865,7 +970,17 @@ function OffersScreenInhoud() {
   const bossVerder = () => {
     if (!vorigConcept || !concept) return;
     const doc = vorigConcept.document as Concept | undefined;
-    if (doc) setConcept({ ...doc, versie: concept.versie, bron: concept.bron });
+    // De calculatiestand komt van het geopende formulier: een bewaard concept
+    // van vóór de calculatie kent die velden niet.
+    if (doc) {
+      setConcept({
+        ...doc,
+        versie: concept.versie,
+        bron: concept.bron,
+        kostprijsPerUur: doc.kostprijsPerUur ?? concept.kostprijsPerUur,
+        calcGeladen: concept.calcGeladen,
+      });
+    }
     setBewaardGesprek((vorigConcept.gesprek as OfferteGesprekBewaard | undefined) ?? null);
     setVorigConcept(null);
     setBossGebruikt(true);
@@ -884,7 +999,7 @@ function OffersScreenInhoud() {
         })(),
       ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
     : [];
-  const kanOpslaan = Boolean(concept && !concept.volledigVast && !concept.regelsLaden && !(!concept.id && (!concept.customerId || (magRegels && concept.regels.length === 0))));
+  const kanOpslaan = Boolean(concept && (!concept.volledigVast || alleenCalculatie) && !concept.regelsLaden && !(!concept.id && (!concept.customerId || (magRegels && concept.regels.length === 0))));
   const formulierVelden = (inWerkruimte: boolean) => (
     <>
           <WerkruimteVeld naam="klant">
@@ -982,6 +1097,22 @@ function OffersScreenInhoud() {
             <Text style={styles.uitleg}>
               {`Totaal ${formatEURCent(Number(concept.bron.totaal_incl ?? 0))} incl. btw.`}
             </Text>
+          ) : null}
+
+          {/* De interne calculatie: alleen voor jou, niet op de pdf. Ook bij
+              een verstuurde of geaccepteerde offerte; Overnemen alleen zolang
+              de prijzen te wijzigen zijn. */}
+          {concept && toonCalculatie && !concept.regelsLaden ? (
+            <OfferteCalculatie
+              regels={concept.regels}
+              onRegels={(fn) => setConcept((c) => (c ? { ...c, regels: fn(c.regels) } : c))}
+              kostprijsPerUur={concept.kostprijsPerUur}
+              onKostprijsPerUur={(v) => setConcept((c) => (c ? { ...c, kostprijsPerUur: v } : c))}
+              standaardKostprijs={standaardKostprijs}
+              eenheden={eenheden}
+              prijzenVast={!conceptBewerkbaar || !magRegels}
+              bedrijfId={companyId}
+            />
           ) : null}
 
           <FormField
@@ -1123,7 +1254,7 @@ function OffersScreenInhoud() {
                 />
               ) : null}
               <Button label="Bekijken" variant="secondary" onPress={() => bekijkPdf(detail)} style={styles.knop} />
-              {magWijzigen && !detailVast ? (
+              {magWijzigen && (!detailVast || magCalculatie) ? (
                 <Button
                   label={bewerkLabel}
                   variant="secondary"
@@ -1243,10 +1374,10 @@ function OffersScreenInhoud() {
         subtitle={concept?.id ? (concept.bron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
         error={saveError}
         saving={saving}
-        submitLabel={concept?.herzien ? 'Nieuwe versie opslaan' : 'Opslaan'}
+        submitLabel={concept?.herzien ? 'Nieuwe versie opslaan' : alleenCalculatie ? 'Calculatie opslaan' : 'Opslaan'}
         submitDisabled={
           !concept ||
-          concept.volledigVast ||
+          (concept.volledigVast && !alleenCalculatie) ||
           concept.regelsLaden ||
           (!concept.id && (!concept.customerId || (magRegels && concept.regels.length === 0)))
         }
@@ -1271,7 +1402,7 @@ function OffersScreenInhoud() {
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast. Een nieuwe offerte
-              maken kan via Kopiëren.
+              maken kan via Kopiëren.{alleenCalculatie ? ' De interne calculatie kun je nog bijwerken.' : ''}
             </Text>
           </View>
         ) : concept?.alleenStatus ? (

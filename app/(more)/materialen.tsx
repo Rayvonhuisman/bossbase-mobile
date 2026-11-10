@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Package, Plus } from 'lucide-react-native';
+import { ChevronRight, FileUp, Package, Plus } from 'lucide-react-native';
 import {
   AppScreen,
   AppSearchBar,
@@ -33,6 +33,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
+import { MaterialenImporteren } from '@/components/MaterialenImporteren';
 
 /**
  * Materialen — de bibliotheek van het dashboard (`MaterialenPage`):
@@ -61,6 +62,7 @@ export default function MaterialenScreen() {
   const [fout, setFout] = useState<string | null>(null);
   const [zoek, setZoek] = useState('');
   const [modal, setModal] = useState<Materiaal | 'nieuw' | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const laad = useCallback(async () => {
     const [m, l] = await Promise.all([listMaterialen(), listLeveranciers()]);
@@ -138,6 +140,19 @@ export default function MaterialenScreen() {
         <View style={styles.inhoud}>
           {fout ? <NoticeBanner toon="fout" message={fout} onPress={() => herlaad()} /> : null}
           <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek op naam of artikelnummer…" />
+          {/* Een prijslijst in één keer inlezen (MaterialenImporteren), met
+              hetzelfde recht als nieuw materiaal. */}
+          {magBeheren ? (
+            <Pressable
+              onPress={() => setImportOpen(true)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.importKnop, pressed && { opacity: 0.7 }]}
+            >
+              <FileUp size={18} color={t.green700} />
+              <Text style={styles.importTekst}>Prijslijst importeren</Text>
+              <Text style={styles.importSub}>CSV, PDF of foto</Text>
+            </Pressable>
+          ) : null}
 
           {gefilterd.length === 0 ? (
             <View style={styles.leeg}>
@@ -208,6 +223,14 @@ export default function MaterialenScreen() {
           <Text style={styles.voet}>Prijzen excl. btw. Geen voorraadbeheer: je koopt per klus in.</Text>
         </View>
       </AppScreen>
+
+      {importOpen ? (
+        <MaterialenImporteren
+          leveranciers={leveranciers}
+          onSluit={() => setImportOpen(false)}
+          onKlaar={() => herlaad()}
+        />
+      ) : null}
 
       {modal ? (
         <MateriaalSheet
@@ -410,6 +433,19 @@ const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
     inhoud: { ...leesbreedte, maxWidth: 880, paddingHorizontal: 16, paddingTop: 12, gap: spacing.md },
     raster: { gap: 10 },
+    importKnop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 48,
+      paddingHorizontal: 14,
+      borderRadius: ds.rMd,
+      borderWidth: 1,
+      borderColor: t.line,
+      backgroundColor: t.card,
+    },
+    importTekst: { fontSize: 14.5, fontWeight: '600', color: t.ink },
+    importSub: { flex: 1, textAlign: 'right', fontSize: 12.5, color: t.muted },
     rasterTablet: { flexDirection: 'row', flexWrap: 'wrap' },
     kaart: {
       backgroundColor: t.card,

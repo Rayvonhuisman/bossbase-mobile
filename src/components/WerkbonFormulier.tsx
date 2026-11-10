@@ -50,6 +50,10 @@ import type { Customer } from '@/types/domain';
 import { PloegKeuze } from './PloegKeuze';
 import { DagKaarten, WerkbonKalender } from './WerkbonDagenVelden';
 import { Schakel } from './instellingen/Bouwstenen';
+import { getOfferteRegelsVoorWerkbon, takenUitOfferte } from '@/services/werkbonOfferteService';
+import { deelOfferteRegelsIn, offerteLabel, standaardTaakIds, type OfferteBron } from '@/lib/werkbonUitOfferte';
+import { listContractKeuzes, type KlantContractKeuze } from '@/services/contractService';
+import { deadlineTekst, PRIORITEIT_LABEL, PRIORITEITEN, slaSoortLabel, type Prioriteit } from '@/lib/sla';
 
 type Collega = { id: string; full_name: string | null; role: string | null };
 type Project = { id: string; name: string | null; customer_id: string | null };
@@ -140,6 +144,56 @@ export function WerkbonFormulier({
 
   const [opslaan, setOpslaan] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+
+  // Storingswerkbon onder een contract: alleen bij een nieuwe bon, en alleen
+  // als de klant een lopend contract heeft (bb_klant_contracten geeft niets
+  // zonder planning, werkbonnen_bewerken of contracten). Prioriteit alleen bij
+  // een contract met SLA; de deadlines rekent de database bij het opslaan.
+  const metContracten = !bewerken && hasFeature('contracten');
+  const [contractKeuzes, setContractKeuzes] = useState<KlantContractKeuze[]>([]);
+  const [contractId, setContractId] = useState<string | null>(null);
+  const [prioriteit, setPrioriteit] = useState<Prioriteit>('normaal');
+  useEffect(() => {
+    // Andere klant: keuze én lijst leeg, zodat er tijdens het laden geen
+    // contract van de vorige klant gekozen kan worden.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setContractId(null);
+    setContractKeuzes([]);
+    if (!metContracten || !klantId) return undefined;
+    let leeft = true;
+    void listContractKeuzes(klantId).then((r) => {
+      if (leeft) setContractKeuzes(r.data);
+    });
+    return () => {
+      leeft = false;
+    };
+  }, [metContracten, klantId]);
+  const gekozenContract = contractKeuzes.find((c) => c.id === contractId) ?? null;
+
+  // Een nieuwe werkbon bij een project met een geaccepteerde offerte: de taken
+  // daaruit overnemen (de standaardkeuze van lib/werkbonUitOfferte; op de
+  // werkbon kun je daarna nog regels bijkiezen). De database geeft alleen
+  // omschrijvingen, geen prijzen, en niets aan wie geen werkbonnen mag maken.
+  const [offerteKeuzes, setOfferteKeuzes] = useState<OfferteBron[]>([]);
+  const [overnemenUit, setOvernemenUit] = useState<string | null>(null);
+  useEffect(() => {
+    if (bewerken || !projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOfferteKeuzes([]);
+      setOvernemenUit(null);
+      return undefined;
+    }
+    let leeft = true;
+    void getOfferteRegelsVoorWerkbon({ projectId }).then((r) => {
+      if (!leeft) return;
+      const lijst = deelOfferteRegelsIn(r.data).filter((o) => standaardTaakIds(o).length);
+      setOfferteKeuzes(lijst);
+      setOvernemenUit(lijst.length === 1 ? lijst[0]!.id : null);
+    });
+    return () => {
+      leeft = false;
+    };
+  }, [bewerken, projectId]);
 
   const laadBronnen = useCallback(async () => {
     setLaden(true);
@@ -270,13 +324,23 @@ export function WerkbonFormulier({
       const res = await createWorkOrder({
         company_id: companyId,
         ...basis,
+        // De offerte waar de taken uit komen, zoals het dashboard.
+        ...(overnemenUit && offerteKeuzes.some((o) => o.id === overnemenUit) ? { offerte_id: overnemenUit } : {}),
         omschrijving: omschrijvingVeld ?? null,
+        ...(gekozenContract
+          ? { contract_id: gekozenContract.id, prioriteit: gekozenContract.heeft_sla ? prioriteit : null }
+          : {}),
       });
       if (res.error || !res.data) {
         setOpslaan(false);
         return setFout(res.error ?? 'De werkbon kon niet worden aangemaakt.');
       }
       opgeslagen = res.data;
+      const uitOfferte = offerteKeuzes.find((o) => o.id === overnemenUit);
+      if (uitOfferte) {
+        const tk = await takenUitOfferte(opgeslagen.id, uitOfferte.id, standaardTaakIds(uitOfferte));
+        if (tk.error) Dialog.alert('Werkbon aangemaakt', `Maar de taken uit de offerte niet: ${tk.error}`);
+      }
       // De notitie uit het aanmaakformulier wordt de eerste interne logregel.
       if (notitie.trim() && user?.id) {
         const n = await addWorkOrderNote({
@@ -357,6 +421,20 @@ export function WerkbonFormulier({
     void syncWerkbonEvents(opgeslagen.id, opgeslagen.company_id);
 
     setOpslaan(false);
+    // De deadlines rekende de server bij het opslaan; laat ze meteen zien.
+    if (!bewerken && (opgeslagen.sla_reactie_voor || opgeslagen.sla_oplossen_voor)) {
+      Dialog.alert(
+        'Werkbon aangemaakt',
+        [
+          opgeslagen.sla_reactie_voor ? `${slaSoortLabel('reactie')} ${deadlineTekst(opgeslagen.sla_reactie_voor)}` : null,
+          opgeslagen.sla_oplossen_voor
+            ? `${slaSoortLabel('oplossen')} ${deadlineTekst(opgeslagen.sla_oplossen_voor)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      );
+    }
     onKlaar(opgeslagen.id);
   };
 
@@ -423,6 +501,54 @@ export function WerkbonFormulier({
           }))}
         />
 
+        {metContracten && contractKeuzes.length > 0 ? (
+          <View style={styles.blok}>
+            <SelectField
+              label="Onder contract"
+              value={contractId}
+              onChange={setContractId}
+              allowEmpty
+              emptyLabel="— Geen contract —"
+              placeholder="— Geen contract —"
+              options={contractKeuzes.map((c) => ({
+                id: c.id,
+                label: [c.nummer, c.titel].filter(Boolean).join(' · ') || 'Contract',
+                sub: c.heeft_sla ? `SLA ${c.sla_niveau ?? ''}`.trim() : 'Zonder SLA',
+              }))}
+              hint="Bijvoorbeeld een storing bij een klant met een onderhouds- of storingscontract."
+            />
+            {gekozenContract?.heeft_sla ? (
+              <>
+                <Text style={styles.label}>Prioriteit</Text>
+                <View style={styles.chipRij}>
+                  {PRIORITEITEN.map((p) => {
+                    const aan = prioriteit === p;
+                    return (
+                      <Pressable
+                        key={p}
+                        onPress={() => setPrioriteit(p)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: aan }}
+                        aria-checked={aan}
+                        style={[styles.chip, aan && styles.chipAan]}
+                      >
+                        <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{PRIORITEIT_LABEL[p]}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.hint}>
+                  De reactie- en oplostijd volgen uit SLA {gekozenContract.sla_niveau ?? ''} en tellen vanaf het
+                  opslaan. Je ziet de deadline zodra de werkbon is aangemaakt.
+                </Text>
+              </>
+            ) : null}
+            {gekozenContract?.binnen_contract ? (
+              <Text style={styles.hint}>Binnen het contract: {alsTekst(gekozenContract.binnen_contract)}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <SelectField
           label="Project (optioneel)"
           value={projectId}
@@ -432,6 +558,22 @@ export function WerkbonFormulier({
           placeholder="— Geen project —"
           options={projectOpties}
         />
+
+        {!bewerken && offerteKeuzes.length > 0 ? (
+          <SelectField
+            label="Taken uit offerte overnemen"
+            value={overnemenUit}
+            onChange={setOvernemenUit}
+            allowEmpty
+            emptyLabel="Niet overnemen"
+            placeholder="Niet overnemen"
+            options={offerteKeuzes.map((o) => {
+              const n = standaardTaakIds(o).length;
+              return { id: o.id, label: `${offerteLabel(o)} (${n === 1 ? '1 taak' : `${n} taken`})` };
+            })}
+            hint="De regels van de offerte worden taken op de werkbon (geen kilometers, geen materiaal). Op de werkbon kun je daarna nog regels bijkiezen."
+          />
+        ) : null}
 
         <AdresZoeker
           label="Locatie"

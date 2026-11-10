@@ -45,6 +45,11 @@ export const PERMISSION_GROEPEN: PermissionGroep[] = [
         label: 'Verkooppijplijn',
         kort: 'Aanvragen en projecten in de pipeline bekijken en beheren',
       },
+      {
+        key: 'contracten',
+        label: 'Contracten',
+        kort: 'Onderhoudscontracten, beurten en SLA bekijken en beheren',
+      },
     ],
   },
   {

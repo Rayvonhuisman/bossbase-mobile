@@ -46,8 +46,11 @@ import {
 } from '@/lib/werkbonLogica';
 import { WerkbonStatusBadge } from '@/components/WerkbonStatusBadge';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { isInTePlannen, slaBadge, vergelijkInTePlannen } from '@/lib/sla';
+import { SlaBadge } from '@/components/werkbon/SlaBadge';
+import { formatDateNL } from '@/lib/format';
 
-type ChipKey = StatusFilter | 'mij';
+type ChipKey = StatusFilter | 'mij' | 'in_te_plannen';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,6 +71,7 @@ function worksOn(wo: Werkbon, userId: string): boolean {
 
 function matchesChip(wo: Werkbon, chip: ChipKey, userId: string | null): boolean {
   if (chip === 'mij') return wo.status !== 'geannuleerd' && (userId ? worksOn(wo, userId) : true);
+  if (chip === 'in_te_plannen') return isInTePlannen(wo);
   return matchtStatus(wo, chip);
 }
 
@@ -100,12 +104,19 @@ export default function WorkOrdersScreen() {
   const [taken, setTaken] = useState<Record<string, { done: number; total: number }>>({});
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useOnthouden<ChipKey>('werkbonnen.filter', isField ? 'mij' : 'alle', [
+  const [bewaardeChip, setChip] = useOnthouden<ChipKey>('werkbonnen.filter', isField ? 'mij' : 'alle', [
     'mij',
     'alle',
     ...WERKBON_STATUSSEN,
     'geannuleerd',
+    'in_te_plannen',
   ]);
+  // Onderhoudscontracten: werkbonnen uit een contract komen zonder datum
+  // binnen, met een uiterlijke datum of SLA-deadline. Dit filter zet ze op
+  // volgorde van wat het eerst moet.
+  const metContracten = hasFeature('contracten');
+  // Zonder de feature is het filter er niet; een bewaarde keuze valt terug.
+  const chip: ChipKey = bewaardeChip === 'in_te_plannen' && !metContracten ? 'alle' : bewaardeChip;
 
   const load = useCallback(
     async () => {
@@ -178,8 +189,11 @@ export default function WorkOrdersScreen() {
       { id: 'afgerond', label: WERKBON_STATUS_STIJL.afgerond.label, count: counts.afgerond },
       { id: 'geannuleerd', label: WERKBON_STATUS_STIJL.geannuleerd.label, count: counts.geannuleerd },
       { id: 'mij', label: 'Mijn werkbonnen' },
+      ...(metContracten
+        ? [{ id: 'in_te_plannen' as const, label: 'In te plannen', count: items.filter(isInTePlannen).length }]
+        : []),
     ],
-    [counts],
+    [counts, metContracten, items],
   );
 
   const filtered = useMemo(
@@ -193,6 +207,10 @@ export default function WorkOrdersScreen() {
    * nog een dag komt.
    */
   const groepen = useMemo(() => {
+    if (chip === 'in_te_plannen') {
+      const lijst = [...filtered].sort(vergelijkInTePlannen);
+      return lijst.length ? [{ key: 'in_te_plannen', label: 'In te plannen', items: lijst }] : [];
+    }
     const vandaag = vandaagIso();
     const sleutel = (w: Werkbon) => {
       const dagen = werkbonDagen(w).map((d) => d.datum);
@@ -216,7 +234,7 @@ export default function WorkOrdersScreen() {
     buckets[1]!.items.sort((a, b) => sleutel(a).localeCompare(sleutel(b)) || tijd(a).localeCompare(tijd(b)));
     buckets[2]!.items.sort((a, b) => sleutel(b).localeCompare(sleutel(a)) || tijd(b).localeCompare(tijd(a)));
     return buckets.filter((g) => g.items.length > 0);
-  }, [filtered]);
+  }, [filtered, chip]);
 
   const onOpen = (id: string) => router.push(`/work-orders/${id}`);
 
@@ -393,7 +411,15 @@ function WerkbonKaart({
     ? klantAvatarKleuren({ id: wo.customer_id, ...wo.customer }, donker)
     : avatarKleuren(wo.titel, donker);
   const adres = wo.locatie || [wo.customer?.address, wo.customer?.city].filter(Boolean).join(', ') || null;
-  const meta = [wo.nummer ?? '—', datumLabel(wo)].join(' · ');
+  const meta = [
+    wo.nummer ?? '—',
+    datumLabel(wo),
+    !wo.gepland_op && wo.uiterlijk_op ? `uiterlijk ${formatDateNL(wo.uiterlijk_op)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  // SLA alleen bij een open werkbon; afgerond of geannuleerd telt niet meer.
+  const sla = wo.status === 'afgerond' || wo.status === 'geannuleerd' ? null : slaBadge(wo);
   const pct = taken && taken.total > 0 ? Math.round((taken.done / taken.total) * 100) : null;
 
   return (
@@ -407,6 +433,7 @@ function WerkbonKaart({
         <Text style={styles.kaartMeta} numberOfLines={1}>
           {meta}
         </Text>
+        {sla && sla !== 'gehaald' ? <SlaBadge status={sla} klein prefix="SLA" /> : null}
         <WerkbonStatusBadge status={wo.status} klein />
       </View>
       <Text style={styles.kaartTitel} numberOfLines={2}>
