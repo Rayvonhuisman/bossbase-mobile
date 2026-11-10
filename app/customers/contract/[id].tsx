@@ -24,6 +24,7 @@ import {
   intervalLabel,
   type ContractDetail,
 } from '@/services/contractService';
+import { seizoenLabel } from '@/lib/contractSeizoen';
 
 /**
  * Eén onderhoudscontract, alleen-lezen. De app beheert geen contracten (dat
@@ -162,7 +163,9 @@ function ContractInhoud() {
                       gedimd={!b.actief}
                       titel={b.omschrijving}
                       sub={[
-                        intervalLabel(b.interval_aantal, b.interval_eenheid),
+                        [intervalLabel(b.interval_aantal, b.interval_eenheid), seizoenLabel(b.seizoen_van, b.seizoen_tot)]
+                          .filter(Boolean)
+                          .join(', '),
                         b.volgende_op ? `volgende ${formatDateNL(b.volgende_op)}` : null,
                         b.actief ? null : 'gestopt',
                       ]

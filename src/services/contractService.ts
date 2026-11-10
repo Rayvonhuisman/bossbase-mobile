@@ -198,6 +198,9 @@ export type ContractDetail = {
     interval_eenheid: string | null;
     volgende_op: string | null;
     actief: boolean;
+    /** Maanden 1–12; beide leeg = het hele jaar (zie lib/contractSeizoen.ts). */
+    seizoen_van?: number | null;
+    seizoen_tot?: number | null;
   }[];
   installaties: Installatie[];
 };
@@ -217,7 +220,7 @@ export async function getContract(id: string): Promise<{ data: ContractDetail | 
          customer:customers ( id, name ),
          sla:sla_niveaus ( naam, klok, reactie_spoed_uren, oplos_spoed_uren, reactie_normaal_uren,
            oplos_normaal_uren, reactie_laag_uren, oplos_laag_uren ),
-         beurten:contract_beurten ( id, omschrijving, interval_aantal, interval_eenheid, volgende_op, actief ),
+         beurten:contract_beurten ( id, omschrijving, interval_aantal, interval_eenheid, volgende_op, actief, seizoen_van, seizoen_tot ),
          contract_installaties ( installatie:installaties ( ${INSTALLATIE_KOLOMMEN} ) )`,
       )
       .eq('id', id)
