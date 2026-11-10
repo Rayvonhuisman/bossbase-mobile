@@ -490,6 +490,9 @@ export type AbonnementStand = {
   verplichtingTot: string | null;
   stoptNaLooptijd: boolean;
   stoptOp: string | null;
+  /** Gratis tot opzegging (migratie 20261110130000): geen Stripe, geen kosten. */
+  gratisTotOpzegging: boolean;
+  gratisSinds: string | null;
   websiteAanvraag: { status?: string } | null;
   magBeheren: boolean;
   readonly: boolean;
@@ -525,6 +528,8 @@ export async function getAbonnement(): Promise<{ data: AbonnementStand | null; e
       verplichtingTot: (d.verplichtingTot as string) || null,
       stoptNaLooptijd: Boolean(d.stoptNaLooptijd),
       stoptOp: (d.stoptOp as string) || null,
+      gratisTotOpzegging: d.gratisTotOpzegging === true && !d.heeftStripe,
+      gratisSinds: (d.gratisSinds as string) || null,
       websiteAanvraag: (d.websiteAanvraag as { status?: string }) || null,
       magBeheren: Boolean(d.magBeheren),
       readonly: d.readonly === true,
