@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { AKKOORD_NIEUW, AKKOORD_VERSIES, OPNIEUW_AKKOORD, teAccepteren, type AkkoordDocument } from '@/lib/akkoord';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AKKOORD_NIEUW, OPNIEUW_AKKOORD, teAccepteren, type AkkoordDocument } from '@/lib/akkoord';
 import { vandaagISO } from '@/lib/datum';
 import { supabase } from '@/lib/supabase';
 import { useAuth, useTheme } from '@/providers';
-import { dsShadowPop, spacing, type ThemeColors } from '@/theme';
-import { Button } from './Button';
+import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 
 /**
- * Nieuwe versie van de voorwaarden: hetzelfde venster als
- * `src/components/NieuweVoorwaarden.jsx` in het dashboard. Een beheerder die
+ * Nieuwe versie van de voorwaarden: dezelfde kleine melding als
+ * `src/components/NieuweVoorwaarden.jsx` in het dashboard (sinds 10-11-2026,
+ * wens Niels: geen venster met de hele uitleg meer). Een beheerder die
  * nog op een oudere versie van de algemene voorwaarden of de
  * verwerkersovereenkomst zit, accepteert de nieuwe na het laden van zijn
  * profiel. Beheerders, omdat de overeenkomst met het bedrijf is; een
@@ -18,14 +19,15 @@ import { Button } from './Button';
  * Alleen documenten waarvan de ingangsdatum bereikt is (`lib/akkoord.ts`).
  * Accepteren gaat via de edge function `akkoord-vastleggen` (tijdstip en
  * IP-adres, bron 'nieuwe_versie'); die legt voor een bestaande beheerder ook
- * alleen ingegane documenten vast. Het venster sluit pas na accepteren;
- * uitloggen kan altijd.
+ * alleen ingegane documenten vast. De melding blokkeert niets en blijft
+ * staan tot de beheerder op Akkoord tikt; tot dan geldt de vorige versie.
  */
 export function NieuweVoorwaarden() {
-  const { status, user, role, signOut } = useAuth();
+  const { status, user, role } = useAuth();
   const { colors: t } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(t), [t]);
-  // Per gebruiker, zodat een andere login nooit het venster van de vorige ziet.
+  // Per gebruiker, zodat een andere login nooit de melding van de vorige ziet.
   const [gevonden, setGevonden] = useState<{ userId: string; docs: AkkoordDocument[] } | null>(null);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -71,93 +73,78 @@ export function NieuweVoorwaarden() {
     setGevonden(null);
   };
 
-  const uitloggen = () => {
-    setGevonden(null);
-    void signOut();
-  };
+  const namen = ontbreekt.map((d) => AKKOORD_NIEUW[d].naam.toLowerCase());
+  const wat = namen.length > 1 ? `${namen.slice(0, -1).join(', ')} en de ${namen[namen.length - 1]}` : namen[0];
 
   return (
-    // Geen onRequestClose-actie: de terugknop van Android sluit dit venster niet.
-    <Modal transparent visible animationType="fade" onRequestClose={() => undefined}>
-      <View style={styles.achtergrond}>
-        <View
-          style={styles.kaart}
-          role="dialog"
-          aria-modal
-          aria-labelledby="nv-titel"
-        >
-          <ScrollView contentContainerStyle={styles.inhoud}>
-            <Text nativeID="nv-titel" role="heading" aria-level={2} style={styles.titel}>
-              We hebben onze voorwaarden aangepast
-            </Text>
-            <Text style={styles.sub}>
-              {ontbreekt.map((d) => `${AKKOORD_NIEUW[d].naam} ${AKKOORD_VERSIES[d]}`).join(' · ')}
-            </Text>
-            <Text style={styles.tekst}>Wat er nieuw is:</Text>
+    <View style={[styles.wrap, { bottom: insets.bottom + 92 }]} pointerEvents="box-none">
+      <View style={styles.kaart} accessibilityRole="alert">
+        <View style={styles.tekstvak}>
+          <Text style={styles.tekst}>We hebben de {wat} aangepast.</Text>
+          <View style={styles.links}>
             {ontbreekt.map((d) => (
-              <Text key={d} style={styles.tekst}>
-                <Text style={styles.vet}>{AKKOORD_NIEUW[d].naam}: </Text>
-                {AKKOORD_NIEUW[d].wat}
+              <Text
+                key={d}
+                accessibilityRole="link"
+                style={styles.link}
+                onPress={() => void Linking.openURL(AKKOORD_NIEUW[d].url).catch(() => undefined)}
+              >
+                {ontbreekt.length > 1 ? AKKOORD_NIEUW[d].naam : 'Lees ze'}
               </Text>
             ))}
-            <Text style={styles.tekst}>
-              Lees de{' '}
-              {ontbreekt.map((d, i) => (
-                <Text key={d}>
-                  {i > 0 ? (i === ontbreekt.length - 1 ? ' en de ' : ', de ') : ''}
-                  <Text
-                    accessibilityRole="link"
-                    style={styles.link}
-                    onPress={() => void Linking.openURL(AKKOORD_NIEUW[d].url).catch(() => undefined)}
-                  >
-                    {AKKOORD_NIEUW[d].naam.toLowerCase()}
-                  </Text>
-                </Text>
-              ))}
-              . Vragen? Mail info@bossbase.nl.
-            </Text>
-            {fout ? (
-              <Text role="alert" style={styles.fout}>
-                {fout}
-              </Text>
-            ) : null}
-          </ScrollView>
-          <View style={styles.knoppen}>
-            <Button label="Uitloggen" variant="secondary" onPress={uitloggen} disabled={bezig} style={styles.knop} />
-            <Button label="Akkoord" onPress={() => void accepteer()} loading={bezig} style={styles.knop} />
           </View>
+          {fout ? (
+            <Text role="alert" style={styles.fout}>
+              {fout}
+            </Text>
+          ) : null}
         </View>
+        <Pressable
+          onPress={() => void accepteer()}
+          disabled={bezig}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => [styles.knop, (pressed || bezig) && { opacity: 0.7 }]}
+        >
+          <Text style={styles.knopTekst}>{bezig ? 'Bezig…' : 'Akkoord'}</Text>
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const makeStyles = (t: ThemeColors) =>
   StyleSheet.create({
-    achtergrond: {
-      flex: 1,
+    wrap: {
+      position: 'absolute',
+      left: spacing.md,
+      right: spacing.md,
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-      // Zelfde verduistering als de dialogen en vellen elders in de app.
-      backgroundColor: 'rgba(4,18,12,0.5)',
+      zIndex: 999,
     },
     kaart: {
       width: '100%',
       maxWidth: 440,
-      maxHeight: '90%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.sm,
+      paddingLeft: spacing.lg,
+      paddingRight: spacing.sm,
+      borderRadius: radius.lg,
       backgroundColor: t.card,
-      borderRadius: 22,
-      padding: spacing.xl,
-      ...dsShadowPop,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.lineStrong,
+      shadowColor: '#0D0D0D',
+      shadowOpacity: 0.14,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 6 },
     },
-    inhoud: { gap: spacing.sm },
-    titel: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: t.ink },
-    sub: { fontSize: 13.5, lineHeight: 19, color: t.muted, marginBottom: spacing.xs },
-    tekst: { fontSize: 14.5, lineHeight: 21, color: t.muted },
-    vet: { fontWeight: '700', color: t.ink },
-    link: { color: t.green700, fontWeight: '600', textDecorationLine: 'underline' },
-    fout: { fontSize: 14, lineHeight: 20, color: '#DC2626' },
-    knoppen: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-    knop: { flex: 1 },
+    tekstvak: { flex: 1, gap: 2 },
+    tekst: { fontSize: 14, lineHeight: 19, fontWeight: '600', fontFamily: fonts.semibold, color: t.ink },
+    links: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+    link: { fontSize: 13.5, lineHeight: 19, color: t.green700, fontWeight: '600', textDecorationLine: 'underline' },
+    fout: { fontSize: 13, lineHeight: 18, color: '#DC2626' },
+    knop: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: t.green },
+    knopTekst: { fontSize: 14, fontWeight: '700', fontFamily: fonts.bold, color: t.greenInk },
   });

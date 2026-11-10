@@ -63,7 +63,7 @@ export default function RootLayout() {
                   <Stack.Screen name="installeren" options={{ animation: 'fade' }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
-                {/* Beheerder op een oudere versie van de voorwaarden: eerst accepteren. */}
+                {/* Beheerder op een oudere versie van de voorwaarden: kleine melding met Akkoord. */}
                 <NieuweVoorwaarden />
                 {/* Op web tekent dit de dialogen van `Dialog.alert`; op iOS en
                     Android doet het besturingssysteem dat zelf. */}
