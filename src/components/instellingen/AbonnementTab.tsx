@@ -59,16 +59,17 @@ export function AbonnementTab() {
     );
   }
 
+  const gratis = stand.gratisTotOpzegging;
   const opzeggen = stand.opzeggenPerEindePeriode || stand.stoptNaLooptijd;
   const status =
-    (ABONNEMENT_STATUS[stand.status ?? ''] ?? stand.status ?? 'Onbekend') +
+    (gratis ? 'Gratis tot opzegging' : ABONNEMENT_STATUS[stand.status ?? ''] ?? stand.status ?? 'Onbekend') +
     (opzeggen
       ? stand.stoptOp
         ? ` · stopt ${formatDateLongNL(stand.stoptOp)}`
         : ' · stopt per einde periode'
       : '');
   const statusToon =
-    stand.status === 'actief' ? 'goed' : stand.status === 'trial' ? 'waarschuwing' : 'fout';
+    stand.readonly ? 'fout' : gratis || stand.status === 'actief' ? 'goed' : stand.status === 'trial' ? 'waarschuwing' : 'fout';
 
   return (
     <>
@@ -82,7 +83,7 @@ export function AbonnementTab() {
 
       <Kaart
         titel={pakketLabel(stand.tier)}
-        sub={`€ ${maandbedrag(stand.tier, stand.extraGebruikers)} p/mnd${
+        sub={gratis ? '€ 0 p/mnd · gratis, zonder einddatum' : `€ ${maandbedrag(stand.tier, stand.extraGebruikers)} p/mnd${
           stand.extraGebruikers > 0
             ? ` (${pakketLabel(stand.tier)} + ${stand.extraGebruikers} × € ${EXTRA_GEBRUIKER_PRIJS})`
             : ''
@@ -92,7 +93,14 @@ export function AbonnementTab() {
         {stand.trial && stand.trialEindigtOp ? (
           <Regel label="Gratis uitproberen t/m" waarde={formatDateLongNL(stand.trialEindigtOp)} s={s} />
         ) : null}
-        {stand.verlengtOp ? (
+        {gratis ? (
+          <Regel
+            label={stand.stoptOp ? 'Gratis actief t/m' : 'Gratis actief'}
+            waarde={stand.stoptOp ? formatDateLongNL(stand.stoptOp) : 'tot je opzegt'}
+            s={s}
+          />
+        ) : null}
+        {!gratis && stand.verlengtOp ? (
           <Regel
             label={stand.opzeggenPerEindePeriode ? 'Stopt op' : 'Verlengt op'}
             waarde={formatDateLongNL(stand.verlengtOp)}
@@ -170,9 +178,17 @@ export function AbonnementTab() {
             ? 'Van pakket wisselen, modules bij- of afkopen, opzeggen en je facturen en betaalmethode beheer je op het dashboard.'
             : 'Alleen de eigenaar van het bedrijf kan het abonnement wijzigen of opzeggen.'}
         </Text>
-        {!stand.heeftStripe ? (
+        {gratis ? (
+          <Text style={s.hint} testID="gratis-tot-opzegging">
+            {stand.stoptOp
+              ? `Je hebt opgezegd. Je account blijft gratis actief tot en met ${formatDateLongNL(stand.stoptOp)}; tot dan kun je de opzegging op het dashboard intrekken.`
+              : 'Je account is gratis actief tot je opzegt. Er is geen betaalmethode nodig en je betaalt geen abonnementskosten. Opzeggen doe je op het dashboard.'}
+          </Text>
+        ) : !stand.heeftStripe ? (
           <Text style={s.hint}>
-            Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.
+            {stand.trial
+              ? 'Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.'
+              : 'Er is geen betaalmethode gekoppeld.'}
           </Text>
         ) : null}
         {stand.magBeheren ? (
