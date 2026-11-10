@@ -11,7 +11,7 @@
  * ingangsdatum (`AKKOORD_INGANG`); zonder datum vraagt het niets.
  */
 export const AKKOORD_VERSIES = {
-  algemene_voorwaarden: '2026-12',
+  algemene_voorwaarden: '2026-12a',
   verwerkersovereenkomst: '2026-12',
   privacyverklaring: '2026-11b',
 } as const;
@@ -20,8 +20,10 @@ export type AkkoordDocument = 'algemene_voorwaarden' | 'verwerkersovereenkomst';
 
 export const AKKOORD_INGANG: Record<AkkoordDocument, string | null> = {
   // 2026-12: besluit Niels 27 oktober 2026, ingang dezelfde dag, zonder mail of
-  // aankondiging; beheerders accepteren bij hun volgende inlog.
-  algemene_voorwaarden: '2026-10-27',
+  // aankondiging; beheerders accepteren bij hun volgende inlog. Voorwaarden
+  // 2026-12a (7.8, sjablonen en Boss zijn geen juridisch advies): op dezelfde
+  // manier, op verzoek van Niels 10 november 2026.
+  algemene_voorwaarden: '2026-11-10',
   verwerkersovereenkomst: '2026-10-27',
 };
 
@@ -30,7 +32,7 @@ export const AKKOORD_NIEUW: Record<AkkoordDocument, { naam: string; url: string;
   algemene_voorwaarden: {
     naam: 'Algemene voorwaarden',
     url: 'https://www.bossbase.nl/voorwaarden',
-    wat: 'Alles exporteren: al je gegevens en bestanden kosteloos in één ZIP (8.3). Artikel 15: de website bij een jaarabonnement, met in 15.9 de afspraken over teksten en sfeerbeelden die we met AI maken. En wat we doen bij een melding van illegale inhoud op je website, met het adres om dat te melden (7.7 en artikel 1).',
+    wat: 'Sjablonen, voorbeeldteksten en teksten van Boss zijn een hulpmiddel en geen juridisch advies: je controleert ze zelf, en bij een contract met je klant is BossBase geen partij (7.8). Eerder kwamen erbij: Alles exporteren, al je gegevens en bestanden kosteloos in één ZIP (8.3). Artikel 15: de website bij een jaarabonnement, met in 15.9 de afspraken over teksten en sfeerbeelden die we met AI maken. En wat we doen bij een melding van illegale inhoud op je website, met het adres om dat te melden (7.7 en artikel 1).',
   },
   verwerkersovereenkomst: {
     naam: 'Verwerkersovereenkomst',
