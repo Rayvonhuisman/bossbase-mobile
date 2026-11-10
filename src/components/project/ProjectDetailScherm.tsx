@@ -113,6 +113,7 @@ import { ACTIVITEIT_TYPES, activiteitTypeLabel, createActivity } from '@/service
 import type { Customer } from '@/types/domain';
 import { BestandenBlok } from '@/components/BestandenBlok';
 import { MetingenBlok } from './MetingenBlok';
+import { BossKnop } from '@/components/boss/BossKnop';
 
 /**
  * Het projectdetail — de app-versie van `ProjectDetailDrawer` uit het
@@ -1338,14 +1339,21 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             subtitle={klant?.name || project?.customer?.name || deal?.customer?.name || undefined}
             onBack={terug}
             rightAction={
-              project && magProject ? (
-                <HeaderIconButton
-                  icon={Pencil}
-                  label="Projectnaam wijzigen"
-                  onPress={() => {
-                    setSaveError(null);
-                    setBewerk({ soort: 'naam', naam: project.name ?? '' });
-                  }}
+              project ? (
+                <BossKnop
+                  projectId={project.id}
+                  naast={
+                    magProject ? (
+                      <HeaderIconButton
+                        icon={Pencil}
+                        label="Projectnaam wijzigen"
+                        onPress={() => {
+                          setSaveError(null);
+                          setBewerk({ soort: 'naam', naam: project.name ?? '' });
+                        }}
+                      />
+                    ) : undefined
+                  }
                 />
               ) : undefined
             }

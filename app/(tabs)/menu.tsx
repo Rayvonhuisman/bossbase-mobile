@@ -130,7 +130,7 @@ export default function MenuScreen() {
   ]);
 
   const ondersteuning: Item[] = [
-    { icon: MessageCircleQuestion, title: 'Help', sub: 'Vraag het Boss, onze helpagent', onPress: openBoss },
+    { icon: MessageCircleQuestion, title: 'Help', sub: 'Vraag het Boss, onze helpagent', onPress: () => openBoss() },
     { icon: Bug, title: 'Bug of idee', sub: 'Meld het en help BossBase beter maken', onPress: openMelden },
     { icon: BookOpen, title: 'Kennisbank', sub: 'Uitleg en handleidingen op bossbase.nl', onPress: () => void Linking.openURL(KENNISBANK_URL) },
     { icon: HelpCircle, title: 'Veelgestelde vragen', sub: 'Snel antwoord op bossbase.nl', onPress: () => void Linking.openURL(FAQ_URL) },

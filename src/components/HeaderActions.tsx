@@ -32,7 +32,7 @@ export function HeaderActions({ iconSize = 38 }: { iconSize?: number }) {
         ) : null}
       </Pressable>
       <Pressable
-        onPress={openBoss}
+        onPress={() => openBoss()}
         accessibilityRole="button"
         accessibilityLabel="Vraag het Boss"
         hitSlop={6}

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { BossKnop } from '@/components/boss/BossKnop';
 import {
   Pressable,
   RefreshControl,
@@ -847,31 +848,36 @@ export default function CustomerDetailScreen() {
             title={name}
             subtitle={[customer.city, tag].filter(Boolean).join(' · ') || undefined}
             rightAction={
-              rechtenGeladen && mag('klanten', 'wijzigen') ? (
-                <HeaderIconButton
-                  icon={Pencil}
-                  label="Klant bewerken"
-                  variant="plain"
-                  onPress={() => {
-                    setSaveError(null);
-                    setConcept({
-                      name: customer.name ?? '',
-                      email: customer.email ?? '',
-                      phone: customer.phone ?? '',
-                      address: customer.address ?? '',
-                      postcode: customer.postcode ?? '',
-                      city: customer.city ?? '',
-                      kvk: customer.kvk_number ?? '',
-                      btw: customer.btw_number ?? '',
-                      iban: customer.iban ?? '',
-                      notes: alsTekst(customer.notes),
-                      type: customer.type ?? null,
-                      source: customer.source ?? '',
-                      betaaltermijn: customer.betaaltermijn_dagen != null ? String(customer.betaaltermijn_dagen) : '',
-                    });
-                  }}
-                />
-              ) : undefined
+              <BossKnop
+                klantId={customer.id}
+                naast={
+                  rechtenGeladen && mag('klanten', 'wijzigen') ? (
+                    <HeaderIconButton
+                      icon={Pencil}
+                      label="Klant bewerken"
+                      variant="plain"
+                      onPress={() => {
+                        setSaveError(null);
+                        setConcept({
+                          name: customer.name ?? '',
+                          email: customer.email ?? '',
+                          phone: customer.phone ?? '',
+                          address: customer.address ?? '',
+                          postcode: customer.postcode ?? '',
+                          city: customer.city ?? '',
+                          kvk: customer.kvk_number ?? '',
+                          btw: customer.btw_number ?? '',
+                          iban: customer.iban ?? '',
+                          notes: alsTekst(customer.notes),
+                          type: customer.type ?? null,
+                          source: customer.source ?? '',
+                          betaaltermijn: customer.betaaltermijn_dagen != null ? String(customer.betaaltermijn_dagen) : '',
+                        });
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
             }
           />
           <AnimatedScreen>

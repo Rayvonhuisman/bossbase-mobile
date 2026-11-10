@@ -13,8 +13,11 @@ import { aantalOngelezen } from '@/services/meldingService';
  * topbalk van het dashboard. De panelen staan één keer in de root; elk scherm
  * opent ze via `useHulp()`.
  */
+type BossContext = { klant_id?: string; project_id?: string } | null;
+
 type Hulp = {
-  openBoss: () => void;
+  /** Met context: die klant of dat project is "deze klant" voor Boss. */
+  openBoss: (context?: BossContext) => void;
   openMelden: () => void;
   openMeldingen: () => void;
   ongelezen: number;
@@ -37,6 +40,7 @@ export function HulpProvider({ children }: { children: ReactNode }) {
   const pad = usePathname();
   const [paneel, setPaneel] = useState<'boss' | 'melden' | 'meldingen' | null>(null);
   const [ongelezen, setOngelezen] = useState(0);
+  const [bossContext, setBossContext] = useState<BossContext>(null);
 
   // Alleen een telling; de state verandert pas als het antwoord er is.
   const userId = user?.id ?? null;
@@ -58,7 +62,11 @@ export function HulpProvider({ children }: { children: ReactNode }) {
   }, [session, userId, tel]);
 
   const waarde: Hulp = {
-    openBoss: () => setPaneel('boss'),
+    openBoss: (context) => {
+      // Alleen een echte context; een klik-event van een knop telt niet.
+      setBossContext(context && typeof context === 'object' && ('klant_id' in context || 'project_id' in context) ? context : null);
+      setPaneel('boss');
+    },
     openMelden: () => setPaneel('melden'),
     openMeldingen: () => setPaneel('meldingen'),
     // Zonder sessie geen teller, ook niet die van de vorige gebruiker.
@@ -73,10 +81,13 @@ export function HulpProvider({ children }: { children: ReactNode }) {
         <BossChat
           key={user?.id ?? 'x'}
           open={paneel === 'boss'}
-          onSluit={() => setPaneel(null)}
+          onSluit={() => {
+            setPaneel(null);
+            setBossContext(null);
+          }}
           onMelden={() => setPaneel('melden')}
           // Op een klant- of projectscherm is dat "deze klant" voor Boss.
-          context={contextUitPad(pad)}
+          context={bossContext ?? contextUitPad(pad)}
         />
       ) : null}
       {session ? <Meldpunt open={paneel === 'melden'} pagina={pad || 'app'} onSluit={() => setPaneel(null)} /> : null}

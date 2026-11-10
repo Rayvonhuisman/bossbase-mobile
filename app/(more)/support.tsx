@@ -28,7 +28,7 @@ export default function SupportScreen() {
       >
         <AppSection title="Hulp" variant="eyebrow" />
         <AppListGroup>
-          <AppListItem first icon={MessageCircleQuestion} title="Vraag het Boss" subtitle="Onze helpagent, direct antwoord" onPress={openBoss} />
+          <AppListItem first icon={MessageCircleQuestion} title="Vraag het Boss" subtitle="Onze helpagent, direct antwoord" onPress={() => openBoss()} />
           <AppListItem icon={BookOpen} title="Kennisbank" subtitle="Uitleg en handleidingen op bossbase.nl" onPress={() => void Linking.openURL(KENNISBANK_URL)} />
           <AppListItem icon={HelpCircle} title="Veelgestelde vragen" subtitle="Snel antwoord op bossbase.nl" onPress={() => void Linking.openURL(FAQ_URL)} />
           <AppListItem icon={Bug} title="Bug of idee" subtitle="Meld het en help BossBase beter maken" onPress={openMelden} />
