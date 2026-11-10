@@ -55,7 +55,10 @@ export function VertelHetBoss({
   volgordeVanaf,
   onSluit,
   onOpgeslagen,
+  startTekst = '',
 }: {
+  /** Uit de Boss-chat: staat in het veld en wordt meteen verwerkt. */
+  startTekst?: string;
   open: boolean;
   projectId: string;
   velden: BrancheVeld[];
@@ -66,7 +69,7 @@ export function VertelHetBoss({
 }) {
   const { colors: t } = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
-  const [invoer, setInvoer] = useState('');
+  const [invoer, setInvoer] = useState(startTekst);
   const [stukken, setStukken] = useState<Stuk[]>([]);
   const [regels, setRegels] = useState<Regel[]>([]);
   const [bewerk, setBewerk] = useState<string | null>(null);
@@ -126,6 +129,15 @@ export function VertelHetBoss({
     setBewerk(null);
     setTimeout(() => lijst.current?.scrollToEnd({ animated: true }), 80);
   };
+
+  // Tekst uit de Boss-chat: één keer meteen verwerken.
+  const gestart = useRef(false);
+  useEffect(() => {
+    if (startTekst && !gestart.current) {
+      gestart.current = true;
+      void verwerk();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pasStukAan = (stuk: Stuk) => {
     if (luistert) spraak.stop();

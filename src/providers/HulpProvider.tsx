@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { usePathname } from 'expo-router';
 import { useAuth } from './AuthProvider';
 import { BossChat } from '@/components/BossChat';
+import { contextUitPad } from '@/lib/boss/vastleggen';
 import { Meldpunt } from '@/components/Meldpunt';
 import { Meldingen } from '@/components/Meldingen';
 import { aantalOngelezen } from '@/services/meldingService';
@@ -69,7 +70,14 @@ export function HulpProvider({ children }: { children: ReactNode }) {
       {children}
       {session ? (
         // Per gebruiker een eigen Boss-gesprek: uitloggen begint opnieuw.
-        <BossChat key={user?.id ?? 'x'} open={paneel === 'boss'} onSluit={() => setPaneel(null)} onMelden={() => setPaneel('melden')} />
+        <BossChat
+          key={user?.id ?? 'x'}
+          open={paneel === 'boss'}
+          onSluit={() => setPaneel(null)}
+          onMelden={() => setPaneel('melden')}
+          // Op een klant- of projectscherm is dat "deze klant" voor Boss.
+          context={contextUitPad(pad)}
+        />
       ) : null}
       {session ? <Meldpunt open={paneel === 'melden'} pagina={pad || 'app'} onSluit={() => setPaneel(null)} /> : null}
       {session ? (

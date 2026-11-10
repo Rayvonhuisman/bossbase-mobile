@@ -30,6 +30,7 @@ import {
 import { Blok, KleineKnop } from './bouwstenen';
 import { MetingVelden } from './MetingVelden';
 import { VertelHetBoss } from './VertelHetBoss';
+import { pakBossMeting } from '@/lib/boss/vastleggen';
 
 /**
  * Metingen op de projectkaart, zoals het blok in het dashboard
@@ -62,6 +63,8 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
   const [formBezig, setFormBezig] = useState(false);
   const [formFout, setFormFout] = useState<string | null>(null);
   const [vertel, setVertel] = useState(false);
+  // Tekst uit de Boss-chat (lib/boss/vastleggen): Vertel het Boss opent ermee.
+  const [startTekst, setStartTekst] = useState('');
   const velden = useMemo(() => brancheVelden(branche) as BrancheVeld[], [branche]);
 
   const laad = useCallback(async () => {
@@ -85,7 +88,19 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
         if (actief) setFout('De metingen konden niet worden geladen.');
       })
       .finally(() => actief && setLaden(false));
-    magMetingenBeheren(projectId).then((m) => actief && setMag(m));
+    magMetingenBeheren(projectId).then((m) => {
+      if (!actief) return;
+      setMag(m);
+      // Uit de Boss-chat: alleen als je hier metingen mag toevoegen (het
+      // pakket controleerde boss-chat al); anders vervalt de tekst vanzelf.
+      if (m) {
+        const tekst = pakBossMeting(projectId);
+        if (tekst) {
+          setStartTekst(tekst);
+          setVertel(true);
+        }
+      }
+    });
     getBranche()
       .then((b) => actief && setBranche(b))
       .catch(() => {});
@@ -277,7 +292,11 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
           projectId={projectId}
           velden={velden}
           volgordeVanaf={metingen.length}
-          onSluit={() => setVertel(false)}
+          startTekst={startTekst}
+          onSluit={() => {
+            setVertel(false);
+            setStartTekst('');
+          }}
           onOpgeslagen={(nieuw) => {
             setMetingen((l) => [...l, ...nieuw]);
             toon(nieuw.length === 1 ? '1 meting opgeslagen' : `${nieuw.length} metingen opgeslagen`, 'succes');

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
+import type { BossKaart } from '@/lib/boss/vastleggen';
 
 /**
  * Boss — dezelfde helpagent als in het dashboard: Edge Function `boss-chat`.
@@ -23,7 +24,14 @@ import { env } from '@/lib/env';
  */
 export const APP_FUNCTIES = ['boss_werkruimte'] as const;
 
-export type BossBericht = { rol: 'gebruiker' | 'boss'; tekst: string };
+export type BossBericht = { rol: 'gebruiker' | 'boss'; tekst: string; kaarten?: BossKaart[] };
+
+/**
+ * Boss legt vast: met `versie: 2` mag Boss een notitie, taak of metingen
+ * klaarzetten (event `acties` met kaartjes). Zonder versie (oudere app) krijgt
+ * de app die nooit. Zie src/lib/boss/vastleggen.ts.
+ */
+export const BOSS_CHAT_VERSIE = 2;
 
 export type BossUitkomst =
   | { ok: true; gesprekId: string | null }
@@ -56,6 +64,8 @@ export async function vraagBoss({
   gesprekId,
   onTekst,
   onBezig,
+  onActies,
+  context,
   signal,
 }: {
   berichten: BossBericht[];
@@ -64,6 +74,10 @@ export async function vraagBoss({
   onTekst: (stukje: string) => void;
   /** Boss zet de vraag door naar het team. */
   onBezig?: (wat: string) => void;
+  /** Boss zet iets klaar om vast te leggen; `tekst` vervangt zijn zin ervoor. */
+  onActies?: (kaarten: BossKaart[], tekst: string | null) => void;
+  /** Het scherm waar de gebruiker staat: "deze klant" voor Boss. */
+  context?: { klant_id?: string; project_id?: string } | null;
   signal?: AbortSignal;
 }): Promise<BossUitkomst> {
   const { data: sessie } = await supabase.auth.getSession();
@@ -80,7 +94,10 @@ export async function vraagBoss({
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        messages: berichten,
+        // Alleen rol en tekst: de kaartjes zijn van de app zelf.
+        messages: berichten.map((b) => ({ rol: b.rol, tekst: b.tekst })),
+        versie: BOSS_CHAT_VERSIE,
+        ...(context?.klant_id || context?.project_id ? { context } : {}),
         bron: 'app',
         // Wat deze app-versie kan (whitelist in boss-chat, _shared/bossGebruiker.ts).
         // Een oudere app stuurt dit niet; dan vertelt Boss dat het met een update komt.
@@ -114,7 +131,10 @@ export async function vraagBoss({
         tekens += e.data.tekst.length;
         onTekst(e.data.tekst);
       } else if (e.soort === 'bezig' && typeof e.data.wat === 'string') onBezig?.(e.data.wat);
-      else if (e.soort === 'fout') fout = typeof e.data.bericht === 'string' ? e.data.bericht : 'Er ging iets mis.';
+      else if (e.soort === 'acties' && Array.isArray(e.data.kaarten)) {
+        tekens += 1;
+        onActies?.(e.data.kaarten as BossKaart[], typeof e.data.tekst === 'string' ? e.data.tekst : null);
+      } else if (e.soort === 'fout') fout = typeof e.data.bericht === 'string' ? e.data.bericht : 'Er ging iets mis.';
     }
   };
 

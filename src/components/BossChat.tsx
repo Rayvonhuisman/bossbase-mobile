@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Send } from 'lucide-react-native';
+import { Mic, Send, Square } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/providers';
 import { vraagBoss, type BossBericht } from '@/services/bossService';
+import { useSpraak } from '@/lib/spraak';
+import { zetBossMeting, type BossKaart } from '@/lib/boss/vastleggen';
+import { BossKaartje } from './boss/BossKaart';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { Paneel } from './Paneel';
 
@@ -70,9 +74,12 @@ export function BossChat({
   open,
   onSluit,
   onMelden,
+  context,
 }: {
   open: boolean;
   onSluit: () => void;
+  /** Klant- of projectscherm waar de gebruiker staat ("deze klant" voor Boss). */
+  context?: { klant_id?: string; project_id?: string } | null;
   /** Naar "Bug of idee" — voor wie liever iets meldt dan vraagt. */
   onMelden?: () => void;
 }) {
@@ -86,6 +93,26 @@ export function BossChat({
   const [fout, setFout] = useState<string | null>(null);
   const lijst = useRef<ScrollView>(null);
   const afbreken = useRef<AbortController | null>(null);
+  const router = useRouter();
+  // Inspreken (webapp: spraakherkenning van de browser). De tekst komt eerst in
+  // het invoerveld; versturen doe je zelf. In de iOS/Android-app: het dicteren
+  // van het toetsenbord.
+  const spraak = useSpraak({ setTekst: setInvoer });
+  const luistert = spraak.stand !== 'uit';
+  useEffect(() => {
+    if (!open && luistert) spraak.stop();
+  }, [open, luistert, spraak]);
+
+  const wijzigKaart = (i: number, k: BossKaart) =>
+    setBerichten((lijst) =>
+      lijst.map((b, j) => (j === i && b.kaarten ? { ...b, kaarten: b.kaarten.map((x) => (x.id === k.id ? k : x)) } : b)),
+    );
+  // Metingen: naar het project, met de tekst in Vertel het Boss.
+  const naarMetingen = (projectId: string, tekst: string) => {
+    zetBossMeting(projectId, tekst);
+    onSluit();
+    router.push(`/project/${projectId}`);
+  };
 
   useEffect(() => () => afbreken.current?.abort(), []);
   useEffect(() => {
@@ -101,6 +128,7 @@ export function BossChat({
   const stuur = async () => {
     const tekst = invoer.trim();
     if (!tekst || bezig) return;
+    if (luistert) spraak.stop();
     setFout(null);
     setInvoer('');
     const geschiedenis: BossBericht[] = [...berichten, { rol: 'gebruiker', tekst }];
@@ -113,6 +141,14 @@ export function BossChat({
       berichten: geschiedenis,
       gesprekId,
       signal: ctrl.signal,
+      context,
+      onActies: (kaarten, vast) =>
+        setBerichten((huidig) => {
+          const kopie = [...huidig];
+          const laatste = kopie[kopie.length - 1];
+          if (laatste?.rol === 'boss') kopie[kopie.length - 1] = { ...laatste, tekst: vast || laatste.tekst, kaarten };
+          return kopie;
+        }),
       onTekst: (stukje) =>
         setBerichten((huidig) => {
           const kopie = [...huidig];
@@ -146,7 +182,7 @@ export function BossChat({
             <TextInput
               value={invoer}
               onChangeText={setInvoer}
-              placeholder="Stel je vraag aan Boss…"
+              placeholder={luistert ? 'Boss luistert…' : 'Vraag iets, of zeg wat Boss moet noteren…'}
               placeholderTextColor={t.muted2}
               multiline
               editable={!bezig}
@@ -162,6 +198,19 @@ export function BossChat({
                 }
               }}
             />
+            {spraak.ondersteund ? (
+              <Pressable
+                onPress={() => (luistert ? spraak.stop() : spraak.start())}
+                disabled={bezig}
+                accessibilityRole="button"
+                accessibilityLabel={luistert ? 'Stoppen met inspreken' : 'Inspreken'}
+                accessibilityState={{ selected: luistert }}
+                testID="boss-chat-mic"
+                style={({ pressed }) => [styles.mic, luistert && styles.micAan, pressed && { opacity: 0.8 }]}
+              >
+                {luistert ? <Square size={16} color="#0D0D0D" /> : <Mic size={18} color={t.ink} />}
+              </Pressable>
+            ) : null}
             <Pressable
               onPress={() => void stuur()}
               disabled={bezig || !invoer.trim()}
@@ -176,6 +225,12 @@ export function BossChat({
               <Send size={18} color="#0D0D0D" strokeWidth={2.4} />
             </Pressable>
           </View>
+          {luistert && spraak.tussen ? <Text style={styles.status}>{spraak.tussen}</Text> : null}
+          {spraak.fout ? (
+            <Pressable onPress={spraak.wisFout} accessibilityRole="alert">
+              <Text style={[styles.status, { color: t.statusRejectFg }]}>{spraak.fout}</Text>
+            </Pressable>
+          ) : null}
           {onMelden ? (
             <Pressable onPress={onMelden} accessibilityRole="link" hitSlop={8}>
               <Text style={styles.melden}>Bug gevonden of een idee? Meld het hier</Text>
@@ -193,9 +248,16 @@ export function BossChat({
             <View key={i} style={[styles.bubbel, styles.jij]}>
               <Text style={styles.jijTekst}>{b.tekst}</Text>
             </View>
-          ) : b.tekst ? (
-            <View key={i} style={[styles.bubbel, styles.boss]}>
-              <Opgemaakt tekst={b.tekst} stijl={styles.bossTekst} vet={styles.vet} />
+          ) : b.tekst || b.kaarten?.length ? (
+            <View key={i} style={{ gap: spacing.sm }}>
+              {b.tekst ? (
+                <View style={[styles.bubbel, styles.boss]}>
+                  <Opgemaakt tekst={b.tekst} stijl={styles.bossTekst} vet={styles.vet} />
+                </View>
+              ) : null}
+              {b.kaarten?.map((k) => (
+                <BossKaartje key={k.id} kaart={k} onWijzig={(nieuw) => wijzigKaart(i, nieuw)} onMetingen={naarMetingen} />
+              ))}
             </View>
           ) : null,
         )}
@@ -248,5 +310,14 @@ const makeStyles = (t: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    mic: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: t.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    micAan: { backgroundColor: '#1DDB62' },
     melden: { fontSize: 12.5, fontFamily: fonts.regular, color: t.muted, textAlign: 'center', textDecorationLine: 'underline' },
   });
