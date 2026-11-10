@@ -6,7 +6,7 @@ import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { createNote } from '@/services/noteService';
 import { addProjectNote } from '@/services/projectService';
 import { createActivity } from '@/services/activityService';
-import { datumTekst, kiesKeuze, kopVan, waaromNiet, type BossKaart as Kaart } from '@/lib/boss/vastleggen';
+import { datumTekst, kiesKeuze, kopVan, meldBossOpgeslagen, waaromNiet, type BossKaart as Kaart } from '@/lib/boss/vastleggen';
 
 /**
  * Een voorstel van Boss in de chat: notitie, taak of metingen. Boss legt zelf
@@ -65,6 +65,12 @@ export function BossKaartje({
     if (!res.ok) return setFout(res.melding);
     setConcept(null);
     onWijzig({ ...k, stand: 'opgeslagen', tekst, datum, tijd });
+    // Een open klant- of projectscherm laat het meteen zien.
+    meldBossOpgeslagen({
+      soort: k.soort,
+      klant_id: k.klant?.id ?? null,
+      project_id: k.soort === 'notitie' ? (k.project?.id ?? null) : null,
+    });
   };
 
   return (

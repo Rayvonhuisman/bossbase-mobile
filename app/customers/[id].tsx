@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BossKnop } from '@/components/boss/BossKnop';
+import { bijBossOpgeslagen } from '@/lib/boss/vastleggen';
 import {
   Pressable,
   RefreshControl,
@@ -292,6 +293,15 @@ export default function CustomerDetailScreen() {
     onFout: setError,
     klaarOmTeLaden: rechtenGeladen,
   });
+
+  // Boss legde iets vast voor deze klant (chat): stil verversen.
+  useEffect(
+    () =>
+      bijBossOpgeslagen((d) => {
+        if (id && d.klant_id === id && !d.project_id) void herlaad();
+      }),
+    [id, herlaad],
+  );
 
   const vandaag = vandaagIso();
   const regels = useMemo(() => planRegels(werkbonnen, activiteiten), [werkbonnen, activiteiten]);

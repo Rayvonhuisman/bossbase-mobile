@@ -114,6 +114,7 @@ import type { Customer } from '@/types/domain';
 import { BestandenBlok } from '@/components/BestandenBlok';
 import { MetingenBlok } from './MetingenBlok';
 import { BossKnop } from '@/components/boss/BossKnop';
+import { bijBossOpgeslagen } from '@/lib/boss/vastleggen';
 
 /**
  * Het projectdetail — de app-versie van `ProjectDetailDrawer` uit het
@@ -292,6 +293,18 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const { loading, refreshing, onRefresh, herlaad, opnieuw } = useLaden(load, { onFout: setError });
 
   const { project, deal, klant, stages } = data;
+
+  // Boss legde een notitie vast voor dit project (chat): lijst verversen.
+  const projectIdNu = project?.id ?? null;
+  useEffect(
+    () =>
+      bijBossOpgeslagen((d) => {
+        if (projectIdNu && d.project_id === projectIdNu)
+          void listProjectNotes(projectIdNu).then((r) => setData((x) => ({ ...x, notities: r.data })));
+      }),
+    [projectIdNu],
+  );
+
   const vandaag = vandaagIso();
   const naamVan = useCallback(
     (id: string) => data.leden.find((l) => l.id === id)?.full_name ?? null,

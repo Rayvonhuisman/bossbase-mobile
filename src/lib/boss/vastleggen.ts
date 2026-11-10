@@ -67,7 +67,7 @@ export function kiesKeuze(k: BossKaart, id: string): BossKaart {
 /** Waarom er (nog) niet opgeslagen kan worden; null = het kan. */
 export function waaromNiet(k: BossKaart): string | null {
   if (k.geweigerd) return k.geweigerd;
-  if (k.keuzes.length) return `Welke ${k.keuze_soort === 'project' ? 'project' : 'klant'} bedoel je${k.gezocht ? ` met "${k.gezocht}"` : ''}?`;
+  if (k.keuzes.length) return `${k.keuze_soort === 'project' ? 'Welk project' : 'Welke klant'} bedoel je${k.gezocht ? ` met "${k.gezocht}"` : ''}?`;
   if (k.soort !== 'taak' && !k.klant && !k.project) {
     return k.gezocht
       ? `Ik vind geen ${k.soort === 'metingen' || k.project ? 'project' : 'klant'} bij "${k.gezocht}" die jij kunt zien. Controleer de naam en vraag het opnieuw.`
@@ -107,4 +107,26 @@ export function pakBossMeting(projectId: string): string | null {
   const { tekst } = wacht;
   wacht = null;
   return tekst;
+}
+
+// ── Na Opslaan: een open klant- of projectscherm ververst ──────────────────
+export type BossOpgeslagen = { soort: BossKaart['soort']; klant_id: string | null; project_id: string | null };
+const luisteraars = new Set<(d: BossOpgeslagen) => void>();
+
+/** Luister naar opgeslagen kaartjes; geeft de opruimfunctie terug (voor useEffect). */
+export function bijBossOpgeslagen(fn: (d: BossOpgeslagen) => void): () => void {
+  luisteraars.add(fn);
+  return () => {
+    luisteraars.delete(fn);
+  };
+}
+
+export function meldBossOpgeslagen(d: BossOpgeslagen) {
+  for (const fn of [...luisteraars]) {
+    try {
+      fn(d);
+    } catch {
+      // Een scherm dat niet kan verversen mag het opslaan niet breken.
+    }
+  }
 }
