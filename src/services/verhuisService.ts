@@ -123,7 +123,14 @@ async function rpc<T>(naam: string, args: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-export const getVerhuis = (werkbonId: string) => rpc<Verhuis>('bb_verhuis_ophalen', { p_werkbon: werkbonId });
+export async function getVerhuis(werkbonId: string): Promise<Verhuis> {
+  const { data, error } = await supabase.rpc('bb_verhuis_ophalen', { p_werkbon: werkbonId });
+  // Functie (nog) niet in de database (app vóór de migratie, of een oude
+  // schema-cache): geen verhuisflow, dus niets tonen in plaats van een fout.
+  if (error && (error.code === 'PGRST202' || error.code === '42883')) return { actief: false } as Verhuis;
+  if (error) throw fout(error);
+  return data as Verhuis;
+}
 export const teken = (werkbonId: string, soort: 'start' | 'eind', naam: string, sha256: string, png: string) =>
   rpc<{ ok: boolean; herhaald: boolean; verhuis: Verhuis }>('bb_verhuis_tekenen', {
     p_werkbon: werkbonId, p_soort: soort, p_naam: naam, p_sha256: sha256, p_png_base64: png,
