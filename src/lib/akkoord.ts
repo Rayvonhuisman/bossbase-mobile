@@ -11,7 +11,7 @@
  * ingangsdatum (`AKKOORD_INGANG`); zonder datum vraagt het niets.
  */
 export const AKKOORD_VERSIES = {
-  algemene_voorwaarden: '2026-12b',
+  algemene_voorwaarden: '2026-12c',
   verwerkersovereenkomst: '2026-12',
   privacyverklaring: '2026-11b',
 } as const;
@@ -25,7 +25,8 @@ export const AKKOORD_INGANG: Record<AkkoordDocument, string | null> = {
   // manier, op verzoek van Niels 10 november 2026. 2026-12b (eindejaarsactie,
   // artikel 15 herschreven: de website is van ons tot je hem koopt): zelfde
   // route, besluit Niels 13 november 2026.
-  algemene_voorwaarden: '2026-11-13',
+  // 2026-12c (14 november 2026, besluit Niels): vooruitbetalen in 4.3.
+  algemene_voorwaarden: '2026-11-14',
   verwerkersovereenkomst: '2026-10-27',
 };
 
@@ -34,7 +35,7 @@ export const AKKOORD_NIEUW: Record<AkkoordDocument, { naam: string; url: string;
   algemene_voorwaarden: {
     naam: 'Algemene voorwaarden',
     url: 'https://www.bossbase.nl/voorwaarden',
-    wat: 'De eindejaarsactie: tot en met 31 december 2 maanden gratis proberen met een gratis website (3.2). Artikel 15 is herschreven: de website is van ons tot je hem koopt. Met een jaarabonnement Groei of Team houd je hem gratis (hosting € 5 per maand); anders koop je hem voor € 500, met hosting van € 5 per maand bij een ander abonnement of € 10 zonder abonnement, of gaat hij offline (15.8 tot en met 15.10). Wat je voor een upgrade of extra betaalt, krijg je niet terug (15.3). Eerder kwamen erbij: sjablonen en teksten van Boss zijn geen juridisch advies (7.8), Alles exporteren (8.3) en het melden van illegale inhoud op je website (7.7 en artikel 1).',
+    wat: 'Je kunt een jaarabonnement in één keer vooruit betalen; wat je in dat jaar toevoegt, reken je meteen naar rato af (4.3). Eerder kwam erbij: de eindejaarsactie: tot en met 31 december 2 maanden gratis proberen met een gratis website (3.2). Artikel 15 is herschreven: de website is van ons tot je hem koopt. Met een jaarabonnement Groei of Team houd je hem gratis (hosting € 5 per maand); anders koop je hem voor € 500, met hosting van € 5 per maand bij een ander abonnement of € 10 zonder abonnement, of gaat hij offline (15.8 tot en met 15.10). Wat je voor een upgrade of extra betaalt, krijg je niet terug (15.3). Eerder kwamen erbij: sjablonen en teksten van Boss zijn geen juridisch advies (7.8), Alles exporteren (8.3) en het melden van illegale inhoud op je website (7.7 en artikel 1).',
   },
   verwerkersovereenkomst: {
     naam: 'Verwerkersovereenkomst',
