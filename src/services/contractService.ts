@@ -31,6 +31,8 @@ export const FACTUUR_RITME_LABEL: Record<string, string> = {
   kwartaal: 'per kwartaal',
   halfjaar: 'per halfjaar',
   jaar: 'per jaar',
+  // Na elke afgeronde contractwerkbon een conceptfactuur (dashboard-migratie 20261113200000).
+  beurt: 'per beurt (na elke afgeronde beurt)',
 };
 
 export type Installatie = {
