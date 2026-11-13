@@ -34,7 +34,7 @@ export const AKKOORD_NIEUW: Record<AkkoordDocument, { naam: string; url: string;
   algemene_voorwaarden: {
     naam: 'Algemene voorwaarden',
     url: 'https://www.bossbase.nl/voorwaarden',
-    wat: 'De eindejaarsactie: tot en met 31 december 2 maanden gratis proberen met een gratis website (3.2). Artikel 15 is herschreven: de website is van ons tot je hem koopt. Met een jaarabonnement Groei of Team houd je hem gratis (hosting € 5 per maand); anders koop je hem voor € 500 met hosting van € 10 per maand, of gaat hij offline (15.8 tot en met 15.10). Wat je voor een upgrade of extra betaalt, krijg je niet terug (15.3). Eerder kwamen erbij: sjablonen en teksten van Boss zijn geen juridisch advies (7.8), Alles exporteren (8.3) en het melden van illegale inhoud op je website (7.7 en artikel 1).',
+    wat: 'De eindejaarsactie: tot en met 31 december 2 maanden gratis proberen met een gratis website (3.2). Artikel 15 is herschreven: de website is van ons tot je hem koopt. Met een jaarabonnement Groei of Team houd je hem gratis (hosting € 5 per maand); anders koop je hem voor € 500, met hosting van € 5 per maand bij een ander abonnement of € 10 zonder abonnement, of gaat hij offline (15.8 tot en met 15.10). Wat je voor een upgrade of extra betaalt, krijg je niet terug (15.3). Eerder kwamen erbij: sjablonen en teksten van Boss zijn geen juridisch advies (7.8), Alles exporteren (8.3) en het melden van illegale inhoud op je website (7.7 en artikel 1).',
   },
   verwerkersovereenkomst: {
     naam: 'Verwerkersovereenkomst',
