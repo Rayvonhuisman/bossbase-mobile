@@ -11,7 +11,7 @@
  * ingangsdatum (`AKKOORD_INGANG`); zonder datum vraagt het niets.
  */
 export const AKKOORD_VERSIES = {
-  algemene_voorwaarden: '2026-12a',
+  algemene_voorwaarden: '2026-12b',
   verwerkersovereenkomst: '2026-12',
   privacyverklaring: '2026-11b',
 } as const;
@@ -22,8 +22,10 @@ export const AKKOORD_INGANG: Record<AkkoordDocument, string | null> = {
   // 2026-12: besluit Niels 27 oktober 2026, ingang dezelfde dag, zonder mail of
   // aankondiging; beheerders accepteren bij hun volgende inlog. Voorwaarden
   // 2026-12a (7.8, sjablonen en Boss zijn geen juridisch advies): op dezelfde
-  // manier, op verzoek van Niels 10 november 2026.
-  algemene_voorwaarden: '2026-11-10',
+  // manier, op verzoek van Niels 10 november 2026. 2026-12b (eindejaarsactie,
+  // artikel 15 herschreven: de website is van ons tot je hem koopt): zelfde
+  // route, besluit Niels 13 november 2026.
+  algemene_voorwaarden: '2026-11-13',
   verwerkersovereenkomst: '2026-10-27',
 };
 
@@ -32,7 +34,7 @@ export const AKKOORD_NIEUW: Record<AkkoordDocument, { naam: string; url: string;
   algemene_voorwaarden: {
     naam: 'Algemene voorwaarden',
     url: 'https://www.bossbase.nl/voorwaarden',
-    wat: 'Sjablonen, voorbeeldteksten en teksten van Boss zijn een hulpmiddel en geen juridisch advies: je controleert ze zelf, en bij een contract met je klant is BossBase geen partij (7.8). Eerder kwamen erbij: Alles exporteren, al je gegevens en bestanden kosteloos in één ZIP (8.3). Artikel 15: de website bij een jaarabonnement, met in 15.9 de afspraken over teksten en sfeerbeelden die we met AI maken. En wat we doen bij een melding van illegale inhoud op je website, met het adres om dat te melden (7.7 en artikel 1).',
+    wat: 'De eindejaarsactie: tot en met 31 december 2 maanden gratis proberen met een gratis website (3.2). Artikel 15 is herschreven: de website is van ons tot je hem koopt. Met een jaarabonnement Groei of Team houd je hem gratis (hosting € 5 per maand); anders koop je hem voor € 500 met hosting van € 10 per maand, of gaat hij offline (15.8 tot en met 15.10). Wat je voor een upgrade of extra betaalt, krijg je niet terug (15.3). Eerder kwamen erbij: sjablonen en teksten van Boss zijn geen juridisch advies (7.8), Alles exporteren (8.3) en het melden van illegale inhoud op je website (7.7 en artikel 1).',
   },
   verwerkersovereenkomst: {
     naam: 'Verwerkersovereenkomst',
