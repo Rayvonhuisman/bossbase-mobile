@@ -24,6 +24,15 @@ const datum = (iso: string | null | undefined) =>
 
 type Venster = 'lid' | 'overdracht' | 'bedrijf' | null;
 
+/** Het woord dat je typt om je account te verwijderen, in je eigen taal. Het
+ *  Nederlandse VERWIJDEREN werkt altijd. Alleen een controle in de app: de
+ *  server vraagt bij een teamlid geen woord. */
+const bevestigWoord = () => tx('VERWIJDEREN', undefined, 'bevestigwoord');
+const isBevestigWoord = (invoer: string) => {
+  const w = invoer.trim().toLocaleUpperCase(locale());
+  return w === 'VERWIJDEREN' || w === bevestigWoord().toLocaleUpperCase(locale());
+};
+
 /**
  * Account verwijderen — dezelfde flow als `AccountVerwijderen.jsx` in het
  * dashboard, via de Edge Function `account-verwijderen` (review 26-10, S4-03;
@@ -266,7 +275,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         error={error}
         saving={saving}
         submitLabel={tx('Definitief verwijderen')}
-        submitDisabled={!wachtwoord || bevestiging.trim().toUpperCase() !== 'VERWIJDEREN'}
+        submitDisabled={!wachtwoord || !isBevestigWoord(bevestiging)}
         onSubmit={lidVerwijderen}
         onClose={() => setVenster(null)}
       >
@@ -284,10 +293,10 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
           autoComplete="current-password"
         />
         <FormField
-          label={tx('Typ VERWIJDEREN om te bevestigen')}
+          label={tx('Typ {woord} om te bevestigen', { woord: bevestigWoord() })}
           value={bevestiging}
           onChangeText={setBevestiging}
-          placeholder="VERWIJDEREN"
+          placeholder={bevestigWoord()}
           autoCapitalize="characters"
           autoCorrect={false}
         />

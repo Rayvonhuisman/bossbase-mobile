@@ -45,3 +45,4 @@ export { ScreenContainer } from './ScreenContainer';
 export { StatusBadge, statusKey, statusLabel, statusTone } from './StatusBadge';
 export type { StatusKey } from './StatusBadge';
 export { WorkOrderCard } from './WorkOrderCard';
+export { TaalKnop, TaalSheet } from './TaalKiezer';

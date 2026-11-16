@@ -15,7 +15,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
-import { AnimatedScreen, AppTopBar, FormField, FormSheet,
+import { AnimatedScreen, AppTopBar, FormField, FormSheet, TaalSheet,
   LoadingScreen,
   OnderStatusbalk,
 } from '@/components';
@@ -55,7 +55,7 @@ export default function ProfileScreen() {
   const [wachtwoord, setWachtwoord] = useState<{ huidig: string; nieuw: string; herhaal: string } | null>(null);
   const [wachtwoordFout, setWachtwoordFout] = useState<string | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
-  const { taal, kiesTaal } = useTaal();
+  const { taal } = useTaal();
   const [taalOpen, setTaalOpen] = useState(false);
   const taalNaam = TALEN.find((l) => l.code === taal)?.naam ?? 'Nederlands';
 
@@ -335,34 +335,8 @@ export default function ProfileScreen() {
       </FormSheet>
 
       {/* Taal kiezen. Geldt voor jou alleen (profiles.taal), op elk toestel en
-          ook in het dashboard. De talen staan in hun eigen taal. */}
-      <FormSheet
-        visible={taalOpen}
-        title={tx('Taal')}
-        subtitle={tx('Alleen voor jou. Je collega\'s houden hun eigen taal.')}
-        hideSubmit
-        onSubmit={() => setTaalOpen(false)}
-        onClose={() => setTaalOpen(false)}
-      >
-        <View style={styles.listGroup}>
-          {TALEN.map((l, i) => (
-            <Pressable
-              key={l.code}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: l.code === taal }}
-              aria-checked={l.code === taal}
-              onPress={async () => {
-                setTaalOpen(false);
-                if (l.code !== taal) await kiesTaal(l.code);
-              }}
-              style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={[styles.rowTitle, { flex: 1 }]}>{l.naam}</Text>
-              {l.code === taal ? <Text style={styles.rowTitle}>✓</Text> : null}
-            </Pressable>
-          ))}
-        </View>
-      </FormSheet>
+          ook in het dashboard. */}
+      <TaalSheet visible={taalOpen} onClose={() => setTaalOpen(false)} />
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AnimatedScreen, Button, InstalleerBossBase } from '@/components';
+import { AnimatedScreen, Button, InstalleerBossBase, TaalKnop } from '@/components';
 import { vraagWachtwoordResetAan } from '@/services/wachtwoordService';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
@@ -178,6 +178,8 @@ export default function LoginScreen() {
 
           {/* Alleen in de webapp, en niet als hij al geïnstalleerd is. */}
           <InstalleerBossBase />
+          {/* Taal kiezen vóór het inloggen (bijv. een nieuwe collega). */}
+          <TaalKnop />
         </AnimatedScreen>
       </KeyboardAvoidingView>
     </SafeAreaView>

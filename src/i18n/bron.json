@@ -1060,7 +1060,7 @@
  "Alleen voor jou. Je collega's houden hun eigen taal.": {
   "soort": "tekst",
   "bestanden": [
-   "app/profile/index.tsx"
+   "src/components/TaalKiezer.tsx"
   ]
  },
  "Alleen {naam} verschuift; de rest van de ploeg en de andere dagen blijven staan.": {
@@ -15812,7 +15812,14 @@
  "Taal": {
   "soort": "tekst",
   "bestanden": [
-   "app/profile/index.tsx"
+   "app/profile/index.tsx",
+   "src/components/TaalKiezer.tsx"
+  ]
+ },
+ "Taal: {taal}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/TaalKiezer.tsx"
   ]
  },
  "Taken": {
@@ -16689,12 +16696,6 @@
    "src/components/NotitieLog.tsx"
   ]
  },
- "Typ VERWIJDEREN om te bevestigen": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/instellingen/AccountVerwijderen.tsx"
-  ]
- },
  "Typ de bedrijfsnaam “{naam}” om te bevestigen": {
   "soort": "tekst",
   "bestanden": [
@@ -16705,6 +16706,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/project/VertelHetBoss.tsx"
+  ]
+ },
+ "Typ {woord} om te bevestigen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/AccountVerwijderen.tsx"
   ]
  },
  "Type": {
@@ -19156,7 +19163,7 @@
    "src/components/boss/FactuurGesprek.tsx"
   ]
  },
- "Welkom, {naam}\nstaat klaar": {
+ "Welkom, {naam}!\nAlles staat klaar": {
   "soort": "tekst",
   "bestanden": [
    "app/(onboarding)/success.tsx"
@@ -20055,6 +20062,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/MaterialenImporteren.tsx"
+  ]
+ },
+ "bevestigwoord::VERWIJDEREN": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/AccountVerwijderen.tsx"
   ]
  },
  "bijgewerkt {datum}": {

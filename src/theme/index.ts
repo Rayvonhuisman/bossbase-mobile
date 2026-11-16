@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 export { colors } from './colors';
 
 /**
@@ -41,11 +42,22 @@ export { colors } from './colors';
  */
 const SORA = true;
 
+/**
+ * Sora heeft geen Cyrillische letters (Bulgaars, Oekraïens). Op web zou de
+ * browser dan terugvallen op zijn standaardletter, en dat is vaak een
+ * schreefletter. Daarom op web een systeemletter als terugval in de lijst; de
+ * browser pakt die alleen voor tekens die Sora niet heeft. Native valt iOS of
+ * Android zelf terug op het systeemlettertype, en een lijst met komma's werkt
+ * daar niet.
+ */
+const TERUGVAL = Platform.OS === 'web' ? ', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' : '';
+const sora = (naam: string) => (SORA ? naam + TERUGVAL : undefined);
+
 export const fonts = {
-  regular: SORA ? 'Sora_400Regular' : undefined,
-  medium: SORA ? 'Sora_500Medium' : undefined,
-  semibold: SORA ? 'Sora_600SemiBold' : undefined,
-  bold: SORA ? 'Sora_700Bold' : undefined,
+  regular: sora('Sora_400Regular'),
+  medium: sora('Sora_500Medium'),
+  semibold: sora('Sora_600SemiBold'),
+  bold: sora('Sora_700Bold'),
 } as const;
 
 /**

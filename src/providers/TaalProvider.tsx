@@ -2,7 +2,8 @@
  * Houdt de gekozen taal bij en hangt de app opnieuw op bij een wissel.
  *
  * Volgorde: de taal uit het profiel (profiles.taal) wint; zonder profiel de
- * laatst gekozen taal op dit toestel (AsyncStorage); anders Nederlands. We
+ * laatst gekozen taal op dit toestel (AsyncStorage); anders Nederlands. Heeft
+ * het profiel nog geen taal, dan gaat de keuze van dit toestel het profiel in. We
  * kiezen bewust níet automatisch de taal van de telefoon: veel Nederlandse
  * gebruikers hebben hun telefoon in het Engels staan.
  */
@@ -42,7 +43,16 @@ export function TaalProvider({ children }: { children: ReactNode }) {
   const profielTaal = profile?.taal;
   useEffect(() => {
     if (!profile) return;
-    const doel: Taal = isTaal(profielTaal) ? profielTaal : 'nl';
+    // Nog geen taal in het profiel, maar wel op dit toestel gekozen (bijv. op
+    // het inlogscherm): die keuze bewaren in het profiel.
+    if (!isTaal(profielTaal)) {
+      if (taal !== 'nl') {
+        zetEigenTaal(profile.id, taal).catch(() => {});
+        profile.taal = taal;
+      }
+      return;
+    }
+    const doel: Taal = profielTaal;
     if (doel !== taal) {
       pasToe(doel);
       AsyncStorage.setItem(SLEUTEL, doel).catch(() => {});
@@ -54,7 +64,7 @@ export function TaalProvider({ children }: { children: ReactNode }) {
     await pasToe(nieuw);
     AsyncStorage.setItem(SLEUTEL, nieuw).catch(() => {});
     if (user?.id) await zetEigenTaal(user.id, nieuw);
-    if (profile) profile.taal = nieuw === 'nl' ? null : nieuw;
+    if (profile) profile.taal = nieuw;
   }, [pasToe, user?.id, profile]);
 
   const waarde = useMemo(() => ({ taal, kiesTaal }), [taal, kiesTaal]);

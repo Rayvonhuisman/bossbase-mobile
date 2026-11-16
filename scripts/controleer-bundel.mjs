@@ -79,7 +79,12 @@ export async function controleerBundel(map) {
     if (!TEKST.has(extname(pad))) continue;
     const inhoud = await readFile(pad, 'utf8');
 
+    // De woordenboeken van de talen (src/i18n/talen/*.json, als los stuk per
+    // taal) bevatten "Wachtwoord": "Password" en dergelijke: dat is een
+    // vertaling, geen wachtwoord. Alleen die ene regel slaan we daar over.
+    const woordenboek = /\/(?:en|de|fr|es|pt|pl|ro|bg|uk|tr)-[0-9a-f]{16,}\.js$/.test(rel);
     for (const [soort, patroon] of VERBODEN) {
+      if (woordenboek && soort === 'wachtwoord als letterlijke waarde') continue;
       if (patroon.test(inhoud)) bevindingen.push({ bestand: rel, soort });
     }
     for (const [token] of inhoud.matchAll(JWT)) {

@@ -243,10 +243,10 @@ export async function updateEigenProfiel(input: {
   );
 }
 
-/** Eigen taal opslaan (kolom profiles.taal; 'nl' wordt leeg = standaard). */
+/** Eigen taal opslaan (kolom profiles.taal). Leeg = nooit gekozen (Nederlands). */
 export async function zetEigenTaal(userId: string, taal: string) {
   return schrijf<{ id: string }>(
-    () => supabase.from('profiles').update({ taal: taal === 'nl' ? null : taal }).eq('id', userId).select('id'),
+    () => supabase.from('profiles').update({ taal }).eq('id', userId).select('id'),
     { context: 'profileService.zetEigenTaal', bedrijfReadonly: false },
   );
 }

@@ -131,7 +131,7 @@ export default function SuccessScreen() {
         </View>
 
         <Text style={styles.title}>
-          {firstName ? tx('Welkom, {naam}\nstaat klaar', { naam: firstName }) : tx('Je werkruimte\nstaat klaar')}
+          {firstName ? tx('Welkom, {naam}!\nAlles staat klaar', { naam: firstName }) : tx('Je werkruimte\nstaat klaar')}
         </Text>
         <Text style={styles.sub}>
           {company?.name
