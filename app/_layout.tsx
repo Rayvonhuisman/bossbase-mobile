@@ -12,6 +12,7 @@ import {
   FontProvider,
   OnboardingProvider,
   PermissionsProvider,
+  TaalProvider,
   ThemeProvider,
   ToastProvider,
   useTheme,
@@ -40,6 +41,7 @@ export default function RootLayout() {
               wachtscherm de themakleuren gebruikt en niet wit is. */}
           <FontProvider>
             <AuthProvider>
+            <TaalProvider>
             <PermissionsProvider>
               <OnboardingProvider>
                 <ToastProvider>
@@ -74,6 +76,7 @@ export default function RootLayout() {
                 </ToastProvider>
               </OnboardingProvider>
             </PermissionsProvider>
+            </TaalProvider>
             </AuthProvider>
           </FontProvider>
           </MobielKader>

@@ -1,0 +1,254 @@
+{
+ "Account": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Alleen voor jou. Je collega's houden hun eigen taal.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Annuleren": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Bedrijf": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Bedrijfsinstellingen": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Beheerder": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "De twee wachtwoorden zijn niet gelijk.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Deze maand": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Gebruiker": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Gelukt": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Herhaal wachtwoord": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Huidig wachtwoord": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Hulp & support": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Integraties": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Je rol en bedrijf worden door een beheerder ingesteld.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Je wachtwoord is gewijzigd.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Je wordt teruggebracht naar het inlogscherm.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Klanten": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Medewerker": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Minstens 8 tekens": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Naam": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Nieuw wachtwoord": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Nogmaals": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Onbekende rol": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Opslaan": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/FormSheet.tsx"
+  ]
+ },
+ "Planner": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Profiel": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Profiel bewerken": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Profiel laden...": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Sluiten": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/FormSheet.tsx"
+  ]
+ },
+ "Taal": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Team": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Teamleden": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Uitloggen": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Uitloggen?": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Uitnodigen, rechten en toegang": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Veelgestelde vragen en contact": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Voor- en achternaam": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Wachtwoord opslaan": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Wachtwoord wijzigen": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "Werkbonnen": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ },
+ "tarieven, btw en gegevens": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/profile/index.tsx"
+  ]
+ }
+}

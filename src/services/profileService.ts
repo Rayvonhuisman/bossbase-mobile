@@ -54,7 +54,7 @@ export async function fetchProfileWithCompany(userId: string): Promise<ProfileFe
   // it returns Postgres 42703 (undefined_column).
   const profileResp = await supabase
     .from('profiles')
-    .select('id, company_id, full_name, avatar_url, role, email_verified_at')
+    .select('id, company_id, full_name, avatar_url, role, email_verified_at, taal')
     .eq('id', userId)
     .maybeSingle();
 
@@ -239,6 +239,14 @@ export async function updateEigenProfiel(input: {
   return schrijf<{ id: string; full_name: string | null }>(
     () => supabase.from('profiles').update(updates).eq('id', userId).select('id, full_name'),
     { context: 'profileService.updateEigenProfiel', bedrijfReadonly: isReadonly() },
+  );
+}
+
+/** Eigen taal opslaan (kolom profiles.taal; 'nl' wordt leeg = standaard). */
+export async function zetEigenTaal(userId: string, taal: string) {
+  return schrijf<{ id: string }>(
+    () => supabase.from('profiles').update({ taal: taal === 'nl' ? null : taal }).eq('id', userId).select('id'),
+    { context: 'profileService.zetEigenTaal', bedrijfReadonly: false },
   );
 }
 

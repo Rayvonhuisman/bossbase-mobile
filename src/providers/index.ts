@@ -8,3 +8,4 @@ export type { PlanStatus } from './PermissionsProvider';
 export { ThemeProvider, useTheme } from './ThemeProvider';
 export type { ColorMode } from './ThemeProvider';
 export type { OnboardingData } from './OnboardingProvider';
+export { TaalProvider, useTaal } from './TaalProvider';

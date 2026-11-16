@@ -17,6 +17,7 @@ import { radius, spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { useFocusTerug } from '@/lib/focusTerug';
+import { tx } from '@/i18n';
 
 type Props = {
   visible: boolean;
@@ -34,6 +35,8 @@ type Props = {
   children: ReactNode;
   /** Extra actie links onderin, bijvoorbeeld verwijderen. */
   destructive?: { label: string; onPress: () => void };
+  /** Geen opslaanknop (keuzelijst die direct werkt). */
+  hideSubmit?: boolean;
 };
 
 /**
@@ -54,12 +57,13 @@ export function FormSheet({
   subtitle,
   error,
   saving = false,
-  submitLabel = 'Opslaan',
+  submitLabel,
   submitDisabled = false,
   onSubmit,
   onClose,
   children,
   destructive,
+  hideSubmit = false,
 }: Props) {
   const { colors: t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -100,7 +104,7 @@ export function FormSheet({
             disabled={saving}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel="Sluiten"
+            accessibilityLabel={tx('Sluiten')}
             style={[styles.closeBtn, saving && styles.closeBtnUit]}
           >
             <X size={20} color={t.ink2} />
@@ -132,12 +136,14 @@ export function FormSheet({
               <Text style={styles.foutTekst}>{error}</Text>
             </View>
           ) : null}
-          <Button
-            label={submitLabel}
-            onPress={onSubmit}
-            loading={saving}
-            disabled={submitDisabled || saving}
-          />
+          {hideSubmit ? null : (
+            <Button
+              label={submitLabel ?? tx('Opslaan')}
+              onPress={onSubmit}
+              loading={saving}
+              disabled={submitDisabled || saving}
+            />
+          )}
           {destructive ? (
             <Pressable
               onPress={destructive.onPress}

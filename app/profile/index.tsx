@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import {
   Building2,
   ChevronRight,
+  Globe,
   HelpCircle,
   Pencil,
   Plug,
@@ -18,7 +19,8 @@ import { AnimatedScreen, AppTopBar, FormField, FormSheet,
   LoadingScreen,
   OnderStatusbalk,
 } from '@/components';
-import { useAuth, usePermissions, useTheme } from '@/providers';
+import { useAuth, usePermissions, useTaal, useTheme } from '@/providers';
+import { TALEN, tx, txm } from '@/i18n';
 import { updateEigenProfiel, wijzigWachtwoordMetHuidig } from '@/services/profileService';
 import { useSave } from '@/lib/useSave';
 import type { Role } from '@/types/domain';
@@ -27,9 +29,9 @@ import { maakThemaStijlen, useStyles } from '@/lib/useStyles';
 import { terugOfNaar } from '@/lib/navigatie';
 
 const ROLE_LABELS: Record<Role, string> = {
-  admin: 'Beheerder',
-  planner: 'Planner',
-  medewerker: 'Medewerker',
+  admin: txm('Beheerder'),
+  planner: txm('Planner'),
+  medewerker: txm('Medewerker'),
 };
 
 // ---------------------------------------------------------------------------
@@ -43,9 +45,9 @@ export default function ProfileScreen() {
   const { allowsRoute, loaded: rechtenGeladen } = usePermissions();
   const { colors: th, colorMode } = useTheme();
 
-  const fullName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Gebruiker';
+  const fullName = profile?.full_name?.trim() || user?.email?.split('@')[0] || tx('Gebruiker');
   const initials = computeInitials(profile?.full_name ?? user?.email ?? '?');
-  const roleLabel = role ? ROLE_LABELS[role] : 'Onbekende rol';
+  const roleLabel = role ? tx(ROLE_LABELS[role]) : tx('Onbekende rol');
   const companyName = company?.name ?? '—';
   const appVersion = Constants.expoConfig?.version ?? '0.1.0';
 
@@ -53,11 +55,14 @@ export default function ProfileScreen() {
   const [wachtwoord, setWachtwoord] = useState<{ huidig: string; nieuw: string; herhaal: string } | null>(null);
   const [wachtwoordFout, setWachtwoordFout] = useState<string | null>(null);
   const { save, saving, error: saveError, setError: setSaveError } = useSave<unknown>();
+  const { taal, kiesTaal } = useTaal();
+  const [taalOpen, setTaalOpen] = useState(false);
+  const taalNaam = TALEN.find((l) => l.code === taal)?.naam ?? 'Nederlands';
 
   const onLogout = () => {
-    Dialog.alert('Uitloggen?', 'Je wordt teruggebracht naar het inlogscherm.', [
-      { text: 'Annuleren', style: 'cancel' },
-      { text: 'Uitloggen', style: 'destructive', onPress: () => signOut() },
+    Dialog.alert(tx('Uitloggen?'), tx('Je wordt teruggebracht naar het inlogscherm.'), [
+      { text: tx('Annuleren'), style: 'cancel' },
+      { text: tx('Uitloggen'), style: 'destructive', onPress: () => signOut() },
     ]);
   };
 
@@ -69,8 +74,8 @@ export default function ProfileScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: th.bg }}>
         <StatusBar style={colorMode === 'dark' ? 'light' : 'dark'} />
-        <AppTopBar variant="detail" onBack={() => terugOfNaar(router, '/today')} title="Profiel" />
-        <LoadingScreen label="Profiel laden..." />
+        <AppTopBar variant="detail" onBack={() => terugOfNaar(router, '/today')} title={tx('Profiel')} />
+        <LoadingScreen label={tx('Profiel laden...')} />
       </View>
     );
   }
@@ -88,7 +93,7 @@ export default function ProfileScreen() {
         <AppTopBar
           variant="detail"
           onBack={() => terugOfNaar(router, '/today')}
-          title="Profiel"
+          title={tx('Profiel')}
           subtitle={`${roleLabel} · ${companyName}`}
           rightAction={
             <Pressable
@@ -97,7 +102,7 @@ export default function ProfileScreen() {
                 setNaamConcept(profile?.full_name ?? '');
               }}
               accessibilityRole="button"
-              accessibilityLabel="Profiel bewerken"
+              accessibilityLabel={tx('Profiel bewerken')}
               style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.7 }]}
               hitSlop={6}
             >
@@ -132,9 +137,9 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.heroStats}>
-            <HeroStat n="—" label="Deze maand" />
-            <HeroStat n="—" label="Werkbonnen" />
-            <HeroStat n="—" label="Klanten" />
+            <HeroStat n="—" label={tx('Deze maand')} />
+            <HeroStat n="—" label={tx('Werkbonnen')} />
+            <HeroStat n="—" label={tx('Klanten')} />
           </View>
         </View>
         {/*
@@ -156,15 +161,15 @@ export default function ProfileScreen() {
         */}
         {allowsRoute('/settings') || allowsRoute('/integrations') ? (
           <>
-            <SectionHead title="Bedrijf" />
+            <SectionHead title={tx('Bedrijf')} />
             <ListGroup
               items={[
                 ...(allowsRoute('/settings')
                   ? [
                       {
                         icon: Building2,
-                        title: 'Bedrijfsinstellingen',
-                        sub: `${companyName} · tarieven, btw en gegevens`,
+                        title: tx('Bedrijfsinstellingen'),
+                        sub: `${companyName} · ${tx('tarieven, btw en gegevens')}`,
                         onPress: () => router.push('/settings'),
                       },
                     ]
@@ -173,7 +178,7 @@ export default function ProfileScreen() {
                   ? [
                       {
                         icon: Plug,
-                        title: 'Integraties',
+                        title: tx('Integraties'),
                         sub: 'Moneybird, Stripe, SnelStart en AFAS',
                         onPress: () => router.push('/integrations'),
                       },
@@ -186,13 +191,13 @@ export default function ProfileScreen() {
 
         {allowsRoute('/team') ? (
           <>
-            <SectionHead title="Team" />
+            <SectionHead title={tx('Team')} />
             <ListGroup
               items={[
                 {
                   icon: Users,
-                  title: 'Teamleden',
-                  sub: 'Uitnodigen, rechten en toegang',
+                  title: tx('Teamleden'),
+                  sub: tx('Uitnodigen, rechten en toegang'),
                   onPress: () => router.push('/team'),
                 },
               ]}
@@ -201,12 +206,12 @@ export default function ProfileScreen() {
         ) : null}
 
         {/* Account */}
-        <SectionHead title="Account" />
+        <SectionHead title={tx('Account')} />
         <ListGroup
           items={[
             {
               icon: ShieldCheck,
-              title: 'Wachtwoord wijzigen',
+              title: tx('Wachtwoord wijzigen'),
               sub: user?.email ?? '—',
               onPress: () => {
                 setWachtwoordFout(null);
@@ -214,9 +219,15 @@ export default function ProfileScreen() {
               },
             },
             {
+              icon: Globe,
+              title: tx('Taal'),
+              sub: taalNaam,
+              onPress: () => setTaalOpen(true),
+            },
+            {
               icon: HelpCircle,
-              title: 'Hulp & support',
-              sub: 'Veelgestelde vragen en contact',
+              title: tx('Hulp & support'),
+              sub: tx('Veelgestelde vragen en contact'),
               onPress: () => router.push('/support'),
             },
           ]}
@@ -229,7 +240,7 @@ export default function ProfileScreen() {
             onPress={onLogout}
             style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.logoutText}>Uitloggen</Text>
+            <Text style={styles.logoutText}>{tx('Uitloggen')}</Text>
           </Pressable>
         </View>
 
@@ -242,7 +253,7 @@ export default function ProfileScreen() {
           alleen je eigen rij, en dat is precies wat dit formulier doet. */}
       <FormSheet
         visible={naamConcept !== null}
-        title="Profiel bewerken"
+        title={tx('Profiel bewerken')}
         error={saveError}
         saving={saving}
         submitDisabled={!naamConcept?.trim()}
@@ -258,29 +269,29 @@ export default function ProfileScreen() {
         onClose={() => setNaamConcept(null)}
       >
         <FormField
-          label="Naam"
+          label={tx('Naam')}
           value={naamConcept ?? ''}
           onChangeText={setNaamConcept}
-          placeholder="Voor- en achternaam"
+          placeholder={tx('Voor- en achternaam')}
           autoFocus
         />
         <Text style={styles.hint}>
-          Je rol en bedrijf worden door een beheerder ingesteld.
+          {tx('Je rol en bedrijf worden door een beheerder ingesteld.')}
         </Text>
       </FormSheet>
 
       <FormSheet
         visible={wachtwoord !== null}
-        title="Wachtwoord wijzigen"
+        title={tx('Wachtwoord wijzigen')}
         subtitle={user?.email ?? undefined}
         error={wachtwoordFout ?? saveError}
         saving={saving}
-        submitLabel="Wachtwoord opslaan"
+        submitLabel={tx('Wachtwoord opslaan')}
         submitDisabled={!wachtwoord?.huidig || !wachtwoord?.nieuw || !wachtwoord?.herhaal}
         onSubmit={() => {
           if (!wachtwoord) return;
           if (wachtwoord.nieuw !== wachtwoord.herhaal) {
-            setWachtwoordFout('De twee wachtwoorden zijn niet gelijk.');
+            setWachtwoordFout(tx('De twee wachtwoorden zijn niet gelijk.'));
             return;
           }
           setWachtwoordFout(null);
@@ -290,14 +301,14 @@ export default function ProfileScreen() {
           save(() => wijzigWachtwoordMetHuidig(wachtwoord.huidig, wachtwoord.nieuw), {
             onSuccess: () => {
               setWachtwoord(null);
-              Dialog.alert('Gelukt', 'Je wachtwoord is gewijzigd.');
+              Dialog.alert(tx('Gelukt'), tx('Je wachtwoord is gewijzigd.'));
             },
           });
         }}
         onClose={() => setWachtwoord(null)}
       >
         <FormField
-          label="Huidig wachtwoord"
+          label={tx('Huidig wachtwoord')}
           value={wachtwoord?.huidig ?? ''}
           onChangeText={(v) => setWachtwoord((w) => (w ? { ...w, huidig: v } : w))}
           secureTextEntry
@@ -306,21 +317,50 @@ export default function ProfileScreen() {
           autoFocus
         />
         <FormField
-          label="Nieuw wachtwoord"
+          label={tx('Nieuw wachtwoord')}
           value={wachtwoord?.nieuw ?? ''}
           onChangeText={(v) => setWachtwoord((w) => (w ? { ...w, nieuw: v } : w))}
-          placeholder="Minstens 8 tekens"
+          placeholder={tx('Minstens 8 tekens')}
           secureTextEntry
           autoCapitalize="none"
         />
         <FormField
-          label="Herhaal wachtwoord"
+          label={tx('Herhaal wachtwoord')}
           value={wachtwoord?.herhaal ?? ''}
           onChangeText={(v) => setWachtwoord((w) => (w ? { ...w, herhaal: v } : w))}
-          placeholder="Nogmaals"
+          placeholder={tx('Nogmaals')}
           secureTextEntry
           autoCapitalize="none"
         />
+      </FormSheet>
+
+      {/* Taal kiezen. Geldt voor jou alleen (profiles.taal), op elk toestel en
+          ook in het dashboard. De talen staan in hun eigen taal. */}
+      <FormSheet
+        visible={taalOpen}
+        title={tx('Taal')}
+        subtitle={tx('Alleen voor jou. Je collega\'s houden hun eigen taal.')}
+        hideSubmit
+        onSubmit={() => setTaalOpen(false)}
+        onClose={() => setTaalOpen(false)}
+      >
+        <View style={styles.listGroup}>
+          {TALEN.map((l, i) => (
+            <Pressable
+              key={l.code}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: l.code === taal }}
+              onPress={async () => {
+                setTaalOpen(false);
+                if (l.code !== taal) await kiesTaal(l.code);
+              }}
+              style={({ pressed }) => [styles.row, i > 0 && styles.rowBorder, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={[styles.rowTitle, { flex: 1 }]}>{l.naam}</Text>
+              {l.code === taal ? <Text style={styles.rowTitle}>✓</Text> : null}
+            </Pressable>
+          ))}
+        </View>
       </FormSheet>
     </View>
   );
