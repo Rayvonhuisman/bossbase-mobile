@@ -8,7 +8,7 @@
  * gebruikers hebben hun telefoon in het Engels staan.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isTaal, laadWoordenboek, zetTaalIntern, type Taal } from '@/i18n';
 import { zetEigenTaal } from '@/services/profileService';
 import { useAuth } from './AuthProvider';
@@ -23,6 +23,8 @@ export function TaalProvider({ children }: { children: ReactNode }) {
   const { profile, user } = useAuth();
   const [taal, setTaal] = useState<Taal>('nl');
   const [klaar, setKlaar] = useState(false);
+  // Taal gekozen terwijl niemand ingelogd was (inlogscherm): die wint bij inloggen.
+  const gekozenVoorInloggen = useRef(false);
 
   const pasToe = useCallback(async (nieuw: Taal) => {
     const boek = await laadWoordenboek(nieuw).catch(() => ({}));
@@ -43,8 +45,18 @@ export function TaalProvider({ children }: { children: ReactNode }) {
   const profielTaal = profile?.taal;
   useEffect(() => {
     if (!profile) return;
-    // Nog geen taal in het profiel, maar wel op dit toestel gekozen (bijv. op
-    // het inlogscherm): die keuze bewaren in het profiel.
+    // Vlak vóór het inloggen bewust een taal gekozen: die wint en gaat het
+    // profiel in.
+    if (gekozenVoorInloggen.current) {
+      gekozenVoorInloggen.current = false;
+      if (profielTaal !== taal) {
+        zetEigenTaal(profile.id, taal).catch(() => {});
+        profile.taal = taal;
+      }
+      return;
+    }
+    // Nog geen taal in het profiel, maar wel op dit toestel gekozen: die keuze
+    // bewaren in het profiel.
     if (!isTaal(profielTaal)) {
       if (taal !== 'nl') {
         zetEigenTaal(profile.id, taal).catch(() => {});
@@ -64,6 +76,7 @@ export function TaalProvider({ children }: { children: ReactNode }) {
     await pasToe(nieuw);
     AsyncStorage.setItem(SLEUTEL, nieuw).catch(() => {});
     if (user?.id) await zetEigenTaal(user.id, nieuw);
+    else gekozenVoorInloggen.current = true;
     if (profile) profile.taal = nieuw;
   }, [pasToe, user?.id, profile]);
 
