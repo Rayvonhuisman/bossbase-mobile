@@ -63,6 +63,7 @@ import { klantAvatarKleuren } from '@/lib/klantKleur';
 import { callPhone, openMaps } from '@/lib/linking';
 import { notAvailableAlert } from '@/lib/notAvailable';
 import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
+import { tx, txn, txm, locale } from '@/i18n';
 
 /**
  * Vandaag — het startscherm uit het goedgekeurde ontwerp.
@@ -78,18 +79,19 @@ import { dsShadow, dsShadowPop, type ThemeColors } from '@/theme';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const NL_LONG_DATE = new Intl.DateTimeFormat('nl-NL', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-});
+const langeDatum = () =>
+  new Intl.DateTimeFormat(locale(), {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
 
 function firstNameOf(fullName: string | null | undefined, fallback: string): string {
   if (!fullName) return fallback;
   return fullName.trim().split(/\s+/)[0] ?? fallback;
 }
 
-const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+const NL_DAYS_SHORT = [txm('Ma'), txm('Di'), txm('Wo'), txm('Do'), txm('Vr'), txm('Za'), txm('Zo')];
 
 /** Zoveel activiteiten toont de homepage, net als `FEED_LIMIET` in het dashboard. */
 const ACTIVITEITEN_MAX = 8;
@@ -141,12 +143,12 @@ function toISODate(d: Date): string {
 function formatUren(hours: number): string {
   if (!hours) return '0';
   if (Number.isInteger(hours)) return String(hours);
-  return hours.toFixed(1).replace('.', ',');
+  return new Intl.NumberFormat(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(hours);
 }
 
 /** "6,5 u" — met eenheid, voor lopende tekst. */
 function formatUrenLang(hours: number): string {
-  return `${formatUren(hours)} u`;
+  return tx('{uren} u', { uren: formatUren(hours) });
 }
 
 /** "zojuist", "5u", "3d" — hoe lang geleden, zoals de tegel in het dashboard (`relAgo`). */
@@ -155,9 +157,9 @@ function geledenKort(iso: string | null | undefined): string | null {
   const ms = Date.now() - new Date(iso).getTime();
   if (Number.isNaN(ms)) return null;
   const uur = Math.floor(ms / 36e5);
-  if (uur < 1) return 'zojuist';
-  if (uur < 24) return `${uur}u`;
-  return `${Math.floor(uur / 24)}d`;
+  if (uur < 1) return tx('zojuist');
+  if (uur < 24) return tx('{n}u', { n: uur });
+  return tx('{n}d', { n: Math.floor(uur / 24) });
 }
 
 /** Afgeronde werkbon? Eén bron voor de statusvertaling: `statusKey`. */
@@ -195,10 +197,10 @@ export default function TodayScreen() {
   const zieFacturen = can('facturen');
   const toonOverzicht = zieFinancien || zieVerkoop || zieOffertes || zieFacturen;
 
-  const firstName = firstNameOf(profile?.full_name, user?.email?.split('@')[0] ?? 'gebruiker');
+  const firstName = firstNameOf(profile?.full_name, user?.email?.split('@')[0] ?? tx('gebruiker'));
   const currentUserName = profile?.full_name ?? user?.email ?? null;
   const today = useMemo(() => {
-    const d = NL_LONG_DATE.format(new Date());
+    const d = langeDatum().format(new Date());
     return d.charAt(0).toUpperCase() + d.slice(1);
   }, []);
 
@@ -395,15 +397,17 @@ export default function TodayScreen() {
   const urenOver = Math.max(0, NORM_UREN - loggedToday);
 
   const heroLinks = huidige
-    ? `${huidigeIsBezig ? 'Nu bezig' : 'Volgende'}: ${huidige.title}`
+    ? huidigeIsBezig
+      ? tx('Nu bezig: {titel}', { titel: huidige.title })
+      : tx('Volgende: {titel}', { titel: huidige.title })
     : werkbonnen.length > 0
-      ? 'Alles afgerond voor vandaag'
-      : 'Niets gepland voor vandaag';
-  const heroRechts = urenOver > 0 ? `nog ${formatUrenLang(urenOver)}` : 'dag compleet';
+      ? tx('Alles afgerond voor vandaag')
+      : tx('Niets gepland voor vandaag');
+  const heroRechts = urenOver > 0 ? tx('nog {uren}', { uren: formatUrenLang(urenOver) }) : tx('dag compleet');
 
   // Kort gehouden: de bovenbalk geeft één regel, en "geschreven" erachter
   // viel er in de simulator al af op een iPhone 17.
-  const subtitel = `${werkbonnen.length} ${werkbonnen.length === 1 ? 'werkbon' : 'werkbonnen'} · ${afspraken.length} ${afspraken.length === 1 ? 'afspraak' : 'afspraken'} · ${formatUrenLang(loggedToday)}`;
+  const subtitel = `${txn('{n} werkbon', '{n} werkbonnen', werkbonnen.length)} · ${txn('{n} afspraak', '{n} afspraken', afspraken.length)} · ${formatUrenLang(loggedToday)}`;
 
   // ─── Acties (ongewijzigd) ───────────────────────────────────────────────
   const openPlanningItem = (item: PlanningItem) => {
@@ -411,10 +415,10 @@ export default function TodayScreen() {
     else if (item.customerId) router.push(`/customers/${item.customerId}`);
   };
   const onNavigate = (addr: string | null) => {
-    if (!openMaps(addr)) notAvailableAlert('Navigeren', 'Geen adres bekend.');
+    if (!openMaps(addr)) notAvailableAlert(tx('Navigeren'), tx('Geen adres bekend.'));
   };
   const onCall = (phone: string | null) => {
-    if (!callPhone(phone)) notAvailableAlert('Bellen', 'Geen telefoonnummer bekend.');
+    if (!callPhone(phone)) notAvailableAlert(tx('Bellen'), tx('Geen telefoonnummer bekend.'));
   };
 
   const huidigeTijd = huidige
@@ -427,14 +431,14 @@ export default function TodayScreen() {
   const dezeWeek = (
             <View style={styles.block}>
               <View style={styles.blockHead}>
-                <Text style={styles.blockTitle}>Deze week</Text>
+                <Text style={styles.blockTitle}>{tx('Deze week')}</Text>
                 <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/hours')} hitSlop={8}>
-                  <Text style={styles.blockLink}>Uren ›</Text>
+                  <Text style={styles.blockLink}>{tx('Uren ›')}</Text>
                 </Pressable>
               </View>
               <AppCard padding={16}>
                 <View style={styles.weekHeader}>
-                  <Text style={styles.weekTotalLabel}>Werkdag deze week</Text>
+                  <Text style={styles.weekTotalLabel}>{tx('Werkdag deze week')}</Text>
                   <Text style={styles.weekTotalValue}>{formatUrenLang(week.werkdag)}</Text>
                 </View>
                 <View style={styles.weekRow}>
@@ -464,15 +468,15 @@ export default function TodayScreen() {
                           />
                         </View>
                         <Text style={[styles.weekLabel, on && styles.weekLabelOn]}>
-                          {label}
+                          {tx(label)}
                         </Text>
                       </View>
                     );
                   })}
                 </View>
                 <Text style={styles.weekKlus}>
-                  Op werkbonnen {formatUrenLang(week.werkbon)}
-                  {week.werkdag > 0 ? ` · niet aan een klus ${formatUrenLang(Math.max(0, week.verschil))}` : ''}
+                  {tx('Op werkbonnen {uren}', { uren: formatUrenLang(week.werkbon) })}
+                  {week.werkdag > 0 ? ` · ${tx('niet aan een klus {uren}', { uren: formatUrenLang(Math.max(0, week.verschil)) })}` : ''}
                 </Text>
               </AppCard>
             </View>
@@ -484,7 +488,7 @@ export default function TodayScreen() {
         header={
           <AppTopBar
             eyebrow={today}
-            title={`Hoi ${firstName}`}
+            title={tx('Hoi {naam}', { naam: firstName })}
             subtitle={subtitel}
             showProfileButton
           />
@@ -497,19 +501,19 @@ export default function TodayScreen() {
           <View style={styles.hero}>
             <View style={styles.heroTop}>
               <View>
-                <Text style={styles.heroLabel}>Werkbonnen</Text>
+                <Text style={styles.heroLabel}>{tx('Werkbonnen')}</Text>
                 <View style={styles.heroValueRow}>
                   <Text style={styles.heroValue}>{klaar}</Text>
-                  <Text style={styles.heroUnit}>van {werkbonnen.length} klaar</Text>
+                  <Text style={styles.heroUnit}>{tx('van {totaal} klaar', { totaal: werkbonnen.length })}</Text>
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.heroLabel}>Werkdag</Text>
+                <Text style={styles.heroLabel}>{tx('Werkdag')}</Text>
                 <View style={styles.heroValueRow}>
                   <Text style={[styles.heroValue, { color: c.green }]}>
                     {formatUren(loggedToday)}
                   </Text>
-                  <Text style={styles.heroUnit}>/ {NORM_UREN} u</Text>
+                  <Text style={styles.heroUnit}>/ {tx('{uren} u', { uren: NORM_UREN })}</Text>
                 </View>
               </View>
             </View>
@@ -534,7 +538,7 @@ export default function TodayScreen() {
 
             <View style={styles.heroFoot}>
               <Text style={styles.heroFootText} numberOfLines={1}>
-                {loading ? 'Laden…' : heroLinks}
+                {loading ? tx('Laden…') : heroLinks}
               </Text>
               <Text style={[styles.heroFootText, { flexShrink: 0 }]}>{heroRechts}</Text>
             </View>
@@ -549,27 +553,27 @@ export default function TodayScreen() {
           <QuickAction
             styles={styles}
             icon={<Clock size={20} color={c.green700} strokeWidth={1.9} />}
-            label="Uren schrijven"
+            label={tx('Uren schrijven')}
             onPress={() => router.push('/hours/new')}
           />
           <QuickAction
             styles={styles}
             icon={<CalendarPlus size={20} color={c.green700} strokeWidth={1.9} />}
-            label="Nieuwe activiteit"
+            label={tx('Nieuwe activiteit')}
             onPress={() => router.push('/activities?nieuw=1')}
           />
           {magWerkbonMaken ? (
             <QuickAction
               styles={styles}
               icon={<FileText size={20} color={c.green700} strokeWidth={1.9} />}
-              label="Nieuwe werkbon"
+              label={tx('Nieuwe werkbon')}
               onPress={() => router.push('/work-orders/new')}
             />
           ) : null}
           <QuickAction
             styles={styles}
             icon={<Users size={20} color={c.green700} strokeWidth={1.9} />}
-            label="Klant zoeken"
+            label={tx('Klant zoeken')}
             onPress={() => router.push('/(tabs)/customers')}
           />
         </View>
@@ -581,7 +585,7 @@ export default function TodayScreen() {
             {huidige ? (
               <View style={styles.block}>
                 <View style={styles.blockHead}>
-                  <Text style={styles.blockTitle}>{huidigeIsBezig ? 'Nu bezig' : 'Volgende'}</Text>
+                  <Text style={styles.blockTitle}>{huidigeIsBezig ? tx('Nu bezig') : tx('Volgende')}</Text>
                   {huidigeTijd ? <Text style={styles.blockMeta}>{huidigeTijd}</Text> : null}
                 </View>
                 <View style={styles.currentCard}>
@@ -603,13 +607,13 @@ export default function TodayScreen() {
                     <FlatBtn
                       styles={styles}
                       icon={<Phone size={17} color={c.ink} strokeWidth={1.9} />}
-                      label="Bel"
+                      label={tx('Bel')}
                       onPress={() => onCall(huidige.phone)}
                     />
                     <FlatBtn
                       styles={styles}
                       icon={<NavigationIcon size={17} color={c.ink} strokeWidth={1.9} />}
-                      label="Route"
+                      label={tx('Route')}
                       onPress={() => onNavigate(huidige.address)}
                     />
                     <FlatBtn
@@ -617,7 +621,7 @@ export default function TodayScreen() {
                       grow={1.3}
                       primary
                       icon={<Clock size={17} color={c.greenInk} strokeWidth={2} />}
-                      label="Uren"
+                      label={tx('Uren')}
                       onPress={() => router.push('/hours/new')}
                     />
                   </View>
@@ -628,16 +632,16 @@ export default function TodayScreen() {
             {/* ── Planning vandaag ────────────────────────────────────────── */}
             <View style={styles.block}>
               <View style={styles.blockHead}>
-                <Text style={styles.blockTitle}>Planning vandaag</Text>
+                <Text style={styles.blockTitle}>{tx('Planning vandaag')}</Text>
                 <Pressable accessibilityRole="link" onPress={() => router.push('/(tabs)/planning')} hitSlop={8}>
-                  <Text style={styles.blockLink}>Agenda ›</Text>
+                  <Text style={styles.blockLink}>{tx('Agenda ›')}</Text>
                 </Pressable>
               </View>
 
               {planning.length === 0 ? (
                 <AppCard padding={18} style={{ alignItems: 'center' }}>
                   <Text style={styles.emptyText}>
-                    {loading ? 'Laden…' : 'Niets gepland voor vandaag.'}
+                    {loading ? tx('Laden…') : tx('Niets gepland voor vandaag.')}
                   </Text>
                 </AppCard>
               ) : (
@@ -659,7 +663,7 @@ export default function TodayScreen() {
             {/* ── Activiteiten vandaag (tegel `actions_today`) ────────────── */}
             <View style={styles.block}>
               <View style={styles.blockHead}>
-                <Text style={styles.blockTitle}>Activiteiten vandaag</Text>
+                <Text style={styles.blockTitle}>{tx('Activiteiten vandaag')}</Text>
                 {!loading && !activiteitenFout ? (
                   <View
                     style={[
@@ -678,14 +682,14 @@ export default function TodayScreen() {
                         },
                       ]}
                     >
-                      {eigen.teLaat.length > 0 ? `${eigen.teLaat.length} te laat` : 'Op schema'}
+                      {eigen.teLaat.length > 0 ? tx('{n} te laat', { n: eigen.teLaat.length }) : tx('Op schema')}
                     </Text>
                   </View>
                 ) : null}
               </View>
 
               {vinkFout ? (
-                <NoticeBanner toon="fout" title="Niet bijgewerkt" message={vinkFout} />
+                <NoticeBanner toon="fout" title={tx('Niet bijgewerkt')} message={vinkFout} />
               ) : null}
 
               {activiteitenFout ? (
@@ -695,11 +699,11 @@ export default function TodayScreen() {
               ) : activiteitenLijst.length === 0 ? (
                 <AppCard padding={18} style={{ alignItems: 'center', gap: 4 }}>
                   <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>
-                    {loading ? 'Laden…' : 'Geen activiteiten vandaag'}
+                    {loading ? tx('Laden…') : tx('Geen activiteiten vandaag')}
                   </Text>
                   {loading ? null : (
                     <Text style={styles.emptyText}>
-                      Tijd om vooruit te plannen of even adem te halen.
+                      {tx('Tijd om vooruit te plannen of even adem te halen.')}
                     </Text>
                   )}
                 </AppCard>
@@ -727,8 +731,8 @@ export default function TodayScreen() {
               >
                 <Text style={styles.blockLink}>
                   {activiteitenTotaal > ACTIVITEITEN_MAX
-                    ? `Alle activiteiten (${activiteitenTotaal}) ›`
-                    : 'Alle activiteiten ›'}
+                    ? tx('Alle activiteiten ({n}) ›', { n: activiteitenTotaal })
+                    : tx('Alle activiteiten ›')}
                 </Text>
               </Pressable>
             </View>
@@ -737,32 +741,34 @@ export default function TodayScreen() {
             {zieVerkoop ? (
               <View style={styles.block}>
                 <View style={styles.blockHead}>
-                  <Text style={styles.blockTitle}>Nieuwe aanvragen</Text>
+                  <Text style={styles.blockTitle}>{tx('Nieuwe aanvragen')}</Text>
                   {allowsRoute('/pipeline') ? (
                     <Pressable accessibilityRole="link" onPress={() => router.push('/pipeline')} hitSlop={8}>
-                      <Text style={styles.blockLink}>Pipeline ›</Text>
+                      <Text style={styles.blockLink}>{tx('Pipeline ›')}</Text>
                     </Pressable>
                   ) : null}
                 </View>
                 {aanvragen && aanvragen.aantal > 0 ? (
                   <Text style={styles.blockMeta}>
-                    {aanvragen.week.dezeWeek} deze week · {aanvragen.week.delta >= 0 ? '+' : ''}
-                    {aanvragen.week.delta} t.o.v. vorige week
+                    {tx('{n} deze week · {verschil} t.o.v. vorige week', {
+                      n: aanvragen.week.dezeWeek,
+                      verschil: `${aanvragen.week.delta >= 0 ? '+' : ''}${aanvragen.week.delta}`,
+                    })}
                   </Text>
                 ) : null}
                 {!aanvragen ? (
                   <AppCard padding={18} style={{ alignItems: 'center' }}>
-                    <Text style={styles.emptyText}>{loading ? 'Laden…' : 'Aanvragen konden niet worden geladen.'}</Text>
+                    <Text style={styles.emptyText}>{loading ? tx('Laden…') : tx('Aanvragen konden niet worden geladen.')}</Text>
                   </AppCard>
                 ) : aanvragen.lijst.length === 0 ? (
                   <AppCard padding={18} style={{ alignItems: 'center', gap: 4 }}>
-                    <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>Geen nieuwe aanvragen</Text>
-                    <Text style={styles.emptyText}>Tijd om je netwerk aan te spreken.</Text>
+                    <Text style={[styles.emptyText, { color: c.ink, fontWeight: '600' }]}>{tx('Geen nieuwe aanvragen')}</Text>
+                    <Text style={styles.emptyText}>{tx('Tijd om je netwerk aan te spreken.')}</Text>
                   </AppCard>
                 ) : (
                   <View style={styles.lijstKaart}>
                     {aanvragen.lijst.map((d, i) => {
-                      const naam = d.customer?.name || 'Onbekende klant';
+                      const naam = d.customer?.name || tx('Onbekende klant');
                       const kleur = d.customer
                         ? klantAvatarKleuren(d.customer, colorMode === 'dark')
                         : avatarKleuren(naam, colorMode === 'dark');
@@ -791,8 +797,8 @@ export default function TodayScreen() {
                     style={({ pressed }) => [styles.voetLink, pressed && { opacity: 0.7 }]}
                   >
                     <Text style={styles.blockLink}>
-                      {`${aanvragen.aantal} ${aanvragen.aantal === 1 ? 'aanvraag' : 'aanvragen'}`}
-                      {zieFinancien ? ` · ${formatEUR(aanvragen.waarde)} potentieel` : ''}
+                      {txn('{n} aanvraag', '{n} aanvragen', aanvragen.aantal)}
+                      {zieFinancien ? ` · ${tx('{bedrag} potentieel', { bedrag: formatEUR(aanvragen.waarde) })}` : ''}
                       {allowsRoute('/pipeline') ? ' ›' : ''}
                     </Text>
                   </Pressable>
@@ -812,16 +818,16 @@ export default function TodayScreen() {
         {toonOverzicht ? (
           <View style={styles.block}>
             <View style={styles.blockHead}>
-              <Text style={styles.blockTitle}>Overzicht</Text>
+              <Text style={styles.blockTitle}>{tx('Overzicht')}</Text>
             </View>
             <View style={styles.tegels}>
               {zieFinancien ? (
                 <KpiTegel
                   styles={styles}
                   tablet={tablet}
-                  label="Open pipeline"
+                  label={tx('Open pipeline')}
                   waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).open.waarde) : '—'}
-                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).open.aantal} ${pipelineWaarden(overzicht.deals).open.aantal === 1 ? 'aanvraag' : 'aanvragen'}` : undefined}
+                  sub={overzicht.deals ? txn('{n} aanvraag', '{n} aanvragen', pipelineWaarden(overzicht.deals).open.aantal) : undefined}
                   onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}
@@ -829,9 +835,9 @@ export default function TodayScreen() {
                 <KpiTegel
                   styles={styles}
                   tablet={tablet}
-                  label="Geaccepteerd"
+                  label={tx('Geaccepteerd')}
                   waarde={overzicht.deals ? formatEUR(pipelineWaarden(overzicht.deals).geaccepteerd.waarde) : '—'}
-                  sub={overzicht.deals ? `${pipelineWaarden(overzicht.deals).geaccepteerd.aantal} ${pipelineWaarden(overzicht.deals).geaccepteerd.aantal === 1 ? 'project' : 'projecten'}` : undefined}
+                  sub={overzicht.deals ? txn('{n} project', '{n} projecten', pipelineWaarden(overzicht.deals).geaccepteerd.aantal) : undefined}
                   onPress={allowsRoute('/pipeline') ? () => router.push('/pipeline') : undefined}
                 />
               ) : null}
@@ -839,9 +845,9 @@ export default function TodayScreen() {
                 <KpiTegel
                   styles={styles}
                   tablet={tablet}
-                  label="Omzet deze maand"
+                  label={tx('Omzet deze maand')}
                   waarde={overzicht.facturen ? formatEUR(omzetDezeMaand(overzicht.facturen, vandaag)) : '—'}
-                  sub="excl. btw"
+                  sub={tx('excl. btw')}
                   onPress={allowsRoute('/invoices') ? () => router.push('/invoices') : undefined}
                 />
               ) : null}
@@ -849,7 +855,7 @@ export default function TodayScreen() {
                 <KpiTegel
                   styles={styles}
                   tablet={tablet}
-                  label="Open offertes"
+                  label={tx('Open offertes')}
                   waarde={overzicht.offertes ? String(openOffertes(overzicht.offertes).aantal) : '—'}
                   sub={overzicht.offertes ? formatEUR(openOffertes(overzicht.offertes).waarde) : undefined}
                   onPress={allowsRoute('/offers') ? () => router.push('/offers') : undefined}
@@ -859,13 +865,13 @@ export default function TodayScreen() {
                 <KpiTegel
                   styles={styles}
                   tablet={tablet}
-                  label="Openstaande facturen"
+                  label={tx('Openstaande facturen')}
                   waarde={overzicht.facturen ? formatEUR(openFacturen(overzicht.facturen, vandaag).waarde) : '—'}
                   sub={
                     overzicht.facturen
-                      ? `${openFacturen(overzicht.facturen, vandaag).aantal} open${
+                      ? `${tx('{n} open', { n: openFacturen(overzicht.facturen, vandaag).aantal })}${
                           openFacturen(overzicht.facturen, vandaag).teLaat > 0
-                            ? ` · ${openFacturen(overzicht.facturen, vandaag).teLaat} te laat`
+                            ? ` · ${tx('{n} te laat', { n: openFacturen(overzicht.facturen, vandaag).teLaat })}`
                             : ''
                         }`
                       : undefined
@@ -877,9 +883,9 @@ export default function TodayScreen() {
               <KpiTegel
                 styles={styles}
                 tablet={tablet}
-                label="Klanten"
+                label={tx('Klanten')}
                 waarde={overzicht.klanten === null ? '—' : String(overzicht.klanten)}
-                sub="in je klantenbestand"
+                sub={tx('in je klantenbestand')}
                 onPress={() => router.push('/(tabs)/customers')}
               />
             </View>

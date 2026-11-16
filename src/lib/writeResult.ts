@@ -1,4 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
+import { tx, txm } from '@/i18n';
 import { isNetwerkfout } from './netwerkfout';
 
 /**
@@ -45,16 +46,16 @@ export type WriteResult<T> =
 export type WriteStatus = WriteResult<null>;
 
 const MELDINGEN: Record<WriteFoutSoort, string> = {
-  'geen-rechten': 'Je hebt geen rechten voor deze actie.',
+  'geen-rechten': txm('Je hebt geen rechten voor deze actie.'),
   readonly:
-    'Je account staat op alleen-lezen. Bekijken kan gewoon; nieuw werk vastleggen kan weer zodra je abonnement loopt.',
-  'plan-limiet': 'Dit past niet binnen je huidige abonnement. Kijk bij Instellingen → Abonnement.',
-  'op-slot': 'Dit record ligt vast en kan niet meer gewijzigd worden.',
-  validatie: 'Niet alle gegevens zijn geldig. Controleer het formulier.',
-  conflict: 'Er hangt nog iets aan dit record. Verwijder dat eerst.',
-  'niet-gevonden': 'Dit record bestaat niet meer. Ververs het scherm.',
-  netwerk: 'Geen verbinding met de server. Controleer je internet.',
-  onbekend: 'Er ging iets mis. Probeer het opnieuw.',
+    txm('Je account staat op alleen-lezen. Bekijken kan gewoon; nieuw werk vastleggen kan weer zodra je abonnement loopt.'),
+  'plan-limiet': txm('Dit past niet binnen je huidige abonnement. Kijk bij Instellingen → Abonnement.'),
+  'op-slot': txm('Dit record ligt vast en kan niet meer gewijzigd worden.'),
+  validatie: txm('Niet alle gegevens zijn geldig. Controleer het formulier.'),
+  conflict: txm('Er hangt nog iets aan dit record. Verwijder dat eerst.'),
+  'niet-gevonden': txm('Dit record bestaat niet meer. Ververs het scherm.'),
+  netwerk: txm('Geen verbinding met de server. Controleer je internet.'),
+  onbekend: txm('Er ging iets mis. Probeer het opnieuw.'),
 };
 
 export function writeFout(
@@ -62,7 +63,7 @@ export function writeFout(
   melding?: string,
   technisch?: string,
 ): { ok: false; soort: WriteFoutSoort; melding: string; technisch?: string } {
-  return { ok: false, soort, melding: melding ?? MELDINGEN[soort], technisch };
+  return { ok: false, soort, melding: melding ?? tx(MELDINGEN[soort]), technisch };
 }
 
 export function writeOk<T>(data: T): { ok: true; data: T } {
@@ -101,7 +102,7 @@ export function classificeerFout(
   }
 
   if (alles.includes('jwt') || alles.includes('token is expired')) {
-    return writeFout('geen-rechten', 'Je sessie is verlopen. Log opnieuw in.', technisch);
+    return writeFout('geen-rechten', tx('Je sessie is verlopen. Log opnieuw in.'), technisch);
   }
 
   // 42501 / de RLS-melding. Welke gate hem tegenhield staat er niet bij, dus
@@ -121,11 +122,11 @@ export function classificeerFout(
   if (code === 'PGRST116') return writeFout('niet-gevonden', undefined, technisch);
 
   if (code === '23505') {
-    return writeFout('validatie', 'Dit bestaat al. Kies een andere waarde.', technisch);
+    return writeFout('validatie', tx('Dit bestaat al. Kies een andere waarde.'), technisch);
   }
   if (code === '23503') return writeFout('conflict', undefined, technisch);
   if (code === '23502') {
-    return writeFout('validatie', 'Er ontbreekt een verplicht veld.', technisch);
+    return writeFout('validatie', tx('Er ontbreekt een verplicht veld.'), technisch);
   }
   if (code === '23514') return writeFout('validatie', undefined, technisch);
 
@@ -133,7 +134,7 @@ export function classificeerFout(
   if (code === '42703' || code === '42P01' || code === 'PGRST204') {
     return writeFout(
       'onbekend',
-      'De app moet worden bijgewerkt. Neem contact op met je beheerder.',
+      tx('De app moet worden bijgewerkt. Neem contact op met je beheerder.'),
       technisch,
     );
   }
@@ -185,7 +186,7 @@ export async function schrijf<T>(
       opties.leegMelding ??
         (opties.bedrijfReadonly
           ? undefined
-          : 'Er is niets opgeslagen: je hebt hier geen rechten voor, of het record bestaat niet meer.'),
+          : tx('Er is niets opgeslagen: je hebt hier geen rechten voor, of het record bestaat niet meer.')),
     );
   }
 

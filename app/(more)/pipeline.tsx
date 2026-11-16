@@ -57,6 +57,7 @@ import {
 import { useSave } from '@/lib/useSave';
 import { formatEUR } from '@/lib/format';
 import { vandaagIso } from '@/lib/nlTijd';
+import { tx, txn } from '@/i18n';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
@@ -78,7 +79,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 
 export default function PipelineScreen() {
   return (
-    <PermissionGate permission="verkoop" label="Pipeline">
+    <PermissionGate permission="verkoop" label={tx('Pipeline')}>
       <PipelineScreenInhoud />
     </PermissionGate>
   );
@@ -133,7 +134,7 @@ function PipelineScreenInhoud() {
     setVervolg(acts);
     if (!klantRes.error) {
       setKlanten(
-        klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant', sub: k.city ?? undefined })),
+        klantRes.data.map((k) => ({ id: k.id, label: k.name ?? tx('Klant'), sub: k.city ?? undefined })),
       );
     }
     if (!ledenRes.error) {
@@ -157,7 +158,7 @@ function PipelineScreenInhoud() {
     () =>
       [...stages]
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-        .map((s) => ({ id: s.id, label: s.name ?? 'Fase' })),
+        .map((s) => ({ id: s.id, label: s.name ?? tx('Fase') })),
     [stages],
   );
   const actieveTelefoonFase =
@@ -188,7 +189,7 @@ function PipelineScreenInhoud() {
 
   const voltooi = (d: DealRow) => {
     setMenuDeal(null);
-    saveActie(() => zetDealAfgerond(d.id, true), { onSuccess: vervang, succesMelding: 'Project voltooid' });
+    saveActie(() => zetDealAfgerond(d.id, true), { onSuccess: vervang, succesMelding: tx('Project voltooid') });
   };
 
   const openDeal = (d: DealRow) => router.push(`/deal/${d.id}` as Href);
@@ -196,16 +197,16 @@ function PipelineScreenInhoud() {
   const menuVoor = (d: DealRow) =>
     magWijzigen && d.stage_id !== verloren?.id ? () => setMenuDeal(d) : undefined;
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Pipeline laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Pipeline laden...')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Pipeline" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Pipeline')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Pipeline laden is mislukt." message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Pipeline laden is mislukt.')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -227,7 +228,7 @@ function PipelineScreenInhoud() {
             onMenu={menuVoor(d)}
           />
         ))}
-        {rijen.length === 0 ? <Text style={styles.geenItems}>Geen items</Text> : null}
+        {rijen.length === 0 ? <Text style={styles.geenItems}>{tx('Geen items')}</Text> : null}
         {magMaken ? (
           <Pressable
             onPress={() => setNieuw({ fase: faseId })}
@@ -236,7 +237,7 @@ function PipelineScreenInhoud() {
           >
             <Plus size={16} color={t.muted} />
             <Text style={styles.leadTekst} numberOfLines={1}>
-              {tablet ? 'Aanvraag toevoegen' : `Aanvraag toevoegen aan ${faseNaam}`}
+              {tablet ? tx('Aanvraag toevoegen') : tx('Aanvraag toevoegen aan {fase}', { fase: faseNaam })}
             </Text>
           </Pressable>
         ) : null}
@@ -253,12 +254,12 @@ function PipelineScreenInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Pipeline"
-            subtitle={`${n} ${n === 1 ? 'aanvraag of project' : 'aanvragen en projecten'} · ${formatEUR(totaal)} totaal`}
+            title={tx('Pipeline')}
+            subtitle={txn('{n} aanvraag of project · {totaal} totaal', '{n} aanvragen en projecten · {totaal} totaal', n, { totaal: formatEUR(totaal) })}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe aanvraag" onPress={() => setNieuw({ fase: null })} />
+                <HeaderIconButton icon={Plus} label={tx('Nieuwe aanvraag')} onPress={() => setNieuw({ fase: null })} />
               ) : undefined
             }
           />
@@ -272,7 +273,7 @@ function PipelineScreenInhoud() {
             <AppSearchBar
               value={filter.text}
               onChange={(v) => setFilter((f) => ({ ...f, text: v }))}
-              placeholder="Zoek op titel, klant of plaats"
+              placeholder={tx('Zoek op titel, klant of plaats')}
             />
           </View>
           <Pressable
@@ -280,13 +281,13 @@ function PipelineScreenInhoud() {
             accessibilityRole="button"
             accessibilityState={{ expanded: toonFilters }}
             aria-expanded={toonFilters}
-            accessibilityLabel={actief ? 'Filter (actief)' : 'Filter'}
+            accessibilityLabel={actief ? tx('Filter (actief)') : tx('Filter')}
             style={({ pressed }) => [styles.filterKnop, actief && styles.filterKnopAan, pressed && { opacity: 0.8 }]}
           >
             <SlidersHorizontal size={18} color={actief ? t.green700 : t.ink2} />
             {tablet ? (
               <Text style={[styles.filterTekst, actief && { color: t.green700 }]}>
-                {actief ? 'Filter (actief)' : 'Filter'}
+                {actief ? tx('Filter (actief)') : tx('Filter')}
               </Text>
             ) : null}
           </Pressable>
@@ -296,20 +297,20 @@ function PipelineScreenInhoud() {
           <View style={[styles.filterPaneel, tablet && styles.filterPaneelTablet]}>
             <View style={tablet ? styles.filterVeldTablet : undefined}>
               <SelectField
-                label="Pipeline fase"
+                label={tx('Pipeline fase')}
                 value={filter.stage === 'all' ? null : filter.stage}
                 options={faseOpties}
                 onChange={(id) => setFilter((f) => ({ ...f, stage: id ?? 'all' }))}
                 allowEmpty
-                emptyLabel="Alle fases"
-                placeholder="Alle fases"
+                emptyLabel={tx('Alle fases')}
+                placeholder={tx('Alle fases')}
               />
             </View>
             <View style={tablet ? styles.filterVeldTablet : undefined}>
               <SelectField
-                label="Status"
+                label={tx('Status')}
                 value={filter.status}
-                options={STATUS_FILTER_OPTIES}
+                options={STATUS_FILTER_OPTIES.map((o) => ({ ...o, label: tx(o.label) }))}
                 onChange={(id) =>
                   setFilter((f) => ({ ...f, status: (id as PipelineFilter['status'] | null) ?? 'open' }))
                 }
@@ -317,28 +318,28 @@ function PipelineScreenInhoud() {
             </View>
             <View style={tablet ? styles.filterVeldTablet : undefined}>
               <SelectField
-                label="Behandeld door"
+                label={tx('Behandeld door')}
                 value={filter.persoon === 'all' ? null : filter.persoon}
-                options={leden.map((l) => ({ id: l.id, label: l.full_name || 'Teamlid' }))}
+                options={leden.map((l) => ({ id: l.id, label: l.full_name || tx('Teamlid') }))}
                 onChange={(id) => setFilter((f) => ({ ...f, persoon: id ?? 'all' }))}
                 allowEmpty
-                emptyLabel="Iedereen"
-                placeholder="Iedereen"
+                emptyLabel={tx('Iedereen')}
+                placeholder={tx('Iedereen')}
               />
             </View>
             <View style={tablet ? styles.filterVeldTablet : undefined}>
               <SelectField
-                label="Prioriteit"
+                label={tx('Prioriteit')}
                 value={filter.priority === 'all' ? null : filter.priority}
-                options={DEAL_PRIORITEITEN.map((p) => ({ id: String(p.id), label: p.label }))}
+                options={DEAL_PRIORITEITEN.map((p) => ({ id: String(p.id), label: tx(p.label) }))}
                 onChange={(id) => setFilter((f) => ({ ...f, priority: id ?? 'all' }))}
                 allowEmpty
-                emptyLabel="Alle"
-                placeholder="Alle"
+                emptyLabel={tx('Alle')}
+                placeholder={tx('Alle')}
               />
             </View>
             <Button
-              label="Reset filters"
+              label={tx('Reset filters')}
               variant="ghost"
               onPress={() => setFilter(STANDAARD_FILTER)}
               disabled={!actief}
@@ -350,14 +351,14 @@ function PipelineScreenInhoud() {
           <View>
             <EmptyState
               icon={<FolderKanban size={40} color={ds.green} strokeWidth={1.6} />}
-              title="Geen aanvragen gevonden"
-              message={actief ? 'Pas je filter aan of voeg een nieuwe aanvraag toe.' : 'Begin met je eerste aanvraag.'}
+              title={tx('Geen aanvragen gevonden')}
+              message={actief ? tx('Pas je filter aan of voeg een nieuwe aanvraag toe.') : tx('Begin met je eerste aanvraag.')}
             />
             <View style={styles.legeKnoppen}>
               {actief ? (
-                <Button label="Reset" variant="secondary" onPress={() => setFilter(STANDAARD_FILTER)} />
+                <Button label={tx('Reset')} variant="secondary" onPress={() => setFilter(STANDAARD_FILTER)} />
               ) : null}
-              {magMaken ? <Button label="Nieuwe aanvraag" onPress={() => setNieuw({ fase: null })} /> : null}
+              {magMaken ? <Button label={tx('Nieuwe aanvraag')} onPress={() => setNieuw({ fase: null })} /> : null}
             </View>
           </View>
         ) : tablet ? (
@@ -378,11 +379,11 @@ function PipelineScreenInhoud() {
                     key={k.id}
                     onPress={() => setVerlorenIn(true)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Verloren tonen (${rijen.length})`}
+                    accessibilityLabel={tx('Verloren tonen ({n})', { n: rijen.length })}
                     style={({ pressed }) => [styles.strook, pressed && { opacity: 0.7 }]}
                   >
                     <Eye size={16} color={t.muted} />
-                    <Text style={styles.strookTekst}>Verloren</Text>
+                    <Text style={styles.strookTekst}>{tx('Verloren')}</Text>
                     <Text style={styles.strookTel}>{rijen.length}</Text>
                   </Pressable>
                 );
@@ -391,7 +392,7 @@ function PipelineScreenInhoud() {
                 <View key={k.id} style={styles.kolom}>
                   <View style={styles.kolomKop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <FaseBadge label={k.name ?? 'Fase'} colorClass={faseKleur[k.id] ?? k.color_class} positie={k.position} />
+                      <FaseBadge label={k.name ?? tx('Fase')} colorClass={faseKleur[k.id] ?? k.color_class} positie={k.position} />
                       <Text style={styles.kolomSom}>{formatEUR(som)}</Text>
                     </View>
                     <View style={styles.tel}>
@@ -402,14 +403,14 @@ function PipelineScreenInhoud() {
                         onPress={() => setVerlorenIn(false)}
                         hitSlop={8}
                         accessibilityRole="button"
-                        accessibilityLabel="Verloren verbergen"
+                        accessibilityLabel={tx('Verloren verbergen')}
                         style={styles.oog}
                       >
                         <EyeOff size={16} color={t.muted} />
                       </Pressable>
                     ) : null}
                   </View>
-                  {kolomInhoud(k.id, k.name ?? 'fase')}
+                  {kolomInhoud(k.id, k.name ?? tx('fase'))}
                 </View>
               );
             })}
@@ -420,7 +421,7 @@ function PipelineScreenInhoud() {
             <AppFilterChips
               chips={kolommen.map((k) => ({
                 id: k.id,
-                label: k.name ?? 'Fase',
+                label: k.name ?? tx('Fase'),
                 count: (perFase.get(k.id) ?? []).length,
               }))}
               active={actieveTelefoonFase ?? ''}
@@ -430,7 +431,7 @@ function PipelineScreenInhoud() {
               <View style={styles.telefoonLijst}>
                 <View style={styles.telefoonKop}>
                   <FaseBadge
-                    label={telefoonKolom.name ?? 'Fase'}
+                    label={telefoonKolom.name ?? tx('Fase')}
                     colorClass={faseKleur[telefoonKolom.id] ?? telefoonKolom.color_class}
                     positie={telefoonKolom.position}
                     groot
@@ -440,7 +441,7 @@ function PipelineScreenInhoud() {
                     {formatEUR(telefoonRijen.reduce((s, d) => s + dealWaarde(d), 0))}
                   </Text>
                 </View>
-                {kolomInhoud(telefoonKolom.id, telefoonKolom.name ?? 'fase')}
+                {kolomInhoud(telefoonKolom.id, telefoonKolom.name ?? tx('fase'))}
               </View>
             ) : null}
           </View>
@@ -450,13 +451,13 @@ function PipelineScreenInhoud() {
       {/* ⋮-menu van een kaart */}
       <Paneel
         open={menuDeal !== null}
-        titel={menuDeal?.customer?.name || 'Klant'}
+        titel={menuDeal?.customer?.name || tx('Klant')}
         subtitel={menuDeal?.title ?? undefined}
         onSluit={() => setMenuDeal(null)}
       >
         {menuDeal ? (
           <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
-            <Text style={styles.menuLabel}>Prioriteit</Text>
+            <Text style={styles.menuLabel}>{tx('Prioriteit')}</Text>
             {DEAL_PRIORITEITEN.map((p) => (
               <Pressable
                 key={String(p.id)}
@@ -464,20 +465,20 @@ function PipelineScreenInhoud() {
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
               >
-                <Text style={styles.menuTekst}>{p.label}</Text>
+                <Text style={styles.menuTekst}>{tx(p.label)}</Text>
                 {(menuDeal.priority || 'med') === p.id ? <Check size={18} color={t.green700} /> : null}
               </Pressable>
             ))}
-            <Text style={styles.menuLabel}>Verplaats naar fase</Text>
+            <Text style={styles.menuLabel}>{tx('Verplaats naar fase')}</Text>
             {faseKeuzes(stages, menuDeal.stage_id).map((s) => (
               <Pressable
                 key={s.id}
                 onPress={() => verplaats(menuDeal, s.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`Verplaats naar ${s.name ?? 'fase'}`}
+                accessibilityLabel={tx('Verplaats naar {fase}', { fase: s.name ?? tx('fase') })}
                 style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
               >
-                <FaseBadge label={s.name ?? 'Fase'} colorClass={faseKleur[s.id] ?? s.color_class} positie={s.position} />
+                <FaseBadge label={s.name ?? tx('Fase')} colorClass={faseKleur[s.id] ?? s.color_class} positie={s.position} />
                 {menuDeal.stage_id === s.id ? <Check size={18} color={t.green700} /> : null}
               </Pressable>
             ))}
@@ -487,7 +488,7 @@ function PipelineScreenInhoud() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
             >
-              <Text style={[styles.menuTekst, { color: t.green700 }]}>Project voltooien</Text>
+              <Text style={[styles.menuTekst, { color: t.green700 }]}>{tx('Project voltooien')}</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -498,7 +499,7 @@ function PipelineScreenInhoud() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.menuRij, pressed && { opacity: 0.7 }]}
             >
-              <Text style={[styles.menuTekst, { color: t.statusRejectFg }]}>Markeer als verloren</Text>
+              <Text style={[styles.menuTekst, { color: t.statusRejectFg }]}>{tx('Markeer als verloren')}</Text>
             </Pressable>
           </ScrollView>
         ) : null}

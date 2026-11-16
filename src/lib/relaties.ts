@@ -4,8 +4,9 @@
  * Bron: het dashboard — `customerTotalsService.js` (bedragen per klant),
  * `CustomersPage`/`LeveranciersPage` (zoeken), `getLeverancierKostenTotalen`
  * (kosten per leverancier) en `PlanningBlok.jsx` (planregels op de klantkaart).
- * Zonder imports, zodat alles los te testen is (`tests/relaties.test.mjs`).
+ * Alleen de vertaling als import, zodat alles los te testen is (`tests/relaties.test.mjs`).
  */
+import { tx, txn } from '@/i18n';
 
 // ---------------------------------------------------------------------------
 // Bedragen per klant (alleen facturen; offertes tellen niet mee)
@@ -138,11 +139,11 @@ export function kostenPerLeverancier(
  */
 export function verwijderBlokkade(naam: string, aantalKosten: number): string | null {
   if (aantalKosten <= 0) return null;
-  const hangt = aantalKosten === 1 ? 'hangt' : 'hangen';
-  const posten = aantalKosten === 1 ? 'kostenpost' : 'kostenposten';
-  return (
-    `${naam} kan niet verwijderd worden: er ${hangt} ${aantalKosten} ${posten} aan. ` +
-    'Zet hem op inactief als je hem niet meer gebruikt.'
+  return txn(
+    '{naam} kan niet verwijderd worden: er hangt {n} kostenpost aan. Zet hem op inactief als je hem niet meer gebruikt.',
+    '{naam} kan niet verwijderd worden: er hangen {n} kostenposten aan. Zet hem op inactief als je hem niet meer gebruikt.',
+    aantalKosten,
+    { naam },
   );
 }
 
@@ -222,7 +223,7 @@ export function planRegels(
         datum: dag.datum.slice(0, 10),
         starttijd: hhmm(dag.starttijd) ?? hhmm(w.starttijd),
         eindtijd: hhmm(dag.eindtijd) ?? hhmm(w.eindtijd),
-        titel: w.titel || 'Werkbon',
+        titel: w.titel || tx('Werkbon'),
         status: w.status ?? null,
       });
     }
@@ -239,7 +240,7 @@ export function planRegels(
       datum: dt.datum,
       starttijd: dt.tijd,
       eindtijd: null,
-      titel: a.title || 'Activiteit',
+      titel: a.title || tx('Activiteit'),
       status: a.completed ? 'completed' : null,
     });
   }

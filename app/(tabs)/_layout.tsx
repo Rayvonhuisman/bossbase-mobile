@@ -10,6 +10,7 @@ import { useAuth, useTheme } from '@/providers';
 import { TABBALK_MAX } from '@/lib/schermklasseRegels';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
+import { tx, txm } from '@/i18n';
 
 /**
  * De tabbalk uit het goedgekeurde ontwerp: een donkere forest-ink pil die
@@ -27,28 +28,28 @@ const TAB_INACTIVE = 'rgba(255,255,255,0.72)';
 
 const PROFILE_ERROR_MESSAGES: Record<string, { title: string; body: string }> = {
   profile_not_found: {
-    title: 'Profiel niet gevonden',
-    body: 'Je account is wel ingelogd, maar er staat nog geen profiel klaar. Neem contact op met je beheerder.',
+    title: txm('Profiel niet gevonden'),
+    body: txm('Je account is wel ingelogd, maar er staat nog geen profiel klaar. Neem contact op met je beheerder.'),
   },
   company_not_found: {
-    title: 'Bedrijf niet gevonden',
-    body: 'Je profiel is niet aan een actief bedrijf gekoppeld. Neem contact op met je beheerder.',
+    title: txm('Bedrijf niet gevonden'),
+    body: txm('Je profiel is niet aan een actief bedrijf gekoppeld. Neem contact op met je beheerder.'),
   },
   rls_or_permission_error: {
-    title: 'Toegang geweigerd',
-    body: 'Je hebt geen toestemming om je profiel op te halen. Neem contact op met je beheerder.',
+    title: txm('Toegang geweigerd'),
+    body: txm('Je hebt geen toestemming om je profiel op te halen. Neem contact op met je beheerder.'),
   },
   schema_error: {
-    title: 'App is verouderd',
-    body: 'De app werkt niet meer met de huidige database-versie. Werk de app bij of neem contact op met je beheerder.',
+    title: txm('App is verouderd'),
+    body: txm('De app werkt niet meer met de huidige database-versie. Werk de app bij of neem contact op met je beheerder.'),
   },
   network_error: {
-    title: 'Geen verbinding',
-    body: 'Controleer je internetverbinding en probeer opnieuw.',
+    title: txm('Geen verbinding'),
+    body: txm('Controleer je internetverbinding en probeer opnieuw.'),
   },
   unknown_error: {
-    title: 'Er ging iets mis',
-    body: 'We konden je profiel niet laden. Probeer opnieuw, of meld dit bij je beheerder.',
+    title: txm('Er ging iets mis'),
+    body: txm('We konden je profiel niet laden. Probeer opnieuw, of meld dit bij je beheerder.'),
   },
 };
 
@@ -142,7 +143,7 @@ export default function TabsLayout() {
     return <Redirect href="/(auth)/login" />;
   }
   if (status === 'loading-profile') {
-    return <LoadingScreen label="Profiel laden..." />;
+    return <LoadingScreen label={tx('Profiel laden...')} />;
   }
   // Registratie wacht op de 6-cijferige code (zoals de gate in het dashboard).
   if (status === 'needs-verification') {
@@ -155,20 +156,20 @@ export default function TabsLayout() {
 
     return (
       <View style={[styles.errorContainer, { backgroundColor: t.bg }]}>
-        <Text style={[styles.errorTitle, { color: t.ink }]}>{copy.title}</Text>
-        <Text style={[styles.errorBody, { color: t.muted }]}>{copy.body}</Text>
+        <Text style={[styles.errorTitle, { color: t.ink }]}>{tx(copy.title)}</Text>
+        <Text style={[styles.errorBody, { color: t.muted }]}>{tx(copy.body)}</Text>
         <View style={styles.errorActions}>
-          <Button label="Opnieuw proberen" onPress={refreshProfile} />
+          <Button label={tx('Opnieuw proberen')} onPress={refreshProfile} />
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              Dialog.alert('Uitloggen?', undefined, [
-                { text: 'Annuleren', style: 'cancel' },
-                { text: 'Uitloggen', style: 'destructive', onPress: signOut },
+              Dialog.alert(tx('Uitloggen?'), undefined, [
+                { text: tx('Annuleren'), style: 'cancel' },
+                { text: tx('Uitloggen'), style: 'destructive', onPress: signOut },
               ])
             }
           >
-            <Text style={styles.logoutLink}>Uitloggen</Text>
+            <Text style={styles.logoutLink}>{tx('Uitloggen')}</Text>
           </Pressable>
         </View>
       </View>
@@ -186,7 +187,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="today"
         options={{
-          title: 'Vandaag',
+          title: tx('Vandaag'),
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
         }}
       />
@@ -194,35 +195,35 @@ export default function TabsLayout() {
         name="planning"
         options={{
           // UI label is "Agenda"; route remains `planning` for compatibility.
-          title: 'Agenda',
+          title: tx('Agenda'),
           tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="work-orders"
         options={{
-          title: 'Werkbonnen',
+          title: tx('Werkbonnen'),
           tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="customers"
         options={{
-          title: 'Relaties',
+          title: tx('Relaties'),
           tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="hours"
         options={{
-          title: 'Uren',
+          title: tx('Uren'),
           tabBarIcon: ({ color, size }) => <Clock color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="menu"
         options={{
-          title: 'Menu',
+          title: tx('Menu'),
           tabBarIcon: ({ color, size }) => <Menu color={color} size={size} />,
         }}
       />

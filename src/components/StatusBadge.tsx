@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { lightTheme, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import type { WorkOrderStatus } from '@/types/domain';
+import { tx } from '@/i18n';
 
 /**
  * Statuskleuren van werkbonnen en projecten, gelijk aan het dashboard
@@ -41,13 +42,13 @@ const KEY_ALIASES: Record<string, CanonicalKey> = {
   geannuleerd_: 'cancelled',
 };
 
-const LABELS: Record<CanonicalKey, string> = {
-  gepland: 'Gepland',
-  in_progress: 'In uitvoering',
-  completed: 'Afgerond',
-  cancelled: 'Geannuleerd',
-  concept: 'Concept',
-  open: 'Open',
+const LABELS: Record<CanonicalKey, () => string> = {
+  gepland: () => tx('Gepland'),
+  in_progress: () => tx('In uitvoering'),
+  completed: () => tx('Afgerond'),
+  cancelled: () => tx('Geannuleerd'),
+  concept: () => tx('Concept'),
+  open: () => tx('Open', undefined, 'status'),
 };
 
 export type StatusTone = { bg: string; fg: string; dot: string };
@@ -96,7 +97,7 @@ export function StatusBadge({ status }: { status: WorkOrderStatus }) {
   const { colors: t } = useTheme();
   const { key, raw } = normalize(status);
   const v = key ? variantsFor(t)[key] : defaultVariant(t);
-  const label = key ? LABELS[key] : prettifyUnknown(raw);
+  const label = key ? LABELS[key]() : prettifyUnknown(raw);
 
   if (__DEV__ && !key && raw && !reportedUnknown.has(raw)) {
     reportedUnknown.add(raw);
@@ -130,7 +131,7 @@ export function statusKey(
 
 export function statusLabel(status: WorkOrderStatus): string {
   const { key, raw } = normalize(status);
-  return key ? LABELS[key] : prettifyUnknown(raw);
+  return key ? LABELS[key]() : prettifyUnknown(raw);
 }
 
 /**

@@ -3,6 +3,7 @@ import { getCompanyId, withCompanyId } from '@/lib/sessionContext';
 import { alsTekst } from '@/lib/notitieTekst';
 import { naarBedrijf, type PdfBedrijf } from '@/lib/pdf/pdfData';
 import type { MailSjabloon } from '@/lib/documentMail';
+import { tx } from '@/i18n';
 
 /**
  * Mail versturen vanuit offertes en facturen — dezelfde aanroepen als
@@ -34,7 +35,7 @@ export async function getMailSjabloon(type: string): Promise<{ data: MailSjabloo
     .maybeSingle();
   if (error) {
     console.warn('[documentMailService.getMailSjabloon]', error.message);
-    return { data: null, error: 'Het e-mailsjabloon kon niet worden geladen.' };
+    return { data: null, error: tx('Het e-mailsjabloon kon niet worden geladen.') };
   }
   if (!data) return { data: null, error: null };
   const rij = data as { onderwerp?: string | null; body?: string | null };
@@ -60,7 +61,7 @@ export async function listKlantMailSjablonen(): Promise<{ data: KlantMailSjabloo
     .order('type', { ascending: true });
   if (error) {
     console.warn('[documentMailService.listKlantMailSjablonen]', error.message);
-    return { data: [], error: 'De e-mailsjablonen konden niet worden geladen.' };
+    return { data: [], error: tx('De e-mailsjablonen konden niet worden geladen.') };
   }
   type Rij = { id: string; type: string | null; name: string | null; onderwerp: string | null; body: string | null };
   return {
@@ -69,7 +70,7 @@ export async function listKlantMailSjablonen(): Promise<{ data: KlantMailSjabloo
       return {
         id: r.id,
         type: r.type ?? '',
-        naam: r.name || r.type || 'Sjabloon',
+        naam: r.name || r.type || tx('Sjabloon'),
         onderwerp: r.onderwerp ?? '',
         body: /<[a-zA-Z]/.test(body) ? alsTekst(body) : body,
       };
@@ -98,7 +99,7 @@ export async function listVerstuurdeMails(
     .order('sent_at', { ascending: false });
   if (error) {
     console.warn('[documentMailService.listVerstuurdeMails]', error.message);
-    return { data: [], error: 'De verstuurde e-mails konden niet worden geladen.' };
+    return { data: [], error: tx('De verstuurde e-mails konden niet worden geladen.') };
   }
   return { data: (data as VerstuurdeMail[]) ?? [], error: null };
 }
@@ -176,12 +177,12 @@ export async function verstuurMail(input: {
 
   try {
     const { data, error } = await supabase.functions.invoke('send-email', { body });
-    if (error) return { ok: false, melding: await leesFout(error, 'Versturen mislukt') };
+    if (error) return { ok: false, melding: await leesFout(error, tx('Versturen mislukt')) };
     const res = data as { success?: boolean; error?: string } | null;
-    if (!res?.success) return { ok: false, melding: res?.error || 'Versturen mislukt' };
+    if (!res?.success) return { ok: false, melding: res?.error || tx('Versturen mislukt') };
     return { ok: true };
   } catch (e) {
-    return { ok: false, melding: e instanceof Error ? e.message : 'Versturen mislukt' };
+    return { ok: false, melding: e instanceof Error ? e.message : tx('Versturen mislukt') };
   }
 }
 

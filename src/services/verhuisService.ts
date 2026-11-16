@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { locale, tx } from '@/i18n';
 
 /**
  * Verhuisflow op de werkbon. Kopie van src/services/verhuisService.js in het
@@ -82,23 +83,23 @@ export type Verhuis = {
 };
 
 export const FASE_LABEL: Record<VerhuisFase, string> = {
-  voorbereiding: 'Afspraken invullen',
-  akkoord_start: 'Klaar om te starten',
-  gestart: 'Bezig',
-  beeindigd: 'Afrekening controleren',
-  akkoord_eind: 'Klaar om te factureren',
-  gefactureerd: 'Gefactureerd',
+  get voorbereiding() { return tx('Afspraken invullen'); },
+  get akkoord_start() { return tx('Klaar om te starten'); },
+  get gestart() { return tx('Bezig'); },
+  get beeindigd() { return tx('Afrekening controleren'); },
+  get akkoord_eind() { return tx('Klaar om te factureren'); },
+  get gefactureerd() { return tx('Gefactureerd'); },
 };
 
-export const SOORT_LABEL: Record<RegelSoort, string> = { uur: 'per uur', km: 'per km', vast: 'vast bedrag' };
+export const SOORT_LABEL: Record<RegelSoort, string> = { get uur() { return tx('per uur'); }, get km() { return tx('per km'); }, get vast() { return tx('vast bedrag'); } };
 
 export const BETAALLINK_REDEN: Record<string, string> = {
-  stripe_niet_gekoppeld: 'Stripe is nog niet gekoppeld. Een beheerder koppelt het in het dashboard via Instellingen › Integraties › Stripe; daarna verschijnt hier de betaal-QR.',
-  stripe_niet_actief: 'De Stripe-koppeling is nog niet actief (Stripe controleert de gegevens nog). Rond de aanmelding af in het dashboard.',
-  feature_niet_in_abonnement: 'Betalen via iDEAL zit niet in het abonnement van dit bedrijf.',
-  niet_betaalbaar: 'Deze factuur kan niet (meer) online worden betaald.',
-  geen_bedrag: 'Er staat niets meer open op deze factuur.',
-  betaald: 'Deze factuur is betaald.',
+  get stripe_niet_gekoppeld() { return tx('Stripe is nog niet gekoppeld. Een beheerder koppelt het in het dashboard via Instellingen › Integraties › Stripe; daarna verschijnt hier de betaal-QR.'); },
+  get stripe_niet_actief() { return tx('De Stripe-koppeling is nog niet actief (Stripe controleert de gegevens nog). Rond de aanmelding af in het dashboard.'); },
+  get feature_niet_in_abonnement() { return tx('Betalen via iDEAL zit niet in het abonnement van dit bedrijf.'); },
+  get niet_betaalbaar() { return tx('Deze factuur kan niet (meer) online worden betaald.'); },
+  get geen_bedrag() { return tx('Er staat niets meer open op deze factuur.'); },
+  get betaald() { return tx('Deze factuur is betaald.'); },
 };
 
 export class VerhuisFout extends Error {
@@ -112,9 +113,9 @@ export class VerhuisFout extends Error {
 function fout(err: { message?: string; hint?: string; code?: string } | null): VerhuisFout {
   const msg = String(err?.message ?? '');
   if (/Failed to fetch|Network request failed|NetworkError|Load failed/i.test(msg)) {
-    return new VerhuisFout('Geen verbinding. Er is niets opgeslagen; probeer het opnieuw zodra je weer bereik hebt.', 'netwerk');
+    return new VerhuisFout(tx('Geen verbinding. Er is niets opgeslagen; probeer het opnieuw zodra je weer bereik hebt.'), 'netwerk');
   }
-  return new VerhuisFout(msg || 'Er ging iets mis.', err?.hint ?? err?.code ?? null);
+  return new VerhuisFout(msg || tx('Er ging iets mis.'), err?.hint ?? err?.code ?? null);
 }
 
 async function rpc<T>(naam: string, args: Record<string, unknown>): Promise<T> {
@@ -165,9 +166,9 @@ export const verstuurFactuurmailOpnieuw = (werkbonId: string) =>
   functie<{ uitkomst: string; fout?: string | null }>(werkbonId, 'mail');
 
 export const euro = (n: number | null | undefined) =>
-  `€ ${Number(n || 0).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `€ ${Number(n || 0).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const uren = (n: number | null | undefined) =>
-  `${Number(n || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} u`;
+  tx('{n} u', { n: Number(n || 0).toLocaleString(locale(), { maximumFractionDigits: 2 }) });
 export const nl = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
 export const getal = (v: string) => {
   const n = Number(String(v ?? '').replace(',', '.'));

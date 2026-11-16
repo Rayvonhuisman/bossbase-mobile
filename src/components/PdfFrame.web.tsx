@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { tx } from '@/i18n';
 
 export type PdfBericht = { type: 'gereed' | 'klaar' | 'fout' | 'tik'; paginas?: number; melding?: string };
 
@@ -108,7 +109,7 @@ export function PdfFrame({ base64, onBericht }: { base64: string; onBericht: (b:
           canvas.style.cssText =
             `display:block;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35);` +
             `width:${Math.floor(basis.width * schaal)}px;max-width:calc(100% - 16px);height:auto;`;
-          canvas.setAttribute('aria-label', `Pagina ${n} van ${doc.numPages}`);
+          canvas.setAttribute('aria-label', tx('Pagina {n} van {totaal}', { n, totaal: doc.numPages }));
           houder.appendChild(canvas);
           const ctx = canvas.getContext('2d');
           if (!ctx) throw new Error('Geen canvas');
@@ -158,7 +159,7 @@ export function PdfFrame({ base64, onBericht }: { base64: string; onBericht: (b:
             padding: '40vh 24px 0',
           }}
         >
-          {mislukt ? 'De PDF kon niet worden getoond.' : 'PDF laden…'}
+          {mislukt ? tx('De PDF kon niet worden getoond.') : tx('PDF laden…')}
         </div>
       ) : null}
     </div>

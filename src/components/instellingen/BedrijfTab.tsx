@@ -17,6 +17,7 @@ import {
 } from '@/services/settingsService';
 import { Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
 import { kiesAfbeelding } from './kiesAfbeelding';
+import { tx } from '@/i18n';
 
 /** Een paar vaste kleuren om snel te kiezen; elke hexcode mag. */
 const MERKKLEUREN = ['#1DDB62', '#15A34A', '#0D0D0D', '#3b82f6', '#f97316', '#ef4444', '#a855f7', '#eab308'];
@@ -42,7 +43,8 @@ type Form = {
 const brancheOpties = (huidig: string) =>
   [...BRANCHES, ...(huidig && !(BRANCHES as readonly string[]).includes(huidig) ? [huidig] : [])].map((b) => ({
     id: b,
-    label: b,
+    // De waarde (naar de database) blijft Nederlands; alleen het label vertalen.
+    label: tx(b),
   }));
 
 const naarForm = (c: CompanyRow | null): Form => ({
@@ -97,7 +99,7 @@ export function BedrijfTab({
       normaliseer: (k, v) => (k === 'iban' ? normaliseerIban(v as string) : typeof v === 'string' ? v.trim() : v),
     });
     if (isLeeg(wijzigingen)) {
-      toon('Er is niets gewijzigd.', 'info');
+      toon(tx('Er is niets gewijzigd.'), 'info');
       return;
     }
     return save(() => updateCompany(wijzigingen), {
@@ -105,7 +107,7 @@ export function BedrijfTab({
         await onGewijzigd();
         await refreshProfile();
       },
-      succesMelding: 'Bedrijfsprofiel opgeslagen',
+      succesMelding: tx('Bedrijfsprofiel opgeslagen'),
     });
   };
 
@@ -119,7 +121,7 @@ export function BedrijfTab({
           await onGewijzigd();
           await refreshProfile();
         },
-        succesMelding: 'Logo opgeslagen',
+        succesMelding: tx('Logo opgeslagen'),
       },
     );
   };
@@ -130,11 +132,11 @@ export function BedrijfTab({
     <>
       {!magWijzigen ? (
         <View style={{ marginHorizontal: spacing.lg, marginTop: spacing.md }}>
-          <Uitleg>Je kunt het bedrijfsprofiel bekijken. Wijzigen kan alleen een beheerder.</Uitleg>
+          <Uitleg>{tx('Je kunt het bedrijfsprofiel bekijken. Wijzigen kan alleen een beheerder.')}</Uitleg>
         </View>
       ) : null}
 
-      <Kaart titel="Logo en merkkleur" sub="Komen op je offertes, facturen en e-mails">
+      <Kaart titel={tx('Logo en merkkleur')} sub={tx('Komen op je offertes, facturen en e-mails')}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <View
             style={{
@@ -157,13 +159,13 @@ export function BedrijfTab({
                 accessibilityIgnoresInvertColors
               />
             ) : (
-              <Text style={[s.hint, { color: '#6b7280' }]}>Geen logo</Text>
+              <Text style={[s.hint, { color: '#6b7280' }]}>{tx('Geen logo')}</Text>
             )}
           </View>
           {magWijzigen ? (
             <View style={{ flex: 1 }}>
               <Button
-                label={bedrijf?.logo_url ? 'Logo vervangen' : 'Logo uploaden'}
+                label={bedrijf?.logo_url ? tx('Logo vervangen') : tx('Logo uploaden')}
                 variant="secondary"
                 loading={logoBezig}
                 disabled={logoBezig}
@@ -172,9 +174,9 @@ export function BedrijfTab({
             </View>
           ) : null}
         </View>
-        <Text style={s.hint}>JPG of PNG, maximaal 5 MB.</Text>
+        <Text style={s.hint}>{tx('JPG of PNG, maximaal 5 MB.')}</Text>
 
-        <Text style={s.label}>Merkkleur</Text>
+        <Text style={s.label}>{tx('Merkkleur')}</Text>
         <View style={s.chipRij}>
           {MERKKLEUREN.map((k) => {
             const gekozen = form.branding_color.toLowerCase() === k.toLowerCase();
@@ -184,7 +186,7 @@ export function BedrijfTab({
                 onPress={() => magWijzigen && setForm((f) => ({ ...f, branding_color: k }))}
                 disabled={!magWijzigen}
                 accessibilityRole="button"
-                accessibilityLabel={`Merkkleur ${k}`}
+                accessibilityLabel={tx('Merkkleur {kleur}', { kleur: k })}
                 accessibilityState={{ selected: gekozen }}
                 aria-pressed={gekozen}
                 style={{
@@ -205,7 +207,7 @@ export function BedrijfTab({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Hexcode"
+              label={tx('Hexcode')}
               value={form.branding_color}
               onChangeText={zet('branding_color')}
               placeholder="#1DDB62"
@@ -228,10 +230,10 @@ export function BedrijfTab({
         </View>
       </Kaart>
 
-      <Kaart titel="Bedrijfsgegevens">
-        <FormField label="Bedrijfsnaam" value={form.name} onChangeText={zet('name')} editable={magWijzigen} />
+      <Kaart titel={tx('Bedrijfsgegevens')}>
+        <FormField label={tx('Bedrijfsnaam')} value={form.name} onChangeText={zet('name')} editable={magWijzigen} />
         <FormField
-          label="E-mailadres"
+          label={tx('E-mailadres')}
           value={form.email}
           onChangeText={zet('email')}
           keyboardType="email-address"
@@ -240,17 +242,17 @@ export function BedrijfTab({
           editable={magWijzigen}
         />
         <FormField
-          label="Antwoord e-mailadres"
+          label={tx('Antwoord e-mailadres')}
           value={form.reply_to_email}
           onChangeText={zet('reply_to_email')}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
           editable={magWijzigen}
-          hint="Antwoorden van klanten op je mails komen hier binnen. Leeg = het e-mailadres hierboven."
+          hint={tx('Antwoorden van klanten op je mails komen hier binnen. Leeg = het e-mailadres hierboven.')}
         />
         <FormField
-          label="Telefoonnummer"
+          label={tx('Telefoonnummer')}
           value={form.phone}
           onChangeText={zet('phone')}
           keyboardType="phone-pad"
@@ -259,7 +261,7 @@ export function BedrijfTab({
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="KvK-nummer"
+              label={tx('KvK-nummer')}
               value={form.kvk}
               onChangeText={zet('kvk')}
               keyboardType="number-pad"
@@ -269,7 +271,7 @@ export function BedrijfTab({
           </View>
           <View style={{ flex: 1.3 }}>
             <FormField
-              label="BTW-nummer"
+              label={tx('BTW-nummer')}
               value={form.btw_number}
               onChangeText={zet('btw_number')}
               autoCapitalize="characters"
@@ -279,7 +281,7 @@ export function BedrijfTab({
           </View>
         </View>
         <FormField
-          label="Website"
+          label={tx('Website')}
           value={form.website}
           onChangeText={zet('website')}
           autoCapitalize="none"
@@ -287,13 +289,13 @@ export function BedrijfTab({
           editable={magWijzigen}
         />
         <SelectField
-          label="Branche"
+          label={tx('Branche')}
           value={form.branche || null}
           options={brancheOpties(form.branche)}
           onChange={(id) => setForm((f) => ({ ...f, branche: id ?? '' }))}
           allowEmpty
-          emptyLabel="Kies je branche"
-          placeholder="Kies je branche"
+          emptyLabel={tx('Kies je branche')}
+          placeholder={tx('Kies je branche')}
           disabled={!magWijzigen}
         />
         {magWijzigen ? (
@@ -301,11 +303,11 @@ export function BedrijfTab({
             onSelect={(v) => setForm((f) => ({ ...f, address: v.address, postal_code: v.postcode, city: v.city }))}
           />
         ) : null}
-        <FormField label="Adres" value={form.address} onChangeText={zet('address')} editable={magWijzigen} />
+        <FormField label={tx('Adres')} value={form.address} onChangeText={zet('address')} editable={magWijzigen} />
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Postcode"
+              label={tx('Postcode')}
               value={form.postal_code}
               onChangeText={zet('postal_code')}
               autoCapitalize="characters"
@@ -313,11 +315,11 @@ export function BedrijfTab({
             />
           </View>
           <View style={{ flex: 1.4 }}>
-            <FormField label="Stad" value={form.city} onChangeText={zet('city')} editable={magWijzigen} />
+            <FormField label={tx('Stad')} value={form.city} onChangeText={zet('city')} editable={magWijzigen} />
           </View>
         </View>
         <FormField
-          label="IBAN (komt op je facturen)"
+          label={tx('IBAN (komt op je facturen)')}
           value={form.iban}
           onChangeText={zet('iban')}
           autoCapitalize="characters"
@@ -326,15 +328,15 @@ export function BedrijfTab({
           editable={magWijzigen}
         />
         <FormField
-          label="Ten name van"
+          label={tx('Ten name van')}
           value={form.iban_tnv}
           onChangeText={zet('iban_tnv')}
-          placeholder={form.name || 'Naam rekeninghouder'}
+          placeholder={form.name || tx('Naam rekeninghouder')}
           editable={magWijzigen}
         />
         {error ? <Uitleg toon="fout">{error}</Uitleg> : null}
         {magWijzigen ? (
-          <Button label="Opslaan" loading={saving} disabled={saving || !form.name.trim()} onPress={opslaan} />
+          <Button label={tx('Opslaan')} loading={saving} disabled={saving || !form.name.trim()} onPress={opslaan} />
         ) : null}
       </Kaart>
     </>

@@ -2,6 +2,7 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppTopBar } from '@/components';
 import { colors, spacing, typography } from '@/theme';
+import { tx } from '@/i18n';
 
 export default function NotFound() {
   const router = useRouter();
@@ -12,13 +13,13 @@ export default function NotFound() {
       <Stack.Screen options={{ headerShown: false }} />
       <AppTopBar
         variant="detail"
-        title="Niet gevonden"
+        title={tx('Niet gevonden')}
         onBack={router.canGoBack() ? () => router.back() : undefined}
       />
       <View style={styles.container}>
-        <Text style={styles.title}>Deze pagina bestaat niet.</Text>
+        <Text style={styles.title}>{tx('Deze pagina bestaat niet.')}</Text>
         <Link href="/" style={styles.link}>
-          Terug naar start
+          {tx('Terug naar start')}
         </Link>
       </View>
     </>

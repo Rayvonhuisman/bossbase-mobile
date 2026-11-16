@@ -16,6 +16,7 @@ import {
   type InstallatieInvoer,
   type KlantContract,
 } from '@/services/contractService';
+import { tx } from '@/i18n';
 
 /**
  * Contracten en installaties op de klantkaart (onderhoudscontracten,
@@ -76,9 +77,9 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
   return (
     <>
       {magContracten ? (
-        <KaartBlok titel="Contracten" aantal={contracten.length}>
+        <KaartBlok titel={tx('Contracten')} aantal={contracten.length}>
           {contracten.length === 0 ? (
-            <KaartLeeg tekst="Geen contracten met deze klant. Contracten maak je in het dashboard." />
+            <KaartLeeg tekst={tx('Geen contracten met deze klant. Contracten maak je in het dashboard.')} />
           ) : (
             contracten.map((c, i) => (
               <KaartRij
@@ -87,14 +88,14 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
                 titel={[c.nummer, c.titel].filter(Boolean).join(' · ')}
                 sub={
                   c.volgende_beurt
-                    ? `Volgende beurt ${formatDateNL(c.volgende_beurt)}`
+                    ? tx('Volgende beurt {datum}', { datum: formatDateNL(c.volgende_beurt) })
                     : c.einddatum
-                      ? `Tot ${formatDateNL(c.einddatum)}`
+                      ? tx('Tot {datum}', { datum: formatDateNL(c.einddatum) })
                       : null
                 }
                 rechts={
                   <KaartPil
-                    tekst={CONTRACT_STATUS_LABEL[c.status] ?? c.status}
+                    tekst={CONTRACT_STATUS_LABEL[c.status] ? tx(CONTRACT_STATUS_LABEL[c.status]!) : c.status}
                     toon={c.status === 'actief' ? 'goed' : c.status === 'opgezegd' ? 'let-op' : 'neutraal'}
                   />
                 }
@@ -107,7 +108,7 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
 
       {toonInstallaties ? (
         <KaartBlok
-          titel="Installaties"
+          titel={tx('Installaties')}
           aantal={installaties.length}
           onToevoegen={
             magInstallatieToevoegen
@@ -125,10 +126,10 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
                 }
               : undefined
           }
-          toevoegLabel="Installatie toevoegen"
+          toevoegLabel={tx('Installatie toevoegen')}
         >
           {installaties.length === 0 ? (
-            <KaartLeeg tekst="Nog geen installaties bij deze klant." />
+            <KaartLeeg tekst={tx('Nog geen installaties bij deze klant.')} />
           ) : (
             installaties.map((ins, i) => (
               <KaartRij
@@ -137,10 +138,10 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
                 gedimd={!ins.actief}
                 titel={installatieNaam(ins)}
                 sub={[
-                  ins.serienummer ? `Serienr. ${ins.serienummer}` : null,
-                  ins.plaatsingsdatum ? `geplaatst ${formatDateNL(ins.plaatsingsdatum)}` : null,
+                  ins.serienummer ? tx('Serienr. {nummer}', { nummer: ins.serienummer }) : null,
+                  ins.plaatsingsdatum ? tx('geplaatst {datum}', { datum: formatDateNL(ins.plaatsingsdatum) }) : null,
                   [ins.adres, ins.plaats].filter(Boolean).join(', ') || null,
-                  ins.actief ? null : 'niet meer actief',
+                  ins.actief ? null : tx('niet meer actief'),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -152,11 +153,11 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
 
       <FormSheet
         visible={!!invoer}
-        title="Installatie toevoegen"
-        subtitle="Het adres wordt dat van de klant."
+        title={tx('Installatie toevoegen')}
+        subtitle={tx('Het adres wordt dat van de klant.')}
         error={fout}
         saving={bezig}
-        submitLabel="Toevoegen"
+        submitLabel={tx('Toevoegen')}
         submitDisabled={!invoer?.soort.trim()}
         onSubmit={() => void opslaan()}
         onClose={() => setInvoer(null)}
@@ -164,34 +165,34 @@ export function KlantContractBlokken({ klantId, ververs }: { klantId: string; ve
         {invoer ? (
           <>
             <FormField
-              label="Soort *"
+              label={tx('Soort *')}
               value={invoer.soort}
               onChangeText={(v) => setInvoer({ ...invoer, soort: v })}
-              placeholder="Bijvoorbeeld cv-ketel, warmtepomp, airco"
+              placeholder={tx('Bijvoorbeeld cv-ketel, warmtepomp, airco')}
             />
             <FormField
-              label="Merk"
+              label={tx('Merk')}
               value={invoer.merk}
               onChangeText={(v) => setInvoer({ ...invoer, merk: v })}
             />
             <FormField
-              label="Type"
+              label={tx('Type')}
               value={invoer.type}
               onChangeText={(v) => setInvoer({ ...invoer, type: v })}
             />
             <FormField
-              label="Serienummer"
+              label={tx('Serienummer')}
               value={invoer.serienummer}
               onChangeText={(v) => setInvoer({ ...invoer, serienummer: v })}
               autoCapitalize="characters"
             />
             <DateField
-              label="Plaatsingsdatum"
+              label={tx('Plaatsingsdatum')}
               value={invoer.plaatsingsdatum}
               onChange={(v) => setInvoer({ ...invoer, plaatsingsdatum: v || null })}
             />
             <FormField
-              label="Notities"
+              label={tx('Notities')}
               value={invoer.notities}
               onChangeText={(v) => setInvoer({ ...invoer, notities: v })}
               multiline

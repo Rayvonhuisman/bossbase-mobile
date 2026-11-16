@@ -9,6 +9,7 @@ import {
   type DialogKnop,
   type DialogVerzoek,
 } from '@/lib/dialogStore';
+import { tx } from '@/i18n';
 
 /**
  * Tekent de dialogen op web (zie `lib/dialog.web.ts`). Staat één keer in de
@@ -245,7 +246,7 @@ function DialoogInhoud({
                     stijl === 'destructive' && styles.knopTekstGevaar,
                   ]}
                 >
-                  {knop.text ?? 'OK'}
+                  {knop.text ?? tx('OK')}
                 </Text>
               </Pressable>
             );

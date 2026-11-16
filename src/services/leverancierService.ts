@@ -5,6 +5,7 @@ import { haalInStukken } from '@/lib/inStukken';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import { eersteRelatieFout } from '@/lib/relatieValidatie';
 import { kostenPerLeverancier, verwijderBlokkade, type LeverancierKosten } from '@/lib/relaties';
+import { tx } from '@/i18n';
 
 /**
  * Leveranciers — tabel `leveranciers`, zoals `leverancierService.js` van het
@@ -50,7 +51,7 @@ export type Leverancier = {
 
 /** Leeg betekent "Naamloos", net als de mapper van het dashboard. */
 export const leverancierNaam = (l: Pick<Leverancier, 'naam'> | null | undefined): string =>
-  (l?.naam ?? '').trim() || 'Naamloos';
+  (l?.naam ?? '').trim() || tx('Naamloos');
 
 export const isActief = (l: Pick<Leverancier, 'actief'>): boolean => l.actief !== false;
 
@@ -65,7 +66,7 @@ export async function listLeveranciersVolledig(): Promise<{ data: Leverancier[];
   );
   if (error) {
     console.warn('[leverancierService.listLeveranciersVolledig]', error.message);
-    return { data: [], error: 'Leveranciers konden niet worden geladen.' };
+    return { data: [], error: tx('Leveranciers konden niet worden geladen.') };
   }
   return { data: (data as unknown as Leverancier[]) ?? [], error: null };
 }
@@ -76,7 +77,7 @@ export async function getLeverancier(
   const { data, error } = await supabase.from('leveranciers').select(COLUMNS).eq('id', id).maybeSingle();
   if (error) {
     console.warn('[leverancierService.getLeverancier]', error.message);
-    return { data: null, error: 'Leverancier kon niet worden geladen.' };
+    return { data: null, error: tx('Leverancier kon niet worden geladen.') };
   }
   return { data: (data as unknown as Leverancier | null) ?? null, error: null };
 }
@@ -136,8 +137,8 @@ const tekst = (v: string | null | undefined): string | null => {
 /** Formulier → kolommen. Lege strings worden null, zoals in het dashboard. */
 function naarPayload(input: LeverancierInput): Record<string, unknown> | string {
   const naam = input.naam.trim();
-  if (!naam) return 'Naam is verplicht.';
-  if (input.email && !/^\S+@\S+\.\S+$/.test(input.email.trim())) return 'Ongeldig e-mailadres.';
+  if (!naam) return tx('Naam is verplicht.');
+  if (input.email && !/^\S+@\S+\.\S+$/.test(input.email.trim())) return tx('Ongeldig e-mailadres.');
   const fout = eersteRelatieFout(input);
   if (fout) return fout;
 
@@ -146,7 +147,7 @@ function naarPayload(input: LeverancierInput): Record<string, unknown> | string 
   if (ruw !== null && ruw !== undefined && String(ruw).trim() !== '') {
     termijn = Number(String(ruw).trim());
     if (!Number.isInteger(termijn) || termijn < 0 || termijn > 365) {
-      return 'De betaaltermijn is een aantal dagen (0 tot 365).';
+      return tx('De betaaltermijn is een aantal dagen (0 tot 365).');
     }
   }
 
@@ -175,7 +176,7 @@ export async function createLeverancier(input: LeverancierInput): Promise<WriteR
   if (basis.notities === undefined) delete basis.notities;
   const payload = withCompanyId({ ...basis, actief: true });
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
   return schrijf<Leverancier>(
     () => supabase.from('leveranciers').insert(payload).select(COLUMNS),
@@ -197,8 +198,7 @@ export async function updateLeverancier(
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
       leegMelding:
-        'De leverancier is niet gewijzigd. Je hebt het recht Klanten bewerken nodig, of de ' +
-        'leverancier bestaat niet meer.',
+        tx('De leverancier is niet gewijzigd. Je hebt het recht Klanten bewerken nodig, of de leverancier bestaat niet meer.'),
     },
   );
 }
@@ -232,14 +232,14 @@ export async function deleteLeverancier(
       context: 'leverancierService.deleteLeverancier',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De leverancier is niet verwijderd. Je hebt het recht Klanten verwijderen nodig.',
+      leegMelding: tx('De leverancier is niet verwijderd. Je hebt het recht Klanten verwijderen nodig.'),
     },
   );
   if (!res.ok) {
     if (res.soort === 'conflict') {
       return writeFout(
         'conflict',
-        'Deze leverancier kan niet verwijderd worden: er hangen nog kosten of materialen aan.',
+        tx('Deze leverancier kan niet verwijderd worden: er hangen nog kosten of materialen aan.'),
       );
     }
     return res;
@@ -262,8 +262,9 @@ export async function negeerRelatieBijImport(
   const externeId = String(snelstartId).replace(/^snelstart_/, '').split('_')[0];
   if (!externeId) return null;
   const melding =
-    `${soort === 'klant' ? 'De klant' : 'De leverancier'} is verwijderd, maar kon niet in de ` +
-    'prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.';
+    soort === 'klant'
+      ? tx('De klant is verwijderd, maar kon niet in de prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.')
+      : tx('De leverancier is verwijderd, maar kon niet in de prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.');
   const companyId = getCompanyId();
   if (!companyId) return melding;
   const { error } = await supabase.from('import_genegeerd').upsert(
@@ -330,7 +331,7 @@ export async function listLeverancierTijdlijn(
   }
   if (error) {
     console.warn('[leverancierService.listLeverancierTijdlijn]', error.message);
-    return { data: [], error: 'De tijdlijn kon niet worden geladen.' };
+    return { data: [], error: tx('De tijdlijn kon niet worden geladen.') };
   }
   return {
     data: ((data as unknown as TijdlijnDbRij[]) ?? []).map((r) => naarRegel({ ...r, auteur: r.auteur ?? null })),
@@ -342,7 +343,7 @@ export async function addLeverancierNotitie(
   leverancierId: string,
   tekstInvoer: string,
 ): Promise<WriteResult<{ id: string }>> {
-  if (!tekstInvoer.trim()) return writeFout('validatie', 'Een notitie mag niet leeg zijn.');
+  if (!tekstInvoer.trim()) return writeFout('validatie', tx('Een notitie mag niet leeg zijn.'));
   const userId = getUserId();
   const payload = withCompanyId({
     leverancier_id: leverancierId,
@@ -352,7 +353,7 @@ export async function addLeverancierNotitie(
     ...(userId ? { created_by: userId } : {}),
   });
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
   return schrijf<{ id: string }>(
     () => supabase.from('leverancier_tijdlijn').insert(payload).select('id'),
@@ -402,7 +403,7 @@ export async function listLeverancierMaterialen(
   }
   if (error) {
     console.warn('[leverancierService.listLeverancierMaterialen]', error.message);
-    return { data: [], error: 'Materialen konden niet worden geladen.' };
+    return { data: [], error: tx('Materialen konden niet worden geladen.') };
   }
   const rijen = (data as unknown as MateriaalDbRij[]) ?? [];
   return {

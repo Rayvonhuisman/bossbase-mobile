@@ -4,6 +4,7 @@ import { Calendar as CalendarIcon, Clock } from 'lucide-react-native';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { nlDatum } from '@/lib/datum';
+import { tx } from '@/i18n';
 
 /**
  * Webvariant van `DateField` en `TimeField`, met dezelfde props en dezelfde
@@ -44,12 +45,13 @@ export function DateField({
   hint,
   minimum,
   maximum,
-  placeholder = 'Kies een datum',
+  placeholder: placeholderProp,
   disabled,
 }: DateProps) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const label_ = nlDatum(value);
+  const placeholder = placeholderProp ?? tx('Kies een datum');
   const [focus, setFocus] = useState(false);
 
   return (
@@ -89,12 +91,13 @@ export function TimeField({
   value,
   onChange,
   hint,
-  placeholder = 'Kies een tijd',
+  placeholder: placeholderProp,
   disabled,
 }: TimeProps) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [focus, setFocus] = useState(false);
+  const placeholder = placeholderProp ?? tx('Kies een tijd');
 
   return (
     <View style={styles.container}>

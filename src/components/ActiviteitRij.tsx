@@ -16,6 +16,7 @@ import { activiteitTypeLabel, type ActivityRow } from '@/services/activityServic
 import type { ActiviteitStatus } from '@/lib/activiteitStatus';
 import { lokaleDatum, lokaleTijd } from '@/lib/nlTijd';
 import { ds, type ThemeColors } from '@/theme';
+import { tx, txm, locale } from '@/i18n';
 
 /**
  * Eén activiteit in een lijst — de rij van `ActivitiesPageV2` in het dashboard:
@@ -36,8 +37,6 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   note: ListChecks,
 };
 
-const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
 /** "di 3 mei · 09:00" in Nederlandse tijd; leeg zonder datum. */
 export function activiteitMoment(dueAt: string | null): string {
@@ -45,16 +44,23 @@ export function activiteitMoment(dueAt: string | null): string {
   const dag = lokaleDatum(dueAt);
   if (!dag) return '';
   const [y, m, d] = dag.split('-').map(Number);
-  const wd = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay();
-  return `${DAG_KORT[wd]} ${d} ${MAAND_KORT[(m ?? 1) - 1]} · ${lokaleTijd(dueAt)}`;
+  const datum = new Intl.DateTimeFormat(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)))
+    .replace(/\./g, '');
+  return `${datum} · ${lokaleTijd(dueAt)}`;
 }
 
 export const STATUS_LABEL: Record<ActiviteitStatus, string> = {
-  overdue: 'Te laat',
-  today: 'Vandaag',
-  open: 'Open',
-  completed: 'Gereed',
+  overdue: txm('Te laat'),
+  today: txm('Vandaag'),
+  open: txm('Open'),
+  completed: txm('Gereed'),
 };
+
+/** Het getoonde statuslabel, vertaald ('Open' als status, niet als werkwoord). */
+export function activiteitStatusLabel(status: ActiviteitStatus): string {
+  return status === 'open' ? tx('Open', undefined, 'status') : tx(STATUS_LABEL[status]);
+}
 
 export function statusKleuren(
   t: ThemeColors,
@@ -138,7 +144,9 @@ export function ActiviteitRij({
           accessibilityRole="checkbox"
           accessibilityState={{ checked: klaar, disabled: !!vinkBezig }}
           aria-checked={klaar}
-          accessibilityLabel={klaar ? `${a.title ?? 'Activiteit'} heropenen` : `${a.title ?? 'Activiteit'} markeren als gereed`}
+          accessibilityLabel={klaar
+            ? tx('{titel} heropenen', { titel: a.title ?? tx('Activiteit') })
+            : tx('{titel} markeren als gereed', { titel: a.title ?? tx('Activiteit') })}
           style={({ pressed }) => [styles.vinkVlak, (pressed || vinkBezig) && { opacity: 0.6 }]}
         >
           <View style={[styles.vink, klaar && styles.vinkAan]}>
@@ -159,14 +167,14 @@ export function ActiviteitRij({
           ]}
           numberOfLines={2}
         >
-          {a.title || 'Activiteit'}
+          {a.title || tx('Activiteit')}
         </Text>
         <Text style={styles.meta} numberOfLines={2}>
           {meta}
         </Text>
         <View style={[styles.badge, { backgroundColor: sk.bg }]}>
           <View style={[styles.badgeStip, { backgroundColor: sk.fg }]} />
-          <Text style={[styles.badgeTekst, { color: sk.fg }]}>{STATUS_LABEL[status]}</Text>
+          <Text style={[styles.badgeTekst, { color: sk.fg }]}>{activiteitStatusLabel(status)}</Text>
         </View>
       </View>
     </View>
@@ -177,7 +185,7 @@ export function ActiviteitRij({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${a.title ?? 'Activiteit'}, ${STATUS_LABEL[status]}`}
+      accessibilityLabel={`${a.title ?? tx('Activiteit')}, ${activiteitStatusLabel(status)}`}
       style={({ pressed }) => [pressed && { opacity: 0.85 }]}
     >
       {inhoud}

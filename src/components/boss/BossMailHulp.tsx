@@ -18,6 +18,7 @@ import { BossAvatar } from '../BossChat';
 import type { MailConcept } from '../DocumentMailSheet';
 import { BossGesprek, IkBubbel, Kaart, KaartKop, KaartTekst, KleineKnop, Knoppen, Waarschuwingen } from './BossGesprek';
 import { useVoortgang } from './gedeeld';
+import { tx, txm } from '@/i18n';
 
 type Voorstel =
   | { soort: 'voorstel'; onderwerp: string; bericht: string; samenvatting?: string }
@@ -34,7 +35,8 @@ type Item =
   | { id: string; t: 'ingevoegd'; vorig: MailConcept; ongedaan?: boolean };
 type ZonderId<T> = T extends unknown ? Omit<T, 'id'> : never;
 
-const START = ['Schrijf een begeleidende mail', 'Maak persoonlijker', 'Maak korter', 'Maak zakelijker'];
+const START = [txm('Schrijf een begeleidende mail'), txm('Maak persoonlijker'), txm('Maak korter'), txm('Maak zakelijker')];
+const MAAK = [txm('Duidelijker'), txm('Korter'), txm('Persoonlijker'), txm('Zakelijker')];
 
 export function BossMailHulp({
   open, onSluit, functie, documentId, klantId, nummer, kanOndertekenen, concept, onWijzig, selectie,
@@ -73,7 +75,11 @@ export function BossMailHulp({
   const vraag = async (opdracht: string, metSel?: { sel: MailSelectie; kaartId: string }) => {
     gestopt.current = false;
     setBusy(true);
-    startStappen([`${isOfferte ? 'Offerte' : 'Factuur'} ${nummer ?? ''} en klantgegevens lezen`.replace(/\s+/g, ' '), 'Tekst schrijven', 'Bedragen en datums controleren']);
+    startStappen([
+      (isOfferte ? tx('Offerte {nummer} en klantgegevens lezen', { nummer: nummer ?? '' }) : tx('Factuur {nummer} en klantgegevens lezen', { nummer: nummer ?? '' })).replace(/\s+/g, ' '),
+      tx('Tekst schrijven'),
+      tx('Bedragen en datums controleren'),
+    ]);
     try {
       const mail = {
         onderwerp: concept.onderwerp,
@@ -90,10 +96,10 @@ export function BossMailHulp({
         push({ t: 'voorstel', status: 'open', onderwerp: resultaat.onderwerp, bericht: resultaat.bericht, samenvatting: resultaat.samenvatting, waarschuwingen });
       } else if (resultaat.soort === 'selectie' && metSel) {
         upd(metSel.kaartId, { voorstel: resultaat.tekst, waarschuwingen } as Partial<Item>);
-      } else push({ t: 'melding', tekst: resultaat.soort === 'melding' ? resultaat.melding || 'Klaar.' : 'Klaar.' });
+      } else push({ t: 'melding', tekst: resultaat.soort === 'melding' ? resultaat.melding || tx('Klaar.') : tx('Klaar.') });
     } catch (e) {
       if (!gestopt.current) {
-        push({ t: 'fout', tekst: `${(e as Error).message} Je mail is niet aangepast.`, opdracht, sel: metSel?.sel, kaartId: metSel?.kaartId });
+        push({ t: 'fout', tekst: tx('{fout} Je mail is niet aangepast.', { fout: (e as Error).message }), opdracht, sel: metSel?.sel, kaartId: metSel?.kaartId });
         if (!metSel) setDraft(opdracht);
       }
     } finally {
@@ -117,24 +123,26 @@ export function BossMailHulp({
   const eersteKeer = !items.some((i) => i.t === 'ik');
 
   return (
-    <Paneel open={open} titel="Help met schrijven" subtitel="Boss · AI-assistent · beta" kop={<BossAvatar />} onSluit={() => { if (!busy) onSluit(); }}>
+    <Paneel open={open} titel={tx('Help met schrijven')} subtitel={tx('Boss · AI-assistent · beta')} kop={<BossAvatar />} onSluit={() => { if (!busy) onSluit(); }}>
       <BossGesprek
         labels={[]}
         intro={eersteKeer ? (
           <Kaart>
-            <KaartTekst>Ik schrijf een onderwerp en bericht voor deze {isOfferte ? 'offerte' : 'factuur'}, met de gegevens die erin staan. Je ziet eerst een voorstel; versturen doe je zelf.</KaartTekst>
-            <Knoppen><KleineKnop label="Schrijf een begeleidende mail" onPress={() => verstuur('Schrijf een begeleidende mail')} /></Knoppen>
+            <KaartTekst>{isOfferte
+              ? tx('Ik schrijf een onderwerp en bericht voor deze offerte, met de gegevens die erin staan. Je ziet eerst een voorstel; versturen doe je zelf.')
+              : tx('Ik schrijf een onderwerp en bericht voor deze factuur, met de gegevens die erin staan. Je ziet eerst een voorstel; versturen doe je zelf.')}</KaartTekst>
+            <Knoppen><KleineKnop label={tx('Schrijf een begeleidende mail')} onPress={() => verstuur(tx('Schrijf een begeleidende mail'))} /></Knoppen>
           </Kaart>
         ) : null}
         busy={busy}
         voortgang={stappen}
-        onStop={() => { gestopt.current = true; stopStappen(); setBusy(false); push({ t: 'melding', tekst: 'Gestopt. Je mail is niet aangepast.' }); }}
+        onStop={() => { gestopt.current = true; stopStappen(); setBusy(false); push({ t: 'melding', tekst: tx('Gestopt. Je mail is niet aangepast.') }); }}
         draft={draft}
         setDraft={setDraft}
         onSend={verstuur}
-        suggesties={eersteKeer ? [] : START.slice(1)}
+        suggesties={eersteKeer ? [] : START.slice(1).map((s) => tx(s))}
         plusOpties={[]}
-        placeholder="Wat moet er anders?"
+        placeholder={tx('Wat moet er anders?')}
         scrollSleutel={`${items.length}`}
       >
         {items.map((it) => (
@@ -143,31 +151,31 @@ export function BossMailHulp({
             {it.t === 'melding' ? <Kaart><KaartTekst>{it.tekst}</KaartTekst></Kaart> : null}
             {it.t === 'fout' ? (
               <Kaart soort="fout" rol="alert">
-                <KaartKop titel="Dit lukte niet" icoon="fout" />
+                <KaartKop titel={tx('Dit lukte niet')} icoon="fout" />
                 <KaartTekst>{it.tekst}</KaartTekst>
-                <Knoppen><KleineKnop label="Opnieuw proberen" variant="secundair" disabled={busy} onPress={() => { upd(it.id, { t: 'melding', tekst: 'Opnieuw geprobeerd.' } as Partial<Item>); setDraft(''); void vraag(it.opdracht, it.sel && it.kaartId ? { sel: it.sel, kaartId: it.kaartId } : undefined); }} /></Knoppen>
+                <Knoppen><KleineKnop label={tx('Opnieuw proberen')} variant="secundair" disabled={busy} onPress={() => { upd(it.id, { t: 'melding', tekst: tx('Opnieuw geprobeerd.') } as Partial<Item>); setDraft(''); void vraag(it.opdracht, it.sel && it.kaartId ? { sel: it.sel, kaartId: it.kaartId } : undefined); }} /></Knoppen>
               </Kaart>
             ) : null}
             {it.t === 'voorstel' ? (
               it.status === 'vervangen' ? (
-                <Kaart soort="oud"><KaartKop titel={it.samenvatting || 'Voorstel'} badge={{ tekst: 'Vervangen', toon: 'grijs' }} /></Kaart>
+                <Kaart soort="oud"><KaartKop titel={it.samenvatting || tx('Voorstel')} badge={{ tekst: tx('Vervangen'), toon: 'grijs' }} /></Kaart>
               ) : (
                 <Kaart soort="ai">
-                  <KaartKop titel={it.samenvatting || 'Voorstel voor de mail'} badge={it.status === 'open' ? { tekst: 'Voorstel', toon: 'ctrl' } : { tekst: 'Ingevoegd', toon: 'ok' }} />
+                  <KaartKop titel={it.samenvatting || tx('Voorstel voor de mail')} badge={it.status === 'open' ? { tekst: tx('Voorstel'), toon: 'ctrl' } : { tekst: tx('Ingevoegd'), toon: 'ok' }} />
                   <View style={{ backgroundColor: t.bgAlt, borderRadius: 12, padding: 10, gap: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>ONDERWERP</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>{tx('ONDERWERP')}</Text>
                     <Text style={{ fontSize: 14.5, fontWeight: '600', color: t.ink }}>{it.onderwerp}</Text>
                   </View>
                   <View style={{ backgroundColor: t.bgAlt, borderRadius: 12, padding: 10, gap: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>BERICHT</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>{tx('BERICHT')}</Text>
                     <Text style={{ fontSize: 14, lineHeight: 20, color: t.ink }}>{it.bericht}</Text>
                   </View>
                   <Waarschuwingen lijst={it.waarschuwingen} />
                   {it.status === 'open' ? (
                     <Knoppen>
-                      <KleineKnop label="Invoegen" onPress={() => voegIn(it)} />
-                      <KleineKnop label="Korter" variant="secundair" disabled={busy} onPress={() => verstuur('Maak korter')} />
-                      <KleineKnop label="Zakelijker" variant="secundair" disabled={busy} onPress={() => verstuur('Maak zakelijker')} />
+                      <KleineKnop label={tx('Invoegen')} onPress={() => voegIn(it)} />
+                      <KleineKnop label={tx('Korter')} variant="secundair" disabled={busy} onPress={() => verstuur(tx('Maak korter'))} />
+                      <KleineKnop label={tx('Zakelijker')} variant="secundair" disabled={busy} onPress={() => verstuur(tx('Maak zakelijker'))} />
                     </Knoppen>
                   ) : null}
                 </Kaart>
@@ -175,47 +183,47 @@ export function BossMailHulp({
             ) : null}
             {it.t === 'selectie' && !it.weg ? (
               it.klaar ? (
-                it.ongedaan ? <Kaart><KaartTekst>Ongedaan gemaakt. Je eigen tekst staat er weer.</KaartTekst></Kaart> : (
+                it.ongedaan ? <Kaart><KaartTekst>{tx('Ongedaan gemaakt. Je eigen tekst staat er weer.')}</KaartTekst></Kaart> : (
                   <Kaart soort="klaar" rol="status">
-                    <KaartKop titel="Selectie vervangen" icoon="ok" />
+                    <KaartKop titel={tx('Selectie vervangen')} icoon="ok" />
                     <Knoppen>
-                      <KleineKnop label="Ongedaan maken" variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => { if (it.vorig) onWijzig(it.vorig); upd(it.id, { ongedaan: true } as Partial<Item>); }} />
-                      <KleineKnop label="Terug naar de mail" variant="stil" onPress={onSluit} />
+                      <KleineKnop label={tx('Ongedaan maken')} variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => { if (it.vorig) onWijzig(it.vorig); upd(it.id, { ongedaan: true } as Partial<Item>); }} />
+                      <KleineKnop label={tx('Terug naar de mail')} variant="stil" onPress={onSluit} />
                     </Knoppen>
                   </Kaart>
                 )
               ) : (
                 <Kaart soort="ai">
-                  <KaartKop titel="Geselecteerde tekst" badge={{ tekst: 'Alleen deze tekst', toon: 'grijs' }} />
+                  <KaartKop titel={tx('Geselecteerde tekst')} badge={{ tekst: tx('Alleen deze tekst'), toon: 'grijs' }} />
                   <View style={{ borderLeftWidth: 3, borderLeftColor: t.lineStrong, paddingLeft: 10 }}>
                     <Text style={{ fontSize: 14, lineHeight: 20, color: t.ink2 }}>{it.sel.tekst}</Text>
                   </View>
                   <Knoppen>
-                    {['Duidelijker', 'Korter', 'Persoonlijker', 'Zakelijker'].map((m) => (
-                      <KleineKnop key={m} label={m} variant="secundair" disabled={busy} onPress={() => void vraag(`Maak deze tekst ${m.toLowerCase()}.`, { sel: it.sel, kaartId: it.id })} />
+                    {MAAK.map((m) => (
+                      <KleineKnop key={m} label={tx(m)} variant="secundair" disabled={busy} onPress={() => void vraag(`Maak deze tekst ${m.toLowerCase()}.`, { sel: it.sel, kaartId: it.id })} />
                     ))}
                   </Knoppen>
                   {it.voorstel ? (
                     <>
                       <View style={{ backgroundColor: t.green50, borderRadius: 12, padding: 10, gap: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>VOORSTEL</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.66, color: t.muted }}>{tx('VOORSTEL')}</Text>
                         <Text style={{ fontSize: 14, lineHeight: 20, color: t.ink }}>{it.voorstel}</Text>
                       </View>
                       <Waarschuwingen lijst={it.waarschuwingen ?? []} />
                       <Knoppen>
                         <KleineKnop
-                          label="Vervang selectie"
+                          label={tx('Vervang selectie')}
                           onPress={() => {
                             const nieuw = vervangSelectie(concept.tekst, it.sel, it.voorstel!);
                             if (nieuw === null) {
-                              push({ t: 'melding', tekst: 'De geselecteerde tekst staat niet meer in het bericht. Selecteer hem opnieuw.' });
+                              push({ t: 'melding', tekst: tx('De geselecteerde tekst staat niet meer in het bericht. Selecteer hem opnieuw.') });
                               return;
                             }
                             onWijzig({ ...concept, tekst: nieuw });
                             upd(it.id, { klaar: true, vorig: { ...concept } } as Partial<Item>);
                           }}
                         />
-                        <KleineKnop label="Laat staan" variant="stil" onPress={() => { upd(it.id, { weg: true } as Partial<Item>); push({ t: 'melding', tekst: 'Selectie niet aangepast.' }); }} />
+                        <KleineKnop label={tx('Laat staan')} variant="stil" onPress={() => { upd(it.id, { weg: true } as Partial<Item>); push({ t: 'melding', tekst: tx('Selectie niet aangepast.') }); }} />
                       </Knoppen>
                     </>
                   ) : null}
@@ -223,13 +231,13 @@ export function BossMailHulp({
               )
             ) : null}
             {it.t === 'ingevoegd' ? (
-              it.ongedaan ? <Kaart><KaartTekst>Ongedaan gemaakt. Je eigen tekst staat er weer.</KaartTekst></Kaart> : (
+              it.ongedaan ? <Kaart><KaartTekst>{tx('Ongedaan gemaakt. Je eigen tekst staat er weer.')}</KaartTekst></Kaart> : (
                 <Kaart soort="klaar" rol="status">
-                  <KaartKop titel="Ingevoegd in de mail" icoon="ok" />
-                  <KaartTekst klein>Nog niets verstuurd. Kijk de mail na en verstuur hem met de gewone knop.</KaartTekst>
+                  <KaartKop titel={tx('Ingevoegd in de mail')} icoon="ok" />
+                  <KaartTekst klein>{tx('Nog niets verstuurd. Kijk de mail na en verstuur hem met de gewone knop.')}</KaartTekst>
                   <Knoppen>
-                    {laatsteIngevoegd === it.id ? <KleineKnop label="Ongedaan maken" variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => { onWijzig(it.vorig); upd(it.id, { ongedaan: true } as Partial<Item>); }} /> : null}
-                    <KleineKnop label="Terug naar de mail" variant="stil" onPress={onSluit} />
+                    {laatsteIngevoegd === it.id ? <KleineKnop label={tx('Ongedaan maken')} variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => { onWijzig(it.vorig); upd(it.id, { ongedaan: true } as Partial<Item>); }} /> : null}
+                    <KleineKnop label={tx('Terug naar de mail')} variant="stil" onPress={onSluit} />
                   </Knoppen>
                 </Kaart>
               )

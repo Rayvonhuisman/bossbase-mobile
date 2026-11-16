@@ -9,7 +9,9 @@
  * (tests/werkbonLogica.test.mjs). Rijen hebben de databasevorm (snake_case).
  */
 
+import { tx, txn } from '@/i18n';
 import { leesGetalNl } from './getalNl';
+import { dagNaam, maandNaam as kalenderMaand } from './kalenderNamen';
 
 // ── Statussen ───────────────────────────────────────────────────────────────
 
@@ -27,11 +29,11 @@ export const WERKBON_STATUS_STIJL: Record<
   WerkbonStatusKey,
   { label: string; kleur: string; bg: string; dot: string }
 > = {
-  gepland: { label: 'Gepland', kleur: '#2563eb', bg: '#eff6ff', dot: '#2563eb' },
-  in_uitvoering: { label: 'In uitvoering', kleur: '#e8784a', bg: '#fff4ec', dot: '#e8784a' },
-  afgerond: { label: 'Afgerond', kleur: '#15A34A', bg: '#ecfdf5', dot: '#15A34A' },
+  gepland: { get label() { return tx('Gepland'); }, kleur: '#2563eb', bg: '#eff6ff', dot: '#2563eb' },
+  in_uitvoering: { get label() { return tx('In uitvoering'); }, kleur: '#e8784a', bg: '#fff4ec', dot: '#e8784a' },
+  afgerond: { get label() { return tx('Afgerond'); }, kleur: '#15A34A', bg: '#ecfdf5', dot: '#15A34A' },
   // Grijs, zoals statusColors.js: gaat niet door.
-  geannuleerd: { label: 'Geannuleerd', kleur: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
+  geannuleerd: { get label() { return tx('Geannuleerd'); }, kleur: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
 };
 
 /** Aliassen zoals het dashboard ze accepteert; onbekend → gepland. */
@@ -73,12 +75,6 @@ export type WerkbonPlanbaar = {
 export const MAX_DAGEN = 60;
 export const STANDAARD_TIJD = { starttijd: '08:00', eindtijd: '16:30' };
 
-const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-const MAAND_LANG = [
-  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
-  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
-];
 
 const naarDate = (iso: string) => new Date(`${iso}T12:00:00`);
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -96,11 +92,11 @@ export function korteDatum(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = naarDate(String(iso).slice(0, 10));
   if (Number.isNaN(d.valueOf())) return String(iso);
-  return `${DAG_KORT[d.getDay()]} ${d.getDate()} ${MAAND_KORT[d.getMonth()]}`;
+  return tx('{weekdag} {dag} {maand}', { weekdag: dagNaam(d.getDay(), 'kort'), dag: d.getDate(), maand: kalenderMaand(d.getMonth(), 'kort') });
 }
 
 /** "september 2026" — maand 0-based. */
-export const maandNaam = (jaar: number, maand: number) => `${MAAND_LANG[maand]} ${jaar}`;
+export const maandNaam = (jaar: number, maand: number) => tx('{maand} {jaar}', { maand: kalenderMaand(maand), jaar });
 
 /** De dagen, gesorteerd; zonder dagenlijst terugval op gepland_op. */
 export function werkbonDagen(w: WerkbonPlanbaar | null | undefined): WerkbonDag[] {
@@ -425,7 +421,7 @@ export function verzetTijd(
     werkbon_dagen: werkbon.werkbon_dagen ?? ((werkbon.dagen as WerkbonDag[] | null | undefined) ?? null),
   };
   const p = planningUitWerkbon(w);
-  if (!p.dagen.includes(datum)) throw new Error('Deze dag staat niet (meer) op de werkbon. Ververs de planning.');
+  if (!p.dagen.includes(datum)) throw new Error(tx('Deze dag staat niet (meer) op de werkbon. Ververs de planning.'));
   const t = { starttijd: hhmm(nieuw.starttijd), eindtijd: hhmm(nieuw.eindtijd) };
   if (pid) {
     const dagTijd = tijdVanDag(p, datum);
@@ -482,23 +478,23 @@ export function dagMeldingen(o: {
 export function controleerPlanning(p: Planning, standaard: Partial<Tijdvak> = {}): string {
   const datums = geplandeDatums(p);
   if (datums.length > MAX_DAGEN) {
-    return `Een werkbon kan maximaal ${MAX_DAGEN} dagen hebben; dit zijn er ${datums.length}. Verdeel de klus over meerdere werkbonnen.`;
+    return tx('Een werkbon kan maximaal {max} dagen hebben; dit zijn er {aantal}. Verdeel de klus over meerdere werkbonnen.', { max: MAX_DAGEN, aantal: datums.length });
   }
   for (const d of datums) {
     const t = tijdVanDag(p, d, standaard);
     if (!t.starttijd || !t.eindtijd) {
       return datums.length > 1
-        ? `Vul voor ${korteDatum(d)} een begin- en eindtijd in. Een dag zonder tijd verschijnt niet in de planning.`
-        : 'Vul een begin- en eindtijd in. Een dag zonder tijd verschijnt niet in de planning.';
+        ? tx('Vul voor {datum} een begin- en eindtijd in. Een dag zonder tijd verschijnt niet in de planning.', { datum: korteDatum(d) })
+        : tx('Vul een begin- en eindtijd in. Een dag zonder tijd verschijnt niet in de planning.');
     }
-    if (t.eindtijd <= t.starttijd) return `Op ${korteDatum(d)} moet de eindtijd na de begintijd liggen.`;
+    if (t.eindtijd <= t.starttijd) return tx('Op {datum} moet de eindtijd na de begintijd liggen.', { datum: korteDatum(d) });
   }
   for (const d of datums) {
     for (const t of Object.values(p.persoonTijden?.[d] ?? {})) {
       const s = hhmm(t?.starttijd);
       const e = hhmm(t?.eindtijd);
-      if (!s || !e) return `Een eigen tijd op ${korteDatum(d)} heeft een begin- en eindtijd nodig.`;
-      if (e <= s) return `Op ${korteDatum(d)} ligt een eigen eindtijd vóór de begintijd.`;
+      if (!s || !e) return tx('Een eigen tijd op {datum} heeft een begin- en eindtijd nodig.', { datum: korteDatum(d) });
+      if (e <= s) return tx('Op {datum} ligt een eigen eindtijd vóór de begintijd.', { datum: korteDatum(d) });
     }
   }
   return '';
@@ -596,9 +592,9 @@ export function leesBedrag(v: string | number | null | undefined): number | null
 // ── Foto's ──────────────────────────────────────────────────────────────────
 
 export const FOTO_CATEGORIE_STIJL = {
-  voor: { label: 'Voor', kleur: '#2563EB', bg: '#EFF4FF' },
-  tijdens: { label: 'Tijdens', kleur: '#D97706', bg: '#FFF7E6' },
-  na: { label: 'Na', kleur: '#0F7A3F', bg: '#E8FBEF' },
+  voor: { get label() { return tx('Voor'); }, kleur: '#2563EB', bg: '#EFF4FF' },
+  tijdens: { get label() { return tx('Tijdens'); }, kleur: '#D97706', bg: '#FFF7E6' },
+  na: { get label() { return tx('Na'); }, kleur: '#0F7A3F', bg: '#E8FBEF' },
 } as const;
 
 // ── Uren ────────────────────────────────────────────────────────────────────
@@ -644,7 +640,7 @@ export function planRegels(w: WerkbonPlanbaar & { voertuig_ids?: string[] | null
 
 /** "08:00–16:30", of "geen tijd". */
 export const planTijd = (r: Pick<PlanRegel, 'starttijd' | 'eindtijd'>) =>
-  r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd';
+  r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : tx('geen tijd');
 
 /** Voertuigen op die dag: de eigen lijst van de dag, anders die van de werkbon (voertuigenOpDag). */
 export const voertuigenOpDag = (w: { voertuig_ids?: string[] | null }, dag: WerkbonDag) =>
@@ -687,7 +683,7 @@ export function busRegels(
         tekst: [
           v.naam,
           t.starttijd ? `${t.starttijd}–${t.eindtijd || '?'}` : null,
-          namen.length ? namen.join(', ') : 'niemand erin',
+          namen.length ? namen.join(', ') : tx('niemand erin'),
           v.zitplaatsen ? `${inzittenden.length}/${v.zitplaatsen}` : null,
         ]
           .filter(Boolean)
@@ -826,10 +822,23 @@ export const meldingBuitenTijd = (
   pt: { starttijd: string; eindtijd: string },
   voertuigNaam: string,
   vt: { starttijd: string; eindtijd: string },
-) => `${naam} werkt ${pt.starttijd}–${pt.eindtijd}, ${voertuigNaam} staat ${vt.starttijd}–${vt.eindtijd}.`;
+) =>
+  tx('{naam} werkt {van}–{tot}, {voertuig} staat {voertuigVan}–{voertuigTot}.', {
+    naam,
+    van: pt.starttijd,
+    tot: pt.eindtijd,
+    voertuig: voertuigNaam,
+    voertuigVan: vt.starttijd,
+    voertuigTot: vt.eindtijd,
+  });
 
 export const meldingVol = (v: PlanVoertuig, vol: { van: string; tot: string; aantal: number }) =>
-  `${v.naam} heeft ${v.zitplaatsen} ${v.zitplaatsen === 1 ? 'plek' : 'plekken'}, tussen ${vol.van} en ${vol.tot} zitten er ${vol.aantal} in.`;
+  txn(
+    '{naam} heeft {n} plek, tussen {van} en {tot} zitten er {aantal} in.',
+    '{naam} heeft {n} plekken, tussen {van} en {tot} zitten er {aantal} in.',
+    Number(v.zitplaatsen),
+    { naam: v.naam, van: vol.van, tot: vol.tot, aantal: vol.aantal },
+  );
 
 /** Het drukste moment in een voertuig op die dag. */
 export function bezettingVanVoertuig(ctx: VoertuigCtx, iso: string, vid: string): number {
@@ -948,7 +957,7 @@ export function voertuigDubbel(o: {
       const t = tijdVanVoertuig(w, dag, o.vid);
       if (!heeftTijd(t)) continue;
       if (s < naarMin(t.eindtijd) && naarMin(t.starttijd) < e) {
-        uit.push({ titel: w.titel || 'Werkbon', starttijd: hhmm(t.starttijd), eindtijd: hhmm(t.eindtijd) });
+        uit.push({ titel: w.titel || tx('Werkbon'), starttijd: hhmm(t.starttijd), eindtijd: hhmm(t.eindtijd) });
       }
     }
   }

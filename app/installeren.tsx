@@ -7,6 +7,7 @@ import { BBMark, Button } from '@/components';
 import { useInstallatie } from '@/lib/pwa';
 import { useTheme } from '@/providers';
 import { fonts, radius, spacing, typography, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * /installeren — openbare uitleg om BossBase als app te installeren.
@@ -27,43 +28,57 @@ export default function InstallerenScreen() {
   const eigen: BlokSoort = ios ? 'ios' : apparaat === 'android' ? 'android' : 'computer';
   const [alles, setAlles] = useState(false);
 
+  // Zinnen met een vetgedrukt woord erin: de hele zin in één tx() met
+  // {plaatshouders}, de vette woorden apart vertaald.
+  const vet = (tekst: string, woorden: Record<string, string>) => metVet(tekst, woorden, styles.vet);
   const blok: Record<BlokSoort, ReactNode> = {
     ios: (
-      <Blok styles={styles} icoon={<Smartphone size={20} color={t.green700} />} titel="iPhone en iPad">
-        <Stap styles={styles} n={1}>Open deze pagina in Safari.</Stap>
+      <Blok styles={styles} icoon={<Smartphone size={20} color={t.green700} />} titel={tx('iPhone en iPad')}>
+        <Stap styles={styles} n={1}>{tx('Open deze pagina in Safari.')}</Stap>
         <Stap styles={styles} n={2}>
-          Tik op <Text style={styles.vet}>Delen</Text> (het vierkantje met de pijl omhoog). Op een
-          iPad staat die rechtsboven, naast het adres.
+          {vet(tx('Tik op {delen} (het vierkantje met de pijl omhoog). Op een iPad staat die rechtsboven, naast het adres.'), {
+            delen: tx('Delen'),
+          })}
         </Stap>
         <Stap styles={styles} n={3}>
-          Kies <Text style={styles.vet}>Zet op beginscherm</Text>. Staat het er niet bij, scrol dan
-          in het menu omlaag.
+          {vet(tx('Kies {beginscherm}. Staat het er niet bij, scrol dan in het menu omlaag.'), {
+            beginscherm: tx('Zet op beginscherm'),
+          })}
         </Stap>
         <Stap styles={styles} n={4}>
-          Tik op <Text style={styles.vet}>Voeg toe</Text>.
+          {vet(tx('Tik op {toevoegen}.'), { toevoegen: tx('Voeg toe') })}
         </Stap>
       </Blok>
     ),
     android: (
       <Blok styles={styles} icoon={<TabletSmartphone size={20} color={t.green700} />} titel="Android">
-        <Stap styles={styles} n={1}>Open deze pagina in Chrome.</Stap>
+        <Stap styles={styles} n={1}>{tx('Open deze pagina in Chrome.')}</Stap>
         <Stap styles={styles} n={2}>
-          Open het menu (⋮) en kies <Text style={styles.vet}>App installeren</Text> of{' '}
-          <Text style={styles.vet}>Toevoegen aan startscherm</Text>. Staat hierboven een knop{' '}
-          <Text style={styles.vet}>Installeer BossBase</Text>, dan kan het ook daarmee.
+          {vet(
+            tx('Open het menu (⋮) en kies {installeren} of {startscherm}. Staat hierboven een knop {knop}, dan kan het ook daarmee.'),
+            {
+              installeren: tx('App installeren'),
+              startscherm: tx('Toevoegen aan startscherm'),
+              knop: tx('Installeer BossBase'),
+            },
+          )}
         </Stap>
-        <Stap styles={styles} n={3}>Bevestig met Installeren.</Stap>
+        <Stap styles={styles} n={3}>{tx('Bevestig met Installeren.')}</Stap>
       </Blok>
     ),
     computer: (
-      <Blok styles={styles} icoon={<Monitor size={20} color={t.green700} />} titel="Computer">
+      <Blok styles={styles} icoon={<Monitor size={20} color={t.green700} />} titel={tx('Computer')}>
         <Stap styles={styles} n={1}>
-          <Text style={styles.vet}>Chrome of Edge:</Text> klik op het installatie-icoon rechts in de
-          adresbalk, of kies in het menu <Text style={styles.vet}>BossBase installeren</Text>.
+          {vet(
+            tx('{browser} klik op het installatie-icoon rechts in de adresbalk, of kies in het menu {menu}.'),
+            { browser: tx('Chrome of Edge:'), menu: tx('BossBase installeren') },
+          )}
         </Stap>
         <Stap styles={styles} n={2}>
-          <Text style={styles.vet}>Safari op een Mac:</Text> kies in de menubalk{' '}
-          <Text style={styles.vet}>Archief → Voeg toe aan Dock</Text>.
+          {vet(tx('{browser} kies in de menubalk {menu}.'), {
+            browser: tx('Safari op een Mac:'),
+            menu: tx('Archief → Voeg toe aan Dock'),
+          })}
         </Stap>
       </Blok>
     ),
@@ -90,35 +105,37 @@ export default function InstallerenScreen() {
         <Image
           source={{ uri: '/icons/icon-192.png' }}
           style={styles.icoon}
-          accessibilityLabel="Appicoon van BossBase"
+          accessibilityLabel={tx('Appicoon van BossBase')}
         />
       ) : null}
 
-      <Text style={styles.titel}>BossBase installeren</Text>
+      <Text style={styles.titel}>{tx('BossBase installeren')}</Text>
 
       {soort === 'geinstalleerd' ? (
         <>
-          <Text style={styles.intro}>BossBase is op dit apparaat al geïnstalleerd.</Text>
-          <Button label="Naar inloggen" onPress={naarInloggen} />
+          <Text style={styles.intro}>{tx('BossBase is op dit apparaat al geïnstalleerd.')}</Text>
+          <Button label={tx('Naar inloggen')} onPress={naarInloggen} />
         </>
       ) : (
         <>
           <Text style={styles.intro}>
-            Als app opent BossBase vanaf je beginscherm of Dock, in een eigen venster zonder
-            browserbalken. Installeren is niet verplicht: BossBase werkt ook gewoon in je browser.
+            {tx('Als app opent BossBase vanaf je beginscherm of Dock, in een eigen venster zonder browserbalken. Installeren is niet verplicht: BossBase werkt ook gewoon in je browser.')}
           </Text>
 
           {soort === 'prompt' ? (
-            <Button label="Installeer BossBase" onPress={() => void installeer()} />
+            <Button label={tx('Installeer BossBase')} onPress={() => void installeer()} />
           ) : null}
 
           {ios && !safari ? (
             <View style={styles.let}>
               <Text style={styles.letTekst}>
-                Je opent deze pagina niet in Safari. Installeren op{' '}
-                {apparaat === 'ipad' ? 'een iPad' : 'een iPhone'} gaat het betrouwbaarst vanuit
-                Safari: kopieer het adres <Text style={styles.vet}>app.bossbase.nl/installeren</Text>{' '}
-                en open het in Safari.
+                {metVet(
+                  apparaat === 'ipad'
+                    ? tx('Je opent deze pagina niet in Safari. Installeren op een iPad gaat het betrouwbaarst vanuit Safari: kopieer het adres {adres} en open het in Safari.')
+                    : tx('Je opent deze pagina niet in Safari. Installeren op een iPhone gaat het betrouwbaarst vanuit Safari: kopieer het adres {adres} en open het in Safari.'),
+                  { adres: 'app.bossbase.nl/installeren' },
+                  styles.vet,
+                )}
               </Text>
             </View>
           ) : null}
@@ -129,11 +146,11 @@ export default function InstallerenScreen() {
 
           {!alles ? (
             <Pressable onPress={() => setAlles(true)} accessibilityRole="button" hitSlop={8}>
-              <Text style={styles.meer}>Instructies voor andere apparaten</Text>
+              <Text style={styles.meer}>{tx('Instructies voor andere apparaten')}</Text>
             </Pressable>
           ) : null}
 
-          <Button label="Naar inloggen" variant="secondary" onPress={naarInloggen} />
+          <Button label={tx('Naar inloggen')} variant="secondary" onPress={naarInloggen} />
         </>
       )}
     </ScrollView>
@@ -141,6 +158,20 @@ export default function InstallerenScreen() {
 }
 
 type Styles = ReturnType<typeof makeStyles>;
+
+/** Zet de {plaatshouders} in een vertaalde zin om in vetgedrukte woorden. */
+function metVet(tekst: string, woorden: Record<string, string>, stijl: Styles['vet']): ReactNode[] {
+  return tekst.split(/(\{\w+\})/).map((deel, i) => {
+    const woord = /^\{\w+\}$/.test(deel) ? woorden[deel.slice(1, -1)] : undefined;
+    return woord != null ? (
+      <Text key={i} style={stijl}>
+        {woord}
+      </Text>
+    ) : (
+      deel
+    );
+  });
+}
 type BlokSoort = 'ios' | 'android' | 'computer';
 
 function Blok({ styles, icoon, titel, children }: { styles: Styles; icoon: ReactNode; titel: string; children: ReactNode }) {

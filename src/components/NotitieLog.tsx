@@ -7,6 +7,7 @@ import { formatDateNL, formatPlanningTime } from '@/lib/format';
 import { lokaleDatum } from '@/lib/nlTijd';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import { mentionZoekterm, tekstMetVermeldingen } from '@/lib/mentions';
+import { tx } from '@/i18n';
 
 export type LogItem = { id: string; html: string; auteur: string; at: string };
 export type LogLid = { id: string; full_name: string };
@@ -25,7 +26,7 @@ export function MentionInvoer({
   gekozen,
   onGekozen,
   leden,
-  placeholder = 'Typ @ om iemand te taggen',
+  placeholder,
   editable = true,
 }: {
   label: string;
@@ -60,18 +61,18 @@ export function MentionInvoer({
         value={value}
         onChangeText={onChangeText}
         onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? tx('Typ @ om iemand te taggen')}
         multiline
         editable={editable}
       />
       {keuzes.length ? (
-        <View style={styles.chipRij} accessibilityLabel="Collega taggen">
+        <View style={styles.chipRij} accessibilityLabel={tx('Collega taggen')}>
           {keuzes.map((l) => (
             <Pressable
               key={l.id}
               onPress={() => kies(l)}
               accessibilityRole="button"
-              accessibilityLabel={`${l.full_name} taggen`}
+              accessibilityLabel={tx('{naam} taggen', { naam: l.full_name })}
               style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
             >
               <Text style={styles.chipTekst}>@{l.full_name}</Text>
@@ -99,7 +100,7 @@ export function naarHtml(tekst: string, gekozen: Getagd[]): { html: string; geta
  * (met mention-span bij een tag, anders veilige HTML) en geeft true bij succes.
  */
 export function NotitieLog({
-  label = 'Notities',
+  label,
   items,
   leden,
   magSchrijven = true,
@@ -133,18 +134,18 @@ export function NotitieLog({
       {magSchrijven ? (
         <>
           <MentionInvoer
-            label={label}
+            label={label ?? tx('Notities')}
             value={tekst}
             onChangeText={setTekst}
             gekozen={gekozen}
             onGekozen={setGekozen}
             leden={leden}
-            placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
+            placeholder={tx('Schrijf een notitie… Typ @ om iemand te taggen')}
           />
           {fout ? <Text style={[styles.klein, { color: t.statusRejectFg }]}>{fout}</Text> : null}
           <View style={{ alignItems: 'flex-end' }}>
             <Button
-              label="Plaatsen"
+              label={tx('Plaatsen')}
               variant="secondary"
               onPress={plaats}
               loading={bezig}
@@ -153,14 +154,14 @@ export function NotitieLog({
           </View>
         </>
       ) : (
-        <Text style={styles.veldLabel}>{label}</Text>
+        <Text style={styles.veldLabel}>{label ?? tx('Notities')}</Text>
       )}
-      {items.length === 0 ? <Text style={styles.leeg}>Nog geen notities.</Text> : null}
+      {items.length === 0 ? <Text style={styles.leeg}>{tx('Nog geen notities.')}</Text> : null}
       {items.map((n) => (
         <View key={n.id} style={styles.notitie}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.notitieMeta}>
-              {n.auteur || 'Onbekend'} · {formatDateNL(lokaleDatum(n.at))} {formatPlanningTime(n.at)}
+              {n.auteur || tx('Onbekend')} · {formatDateNL(lokaleDatum(n.at))} {formatPlanningTime(n.at)}
             </Text>
             <Text style={styles.tekst}>{alsTekst(n.html)}</Text>
           </View>

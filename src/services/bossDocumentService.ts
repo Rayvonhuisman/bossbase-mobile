@@ -11,13 +11,14 @@
  */
 import { supabase } from '@/lib/supabase';
 import { bytesNaarBase64 } from '@/lib/base64';
+import { tx, txm } from '@/i18n';
 
 export type BossFunctie = 'boss-offerte' | 'boss-factuur';
 export type BossStatus = { beschikbaar: boolean; mag: boolean; zeker: boolean };
 export type BossBestand = { naam: string; type: string; data: string };
 export type BossAntwoord<T> = { resultaat: T; waarschuwingen: string[] };
 
-const NIET_BEREIKBAAR = 'Boss is even niet bereikbaar. Probeer het zo nog eens.';
+const NIET_BEREIKBAAR = txm('Boss is even niet bereikbaar. Probeer het zo nog eens.');
 const statussen = new Map<BossFunctie, Promise<BossStatus>>();
 
 export function bossStatus(functie: BossFunctie): Promise<BossStatus> {
@@ -46,7 +47,7 @@ async function foutTekst(error: unknown): Promise<string> {
   } catch {
     /* geen JSON */
   }
-  return NIET_BEREIKBAAR;
+  return tx(NIET_BEREIKBAAR);
 }
 
 export async function vraagBoss<T>(functie: BossFunctie, body: Record<string, unknown>): Promise<BossAntwoord<T>> {
@@ -54,11 +55,11 @@ export async function vraagBoss<T>(functie: BossFunctie, body: Record<string, un
   try {
     res = await supabase.functions.invoke(functie, { body });
   } catch {
-    throw new Error(NIET_BEREIKBAAR);
+    throw new Error(tx(NIET_BEREIKBAAR));
   }
   const { data, error } = res;
   if (error) throw new Error(await foutTekst(error));
-  if (!data?.success) throw new Error(data?.error || NIET_BEREIKBAAR);
+  if (!data?.success) throw new Error(data?.error || tx(NIET_BEREIKBAAR));
   return { resultaat: data.resultaat as T, waarschuwingen: (data.waarschuwingen as string[]) || [] };
 }
 
@@ -71,14 +72,14 @@ export const BOSS_BESTAND_MAX = 4 * 1024 * 1024;
 export function bestandVoorBoss(naam: string, type: string | null, bytes: ArrayBuffer): BossBestand {
   const ext = (naam.split('.').pop() || '').toLowerCase();
   const mime = type || (ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : '');
-  if (!bytes.byteLength) throw new Error('Het bestand is leeg.');
+  if (!bytes.byteLength) throw new Error(tx('Het bestand is leeg.'));
   if (!BOSS_BESTAND_TYPES.includes(mime)) {
     throw new Error(
       ext === 'heic'
-        ? 'Dit is een HEIC-foto van een iPhone. Die kan Boss nog niet lezen. Maak een foto met de camera-knop of kies een pdf.'
-        : `Een .${ext || 'onbekend'}-bestand kan Boss niet lezen. Kies een pdf, jpg of png.`,
+        ? tx('Dit is een HEIC-foto van een iPhone. Die kan Boss nog niet lezen. Maak een foto met de camera-knop of kies een pdf.')
+        : tx('Een .{ext}-bestand kan Boss niet lezen. Kies een pdf, jpg of png.', { ext: ext || tx('onbekend') }),
     );
   }
-  if (bytes.byteLength > BOSS_BESTAND_MAX) throw new Error('Dit bestand is groter dan 4 MB. Kies een kleiner bestand.');
+  if (bytes.byteLength > BOSS_BESTAND_MAX) throw new Error(tx('Dit bestand is groter dan 4 MB. Kies een kleiner bestand.'));
   return { naam, type: mime, data: bytesNaarBase64(new Uint8Array(bytes)) };
 }

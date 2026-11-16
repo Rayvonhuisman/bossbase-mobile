@@ -5,6 +5,7 @@ import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/wr
 import { negeerBijImport } from './importPrullenbak';
 import { haalInStukken } from '@/lib/inStukken';
 import { calcBtw, type WerkbonInkoopBron } from '@/lib/kostenLogica';
+import { tx } from '@/i18n';
 
 /**
  * Kosten (`job_costs`) — dezelfde tabel en dezelfde categorieën als het
@@ -103,7 +104,7 @@ export async function listJobCosts(
       .limit(bereik);
     if (error) {
       console.warn('[jobCostService.listJobCosts]', error.message);
-      return { data: [], error: 'Kosten konden niet worden geladen.' };
+      return { data: [], error: tx('Kosten konden niet worden geladen.') };
     }
     return { data: (data as unknown as JobCostRow[]) ?? [], error: null };
   }
@@ -126,7 +127,7 @@ export async function listJobCosts(
   }
   if (res.error) {
     console.warn('[jobCostService.listJobCosts]', res.error.message);
-    return { data: [], error: 'Kosten laden is mislukt.' };
+    return { data: [], error: tx('Kosten laden is mislukt.') };
   }
   return { data: (res.data as unknown as JobCostRow[]) ?? [], error: null };
 }
@@ -158,7 +159,7 @@ export async function listWerkbonInkopen(
   }
   if (res.error) {
     console.warn('[jobCostService.listWerkbonInkopen]', res.error.message);
-    return { data: [], error: 'Kosten laden is mislukt.' };
+    return { data: [], error: tx('Kosten laden is mislukt.') };
   }
   return { data: (res.data as unknown as WerkbonInkoopBron[]) ?? [], error: null };
 }
@@ -200,7 +201,7 @@ export async function listLeveranciers(): Promise<{
     .order('naam', { ascending: true });
   if (error) {
     console.warn('[jobCostService.listLeveranciers]', error.message);
-    return { data: [], error: 'Leveranciers konden niet worden geladen.' };
+    return { data: [], error: tx('Leveranciers konden niet worden geladen.') };
   }
   return {
     data: ((data as { id: string; naam: string }[]) ?? []).map((l) => ({ id: l.id, naam: l.naam })),
@@ -219,17 +220,17 @@ export async function listLeveranciers(): Promise<{
  */
 export async function createLeverancier(naam: string): Promise<WriteResult<{ id: string; naam: string }>> {
   const schoon = naam.trim();
-  if (!schoon) return writeFout('validatie', 'Vul een naam in.');
+  if (!schoon) return writeFout('validatie', tx('Vul een naam in.'));
 
   const payload = withCompanyId({ naam: schoon, actief: true });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   return schrijf<{ id: string; naam: string }>(
     () => supabase.from('leveranciers').insert(payload).select('id, naam'),
     {
       context: 'jobCostService.createLeverancier',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De leverancier is niet opgeslagen.',
+      leegMelding: tx('De leverancier is niet opgeslagen.'),
     },
   );
 }
@@ -285,13 +286,13 @@ export async function koppelBonnen(
     const { error } = await supabase.storage
       .from('kosten-bijlagen')
       .upload(pad, b.bytes, { contentType: b.contentType, upsert: false });
-    if (error) return 'De bon kon niet worden geüpload. Probeer het opnieuw.';
+    if (error) return tx('De bon kon niet worden geüpload. Probeer het opnieuw.');
     paden.push(pad);
   }
   const bijlage_url = JSON.stringify(paden);
   for (const id of kostenIds) {
     const { error } = await supabase.from('job_costs').update({ bijlage_url }).eq('id', id);
-    if (error) return 'De bon is geüpload maar niet aan de kostenpost gekoppeld.';
+    if (error) return tx('De bon is geüpload maar niet aan de kostenpost gekoppeld.');
   }
   return null;
 }
@@ -313,14 +314,14 @@ export type JobCostInput = {
 
 function valideerKost(input: Partial<JobCostInput>, nieuw: boolean): string | null {
   if ((nieuw || input.description !== undefined) && !input.description?.trim()) {
-    return 'Vul een omschrijving in.';
+    return tx('Vul een omschrijving in.');
   }
   if (nieuw || input.amount !== undefined) {
     const bedrag = Number(input.amount);
-    if (!Number.isFinite(bedrag) || bedrag <= 0) return 'Voer een geldig bedrag in.';
+    if (!Number.isFinite(bedrag) || bedrag <= 0) return tx('Voer een geldig bedrag in.');
   }
   if (input.cost_date && !isGeldigeDatum(input.cost_date)) {
-    return 'Vul een geldige datum in (JJJJ-MM-DD).';
+    return tx('Vul een geldige datum in (JJJJ-MM-DD).');
   }
   if (
     input.btw_percentage !== undefined &&
@@ -329,15 +330,15 @@ function valideerKost(input: Partial<JobCostInput>, nieuw: boolean): string | nu
       input.btw_percentage < 0 ||
       input.btw_percentage > 100)
   ) {
-    return 'Vul een geldig btw-percentage in.';
+    return tx('Vul een geldig btw-percentage in.');
   }
   // De databaseconstraint in gewone taal, vóórdat de server hem als 23514
   // teruggeeft. Een werkbonkost is de uitzondering: die hangt aan de klus.
   if (nieuw && !input.leverancier_id && !input.werkbon_id) {
-    return 'Kies een leverancier. Zonder leverancier kan een kostenpost niet worden vastgelegd.';
+    return tx('Kies een leverancier. Zonder leverancier kan een kostenpost niet worden vastgelegd.');
   }
   if (input.klant_type && !['klant', 'algemeen'].includes(input.klant_type)) {
-    return 'Onbekend kostentype.';
+    return tx('Onbekend kostentype.');
   }
   return null;
 }
@@ -398,7 +399,7 @@ export async function createJobCost(input: JobCostInput): Promise<WriteResult<Jo
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   return schrijf<JobCostRow>(
@@ -407,8 +408,7 @@ export async function createJobCost(input: JobCostInput): Promise<WriteResult<Jo
       context: 'jobCostService.createJobCost',
       bedrijfReadonly: isReadonly(),
       leegMelding:
-        'De kostenpost is niet opgeslagen. Je hebt het recht Kosten nodig, en Kosten & ' +
-        'nacalculatie moet in je abonnement zitten.',
+        tx('De kostenpost is niet opgeslagen. Je hebt het recht Kosten nodig, en Kosten & nacalculatie moet in je abonnement zitten.'),
     },
   );
 }
@@ -421,7 +421,7 @@ export async function updateJobCost(
   if (fout) return writeFout('validatie', fout);
 
   const updates = mapKost(input);
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<JobCostRow>(
     () => supabase.from('job_costs').update(updates).eq('id', id).select(JOB_COST_COLUMNS),
@@ -467,7 +467,7 @@ export async function deleteJobCost(
         context: 'jobCostService.deleteJobCost.materiaal',
         bedrijfReadonly: isReadonly(),
         leegSoort: 'geen-rechten',
-        leegMelding: 'Je hebt geen rechten om dit werkbonmateriaal te verwijderen.',
+        leegMelding: tx('Je hebt geen rechten om dit werkbonmateriaal te verwijderen.'),
       },
     );
     return res.ok ? { ok: true, data: null } : res;
@@ -479,7 +479,7 @@ export async function deleteJobCost(
       context: 'jobCostService.deleteJobCost',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Je hebt geen rechten om deze kostenpost te verwijderen.',
+      leegMelding: tx('Je hebt geen rechten om deze kostenpost te verwijderen.'),
     },
   );
   if (!res.ok) return res;

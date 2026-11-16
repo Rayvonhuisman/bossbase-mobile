@@ -5,6 +5,7 @@ import { useHulp } from '@/providers/HulpProvider';
 import { fonts } from '@/theme';
 import { ProfileSettingsButton } from './ProfileSettingsButton';
 import { BossAvatar } from './BossChat';
+import { tx } from '@/i18n';
 
 /**
  * De knoppen rechtsboven, op elke pagina — zoals de topbalk van het dashboard:
@@ -20,7 +21,7 @@ export function HeaderActions({ iconSize = 38 }: { iconSize?: number }) {
       <Pressable
         onPress={openMeldingen}
         accessibilityRole="button"
-        accessibilityLabel={ongelezen ? `Notificaties, ${ongelezen} ongelezen` : 'Notificaties'}
+        accessibilityLabel={ongelezen ? tx('Notificaties, {n} ongelezen', { n: ongelezen }) : tx('Notificaties')}
         hitSlop={6}
         style={({ pressed }) => [styles.btn, rond, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.7 }]}
       >
@@ -34,7 +35,7 @@ export function HeaderActions({ iconSize = 38 }: { iconSize?: number }) {
       <Pressable
         onPress={() => openBoss()}
         accessibilityRole="button"
-        accessibilityLabel="Vraag het Boss"
+        accessibilityLabel={tx('Vraag het Boss')}
         hitSlop={6}
         style={({ pressed }) => [pressed && { opacity: 0.7 }]}
       >

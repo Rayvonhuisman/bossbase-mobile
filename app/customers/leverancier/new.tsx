@@ -14,6 +14,7 @@ import { useSave } from '@/lib/useSave';
 import { terugOfNaar } from '@/lib/navigatie';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { spacing } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * Nieuwe leverancier — `NewLeverancierModal` van het dashboard. De database
@@ -32,7 +33,7 @@ export default function NieuweLeverancierScherm() {
 
   const opslaan = () => {
     save(() => createLeverancier(concept), {
-      succesMelding: 'Leverancier opgeslagen',
+      succesMelding: tx('Leverancier opgeslagen'),
       onSuccess: (l) => {
         router.replace(`/customers/leverancier/${l.id}`);
       },
@@ -43,7 +44,7 @@ export default function NieuweLeverancierScherm() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppTopBar variant="detail" title="Nieuwe leverancier" onBack={terug} />
+        <AppTopBar variant="detail" title={tx('Nieuwe leverancier')} onBack={terug} />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -56,12 +57,12 @@ export default function NieuweLeverancierScherm() {
             <LeverancierVelden waarde={concept} onChange={setConcept} />
           </ScrollView>
           <FormFooter
-            label="Leverancier opslaan"
+            label={tx('Leverancier opslaan')}
             onPress={opslaan}
             loading={saving}
             disabled={!leverancierConceptGeldig(concept)}
             error={error}
-            hint={concept.naam.trim() ? null : 'Naam is verplicht.'}
+            hint={concept.naam.trim() ? null : tx('Naam is verplicht.')}
           />
         </KeyboardAvoidingView>
       </View>

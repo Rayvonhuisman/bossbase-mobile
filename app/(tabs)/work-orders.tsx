@@ -49,6 +49,7 @@ import { useOnthouden } from '@/lib/useOnthouden';
 import { isInTePlannen, slaBadge, vergelijkInTePlannen } from '@/lib/sla';
 import { SlaBadge } from '@/components/werkbon/SlaBadge';
 import { formatDateNL } from '@/lib/format';
+import { tx } from '@/i18n';
 
 type ChipKey = StatusFilter | 'mij' | 'in_te_plannen';
 
@@ -59,7 +60,7 @@ type ChipKey = StatusFilter | 'mij' | 'in_te_plannen';
 /** "ma 3 nov · 08:00" of "ma 3 nov – vr 7 nov · 5 dagen · 08:00" (dashboardkaart). */
 function datumLabel(wo: Werkbon): string {
   const label = planningLabel(wo);
-  if (!label) return 'Niet ingepland';
+  if (!label) return tx('Niet ingepland');
   const { starttijd } = werkbonVenster(wo);
   return starttijd ? `${label} · ${starttijd}` : label;
 }
@@ -183,14 +184,14 @@ export default function WorkOrdersScreen() {
 
   const chips: ChipDef<ChipKey>[] = useMemo(
     () => [
-      { id: 'alle', label: 'Alle', count: counts.alle },
-      { id: 'gepland', label: WERKBON_STATUS_STIJL.gepland.label, count: counts.gepland },
-      { id: 'in_uitvoering', label: WERKBON_STATUS_STIJL.in_uitvoering.label, count: counts.in_uitvoering },
-      { id: 'afgerond', label: WERKBON_STATUS_STIJL.afgerond.label, count: counts.afgerond },
-      { id: 'geannuleerd', label: WERKBON_STATUS_STIJL.geannuleerd.label, count: counts.geannuleerd },
-      { id: 'mij', label: 'Mijn werkbonnen' },
+      { id: 'alle', label: tx('Alle'), count: counts.alle },
+      { id: 'gepland', label: tx(WERKBON_STATUS_STIJL.gepland.label), count: counts.gepland },
+      { id: 'in_uitvoering', label: tx(WERKBON_STATUS_STIJL.in_uitvoering.label), count: counts.in_uitvoering },
+      { id: 'afgerond', label: tx(WERKBON_STATUS_STIJL.afgerond.label), count: counts.afgerond },
+      { id: 'geannuleerd', label: tx(WERKBON_STATUS_STIJL.geannuleerd.label), count: counts.geannuleerd },
+      { id: 'mij', label: tx('Mijn werkbonnen') },
       ...(metContracten
-        ? [{ id: 'in_te_plannen' as const, label: 'In te plannen', count: items.filter(isInTePlannen).length }]
+        ? [{ id: 'in_te_plannen' as const, label: tx('In te plannen'), count: items.filter(isInTePlannen).length }]
         : []),
     ],
     [counts, metContracten, items],
@@ -209,7 +210,7 @@ export default function WorkOrdersScreen() {
   const groepen = useMemo(() => {
     if (chip === 'in_te_plannen') {
       const lijst = [...filtered].sort(vergelijkInTePlannen);
-      return lijst.length ? [{ key: 'in_te_plannen', label: 'In te plannen', items: lijst }] : [];
+      return lijst.length ? [{ key: 'in_te_plannen', label: tx('In te plannen'), items: lijst }] : [];
     }
     const vandaag = vandaagIso();
     const sleutel = (w: Werkbon) => {
@@ -218,10 +219,10 @@ export default function WorkOrdersScreen() {
     };
     const tijd = (w: Werkbon) => werkbonVenster(w).starttijd ?? '';
     const buckets: { key: string; label: string; items: Werkbon[] }[] = [
-      { key: 'vandaag', label: 'Vandaag', items: [] },
-      { key: 'binnenkort', label: 'Binnenkort', items: [] },
-      { key: 'eerder', label: 'Eerder', items: [] },
-      { key: 'open', label: 'Niet ingepland', items: [] },
+      { key: 'vandaag', label: tx('Vandaag'), items: [] },
+      { key: 'binnenkort', label: tx('Binnenkort'), items: [] },
+      { key: 'eerder', label: tx('Eerder'), items: [] },
+      { key: 'open', label: tx('Niet ingepland'), items: [] },
     ];
     filtered.forEach((w) => {
       const dagen = werkbonDagen(w).map((d) => d.datum);
@@ -239,11 +240,11 @@ export default function WorkOrdersScreen() {
   const onOpen = (id: string) => router.push(`/work-orders/${id}`);
 
   // Stale-while-refresh: only take over the screen when there is no data yet.
-  if (loading && items.length === 0) return <LoadingScreen label="Werkbonnen laden..." />;
+  if (loading && items.length === 0) return <LoadingScreen label={tx('Werkbonnen laden...')} />;
   if (error && items.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <ErrorState title="Werkbonnen niet geladen" message={error} onRetry={opnieuw} />
+        <ErrorState title={tx('Werkbonnen niet geladen')} message={error} onRetry={opnieuw} />
       </View>
     );
   }
@@ -255,13 +256,17 @@ export default function WorkOrdersScreen() {
           /* Aanmaken zit rechtsboven, zoals in het ontwerp. Dat is bewust geen
              zwevende knop meer: die legde zich over de onderste lijstrijen. */
           <AppTopBar
-            title="Werkbonnen"
-            subtitle={`${items.length} totaal · ${counts.gepland + counts.in_uitvoering} open · ${counts.afgerond} afgerond`}
+            title={tx('Werkbonnen')}
+            subtitle={tx('{totaal} totaal · {open} open · {afgerond} afgerond', {
+              totaal: items.length,
+              open: counts.gepland + counts.in_uitvoering,
+              afgerond: counts.afgerond,
+            })}
             rightAction={
               canCreate ? (
                 <HeaderIconButton
                   icon={Plus}
-                  label="Nieuwe werkbon"
+                  label={tx('Nieuwe werkbon')}
                   size={42}
                   onPress={() => router.push('/work-orders/new')}
                 />
@@ -279,7 +284,7 @@ export default function WorkOrdersScreen() {
           <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
             <NoticeBanner
               toon="fout"
-              message={`${error} Je ziet de laatst geladen lijst — tik om opnieuw te proberen.`}
+              message={tx('{fout} Je ziet de laatst geladen lijst — tik om opnieuw te proberen.', { fout: error })}
               onPress={() => herlaad()}
             />
           </View>
@@ -290,7 +295,7 @@ export default function WorkOrdersScreen() {
           <AppSearchBar
             value={query}
             onChange={setQuery}
-            placeholder="Zoek op titel, klant of locatie…"
+            placeholder={tx('Zoek op titel, klant of locatie…')}
           />
         </View>
 
@@ -306,11 +311,11 @@ export default function WorkOrdersScreen() {
               <View style={styles.emptyIcon}>
                 <ClipboardList size={28} color={t.green700} strokeWidth={1.8} />
               </View>
-              <Text style={styles.emptyTitle}>Geen werkbonnen gevonden</Text>
+              <Text style={styles.emptyTitle}>{tx('Geen werkbonnen gevonden')}</Text>
               <Text style={styles.emptyBody}>
                 {items.length === 0
-                  ? 'Er zijn nog geen werkbonnen aangemaakt of toegewezen.'
-                  : 'Pas de filters aan of maak een nieuwe werkbon aan.'}
+                  ? tx('Er zijn nog geen werkbonnen aangemaakt of toegewezen.')
+                  : tx('Pas de filters aan of maak een nieuwe werkbon aan.')}
               </Text>
               <View style={styles.emptyKnoppen}>
                 <Pressable
@@ -321,7 +326,7 @@ export default function WorkOrdersScreen() {
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
                 >
-                  <Text style={styles.emptyBtnText}>Filters wissen</Text>
+                  <Text style={styles.emptyBtnText}>{tx('Filters wissen')}</Text>
                 </Pressable>
                 {canCreate ? (
                   <Pressable
@@ -329,7 +334,7 @@ export default function WorkOrdersScreen() {
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.emptyBtn, styles.emptyBtnLicht, pressed && { opacity: 0.85 }]}
                   >
-                    <Text style={[styles.emptyBtnText, { color: t.ink }]}>Nieuwe werkbon</Text>
+                    <Text style={[styles.emptyBtnText, { color: t.ink }]}>{tx('Nieuwe werkbon')}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -402,8 +407,8 @@ function WerkbonKaart({
     assignees.length === 0
       ? null
       : assignees.length === 1
-        ? (namen[assignees[0]!] ?? 'Toegewezen')
-        : `${namen[assignees[0]!] ?? 'Toegewezen'} +${assignees.length - 1}`;
+        ? (namen[assignees[0]!] ?? tx('Toegewezen'))
+        : `${namen[assignees[0]!] ?? tx('Toegewezen')} +${assignees.length - 1}`;
 
   const klant = wo.customer?.name ?? null;
   // Zelfde vaste klantkleur als het dashboard; zonder klant uit de titel.
@@ -414,7 +419,7 @@ function WerkbonKaart({
   const meta = [
     wo.nummer ?? '—',
     datumLabel(wo),
-    !wo.gepland_op && wo.uiterlijk_op ? `uiterlijk ${formatDateNL(wo.uiterlijk_op)}` : null,
+    !wo.gepland_op && wo.uiterlijk_op ? tx('uiterlijk {datum}', { datum: formatDateNL(wo.uiterlijk_op) }) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -437,7 +442,7 @@ function WerkbonKaart({
         <WerkbonStatusBadge status={wo.status} klein />
       </View>
       <Text style={styles.kaartTitel} numberOfLines={2}>
-        {wo.titel || alsTekst(wo.omschrijving) || 'Werkbon'}
+        {wo.titel || alsTekst(wo.omschrijving) || tx('Werkbon')}
       </Text>
       <View style={styles.kaartVoet}>
         <View style={[styles.kaartAvatar, { backgroundColor: av.bg }]}>
@@ -446,7 +451,7 @@ function WerkbonKaart({
           </Text>
         </View>
         <Text style={styles.kaartKlant} numberOfLines={1}>
-          {[klant, adres].filter(Boolean).join(' · ') || (assigneeLabel ?? 'Niet toegewezen')}
+          {[klant, adres].filter(Boolean).join(' · ') || (assigneeLabel ?? tx('Niet toegewezen'))}
         </Text>
       </View>
       {pct !== null && taken ? (

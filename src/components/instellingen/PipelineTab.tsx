@@ -25,6 +25,13 @@ import {
   type VerlorenReden,
 } from '@/services/instellingenService';
 import { Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { tx } from '@/i18n';
+
+/** "a en b", "a, b en c" in de taal van de gebruiker. */
+const opsomming = (lijst: string[]) =>
+  lijst.length < 2
+    ? (lijst[0] ?? '')
+    : tx('{eerste} en {laatste}', { eerste: lijst.slice(0, -1).join(', '), laatste: lijst[lijst.length - 1] });
 
 /**
  * Pipeline — koppeling met de uitvoering (`pipeline_koppelingen`), fasen
@@ -66,7 +73,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
   const koppel = (moment: string, stageId: string | null) => {
     const vorige = koppelingen[moment] ?? null;
     setKoppelingen((k) => ({ ...k, [moment]: stageId }));
-    save(() => zetKoppeling(moment, stageId), { succesMelding: 'Koppeling opgeslagen' }).then((res) => {
+    save(() => zetKoppeling(moment, stageId), { succesMelding: tx('Koppeling opgeslagen') }).then((res) => {
       if (res && !res.ok) setKoppelingen((k) => ({ ...k, [moment]: vorige }));
     });
   };
@@ -88,7 +95,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
           setFase(null);
           await laad();
         },
-        succesMelding: fase.id ? 'Fase bijgewerkt' : 'Fase aangemaakt',
+        succesMelding: fase.id ? tx('Fase bijgewerkt') : tx('Fase aangemaakt'),
       },
     );
   };
@@ -96,19 +103,19 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
   const faseVerwijderen = (f: Fase) => {
     const geraakt = PIPELINE_MOMENTEN.filter((m) => koppelingen[m.key] === f.id).map((m) => m.label);
     const kop = geraakt.length
-      ? `Let op: deze fase is gekoppeld aan ${geraakt.join(' en ')}. Die koppeling vervalt.\n\n`
+      ? `${tx('Let op: deze fase is gekoppeld aan {momenten}. Die koppeling vervalt.', { momenten: opsomming(geraakt) })}\n\n`
       : '';
-    Dialog.alert('Fase verwijderen?', `${kop}Dit kan niet ongedaan worden gemaakt.`, [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Fase verwijderen?'), `${kop}${tx('Dit kan niet ongedaan worden gemaakt.')}`, [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: () =>
           save(() => deleteFase(f.id), {
             onSuccess: () => laad(),
             succesMelding: geraakt.length
-              ? `Fase verwijderd — koppeling voor ${geraakt.join(' en ')} vervallen`
-              : 'Fase verwijderd',
+              ? tx('Fase verwijderd — koppeling voor {momenten} vervallen', { momenten: opsomming(geraakt) })
+              : tx('Fase verwijderd'),
           }),
       },
     ]);
@@ -121,21 +128,21 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
         setReden(null);
         await laad();
       },
-      succesMelding: reden.id ? 'Reden bijgewerkt' : 'Reden aangemaakt',
+      succesMelding: reden.id ? tx('Reden bijgewerkt') : tx('Reden aangemaakt'),
     });
   };
 
   const redenVerwijderen = (r: VerlorenReden) =>
     Dialog.alert(
-      'Verloren-reden verwijderen?',
-      'Bestaande aanvragen met deze reden behouden hun opgeslagen tekst.',
+      tx('Verloren-reden verwijderen?'),
+      tx('Bestaande aanvragen met deze reden behouden hun opgeslagen tekst.'),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Verwijderen',
+          text: tx('Verwijderen'),
           style: 'destructive',
           onPress: () =>
-            save(() => deleteVerlorenReden(r.id), { onSuccess: () => laad(), succesMelding: 'Reden verwijderd' }),
+            save(() => deleteVerlorenReden(r.id), { onSuccess: () => laad(), succesMelding: tx('Reden verwijderd') }),
         },
       ],
     );
@@ -146,7 +153,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
     <>
       {!isAdmin ? (
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <Uitleg>Je kunt de pipeline bekijken. Wijzigen kan alleen een beheerder.</Uitleg>
+          <Uitleg>{tx('Je kunt de pipeline bekijken. Wijzigen kan alleen een beheerder.')}</Uitleg>
         </View>
       ) : null}
       {fout ? (
@@ -156,8 +163,8 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
       ) : null}
 
       <Kaart
-        titel="Koppeling met uitvoering"
-        sub="Welke fase hoort bij welk moment in de uitvoering. Een aanvraag of project schuift automatisch door zodra het moment bereikt is."
+        titel={tx('Koppeling met uitvoering')}
+        sub={tx('Welke fase hoort bij welk moment in de uitvoering. Een aanvraag of project schuift automatisch door zodra het moment bereikt is.')}
       >
         {PIPELINE_MOMENTEN.map((m) => (
           <View key={m.key} style={{ gap: 2 }}>
@@ -167,8 +174,8 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
               value={koppelingen[m.key] ?? null}
               onChange={(id) => koppel(m.key, id)}
               allowEmpty
-              emptyLabel="— Niet gekoppeld —"
-              placeholder="— Niet gekoppeld —"
+              emptyLabel={tx('— Niet gekoppeld —')}
+              placeholder={tx('— Niet gekoppeld —')}
               disabled={!isAdmin || saving}
               hint={m.uitleg}
             />
@@ -177,11 +184,11 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
       </Kaart>
 
       <Kaart
-        titel="Pipelinefasen"
+        titel={tx('Pipelinefasen')}
         rechts={
           isAdmin ? (
             <Button
-              label="Fase toevoegen"
+              label={tx('Fase toevoegen')}
               variant="secondary"
               onPress={() => {
                 setError(null);
@@ -191,7 +198,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
           ) : undefined
         }
       >
-        {fasen.length === 0 ? <Text style={s.hint}>Nog geen fasen.</Text> : null}
+        {fasen.length === 0 ? <Text style={s.hint}>{tx('Nog geen fasen.')}</Text> : null}
         {fasen.map((f) => (
           <View key={f.id} style={s.lijstRij}>
             <View style={[s.stip, { backgroundColor: kleurVan[f.id] }]} />
@@ -207,7 +214,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
                     setFase({ id: f.id, name: f.name, kleur: kleurVan[f.id] ?? f.color_class });
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`${f.name} bewerken`}
+                  accessibilityLabel={tx('{naam} bewerken', { naam: f.name })}
                   style={s.iconKnop}
                 >
                   <Pencil size={17} color={t.muted} />
@@ -215,7 +222,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
                 <Pressable
                   onPress={() => faseVerwijderen(f)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${f.name} verwijderen`}
+                  accessibilityLabel={tx('{naam} verwijderen', { naam: f.name })}
                   style={s.iconKnop}
                 >
                   <Trash2 size={17} color={t.statusRejectFg} />
@@ -227,12 +234,12 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
       </Kaart>
 
       <Kaart
-        titel="Verloren-redenen"
-        sub="De keuzes als je een aanvraag op verloren zet."
+        titel={tx('Verloren-redenen')}
+        sub={tx('De keuzes als je een aanvraag op verloren zet.')}
         rechts={
           isAdmin ? (
             <Button
-              label="Reden toevoegen"
+              label={tx('Reden toevoegen')}
               variant="secondary"
               onPress={() => {
                 setError(null);
@@ -242,7 +249,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
           ) : undefined
         }
       >
-        {redenen.length === 0 ? <Text style={s.hint}>Nog geen redenen.</Text> : null}
+        {redenen.length === 0 ? <Text style={s.hint}>{tx('Nog geen redenen.')}</Text> : null}
         {redenen.map((r) => (
           <View key={r.id} style={s.lijstRij}>
             <Text style={[s.lijstTitel, { flex: 1 }]}>{r.label}</Text>
@@ -254,7 +261,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
                     setReden({ id: r.id, label: r.label });
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`${r.label} bewerken`}
+                  accessibilityLabel={tx('{naam} bewerken', { naam: r.label })}
                   style={s.iconKnop}
                 >
                   <Pencil size={17} color={t.muted} />
@@ -262,7 +269,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
                 <Pressable
                   onPress={() => redenVerwijderen(r)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${r.label} verwijderen`}
+                  accessibilityLabel={tx('{naam} verwijderen', { naam: r.label })}
                   style={s.iconKnop}
                 >
                   <Trash2 size={17} color={t.statusRejectFg} />
@@ -275,7 +282,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
 
       <FormSheet
         visible={fase !== null}
-        title={fase?.id ? 'Fase bewerken' : 'Nieuwe fase'}
+        title={fase?.id ? tx('Fase bewerken') : tx('Nieuwe fase')}
         error={error}
         saving={saving}
         submitDisabled={!fase?.name.trim()}
@@ -283,12 +290,12 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
         onClose={() => setFase(null)}
       >
         <FormField
-          label="Naam"
+          label={tx('Naam')}
           value={fase?.name ?? ''}
           onChangeText={(v) => setFase((c) => (c ? { ...c, name: v } : c))}
           autoFocus
         />
-        <Text style={s.label}>Kleur</Text>
+        <Text style={s.label}>{tx('Kleur')}</Text>
         <View style={s.chipRij}>
           {FASE_KLEUR_OPTIES.map((k) => {
             const gekozen = (fase?.kleur ?? '').toLowerCase() === k.value.toLowerCase();
@@ -315,7 +322,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
 
       <FormSheet
         visible={reden !== null}
-        title={reden?.id ? 'Reden bewerken' : 'Nieuwe reden'}
+        title={reden?.id ? tx('Reden bewerken') : tx('Nieuwe reden')}
         error={error}
         saving={saving}
         submitDisabled={!reden?.label.trim()}
@@ -323,7 +330,7 @@ export function PipelineTab({ isAdmin }: { isAdmin: boolean }) {
         onClose={() => setReden(null)}
       >
         <FormField
-          label="Reden"
+          label={tx('Reden')}
           value={reden?.label ?? ''}
           onChangeText={(v) => setReden((c) => (c ? { ...c, label: v } : c))}
           autoFocus

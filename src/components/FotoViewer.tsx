@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react-native';
+import { tx } from '@/i18n';
 
 export type ViewerFoto = { id: string; url: string };
 
@@ -109,20 +110,20 @@ function ViewerInhoud({ fotos, start, titel, onSluit, onVerwijder }: Props & { s
         <Pressable
           onPress={onSluit}
           accessibilityRole="button"
-          accessibilityLabel="Sluiten"
+          accessibilityLabel={tx('Sluiten')}
           hitSlop={8}
           style={styles.knop}
         >
           <X size={22} color="#fff" strokeWidth={2.4} />
         </Pressable>
         <Text style={styles.teller} numberOfLines={1}>
-          {[titel, fotos.length > 1 ? `${huidig + 1} van ${fotos.length}` : null].filter(Boolean).join(' · ')}
+          {[titel, fotos.length > 1 ? tx('{n} van {totaal}', { n: huidig + 1, totaal: fotos.length }) : null].filter(Boolean).join(' · ')}
         </Text>
         {onVerwijder && foto ? (
           <Pressable
             onPress={() => onVerwijder(foto)}
             accessibilityRole="button"
-            accessibilityLabel="Foto verwijderen"
+            accessibilityLabel={tx('Foto verwijderen')}
             hitSlop={8}
             style={styles.knop}
           >
@@ -139,7 +140,7 @@ function ViewerInhoud({ fotos, start, titel, onSluit, onVerwijder }: Props & { s
             <Pressable
               onPress={() => naar(huidig - 1)}
               accessibilityRole="button"
-              accessibilityLabel="Vorige foto"
+              accessibilityLabel={tx('Vorige foto')}
               style={[styles.pijl, { left: 12 }]}
             >
               <ChevronLeft size={26} color="#fff" />
@@ -149,7 +150,7 @@ function ViewerInhoud({ fotos, start, titel, onSluit, onVerwijder }: Props & { s
             <Pressable
               onPress={() => naar(huidig + 1)}
               accessibilityRole="button"
-              accessibilityLabel="Volgende foto"
+              accessibilityLabel={tx('Volgende foto')}
               style={[styles.pijl, { right: 12 }]}
             >
               <ChevronRight size={26} color="#fff" />

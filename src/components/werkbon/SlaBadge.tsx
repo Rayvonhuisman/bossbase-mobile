@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/providers';
+import { tx } from '@/i18n';
 import { SLA_STATUS_LABEL, type SlaStatus } from '@/lib/sla';
 
 /**
@@ -16,7 +17,7 @@ export function SlaBadge({ status, klein = false, prefix }: { status: SlaStatus;
         : status === 'op_tijd'
           ? { bg: t.statusApproveBg, fg: t.statusApproveFg }
           : { bg: t.statusDraftBg, fg: t.statusDraftFg };
-  const label = `${prefix ? `${prefix} ` : ''}${SLA_STATUS_LABEL[status]}`;
+  const label = `${prefix ? `${prefix} ` : ''}${tx(SLA_STATUS_LABEL[status])}`;
   return (
     <View style={[styles.pil, { backgroundColor: kleur.bg }, klein && styles.klein]} accessibilityLabel={`SLA: ${label}`}>
       <Text style={[styles.tekst, { color: kleur.fg }, klein && styles.tekstKlein]} numberOfLines={1}>

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, Star } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { ds, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 export type PloegLid = { id: string; full_name: string | null; role?: string | null };
 
@@ -62,7 +63,7 @@ export function PloegKeuze({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: aan }}
               aria-checked={aan}
-              accessibilityLabel={c.full_name ?? 'Medewerker'}
+              accessibilityLabel={c.full_name ?? tx('Medewerker')}
               style={styles.rijHoofd}
             >
               <View style={[styles.vink, aan && styles.vinkAan]}>
@@ -70,11 +71,12 @@ export function PloegKeuze({
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.rijTitel} numberOfLines={1}>
-                  {c.full_name ?? 'Naamloos'}
-                  {c.id === eigenId ? ' (ikzelf)' : ''}
+                  {c.id === eigenId
+                    ? tx('{naam} (ikzelf)', { naam: c.full_name ?? tx('Naamloos') })
+                    : (c.full_name ?? tx('Naamloos'))}
                 </Text>
                 <Text style={styles.rijSub} numberOfLines={1}>
-                  {verantw ? 'Verantwoordelijk' : aan ? 'Uitvoerder' : (c.role ?? '')}
+                  {verantw ? tx('Verantwoordelijk') : aan ? tx('Uitvoerder') : (c.role ?? '')}
                 </Text>
               </View>
             </Pressable>
@@ -83,7 +85,7 @@ export function PloegKeuze({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: verantw }}
               aria-checked={verantw}
-              accessibilityLabel={`${c.full_name ?? 'Medewerker'} verantwoordelijk`}
+              accessibilityLabel={tx('{naam} verantwoordelijk', { naam: c.full_name ?? tx('Medewerker') })}
               hitSlop={6}
               style={styles.sterKnop}
             >

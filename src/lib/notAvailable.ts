@@ -1,3 +1,4 @@
+import { tx } from '@/i18n';
 import { Dialog } from './dialog';
 
 /**
@@ -11,7 +12,7 @@ import { Dialog } from './dialog';
  */
 export function notAvailableAlert(
   feature: string,
-  detail = 'Deze functie is nog niet beschikbaar in de mobiele app.',
+  detail = tx('Deze functie is nog niet beschikbaar in de mobiele app.'),
 ): void {
   Dialog.alert(feature, detail);
 }

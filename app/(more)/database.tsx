@@ -51,6 +51,7 @@ import { deleteCustomer } from '@/services/customerService';
 import { useSave } from '@/lib/useSave';
 import { FilterPaneel } from '@/components/database/FilterPaneel';
 import { FotoOverzicht } from '@/components/database/FotoOverzicht';
+import { tx, txn } from '@/i18n';
 
 /**
  * Database — zoals `DatabasePage.jsx` ("Database & Export") in het dashboard:
@@ -74,7 +75,7 @@ type Segment = { name: string; filters: DbFilters };
 
 export default function DatabaseScreen() {
   return (
-    <PermissionGate permission="database" label="Database">
+    <PermissionGate permission="database" label={tx('Database')}>
       <DatabaseInhoud />
     </PermissionGate>
   );
@@ -202,20 +203,20 @@ function DatabaseInhoud() {
 
   const klantActies = (c: DbKlant) => {
     const knoppen: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = [
-      { text: 'Klantgegevens openen', onPress: () => router.push(`/customers/${c.id}`) },
+      { text: tx('Klantgegevens openen'), onPress: () => router.push(`/customers/${c.id}`) },
     ];
     if (magVerwijderen) {
       knoppen.push({
-        text: 'Klant verwijderen',
+        text: tx('Klant verwijderen'),
         style: 'destructive',
         onPress: () =>
           Dialog.alert(
-            'Klant verwijderen?',
-            `Weet je zeker dat je ${c.name} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`,
+            tx('Klant verwijderen?'),
+            tx('Weet je zeker dat je {naam} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.', { naam: c.name }),
             [
-              { text: 'Annuleren', style: 'cancel' },
+              { text: tx('Annuleren'), style: 'cancel' },
               {
-                text: 'Verwijderen',
+                text: tx('Verwijderen'),
                 style: 'destructive',
                 onPress: () =>
                   save(() => deleteCustomer(c.id), {
@@ -227,14 +228,14 @@ function DatabaseInhoud() {
                       });
                       await herlaad();
                     },
-                    succesMelding: `${c.name} verwijderd`,
+                    succesMelding: tx('{naam} verwijderd', { naam: c.name }),
                   }),
               },
             ],
           ),
       });
     }
-    knoppen.push({ text: 'Annuleren', style: 'cancel' });
+    knoppen.push({ text: tx('Annuleren'), style: 'cancel' });
     Dialog.alert(c.name, undefined, knoppen);
   };
 
@@ -245,19 +246,19 @@ function DatabaseInhoud() {
     setSegmentNaam(null);
   };
 
-  if (loading) return <LoadingScreen label="Database laden..." />;
+  if (loading) return <LoadingScreen label={tx('Database laden...')} />;
 
   const kop = (
     <AppTopBar
       variant="detail"
-      title="Database"
+      title={tx('Database')}
       subtitle={
         weergave === 'fotos'
-          ? "Foto's & bestanden"
+          ? tx("Foto's & bestanden")
           : data
             ? filtersActief
-              ? `${gefilterd.length} van ${data.klanten.length} klanten`
-              : `${data.klanten.length} klanten`
+              ? txn('{aantal} van {n} klant', '{aantal} van {n} klanten', data.klanten.length, { aantal: gefilterd.length })
+              : txn('{n} klant', '{n} klanten', data.klanten.length)
             : undefined
       }
       onBack={() => terugOfNaar(router, '/menu')}
@@ -268,7 +269,7 @@ function DatabaseInhoud() {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen scroll={false} header={kop}>
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -280,8 +281,8 @@ function DatabaseInhoud() {
         <View style={{ paddingTop: 4 }}>
           <AppFilterChips
             chips={[
-              { id: 'klanten', label: 'Klanten' },
-              { id: 'fotos', label: "Foto's & bestanden" },
+              { id: 'klanten', label: tx('Klanten') },
+              { id: 'fotos', label: tx("Foto's & bestanden") },
             ]}
             active={weergave}
             onChange={(id) => router.setParams({ weergave: id })}
@@ -299,13 +300,13 @@ function DatabaseInhoud() {
                   setZoek(v);
                   setPaginaNr(1);
                 }}
-                placeholder="Zoek klant…"
+                placeholder={tx('Zoek klant…')}
               />
             </View>
             <AppFilterChips
               chips={[
-                { id: 'alle', label: 'Alle' },
-                { id: 'lopend_project', label: 'Lopend project' },
+                { id: 'alle', label: tx('Alle') },
+                { id: 'lopend_project', label: tx('Lopend project') },
               ]}
               active={snelTab}
               onChange={(id) => {
@@ -317,12 +318,12 @@ function DatabaseInhoud() {
               <Pressable
                 onPress={() => setFilterOpen(true)}
                 accessibilityRole="button"
-                accessibilityLabel="Filters"
+                accessibilityLabel={tx('Filters')}
                 style={({ pressed }) => [styles.filterKnop, pressed && { opacity: 0.85 }]}
               >
                 <SlidersHorizontal size={16} color={t.ink} />
                 <Text style={styles.filterTekst}>
-                  Filters{actieveFilters > 0 ? ` (${actieveFilters})` : ''}
+                  {actieveFilters > 0 ? tx('Filters ({n})', { n: actieveFilters }) : tx('Filters')}
                 </Text>
               </Pressable>
               {filtersActief ? (
@@ -331,7 +332,7 @@ function DatabaseInhoud() {
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.filterKnop, pressed && { opacity: 0.85 }]}
                 >
-                  <Text style={styles.filterTekst}>Wis filters</Text>
+                  <Text style={styles.filterTekst}>{tx('Wis filters')}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -346,7 +347,7 @@ function DatabaseInhoud() {
                         setPaginaNr(1);
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Segment ${sg.name} toepassen`}
+                      accessibilityLabel={tx('Segment {naam} toepassen', { naam: sg.name })}
                       style={styles.segmentNaam}
                     >
                       <Text style={styles.segmentTekst}>{sg.name}</Text>
@@ -354,7 +355,7 @@ function DatabaseInhoud() {
                     <Pressable
                       onPress={() => bewaarSegmenten(segmenten.filter((x) => x.name !== sg.name))}
                       accessibilityRole="button"
-                      accessibilityLabel={`Segment ${sg.name} verwijderen`}
+                      accessibilityLabel={tx('Segment {naam} verwijderen', { naam: sg.name })}
                       style={styles.segmentWeg}
                     >
                       <X size={14} color={t.muted} />
@@ -383,12 +384,12 @@ function DatabaseInhoud() {
                     {allesOpPagina ? <Text style={styles.vink}>✓</Text> : null}
                   </View>
                   <Text style={styles.selectieTekst}>
-                    {geselecteerd.size > 0 ? `${geselecteerd.size} geselecteerd` : 'Selecteer deze pagina'}
+                    {geselecteerd.size > 0 ? tx('{n} geselecteerd', { n: geselecteerd.size }) : tx('Selecteer deze pagina')}
                   </Text>
                 </Pressable>
                 {geselecteerd.size > 0 ? (
                   <Pressable onPress={() => setGeselecteerd(new Set())} accessibilityRole="button" style={styles.linkKnop}>
-                    <Text style={styles.link}>Wis selectie</Text>
+                    <Text style={styles.link}>{tx('Wis selectie')}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -397,7 +398,7 @@ function DatabaseInhoud() {
             {gefilterd.length === 0 ? (
               <EmptyState
                 icon={<Database size={40} color={ds.green} strokeWidth={1.6} />}
-                title={filtersActief ? 'Geen klanten gevonden met deze filters.' : 'Geen klanten.'}
+                title={filtersActief ? tx('Geen klanten gevonden met deze filters.') : tx('Geen klanten.')}
               />
             ) : (
               <AppListGroup>
@@ -407,10 +408,10 @@ function DatabaseInhoud() {
                   const lm = rel ? laatsteMail(rel) : null;
                   const delen = [
                     c.city,
-                    lp ? `${lp.name} (${projectStatusLabel(lp.status)})` : null,
-                    lm?.sent_at ? `Mail ${formatDateNL(lm.sent_at)}` : null,
-                    `${rel?.projecten.length ?? 0} projecten`,
-                    `Betaald ${formatEUR(sumBetaald(rel?.facturen ?? []))}`,
+                    lp ? `${lp.name} (${tx(projectStatusLabel(lp.status))})` : null,
+                    lm?.sent_at ? tx('Mail {datum}', { datum: formatDateNL(lm.sent_at) }) : null,
+                    txn('{n} project', '{n} projecten', rel?.projecten.length ?? 0),
+                    tx('Betaald {bedrag}', { bedrag: formatEUR(sumBetaald(rel?.facturen ?? [])) }),
                   ].filter(Boolean);
                   const aan = geselecteerd.has(c.id);
                   return (
@@ -423,7 +424,7 @@ function DatabaseInhoud() {
                           accessibilityRole="checkbox"
                           accessibilityState={{ checked: aan }}
                           aria-checked={aan}
-                          accessibilityLabel={`${c.name} selecteren`}
+                          accessibilityLabel={tx('{naam} selecteren', { naam: c.name })}
                           style={styles.rijVink}
                         >
                           <View style={[styles.vak, aan && styles.vakAan]}>
@@ -431,13 +432,13 @@ function DatabaseInhoud() {
                           </View>
                         </Pressable>
                       }
-                      title={c.name || 'Naamloos'}
+                      title={c.name || tx('Naamloos')}
                       subtitle={delen.join(' · ')}
                       trailing={
                         <Pressable
                           onPress={() => klantActies(c)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Acties voor ${c.name}`}
+                          accessibilityLabel={tx('Acties voor {naam}', { naam: c.name })}
                           style={styles.rijActie}
                           disabled={saving}
                         >
@@ -455,12 +456,12 @@ function DatabaseInhoud() {
 
             {pag.totaal > 1 ? (
               <View style={styles.pager}>
-                <Button label="‹ Vorige" variant="secondary" disabled={pag.huidig <= 1} onPress={() => setPaginaNr(pag.huidig - 1)} />
+                <Button label={tx('‹ Vorige')} variant="secondary" disabled={pag.huidig <= 1} onPress={() => setPaginaNr(pag.huidig - 1)} />
                 <Text style={styles.pagerTekst}>
-                  Pagina {pag.huidig} van {pag.totaal}
+                  {tx('Pagina {huidig} van {totaal}', { huidig: pag.huidig, totaal: pag.totaal })}
                 </Text>
                 <Button
-                  label="Volgende ›"
+                  label={tx('Volgende ›')}
                   variant="secondary"
                   disabled={pag.huidig >= pag.totaal}
                   onPress={() => setPaginaNr(pag.huidig + 1)}
@@ -470,20 +471,19 @@ function DatabaseInhoud() {
 
             {geselecteerd.size > 0 ? (
               <View style={styles.bulk}>
-                <Text style={styles.bulkTitel}>{geselecteerd.size} klanten geselecteerd</Text>
+                <Text style={styles.bulkTitel}>{txn('{n} klant geselecteerd', '{n} klanten geselecteerd', geselecteerd.size)}</Text>
                 <View style={styles.knopRij2}>
-                  <Button label={CSV_ALS_BESTAND ? 'Exporteren als CSV' : 'CSV delen'} onPress={exporteerCsv} />
-                  <Button label="Segment opslaan" variant="secondary" onPress={() => setSegmentNaam('')} />
+                  <Button label={CSV_ALS_BESTAND ? tx('Exporteren als CSV') : tx('CSV delen')} onPress={exporteerCsv} />
+                  <Button label={tx('Segment opslaan')} variant="secondary" onPress={() => setSegmentNaam('')} />
                 </View>
               </View>
             ) : null}
 
             <Text style={styles.voetnoot}>
-              E-mail naar je selectie versturen, exporteren als Excel en offertes of facturen als PDF/ZIP
-              downloaden doe je op het dashboard.
+              {tx('E-mail naar je selectie versturen, exporteren als Excel en offertes of facturen als PDF/ZIP downloaden doe je op het dashboard.')}
             </Text>
             <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
-              <Button label="Database openen op het dashboard" variant="ghost" onPress={() => openDashboard('database')} />
+              <Button label={tx('Database openen op het dashboard')} variant="ghost" onPress={() => openDashboard('database')} />
             </View>
           </>
         )}
@@ -491,29 +491,29 @@ function DatabaseInhoud() {
 
       <FormSheet
         visible={filterOpen}
-        title="Filters"
-        subtitle={`${gefilterd.length} klanten`}
-        submitLabel={`Toon ${gefilterd.length} klanten`}
+        title={tx('Filters')}
+        subtitle={txn('{n} klant', '{n} klanten', gefilterd.length)}
+        submitLabel={txn('Toon {n} klant', 'Toon {n} klanten', gefilterd.length)}
         onSubmit={() => setFilterOpen(false)}
         onClose={() => setFilterOpen(false)}
-        destructive={actieveFilters > 0 ? { label: 'Wis filters', onPress: () => setFilters(LEGE_FILTERS) } : undefined}
+        destructive={actieveFilters > 0 ? { label: tx('Wis filters'), onPress: () => setFilters(LEGE_FILTERS) } : undefined}
       >
         {extra ? <FilterPaneel filters={filters} zet={zet} extra={extra} /> : null}
       </FormSheet>
 
       <FormSheet
         visible={segmentNaam !== null}
-        title="Segment opslaan"
-        subtitle="De huidige filters, alleen op dit toestel bewaard"
+        title={tx('Segment opslaan')}
+        subtitle={tx('De huidige filters, alleen op dit toestel bewaard')}
         submitDisabled={!segmentNaam?.trim()}
         onSubmit={segmentOpslaan}
         onClose={() => setSegmentNaam(null)}
       >
         <FormField
-          label="Naam"
+          label={tx('Naam')}
           value={segmentNaam ?? ''}
           onChangeText={setSegmentNaam}
-          placeholder="Bijv. Klanten zonder project"
+          placeholder={tx('Bijv. Klanten zonder project')}
           autoFocus
         />
       </FormSheet>

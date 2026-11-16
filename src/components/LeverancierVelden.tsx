@@ -6,6 +6,7 @@ import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import { valideerRelatieVelden } from '@/lib/relatieValidatie';
 import type { Leverancier } from '@/services/leverancierService';
+import { tx } from '@/i18n';
 
 /** De velden van het leveranciersformulier, als tekst zoals ze in de invoer staan. */
 export type LeverancierConcept = {
@@ -95,24 +96,24 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
   return (
     <View style={{ gap: spacing.lg }}>
       <FormField
-        label="Naam *"
+        label={tx('Naam *')}
         value={waarde.naam}
         onChangeText={zet('naam')}
-        placeholder="Bijv. Bouwmaat Utrecht"
+        placeholder={tx('Bijv. Bouwmaat Utrecht')}
         autoCapitalize="words"
       />
       <FormField
-        label="Contactpersoon"
+        label={tx('Contactpersoon')}
         value={waarde.contactpersoon}
         onChangeText={zet('contactpersoon')}
-        placeholder="Optioneel"
+        placeholder={tx('Optioneel')}
         autoCapitalize="words"
       />
       <FormField
-        label="E-mail"
+        label={tx('E-mail')}
         value={waarde.email}
         onChangeText={zet('email')}
-        placeholder="inkoop@leverancier.nl"
+        placeholder={tx('inkoop@leverancier.nl')}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -120,7 +121,7 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
       <View style={styles.rij}>
         <View style={{ flex: 1 }}>
           <FormField
-            label="Telefoon"
+            label={tx('Telefoon')}
             value={waarde.telefoon}
             onChangeText={zet('telefoon')}
             placeholder="030 123 45 67"
@@ -129,7 +130,7 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
         </View>
         <View style={{ flex: 1 }}>
           <FormField
-            label="Mobiel"
+            label={tx('Mobiel')}
             value={waarde.mobiel}
             onChangeText={zet('mobiel')}
             placeholder="06 12 34 56 78"
@@ -139,15 +140,15 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
       </View>
       <AdresZoeker onSelect={(v) => onChange({ ...waarde, ...v })} />
       <FormField
-        label="Adres"
+        label={tx('Adres')}
         value={waarde.address}
         onChangeText={zet('address')}
-        placeholder="Straat en huisnummer"
+        placeholder={tx('Straat en huisnummer')}
       />
       <View style={styles.rij}>
         <View style={{ flex: 1 }}>
           <FormField
-            label="Postcode"
+            label={tx('Postcode')}
             value={waarde.postcode}
             onChangeText={zet('postcode')}
             placeholder="1234 AB"
@@ -155,21 +156,21 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
           />
         </View>
         <View style={{ flex: 1.4 }}>
-          <FormField label="Stad" value={waarde.city} onChangeText={zet('city')} placeholder="Plaats" />
+          <FormField label={tx('Stad')} value={waarde.city} onChangeText={zet('city')} placeholder={tx('Plaats')} />
         </View>
       </View>
       <FormField
-        label="Website"
+        label={tx('Website')}
         value={waarde.website}
         onChangeText={zet('website')}
-        placeholder="www.leverancier.nl"
+        placeholder={tx('www.leverancier.nl')}
         keyboardType="url"
         autoCapitalize="none"
         autoCorrect={false}
       />
       <View>
         <FormField
-          label="KvK-nummer"
+          label={tx('KvK-nummer')}
           value={waarde.kvk_number}
           onChangeText={zet('kvk_number')}
           onBlur={blur('kvk_number')}
@@ -180,7 +181,7 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
       </View>
       <View>
         <FormField
-          label="Btw-nummer"
+          label={tx('Btw-nummer')}
           value={waarde.btw_number}
           onChangeText={zet('btw_number')}
           onBlur={blur('btw_number')}
@@ -203,7 +204,7 @@ export function LeverancierVelden({ waarde, onChange }: Props) {
         {fout('iban')}
       </View>
       <FormField
-        label="Betaaltermijn (dagen)"
+        label={tx('Betaaltermijn (dagen)')}
         value={waarde.betaaltermijn_dagen}
         onChangeText={zet('betaaltermijn_dagen')}
         placeholder="30"

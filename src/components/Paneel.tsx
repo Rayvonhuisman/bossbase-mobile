@@ -16,6 +16,7 @@ import { useZichtbareViewport } from '@/lib/zichtbareViewport';
 import { useFocusTerug } from '@/lib/focusTerug';
 import { bepaalSchermklasse, FORMULIER_MAX } from '@/lib/schermklasseRegels';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * Een zwevend paneel voor Boss, "Bug of idee" en Meldingen — bewust geen
@@ -74,7 +75,7 @@ export function Paneel({
           style={StyleSheet.absoluteFill}
           onPress={onSluit}
           accessibilityRole="button"
-          accessibilityLabel="Sluiten"
+          accessibilityLabel={tx('Sluiten')}
         />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -103,7 +104,7 @@ export function Paneel({
               <Pressable
                 onPress={onSluit}
                 accessibilityRole="button"
-                accessibilityLabel="Sluiten"
+                accessibilityLabel={tx('Sluiten')}
                 hitSlop={10}
                 style={({ pressed }) => [styles.sluit, pressed && { opacity: 0.6 }]}
               >

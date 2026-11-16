@@ -16,6 +16,7 @@
  * Wat al op de werkbon staat wordt gemarkeerd en niet nog eens toegevoegd; de
  * database controleert dat ook. Puur: tests/offerteCalculatie.test.mjs.
  */
+import { tx } from '@/i18n';
 
 export type OfferteRegelRij = {
   offerte_id: string;
@@ -127,4 +128,4 @@ export const standaardTaakIds = (offerte: OfferteBron | null | undefined) =>
   (offerte?.taken || []).filter((t) => t.standaard).map((t) => t.id);
 
 export const offerteLabel = (o: Pick<OfferteBron, 'nummer' | 'omschrijving'>) =>
-  [o.nummer, o.omschrijving].filter(Boolean).join(' · ') || 'Offerte';
+  [o.nummer, o.omschrijving].filter(Boolean).join(' · ') || tx('Offerte');

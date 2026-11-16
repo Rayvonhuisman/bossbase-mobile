@@ -17,8 +17,9 @@
  *   app → pagina  { type: 'pdf', base64 }
  *   pagina → app  { type: 'klaar', paginas } | { type: 'fout', melding } | { type: 'tik' }
  *
- * Geen imports: draait in de Node-tests.
+ * Alleen de vertaling als import: draait in de Node-tests.
  */
+import { taal, tx } from '@/i18n';
 
 export const PDFJS_VERSIE = '4.10.38';
 /**
@@ -31,9 +32,18 @@ export const PDFJS_VERSIE = '4.10.38';
 export const PDFJS_BASIS = 'https://cdn.jsdelivr.net';
 const CDN = `${PDFJS_BASIS}/npm/pdfjs-dist@${PDFJS_VERSIE}/legacy/build`;
 
+const escHtml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 export function pdfWeergaveHtml(): string {
+  // Schermteksten in de taal van de app; als JSON in het script (geen HTML-injectie).
+  const teksten = {
+    laden: tx('PDF laden…'),
+    fout: tx('De PDF kon niet worden getoond.'),
+    pagina: tx('Pagina {n} van {totaal}'),
+  };
+  const tekstenJson = JSON.stringify(teksten).replace(/</g, '\\u003c');
   return `<!doctype html>
-<html lang="nl">
+<html lang="${taal()}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes">
@@ -46,8 +56,9 @@ export function pdfWeergaveHtml(): string {
 </head>
 <body>
 <div id="paginas"></div>
-<div id="melding">PDF laden…</div>
+<div id="melding">${escHtml(teksten.laden)}</div>
 <script type="module">
+  const TEKST = ${tekstenJson};
   const stuur = (bericht) => {
     const tekst = JSON.stringify(bericht);
     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(tekst);
@@ -90,14 +101,14 @@ export function pdfWeergaveHtml(): string {
         canvas.height = Math.floor(vp.height);
         canvas.style.width = Math.floor(basis.width * schaal) + 'px';
         canvas.style.height = Math.floor(basis.height * schaal) + 'px';
-        canvas.setAttribute('aria-label', 'Pagina ' + n + ' van ' + doc.numPages);
+        canvas.setAttribute('aria-label', TEKST.pagina.replace('{n}', String(n)).replace('{totaal}', String(doc.numPages)));
         houder.appendChild(canvas);
         await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
         if (n === 1) melding.style.display = 'none';
       }
       stuur({ type: 'klaar', paginas: doc.numPages });
     } catch (e) {
-      melding.textContent = 'De PDF kon niet worden getoond.';
+      melding.textContent = TEKST.fout;
       stuur({ type: 'fout', melding: String((e && e.message) || e) });
     }
   }

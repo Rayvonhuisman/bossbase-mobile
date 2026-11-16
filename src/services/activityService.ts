@@ -7,6 +7,7 @@ import { agendaWerkbonItems, zichtbareAfspraken, type AgendaWerkbonItem } from '
 import { toLocalISODate } from '@/lib/dateRange';
 import { haalInStukken } from '@/lib/inStukken';
 import { leesAfspraakNotities, type AfspraakNotitie } from '@/lib/afspraakNotities';
+import { tx, txm } from '@/i18n';
 
 /**
  * Activities + calendar_events ophalen voor mobile Planning + Vandaag.
@@ -105,7 +106,7 @@ export async function listCalendarEventsForRange(
 
   if (error) {
     console.warn('[activityService.listCalendarEventsForRange]', error.message);
-    return { data: [], error: 'Agenda kon niet worden geladen.' };
+    return { data: [], error: tx('Agenda kon niet worden geladen.') };
   }
   return { data: (data as unknown as CalendarEvent[]) ?? [], error: null };
 }
@@ -127,7 +128,7 @@ export async function listRecentActivities(
 
   if (error) {
     console.warn('[activityService.listRecentActivities]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
+    return { data: [], error: tx('Activiteiten konden niet worden geladen.') };
   }
   return { data: (data as unknown as ActivityRow[]) ?? [], error: null };
 }
@@ -161,7 +162,7 @@ export async function listAllActivities(): Promise<{ data: ActivityRow[]; error:
   );
   if (error) {
     console.warn('[activityService.listAllActivities]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
+    return { data: [], error: tx('Activiteiten konden niet worden geladen.') };
   }
   return { data, error: null };
 }
@@ -194,7 +195,7 @@ export async function listEigenOpenActiviteitenTot(
   );
   if (error) {
     console.warn('[activityService.listEigenOpenActiviteitenTot]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
+    return { data: [], error: tx('Activiteiten konden niet worden geladen.') };
   }
   return { data, error: null };
 }
@@ -215,7 +216,7 @@ export async function getNextCalendarEvent(): Promise<{
 
   if (error) {
     console.warn('[activityService.getNextCalendarEvent]', error.message);
-    return { data: null, error: 'Volgende afspraak kon niet worden geladen.' };
+    return { data: null, error: tx('Volgende afspraak kon niet worden geladen.') };
   }
   return { data: (data as unknown as CalendarEvent | null) ?? null, error: null };
 }
@@ -283,7 +284,7 @@ function fromEvent(e: CalendarEvent): PlanningItem {
     id: `event-${e.id}`,
     source: 'calendar_event',
     number: null,
-    title: e.title ?? 'Afspraak',
+    title: e.title ?? tx('Afspraak'),
     customerName: e.customer?.name ?? null,
     customerId: e.customer_id,
     description: e.notes,
@@ -296,7 +297,7 @@ function fromEvent(e: CalendarEvent): PlanningItem {
     assigneeName: null,
     assigneeId: null,
     workOrderId: null,
-    typeLabel: 'Afspraak',
+    typeLabel: tx('Afspraak'),
   };
 }
 
@@ -353,7 +354,7 @@ export async function listMijnPlanning(params: {
   }
   items.sort((a, b) => sortMs(a) - sortMs(b));
 
-  const fout = evRes.error && wbRes.error ? 'Planning kon niet worden geladen.' : (evRes.error ?? wbRes.error);
+  const fout = evRes.error && wbRes.error ? tx('Planning kon niet worden geladen.') : (evRes.error ?? wbRes.error);
   return { items, error: fout };
 }
 
@@ -363,7 +364,7 @@ function fromWerkbonDag(it: AgendaWerkbonItem<PlanWerkbon>, currentUserName: str
     id: `wo-${it.sleutel}`,
     source: 'work_order',
     number: w.nummer ?? null,
-    title: w.titel || 'Werkbon',
+    title: w.titel || tx('Werkbon'),
     customerName: w.customer?.name ?? null,
     customerId: w.customer_id,
     description: null,
@@ -373,10 +374,10 @@ function fromWerkbonDag(it: AgendaWerkbonItem<PlanWerkbon>, currentUserName: str
     endAt: combineDateTime(it.datum, it.eindtijd),
     date: it.datum,
     status: w.status ?? null,
-    assigneeName: currentUserName?.trim() || 'Jij',
+    assigneeName: currentUserName?.trim() || tx('Jij'),
     assigneeId: null,
     workOrderId: w.id,
-    typeLabel: 'Werkbon',
+    typeLabel: tx('Werkbon'),
   };
 }
 
@@ -407,20 +408,20 @@ export type ActiviteitType = (typeof ACTIVITEIT_TYPES)[number];
  * data een nette naam houdt.
  */
 export const ACTIVITEIT_TYPE_LABELS: Record<string, string> = {
-  call: 'Bellen',
-  email: 'E-mail',
-  visit: 'Bezoek',
-  task: 'Taak',
-  follow: 'Opvolgen',
-  meeting: 'Afspraak',
-  note: 'Notitie',
-  quote: 'Offerte',
-  offer: 'Offerte',
+  call: txm('Bellen'),
+  email: txm('E-mail'),
+  visit: txm('Bezoek'),
+  task: txm('Taak'),
+  follow: txm('Opvolgen'),
+  meeting: txm('Afspraak'),
+  note: txm('Notitie'),
+  quote: txm('Offerte'),
+  offer: txm('Offerte'),
 };
 
 export function activiteitTypeLabel(type: string | null | undefined): string {
-  if (!type) return 'Activiteit';
-  return ACTIVITEIT_TYPE_LABELS[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
+  if (!type) return tx('Activiteit');
+  return ACTIVITEIT_TYPE_LABELS[type] ? tx(ACTIVITEIT_TYPE_LABELS[type]) : type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 export type ActivityInput = {
@@ -477,14 +478,14 @@ function mapActivityInput(input: Partial<ActivityInput>): Record<string, unknown
 
 function valideerActivity(input: Partial<ActivityInput>, nieuw: boolean): string | null {
   if (nieuw || input.title !== undefined) {
-    if (!input.title?.trim()) return 'Geef de activiteit een titel.';
+    if (!input.title?.trim()) return tx('Geef de activiteit een titel.');
   }
   if (input.date) {
-    if (!isGeldigeDatum(input.date)) return 'Vul een geldige datum in (JJJJ-MM-DD).';
-    if (input.time && !isGeldigeTijd(input.time)) return 'Vul een geldige tijd in (uu:mm).';
+    if (!isGeldigeDatum(input.date)) return tx('Vul een geldige datum in (JJJJ-MM-DD).');
+    if (input.time && !isGeldigeTijd(input.time)) return tx('Vul een geldige tijd in (uu:mm).');
   }
-  if (!input.date && input.time) return 'Kies eerst een datum bij deze tijd.';
-  if (input.end_time && !isGeldigeTijd(input.end_time)) return 'Vul een geldige eindtijd in (uu:mm).';
+  if (!input.date && input.time) return tx('Kies eerst een datum bij deze tijd.');
+  if (input.end_time && !isGeldigeTijd(input.end_time)) return tx('Vul een geldige eindtijd in (uu:mm).');
   return null;
 }
 
@@ -510,7 +511,7 @@ export async function createActivity(
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   return schrijf<ActivityRow>(
@@ -528,7 +529,7 @@ export async function updateActivity(
 
   const updates = mapActivityInput(input);
   if (Object.keys(updates).length === 0) {
-    return writeFout('validatie', 'Er is niets gewijzigd.');
+    return writeFout('validatie', tx('Er is niets gewijzigd.'));
   }
 
   const res = await schrijf<ActivityRow>(
@@ -610,21 +611,21 @@ export async function upsertActiviteitAgendaItem(o: {
       .maybeSingle();
     if (bestaand) {
       const { error } = await supabase.from('calendar_events').update(basis).eq('id', (bestaand as { id: string }).id);
-      return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+      return { error: error ? tx('De agenda is niet bijgewerkt.') : null };
     }
     const payload = withCompanyId({ ...basis, activiteit_id: o.activiteitId, herkomst: 'planning' });
-    if (!payload) return { error: 'De agenda is niet bijgewerkt.' };
+    if (!payload) return { error: tx('De agenda is niet bijgewerkt.') };
     const { error } = await supabase.from('calendar_events').insert(payload);
-    return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+    return { error: error ? tx('De agenda is niet bijgewerkt.') : null };
   } catch {
-    return { error: 'De agenda is niet bijgewerkt.' };
+    return { error: tx('De agenda is niet bijgewerkt.') };
   }
 }
 
 /** Niet meer ingepland: het agenda-item van de activiteit weg (`deleteActivityEvent`). */
 export async function verwijderActiviteitAgendaItem(activiteitId: string): Promise<{ error: string | null }> {
   const { error } = await supabase.from('calendar_events').delete().eq('activiteit_id', activiteitId);
-  return { error: error ? 'De agenda is niet bijgewerkt.' : null };
+  return { error: error ? tx('De agenda is niet bijgewerkt.') : null };
 }
 
 /**
@@ -690,7 +691,7 @@ export async function deleteActivity(id: string): Promise<WriteStatus> {
       context: 'activityService.deleteActivity',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'niet-gevonden',
-      leegMelding: 'Deze activiteit is al verwijderd of je hebt er geen rechten voor.',
+      leegMelding: tx('Deze activiteit is al verwijderd of je hebt er geen rechten voor.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -707,7 +708,7 @@ export async function getActivity(
     .maybeSingle();
   if (error) {
     console.warn('[activityService.getActivity]', error.message);
-    return { data: null, error: 'Activiteit kon niet worden geladen.' };
+    return { data: null, error: tx('Activiteit kon niet worden geladen.') };
   }
   return { data: (data as unknown as ActivityRow | null) ?? null, error: null };
 }
@@ -746,10 +747,10 @@ export type AfspraakInput = {
 };
 
 export const AFSPRAAK_TYPES = [
-  { id: 'event', label: 'Afspraak' },
-  { id: 'job', label: 'Klus' },
-  { id: 'visit', label: 'Opname' },
-  { id: 'activity', label: 'Activiteit' },
+  { id: 'event', get label() { return tx('Afspraak'); } },
+  { id: 'job', get label() { return tx('Klus'); } },
+  { id: 'visit', get label() { return tx('Opname'); } },
+  { id: 'activity', get label() { return tx('Activiteit'); } },
 ] as const;
 export type AfspraakType = (typeof AFSPRAAK_TYPES)[number]['id'];
 
@@ -787,16 +788,16 @@ function mapAfspraak(input: Partial<AfspraakInput>): Record<string, unknown> {
 
 function valideerAfspraak(input: Partial<AfspraakInput>, nieuw: boolean): string | null {
   if ((nieuw || input.title !== undefined) && !input.title?.trim()) {
-    return 'Geef de afspraak een titel.';
+    return tx('Geef de afspraak een titel.');
   }
-  if (nieuw && !input.date) return 'Kies een datum.';
+  if (nieuw && !input.date) return tx('Kies een datum.');
   if (input.date && !isGeldigeDatum(input.date)) {
-    return 'Vul een geldige datum in (JJJJ-MM-DD).';
+    return tx('Vul een geldige datum in (JJJJ-MM-DD).');
   }
-  if (input.time && !isGeldigeTijd(input.time)) return 'Vul een geldige begintijd in (uu:mm).';
-  if (input.end && !isGeldigeTijd(input.end)) return 'Vul een geldige eindtijd in (uu:mm).';
+  if (input.time && !isGeldigeTijd(input.time)) return tx('Vul een geldige begintijd in (uu:mm).');
+  if (input.end && !isGeldigeTijd(input.end)) return tx('Vul een geldige eindtijd in (uu:mm).');
   if (input.time && input.end && input.end <= input.time) {
-    return 'De eindtijd moet ná de begintijd liggen.';
+    return tx('De eindtijd moet ná de begintijd liggen.');
   }
   return null;
 }
@@ -814,7 +815,7 @@ export async function createAfspraak(
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const res = await schrijf<CalendarEvent>(
@@ -867,7 +868,7 @@ export async function updateAfspraak(
   if (fout) return writeFout('validatie', fout);
 
   const updates = mapAfspraak(input);
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<CalendarEvent>(
     () =>
@@ -877,8 +878,7 @@ export async function updateAfspraak(
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
       leegMelding:
-        'De afspraak is niet gewijzigd. Een ingeplande werkbon aanpassen vraagt het recht ' +
-        'Planning; je eigen afspraken kun je altijd wijzigen.',
+        tx('De afspraak is niet gewijzigd. Een ingeplande werkbon aanpassen vraagt het recht Planning; je eigen afspraken kun je altijd wijzigen.'),
     },
   );
 }
@@ -891,8 +891,7 @@ export async function deleteAfspraak(id: string): Promise<WriteStatus> {
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
       leegMelding:
-        'De afspraak is niet verwijderd. Een ingeplande werkbon verwijderen vraagt het recht ' +
-        'Planning.',
+        tx('De afspraak is niet verwijderd. Een ingeplande werkbon verwijderen vraagt het recht Planning.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -908,7 +907,7 @@ export async function koppelWerkbonAanAfspraak(id: string, werkbonId: string): P
       context: 'activityService.koppelWerkbonAanAfspraak',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De werkbon is gemaakt, maar kon niet aan de afspraak worden gekoppeld.',
+      leegMelding: tx('De werkbon is gemaakt, maar kon niet aan de afspraak worden gekoppeld.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -928,7 +927,7 @@ export async function getAfspraakExtra(
     .select('werkbon_id, assigned_to, comments')
     .eq('id', id)
     .maybeSingle();
-  if (error) return { werkbonId: null, deelnemerId: null, notities: [], error: 'De notities konden niet worden geladen.' };
+  if (error) return { werkbonId: null, deelnemerId: null, notities: [], error: tx('De notities konden niet worden geladen.') };
   const rij = data as { werkbon_id?: string | null; assigned_to?: string | null; comments?: unknown } | null;
   return {
     werkbonId: rij?.werkbon_id ?? null,
@@ -956,7 +955,7 @@ export async function plaatsAfspraakNotitie(
       context: 'activityService.plaatsAfspraakNotitie',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De notitie is niet geplaatst: je mag deze afspraak niet wijzigen.',
+      leegMelding: tx('De notitie is niet geplaatst: je mag deze afspraak niet wijzigen.'),
     },
   );
   return res.ok ? { ok: true, data: lijst } : res;
@@ -975,7 +974,7 @@ export async function listActiviteitNotities(
     .select('id, note, created_at, profiles(full_name)')
     .eq('activity_id', activityId)
     .order('created_at', { ascending: false });
-  if (error) return { data: [], error: 'De notities van deze activiteit konden niet worden geladen.' };
+  if (error) return { data: [], error: tx('De notities van deze activiteit konden niet worden geladen.') };
   type Rij = { id: string; note: string | null; created_at: string; profiles: { full_name: string | null } | null };
   const rijen = (data ?? []) as unknown as Rij[];
   return {
@@ -986,14 +985,14 @@ export async function listActiviteitNotities(
 
 /** `addActiviteitNotitie`: een losse regel in het log. */
 export async function addActiviteitNotitie(activityId: string, html: string): Promise<WriteResult<{ id: string }>> {
-  if (!html.trim()) return writeFout('validatie', 'Notitie mag niet leeg zijn');
+  if (!html.trim()) return writeFout('validatie', tx('Notitie mag niet leeg zijn'));
   const userId = getUserId();
   const payload = withCompanyId({ activity_id: activityId, note: html, ...(userId ? { created_by: userId } : {}) });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   return schrijf<{ id: string }>(() => supabase.from('activiteit_notities').insert(payload).select('id'), {
     context: 'activityService.addActiviteitNotitie',
     bedrijfReadonly: isReadonly(),
     leegSoort: 'geen-rechten',
-    leegMelding: 'De notitie is niet opgeslagen.',
+    leegMelding: tx('De notitie is niet opgeslagen.'),
   });
 }

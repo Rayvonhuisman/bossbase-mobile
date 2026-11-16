@@ -25,6 +25,7 @@ import type { ProjectUur } from '@/services/projectService';
 import { Blok, KleineKnop, Rij, useStijl, Veld } from './bouwstenen';
 import { NacalculatieTabel } from './NacalculatieTabel';
 import { getalOfNul } from '@/lib/getalNl';
+import { tx, txn } from '@/i18n';
 
 /**
  * De Nacalculatie-tab (`KostenTab` in het dashboard): wat deze klus kost
@@ -166,21 +167,22 @@ export function KostenTab({
 
   return (
     <>
-      <Blok titel="Nacalculatie">
+      <Blok titel={tx('Nacalculatie')}>
         {laden ? (
-          <Text style={styles.leeg}>Laden…</Text>
+          <Text style={styles.leeg}>{tx('Laden…')}</Text>
         ) : magInkoop ? (
           <NacalculatieTabel nc={nc} magBedragen={magBedragen} isAdmin={isAdmin} />
         ) : (
           <>
             <View style={styles.raster}>
-              <Veld label="Inkopen">
+              <Veld label={tx('Inkopen')}>
                 <Text style={styles.tegelWaarde}>{formatEUR(overzicht.inkopen.bedrag)}</Text>
               </Veld>
             </View>
             <Text style={styles.klein}>
-              Geen nacalculatie zichtbaar: de arbeid en het materiaal tellen mee tegen hun kostprijs, en die is voor
-              jou afgeschermd (recht ‘Inkoop- en kostprijzen zien’). Daarom zie je hier alleen de inkopen.
+              {tx(
+                'Geen nacalculatie zichtbaar: de arbeid en het materiaal tellen mee tegen hun kostprijs, en die is voor jou afgeschermd (recht ‘Inkoop- en kostprijzen zien’). Daarom zie je hier alleen de inkopen.',
+              )}
             </Text>
           </>
         )}
@@ -188,35 +190,37 @@ export function KostenTab({
             verkoopprijs gebruikt, en dan is het resultaat een ondergrens. */}
         {magInkoop && overzicht.materiaal.zonderInkoopprijs > 0 ? (
           <NoticeBanner
-            message={`${
-              overzicht.materiaal.zonderInkoopprijs === 1
-                ? '1 materiaalregel heeft geen inkoopprijs'
-                : `${overzicht.materiaal.zonderInkoopprijs} materiaalregels hebben geen inkoopprijs`
-            } (${formatEUR(overzicht.materiaal.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus het werkelijke resultaat ligt hoger. Vul de inkoopprijs in op de werkbon.`}
+            message={txn(
+              '{n} materiaalregel heeft geen inkoopprijs ({bedrag}). Daarvoor is de verkoopprijs gerekend, dus het werkelijke resultaat ligt hoger. Vul de inkoopprijs in op de werkbon.',
+              '{n} materiaalregels hebben geen inkoopprijs ({bedrag}). Daarvoor is de verkoopprijs gerekend, dus het werkelijke resultaat ligt hoger. Vul de inkoopprijs in op de werkbon.',
+              overzicht.materiaal.zonderInkoopprijs,
+              { bedrag: formatEUR(overzicht.materiaal.geschatBedrag) },
+            )}
           />
         ) : null}
       </Blok>
 
       <Blok
-        titel="Inkopen"
-        actie={magBewerken && !laden ? <KleineKnop label="Toevoegen" icon="plus" onPress={openNieuw} /> : undefined}
+        titel={tx('Inkopen')}
+        actie={magBewerken && !laden ? <KleineKnop label={tx('Toevoegen')} icon="plus" onPress={openNieuw} /> : undefined}
       >
         <Text style={styles.klein}>
-          Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker.
-          Bedragen exclusief btw.
+          {tx(
+            'Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.',
+          )}
         </Text>
         {laden ? (
-          <Text style={styles.leeg}>Laden…</Text>
+          <Text style={styles.leeg}>{tx('Laden…')}</Text>
         ) : laadFout && !inkopen.length ? (
           <Text style={[styles.leeg, { color: t.statusRejectFg }]}>{laadFout}</Text>
         ) : inkopen.length === 0 ? (
-          <Text style={styles.leeg}>Nog geen kosten toegevoegd.</Text>
+          <Text style={styles.leeg}>{tx('Nog geen kosten toegevoegd.')}</Text>
         ) : (
           <>
             {inkopen.map((k) => (
               <Rij
                 key={k.id}
-                titel={k.naam || '(geen omschrijving)'}
+                titel={k.naam || tx('(geen omschrijving)')}
                 sub={[
                   `${alsVeld(k.aantal)}${k.eenheid ? ` ${k.eenheid}` : ''} × ${formatEURCent(k.prijs_per)}`,
                   leverancierNaam(k.leverancier_id),
@@ -228,7 +232,7 @@ export function KostenTab({
               />
             ))}
             <View style={[styles.rij, { justifyContent: 'flex-end' }]}>
-              <Text style={styles.klein}>Totaal inkopen (excl. btw)</Text>
+              <Text style={styles.klein}>{tx('Totaal inkopen (excl. btw)')}</Text>
               <Text style={styles.bedrag}>{formatEURCent(overzicht.inkopen.bedrag)}</Text>
             </View>
           </>
@@ -236,20 +240,20 @@ export function KostenTab({
       </Blok>
 
       {magInkoop ? (
-        <Blok titel={`Materiaal (${materiaal.length})`}>
-          <Text style={styles.klein}>Aantallen en prijzen wijzig je op de werkbon.</Text>
+        <Blok titel={tx('Materiaal ({n})', { n: materiaal.length })}>
+          <Text style={styles.klein}>{tx('Aantallen en prijzen wijzig je op de werkbon.')}</Text>
           {laden ? (
-            <Text style={styles.leeg}>Laden…</Text>
+            <Text style={styles.leeg}>{tx('Laden…')}</Text>
           ) : materiaal.length === 0 ? (
-            <Text style={styles.leeg}>Nog geen materiaal op de werkbonnen van dit project.</Text>
+            <Text style={styles.leeg}>{tx('Nog geen materiaal op de werkbonnen van dit project.')}</Text>
           ) : (
             materiaal.map((c) => (
               <Rij
                 key={c.id}
-                titel={materiaalNaam(c.description) || '(geen omschrijving)'}
+                titel={materiaalNaam(c.description) || tx('(geen omschrijving)')}
                 sub={[
                   c.cost_date ? formatDateNL(c.cost_date) : null,
-                  c.inkoopprijsPer == null ? 'op verkoopprijs' : 'inkoop, excl. btw',
+                  c.inkoopprijsPer == null ? tx('op verkoopprijs') : tx('inkoop, excl. btw'),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -263,36 +267,39 @@ export function KostenTab({
       {!laden && boekingen.length > 0 ? (
         <NoticeBanner
           toon="info"
-          message={`${boekingen.length === 1 ? '1 boeking' : `${boekingen.length} boekingen`} op de Kosten-pagina ${
-            boekingen.length === 1 ? 'hangt' : 'hangen'
-          } aan dit project (${formatEURCent(overzicht.boekingen.bedrag)}). Dat is de boekhouding en telt niet mee in de nacalculatie: het materiaal zelf staat hierboven al via de werkbon. Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.`}
+          message={txn(
+            '{n} boeking op de Kosten-pagina hangt aan dit project ({bedrag}). Dat is de boekhouding en telt niet mee in de nacalculatie: het materiaal zelf staat hierboven al via de werkbon. Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.',
+            '{n} boekingen op de Kosten-pagina hangen aan dit project ({bedrag}). Dat is de boekhouding en telt niet mee in de nacalculatie: het materiaal zelf staat hierboven al via de werkbon. Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.',
+            boekingen.length,
+            { bedrag: formatEURCent(overzicht.boekingen.bedrag) },
+          )}
         />
       ) : null}
 
       <FormSheet
         visible={concept !== null}
-        title={concept?.id ? 'Inkoop bewerken' : 'Inkoop toevoegen'}
-        subtitle="Kostprijs exclusief btw"
+        title={concept?.id ? tx('Inkoop bewerken') : tx('Inkoop toevoegen')}
+        subtitle={tx('Kostprijs exclusief btw')}
         error={error}
         saving={saving}
         submitDisabled={!concept?.naam.trim()}
         onSubmit={opslaan}
         onClose={() => setConcept(null)}
-        destructive={concept?.id ? { label: 'Verwijderen', onPress: verwijder } : undefined}
+        destructive={concept?.id ? { label: tx('Verwijderen'), onPress: verwijder } : undefined}
       >
         {concept ? (
           <>
             <FormField
-              label="Omschrijving"
+              label={tx('Omschrijving')}
               value={concept.naam}
               onChangeText={(v) => setConcept({ ...concept, naam: v })}
-              placeholder="Bijv. Steigerhuur"
+              placeholder={tx('Bijv. Steigerhuur')}
               autoFocus={!concept.id}
             />
             <View style={styles.formRij}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Aantal"
+                  label={tx('Aantal')}
                   value={concept.aantal}
                   onChangeText={(v) => setConcept({ ...concept, aantal: v })}
                   keyboardType="decimal-pad"
@@ -300,32 +307,33 @@ export function KostenTab({
               </View>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Eenheid"
+                  label={tx('Eenheid')}
                   value={concept.eenheid}
                   onChangeText={(v) => setConcept({ ...concept, eenheid: v })}
-                  placeholder="stuk"
+                  placeholder={tx('stuk')}
                 />
               </View>
             </View>
             <FormField
-              label="Kostprijs per eenheid"
+              label={tx('Kostprijs per eenheid')}
               value={concept.prijs}
               onChangeText={(v) => setConcept({ ...concept, prijs: v })}
               keyboardType="decimal-pad"
               placeholder="0,00"
             />
             <SelectField
-              label="Leverancier"
+              label={tx('Leverancier')}
               value={concept.leverancierId}
               options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
               onChange={(id) => setConcept({ ...concept, leverancierId: id })}
               allowEmpty
-              emptyLabel="— Geen leverancier —"
-              placeholder="— Geen leverancier —"
+              emptyLabel={tx('— Geen leverancier —')}
+              placeholder={tx('— Geen leverancier —')}
               searchable
             />
             <Text style={styles.klein}>
-              Subtotaal {formatEURCent(kostBedrag(getal(concept.aantal), getal(concept.prijs)))}
+              {tx('Subtotaal {bedrag}', { bedrag: formatEURCent(kostBedrag(getal(concept.aantal), getal(concept.prijs))) })}
+
             </Text>
           </>
         ) : null}

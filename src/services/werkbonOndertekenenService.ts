@@ -11,6 +11,7 @@ import {
   type SignResultaat,
 } from '@/lib/werkbonVersturen';
 import type { Werkbon, WerkbonNotitie } from './workOrderService';
+import { tx } from '@/i18n';
 
 /**
  * Laten ondertekenen en waarschuwen vanuit de app. De verzoeken zelf staan in
@@ -47,7 +48,7 @@ export async function tekenOpToestel(
   invoer: { naam: string; email: string; handtekening: string },
 ): Promise<{ data: SignResultaat | null; error: string | null }> {
   if (!werkbon.sign_token) {
-    return { data: null, error: 'Deze werkbon heeft nog geen ondertekenlink. Herlaad de werkbon en probeer het opnieuw.' };
+    return { data: null, error: tx('Deze werkbon heeft nog geen ondertekenlink. Herlaad de werkbon en probeer het opnieuw.') };
   }
   try {
     const data = await signWerkbon(supabase, {
@@ -58,7 +59,7 @@ export async function tekenOpToestel(
     });
     return { data, error: null };
   } catch (e) {
-    return { data: null, error: alsFout(e, 'Ondertekenen mislukt') };
+    return { data: null, error: alsFout(e, tx('Ondertekenen mislukt')) };
   }
 }
 
@@ -85,7 +86,7 @@ export async function mailTerOndertekening(
     });
     return { data: { email: res.email }, error: null };
   } catch (e) {
-    return { data: null, error: alsFout(e, 'Versturen mislukt') };
+    return { data: null, error: alsFout(e, tx('Versturen mislukt')) };
   }
 }
 
@@ -126,7 +127,7 @@ export async function stuurWaarschuwing(
     });
     return { data: bij, error: null };
   } catch (e) {
-    return { data: null, error: alsFout(e, 'Versturen mislukt') };
+    return { data: null, error: alsFout(e, tx('Versturen mislukt')) };
   }
 }
 
@@ -152,20 +153,20 @@ export async function stuurGetekendePdfNa(werkbonId: string): Promise<{ nagezond
       } catch {
         /* geen json */
       }
-      return { nagezonden: false, error: melding || 'De ontbrekende PDF kon niet worden nagestuurd.' };
+      return { nagezonden: false, error: melding || tx('De ontbrekende PDF kon niet worden nagestuurd.') };
     }
     const d = data as { nagezonden?: boolean; error?: string } | null;
     if (d?.error) return { nagezonden: false, error: d.error };
     return { nagezonden: !!d?.nagezonden, error: null };
   } catch {
-    return { nagezonden: false, error: 'De ontbrekende PDF kon niet worden nagestuurd.' };
+    return { nagezonden: false, error: tx('De ontbrekende PDF kon niet worden nagestuurd.') };
   }
 }
 
 /** Startmoment vastleggen vóór het afronden ("Wanneer is de klus gestart?"). */
 export async function zetStartmoment(werkbonId: string, iso: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase.from('werkbonnen').update({ gestart_op: iso }).eq('id', werkbonId).select('id');
-  if (error) return { error: 'Startmoment opslaan mislukt' };
-  if (!((data as { id: string }[]) ?? []).length) return { error: 'Startmoment opslaan mislukt — je hebt hier geen rechten voor.' };
+  if (error) return { error: tx('Startmoment opslaan mislukt') };
+  if (!((data as { id: string }[]) ?? []).length) return { error: tx('Startmoment opslaan mislukt — je hebt hier geen rechten voor.') };
   return { error: null };
 }

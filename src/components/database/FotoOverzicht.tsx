@@ -5,6 +5,7 @@ import { Camera } from 'lucide-react-native';
 import { AppSection } from '@/components/AppSection';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
+import { tx } from '@/i18n';
 import { useTheme } from '@/providers';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { formatDateNL } from '@/lib/format';
@@ -51,17 +52,17 @@ export function FotoOverzicht() {
   }, [verwerk]);
 
   if (laden) {
-    return <Text style={styles.voetnoot}>Foto&rsquo;s laden…</Text>;
+    return <Text style={styles.voetnoot}>{tx('Foto’s laden…')}</Text>;
   }
   if (fout) {
-    return <ErrorState title="Niet geladen" message={fout} onRetry={laad} />;
+    return <ErrorState title={tx('Niet geladen')} message={fout} onRetry={laad} />;
   }
   if (items.length === 0) {
     return (
       <EmptyState
         icon={<Camera size={40} color={ds.green} strokeWidth={1.6} />}
-        title="Nog geen foto's"
-        message="Foto's die je op een werkbon vastlegt verschijnen hier. Open een werkbon en tik bij Foto's op Toevoegen."
+        title={tx('Nog geen foto\'s')}
+        message={tx('Foto\'s die je op een werkbon vastlegt verschijnen hier. Open een werkbon en tik bij Foto\'s op Toevoegen.')}
       />
     );
   }
@@ -75,7 +76,7 @@ export function FotoOverzicht() {
     }
     const bon = f.werkbon;
     groepen.set(f.werkbon_id, {
-      titel: bon?.titel || bon?.nummer || 'Werkbon',
+      titel: bon?.titel || bon?.nummer || tx('Werkbon'),
       sub: [bon?.customer?.name, formatDateNL(f.created_at)].filter(Boolean).join(' · '),
       fotos: [f],
     });
@@ -93,13 +94,13 @@ export function FotoOverzicht() {
                 key={f.id}
                 onPress={() => router.push(`/work-orders/${werkbonId}`)}
                 accessibilityRole="button"
-                accessibilityLabel={`Foto bij ${groep.titel}`}
+                accessibilityLabel={tx('Foto bij {titel}', { titel: groep.titel })}
                 style={({ pressed }) => [pressed && { opacity: 0.85 }]}
               >
                 <Image source={{ uri: f.url }} style={[styles.foto, { width: tegel, height: tegel }]} />
                 {f.categorie ? (
                   <View style={styles.label}>
-                    <Text style={styles.labelTekst}>{f.categorie}</Text>
+                    <Text style={styles.labelTekst}>{categorieLabel(f.categorie)}</Text>
                   </View>
                 ) : null}
               </Pressable>
@@ -108,11 +109,18 @@ export function FotoOverzicht() {
         </View>
       ))}
       <Text style={styles.voetnoot}>
-        Tik op een foto om de bijbehorende werkbon te openen. Daar kun je foto&rsquo;s toevoegen en
-        verwijderen.
+        {tx('Tik op een foto om de bijbehorende werkbon te openen. Daar kun je foto’s toevoegen en verwijderen.')}
       </Text>
     </>
   );
+}
+
+/** Alleen het getoonde label; de waarde in de database blijft voor/tijdens/na. */
+function categorieLabel(c: string) {
+  if (c === 'voor') return tx('voor', undefined, 'fotocategorie');
+  if (c === 'tijdens') return tx('tijdens', undefined, 'fotocategorie');
+  if (c === 'na') return tx('na', undefined, 'fotocategorie');
+  return c;
 }
 
 const makeStyles = (t: ThemeColors) =>

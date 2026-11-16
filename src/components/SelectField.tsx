@@ -5,6 +5,7 @@ import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
 import { MobielKader } from './MobielKader';
 import { useFocusTerug } from '@/lib/focusTerug';
+import { tx } from '@/i18n';
 
 export type SelectOption = {
   id: string;
@@ -39,15 +40,16 @@ export function SelectField({
   value,
   options,
   onChange,
-  placeholder = 'Kies…',
+  placeholder: placeholderProp,
   allowEmpty = false,
-  emptyLabel = 'Geen',
+  emptyLabel,
   hint,
   disabled = false,
   searchable,
 }: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const placeholder = placeholderProp ?? tx('Kies…');
   const [open, setOpen] = useState(false);
   useFocusTerug(open);
   const [zoek, setZoek] = useState('');
@@ -104,7 +106,7 @@ export function SelectField({
               onPress={() => setOpen(false)}
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel="Sluiten"
+              accessibilityLabel={tx('Sluiten')}
               style={styles.sluit}
             >
               <X size={20} color={t.ink2} />
@@ -117,7 +119,7 @@ export function SelectField({
               <TextInput
                 value={zoek}
                 onChangeText={setZoek}
-                placeholder="Zoeken…"
+                placeholder={tx('Zoeken…')}
                 placeholderTextColor={t.muted2}
                 style={styles.zoekInput}
                 autoCorrect={false}
@@ -133,7 +135,7 @@ export function SelectField({
             ListHeaderComponent={
               allowEmpty ? (
                 <Rij
-                  label={emptyLabel}
+                  label={emptyLabel ?? tx('Geen')}
                   gekozen={value === null}
                   onPress={() => kies(null)}
                   styles={styles}
@@ -143,7 +145,7 @@ export function SelectField({
             }
             ListEmptyComponent={
               <Text style={styles.leeg}>
-                {zoek ? 'Niets gevonden.' : 'Er is nog niets om te kiezen.'}
+                {zoek ? tx('Niets gevonden.') : tx('Er is nog niets om te kiezen.')}
               </Text>
             }
             renderItem={({ item }) => (

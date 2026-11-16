@@ -115,6 +115,8 @@ import { BestandenBlok } from '@/components/BestandenBlok';
 import { MetingenBlok } from './MetingenBlok';
 import { BossKnop } from '@/components/boss/BossKnop';
 import { bijBossOpgeslagen } from '@/lib/boss/vastleggen';
+import { tx, txn } from '@/i18n';
+import { toonWaarde } from '@/i18n/databaseWaarden';
 
 /**
  * Het projectdetail — de app-versie van `ProjectDetailDrawer` uit het
@@ -235,13 +237,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       deal = d.data;
       project = p.data;
       if (!deal && !project) {
-        setError('Deze aanvraag bestaat niet (meer) of je mag hem niet zien.');
+        setError(tx('Deze aanvraag bestaat niet (meer) of je mag hem niet zien.'));
         return;
       }
     } else if (projectId) {
       const p = await getProject(projectId);
       if (p.error || !p.data) {
-        setError(p.error ?? 'Dit project bestaat niet (meer) of je mag het niet zien.');
+        setError(p.error ?? tx('Dit project bestaat niet (meer) of je mag het niet zien.'));
         return;
       }
       project = p.data;
@@ -331,13 +333,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     if (tab !== 'overzicht' && !tabZichtbaar) setTab('overzicht');
   }, [tab, tabZichtbaar]);
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Project laden…" />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Project laden…')} />;
 
   if (error || (!project && !deal)) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppScreen scroll={false} header={<AppTopBar variant="detail" title="Project" onBack={terug} />}>
-          <ErrorState title="Niet geladen" message={error ?? 'Project niet gevonden.'} onRetry={opnieuw} />
+        <AppScreen scroll={false} header={<AppTopBar variant="detail" title={tx('Project')} onBack={terug} />}>
+          <ErrorState title={tx('Niet geladen')} message={error ?? tx('Project niet gevonden.')} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -362,7 +364,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     if (!deal) return;
     saveDeal(() => zetDealAfgerond(deal.id, aan), {
       onSuccess: zetDeal,
-      succesMelding: aan ? 'Project voltooid' : 'Project heropend',
+      succesMelding: aan ? tx('Project voltooid') : tx('Project heropend'),
     });
   };
   const heropenVerloren = () => {
@@ -370,7 +372,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     if (!deal || !eerste) return;
     saveDeal(() => heropenVerlorenDeal(deal.id, eerste.id), {
       onSuccess: zetDeal,
-      succesMelding: 'Aanvraag heropend',
+      succesMelding: tx('Aanvraag heropend'),
     });
   };
   const wijzigBehandelaars = (ids: string[]) => {
@@ -418,7 +420,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             deal_id: deal?.id ?? null,
             customer_id: deal?.customer_id ?? project?.customer_id ?? null,
           }),
-        { ...naHerladen, succesMelding: 'Activiteit ingepland' },
+        { ...naHerladen, succesMelding: tx('Activiteit ingepland') },
       );
       return;
     }
@@ -441,13 +443,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         () =>
           bewerk.naam.trim()
             ? updateProject(project.id, { name: bewerk.naam })
-            : Promise.resolve(writeFout('validatie', 'Een project moet een naam houden')),
+            : Promise.resolve(writeFout('validatie', tx('Een project moet een naam houden'))),
         naHerladen,
       );
     } else if (bewerk.soort === 'aanvraag') {
       save(() => updateProject(project.id, { description: bewerk.tekst }), {
         ...naHerladen,
-        succesMelding: 'Aanvraag bijgewerkt',
+        succesMelding: tx('Aanvraag bijgewerkt'),
       });
     } else if (bewerk.soort === 'info') {
       const waardeGewijzigd =
@@ -465,7 +467,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             // Een zelf getypte waarde blijft staan (waarde_bron 'handmatig').
             ...(waardeGewijzigd ? { project_value: getal(bewerk.waarde), waarde_bron: 'handmatig' as const } : {}),
           }),
-        { ...naHerladen, succesMelding: 'Project bijgewerkt' },
+        { ...naHerladen, succesMelding: tx('Project bijgewerkt') },
       );
     } else if (bewerk.soort === 'klantgegevens') {
       if (!klant) return;
@@ -480,12 +482,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             postcode: bewerk.postcode,
             city: bewerk.plaats,
           }),
-        { ...naHerladen, succesMelding: 'Klantgegevens bijgewerkt' },
+        { ...naHerladen, succesMelding: tx('Klantgegevens bijgewerkt') },
       );
     } else if (bewerk.soort === 'klant') {
       save(() => updateProject(project.id, { customer_id: bewerk.klantId }), {
         ...naHerladen,
-        succesMelding: 'Klant gewijzigd',
+        succesMelding: tx('Klant gewijzigd'),
       });
     }
   };
@@ -496,7 +498,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     if (!project) return;
     save(() => updateProject(project.id, { uren_bron: 'offertes' }), {
       onSuccess: herlaad,
-      succesMelding: 'Begrote uren komen weer uit de offertes',
+      succesMelding: tx('Begrote uren komen weer uit de offertes'),
     });
   };
 
@@ -504,7 +506,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     if (!project) return;
     save(() => updateProject(project.id, { waarde_bron: 'aanvraag' }), {
       onSuccess: herlaad,
-      succesMelding: 'Projectwaarde wordt weer automatisch berekend',
+      succesMelding: tx('Projectwaarde wordt weer automatisch berekend'),
     });
   };
 
@@ -513,22 +515,23 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
     setBewerk({ soort: 'klant', klantId: project?.customer_id ?? null });
     if (klantOpties.length === 0) {
       const r = await listCustomers();
-      setKlantOpties(r.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant', sub: k.city ?? undefined })));
+      setKlantOpties(r.data.map((k) => ({ id: k.id, label: k.name ?? tx('Klant'), sub: k.city ?? undefined })));
     }
   };
 
   const verwijderProject = () => {
     if (!project) return;
     bevestigVerwijderen(
-      `Project "${project.name ?? ''}"`,
+      tx('Project "{naam}"', { naam: project.name ?? '' }),
       () => {
         save(() => deleteProject(project.id), {
           onSuccess: () => terug(),
-          succesMelding: 'Project verwijderd',
+          succesMelding: tx('Project verwijderd'),
         });
       },
-      'Projectnotities, foto’s en projectkosten worden mee verwijderd. Werkbonnen, facturen en ' +
-        'losse kostenposten blijven bestaan, maar verliezen hun projectkoppeling.',
+      tx(
+        'Projectnotities, foto’s en projectkosten worden mee verwijderd. Werkbonnen, facturen en losse kostenposten blijven bestaan, maar verliezen hun projectkoppeling.',
+      ),
     );
   };
 
@@ -541,10 +544,10 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   // ── Foto's bij de aanvraag (uploadProjectFoto / deleteProjectFoto) ────────
   const fotoToevoegen = () => {
     if (!project || fotoSlot.current || fotoBezig) return;
-    Dialog.alert("Foto toevoegen", 'Waar komt de foto vandaan?', [
-      { text: 'Camera', onPress: () => pakEnUpload('camera') },
-      { text: 'Fotobibliotheek', onPress: () => pakEnUpload('bibliotheek') },
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Foto toevoegen'), tx('Waar komt de foto vandaan?'), [
+      { text: tx('Camera'), onPress: () => pakEnUpload('camera') },
+      { text: tx('Fotobibliotheek'), onPress: () => pakEnUpload('bibliotheek') },
+      { text: tx('Annuleren'), style: 'cancel' },
     ]);
   };
 
@@ -561,10 +564,10 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!vraag.granted) {
           Dialog.alert(
-            'Geen toestemming',
+            tx('Geen toestemming'),
             bron === 'camera'
-              ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-              : "Geef BossBase toegang tot je foto's om er een te kiezen.",
+              ? tx('Geef BossBase toegang tot de camera om een foto te maken.')
+              : tx("Geef BossBase toegang tot je foto's om er een te kiezen."),
           );
           return;
         }
@@ -593,7 +596,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           extensie: foto.extensie,
         });
         if (!up.ok) {
-          Dialog.alert('Foto niet opgeslagen', up.melding);
+          Dialog.alert(tx('Foto niet opgeslagen'), up.melding);
           break;
         }
         setData((d) => ({ ...d, fotos: [...d.fotos, up.data] }));
@@ -605,7 +608,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   };
 
   const fotoWeg = (foto: ProjectFoto) => {
-    bevestigVerwijderen('Deze foto', () => {
+    bevestigVerwijderen(tx('Deze foto'), () => {
       save(() => deleteProjectFoto(foto), {
         onSuccess: () => setData((d) => ({ ...d, fotos: d.fotos.filter((x) => x.id !== foto.id) })),
       });
@@ -613,13 +616,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   };
 
   const koppelOfferte = async (offerteId: string) => {
-    if (!project) return writeFout('onbekend', 'Geen project.');
+    if (!project) return writeFout('onbekend', tx('Geen project.'));
     const res = await updateProject(project.id, { offerte_id: offerteId });
     if (res.ok) await herlaad();
     return res;
   };
   const notitieWeg = (n: ProjectNote) => {
-    bevestigVerwijderen('Notitie', () => {
+    bevestigVerwijderen(tx('Notitie'), () => {
       save(() => deleteProjectNote(n.id), {
         onSuccess: () => setData((d) => ({ ...d, notities: d.notities.filter((x) => x.id !== n.id) })),
       });
@@ -627,7 +630,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   };
 
   // ── Weergave-hulpjes ─────────────────────────────────────────────────────
-  const titel = project?.name || deal?.title || 'Project';
+  const titel = project?.name || deal?.title || tx('Project');
   const verlopen = isVerlopen(project?.deadline, project?.status, vandaag);
   const komend = regels.filter((r) => r.datum >= vandaag);
   const aanvraagTekst = alsTekst(project?.description || deal?.description || '');
@@ -639,13 +642,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   const bronLabel = !deal
     ? null
     : data.bron?.bron === 'bossbase_website'
-      ? 'Via het websiteformulier'
+      ? tx('Via het websiteformulier')
       : data.bron?.bron === 'website'
-        ? 'Via de website'
+        ? tx('Via de website')
         : data.bron?.bron
-          ? `Via ${data.bron.bron}`
+          ? tx('Via {bron}', { bron: data.bron.bron })
           : magVerkoop
-            ? 'Handmatig aangemaakt'
+            ? tx('Handmatig aangemaakt')
             : null;
   const binnenOp = deal ? data.bron?.binnenOp || deal.created_at : null;
   // De omschrijving staat al bovenaan; alleen een aangepaste tekst laat het origineel zien.
@@ -680,7 +683,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       {deal ? (
         <View style={styles.blok}>
           <View style={styles.blokKop}>
-            <Text style={styles.blokTitel}>Status</Text>
+            <Text style={styles.blokTitel}>{tx('Status')}</Text>
             {magVerkoop && !dealVerloren && !dealAfgerond ? (
               <Pressable
                 onPress={() => setVerlorenOpen(true)}
@@ -688,41 +691,41 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 hitSlop={10}
                 style={({ pressed }) => [styles.stilLink, pressed && { opacity: 0.6 }]}
               >
-                <Text style={styles.stilLinkTekst}>Verloren</Text>
+                <Text style={styles.stilLinkTekst}>{tx('Verloren')}</Text>
               </Pressable>
             ) : null}
           </View>
 
           {dealVerloren ? (
             <View style={styles.rijMidden}>
-              <StatusBadge status="Verloren" />
-              {deal.lost_reason ? <Text style={styles.klein}>{deal.lost_reason}</Text> : null}
+              <StatusBadge status={tx('Verloren')} />
+              {deal.lost_reason ? <Text style={styles.klein}>{toonWaarde(deal.lost_reason)}</Text> : null}
             </View>
           ) : dealAfgerond ? (
-            <StatusBadge status="Project voltooid" />
+            <StatusBadge status={tx('Project voltooid')} />
           ) : magVerkoop && stages.length ? (
             <SelectField
-              label="Fase"
+              label={tx('Fase')}
               value={deal.stage_id}
-              options={faseKeuzes(stages, deal.stage_id).map((s) => ({ id: s.id, label: s.name ?? 'Fase' }))}
+              options={faseKeuzes(stages, deal.stage_id).map((s) => ({ id: s.id, label: s.name ?? tx('Fase') }))}
               onChange={wijzigFase}
-              placeholder="Kies een fase"
+              placeholder={tx('Kies een fase')}
             />
           ) : huidigeFase ? (
             <FaseBadge
-              label={huidigeFase.name ?? 'Fase'}
+              label={huidigeFase.name ?? tx('Fase')}
               colorClass={pipelineFaseKleuren(stages)[huidigeFase.id] ?? huidigeFase.color_class}
               positie={huidigeFase.position}
               groot
             />
           ) : (
-            <Text style={styles.waarde}>Loopt</Text>
+            <Text style={styles.waarde}>{tx('Loopt')}</Text>
           )}
 
           {magVerkoop ? (
             toewijzen && !dealAfgerond ? (
               <View style={styles.veldKolom}>
-                <Text style={styles.veldLabel}>Behandeld door</Text>
+                <Text style={styles.veldLabel}>{tx('Behandeld door')}</Text>
                 <LedenKeuze label="" leden={data.leden} waarde={behandelaarIds(deal)} onChange={wijzigBehandelaars} />
               </View>
             ) : (
@@ -731,22 +734,24 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                   onPress={() => setToewijzen(true)}
                   disabled={dealAfgerond}
                   accessibilityRole="button"
-                  accessibilityLabel={`Behandeld door: ${behandelaars.length ? behandelaars.join(', ') : 'niemand'}`}
+                  accessibilityLabel={tx('Behandeld door: {namen}', {
+                    namen: behandelaars.length ? behandelaars.join(', ') : tx('niemand'),
+                  })}
                   style={({ pressed }) => [styles.behandelaarKnop, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={styles.veldLabel}>Behandeld door</Text>
+                  <Text style={styles.veldLabel}>{tx('Behandeld door')}</Text>
                   <View style={styles.rijMidden}>
                     <Text style={[styles.waarde, { flexShrink: 1 }]} numberOfLines={1}>
-                      {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'}
+                      {behandelaars.length ? behandelaars.join(', ') : tx('Niemand toegewezen')}
                     </Text>
                     {!dealAfgerond ? <Pencil size={13} color={t.muted} /> : null}
                   </View>
                 </Pressable>
                 {dealVerloren ? (
-                  <Button label="Heropenen" variant="secondary" onPress={heropenVerloren} />
+                  <Button label={tx('Heropenen')} variant="secondary" onPress={heropenVerloren} />
                 ) : (
                   <Button
-                    label={dealAfgerond ? 'Heropenen' : 'Voltooien'}
+                    label={dealAfgerond ? tx('Heropenen') : tx('Voltooien')}
                     variant={dealAfgerond ? 'secondary' : 'primary'}
                     onPress={() => zetAfgerond(!dealAfgerond)}
                   />
@@ -757,7 +762,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
           {magVerkoop && !dealVerloren && !dealAfgerond ? (
             <View style={styles.prioRij}>
-              <Text style={styles.veldLabel}>Prioriteit</Text>
+              <Text style={styles.veldLabel}>{tx('Prioriteit')}</Text>
               <View style={styles.prioChips}>
                 {DEAL_PRIORITEITEN.map((p) => {
                   const aan = (deal.priority || 'med') === p.id;
@@ -771,7 +776,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                       hitSlop={6}
                       style={[styles.prioChip, aan && styles.chipAan]}
                     >
-                      <Text style={[styles.prioChipTekst, aan && styles.chipTekstAan]}>{p.label}</Text>
+                      <Text style={[styles.prioChipTekst, aan && styles.chipTekstAan]}>{tx(p.label)}</Text>
                     </Pressable>
                   );
                 })}
@@ -779,14 +784,16 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             </View>
           ) : null}
           {!project && magVerkoop ? (
-            <Text style={styles.klein}>Bij deze aanvraag hoort nog geen project.</Text>
+            <Text style={styles.klein}>{tx('Bij deze aanvraag hoort nog geen project.')}</Text>
           ) : null}
         </View>
       ) : project ? (
-        <Blok titel="Status">
+        <Blok titel={tx('Status')}>
           <StatusBadge status={project.status ?? 'gepland'} />
           <Text style={styles.klein}>
-            De status volgt de werkbonnen: {projectStatusLabel(project.status).toLowerCase()}.
+            {tx('De status volgt de werkbonnen: {status}.', {
+              status: projectStatusLabel(project.status).toLocaleLowerCase(),
+            })}
           </Text>
         </Blok>
       ) : null}
@@ -795,25 +802,25 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       <View style={[styles.blok, styles.aanvraagBlok]}>
         <View style={styles.blokKop}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.aanvraagEyebrow}>De aanvraag</Text>
+            <Text style={styles.aanvraagEyebrow}>{tx('De aanvraag')}</Text>
             <Text style={styles.klein} numberOfLines={2}>
-              {[bronLabel, binnenOp ? `binnen op ${formatDateNL(lokaleDatum(binnenOp))}` : null].filter(Boolean).join(' · ') || ' '}
+              {[bronLabel, binnenOp ? tx('binnen op {datum}', { datum: formatDateNL(lokaleDatum(binnenOp)) }) : null].filter(Boolean).join(' · ') || ' '}
             </Text>
           </View>
-          {aanvraagBewerken ? <KleineKnop label="Bewerken" onPress={aanvraagBewerken} /> : null}
+          {aanvraagBewerken ? <KleineKnop label={tx('Bewerken')} onPress={aanvraagBewerken} /> : null}
         </View>
 
         <View style={styles.aanvraagVak}>
-          <Text style={[styles.veldLabel, { color: t.green700 }]}>Wat de klant vraagt</Text>
+          <Text style={[styles.veldLabel, { color: t.green700 }]}>{tx('Wat de klant vraagt')}</Text>
           <Text style={[styles.aanvraagTekst, !aanvraagTekst && { color: t.muted, fontWeight: '400', fontSize: 15 }]}>
-            {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
+            {aanvraagTekst || tx('Nog niets opgeschreven over deze aanvraag.')}
           </Text>
         </View>
 
         {websiteVelden.length || data.bron?.fotos ? (
           <View style={styles.websiteVak}>
             <Text style={styles.veldLabel}>
-              Ingevuld op de website{data.bron?.isTest ? ' (testaanvraag)' : ''}
+              {data.bron?.isTest ? tx('Ingevuld op de website (testaanvraag)') : tx('Ingevuld op de website')}
             </Text>
             {websiteVelden.map((v) => (
               <View key={v.key} style={styles.websiteRij}>
@@ -836,9 +843,9 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             ))}
             {data.bron?.fotos ? (
               <View style={styles.websiteRij}>
-                <Text style={styles.websiteLabel}>Foto&apos;s</Text>
+                <Text style={styles.websiteLabel}>{tx("Foto's")}</Text>
                 <Text style={styles.websiteWaarde}>
-                  {data.bron.fotos === 1 ? '1 foto, hieronder' : `${data.bron.fotos} foto's, hieronder`}
+                  {txn('{n} foto, hieronder', "{n} foto's, hieronder", data.bron.fotos)}
                 </Text>
               </View>
             ) : null}
@@ -847,24 +854,24 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
         <View style={styles.raster}>
           <View style={styles.rasterVeld}>
-            <Text style={styles.veldLabel}>Waar</Text>
+            <Text style={styles.veldLabel}>{tx('Waar')}</Text>
             <Text style={styles.waarde}>{klant?.address || '—'}</Text>
             {klant?.postcode || klant?.city ? (
               <Text style={styles.klein}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</Text>
             ) : null}
           </View>
           <View style={styles.rasterVeld}>
-            <Text style={styles.veldLabel}>Wanneer</Text>
+            <Text style={styles.veldLabel}>{tx('Wanneer')}</Text>
             <Text style={styles.waarde}>{wanneerLabel(regels, project?.start_date ?? null, vandaag)}</Text>
-            {project?.deadline ? <Text style={styles.klein}>deadline {formatDateNL(project.deadline)}</Text> : null}
+            {project?.deadline ? <Text style={styles.klein}>{tx('deadline {datum}', { datum: formatDateNL(project.deadline) })}</Text> : null}
           </View>
           <View style={styles.rasterVeld}>
-            <Text style={styles.veldLabel}>Contact</Text>
+            <Text style={styles.veldLabel}>{tx('Contact')}</Text>
             <Text style={styles.waarde} numberOfLines={1}>{klant?.phone || klant?.email || '—'}</Text>
           </View>
           {!project && deal ? (
             <View style={styles.rasterVeld}>
-              <Text style={styles.veldLabel}>Verwachte omzet</Text>
+              <Text style={styles.veldLabel}>{tx('Verwachte omzet')}</Text>
               <Text style={styles.waarde}>{formatEUR(Number(deal.expected_revenue ?? 0))}</Text>
             </View>
           ) : null}
@@ -874,21 +881,21 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         <View style={styles.actieRij}>
           <ActieTegel
             icon={<Phone size={18} color={t.green700} />}
-            label="Bel"
+            label={tx('Bel')}
             uit={!klant?.phone}
-            onPress={() => callPhone(klant?.phone) || notAvailableAlert('Bellen', 'Geen telefoonnummer bekend.')}
+            onPress={() => callPhone(klant?.phone) || notAvailableAlert(tx('Bellen'), tx('Geen telefoonnummer bekend.'))}
           />
           <ActieTegel
             icon={<Mail size={18} color={t.green700} />}
-            label="Mail"
+            label={tx('Mail')}
             uit={!klant?.email}
-            onPress={() => sendMail(klant?.email) || notAvailableAlert('Mailen', 'Geen e-mailadres bekend.')}
+            onPress={() => sendMail(klant?.email) || notAvailableAlert(tx('Mailen'), tx('Geen e-mailadres bekend.'))}
           />
           <ActieTegel
             icon={<MapPin size={18} color={t.green700} />}
-            label="Route"
+            label={tx('Route')}
             uit={!klantAdres}
-            onPress={() => openMaps(klantAdres) || notAvailableAlert('Navigeren', 'Geen adres bekend.')}
+            onPress={() => openMaps(klantAdres) || notAvailableAlert(tx('Navigeren'), tx('Geen adres bekend.'))}
           />
         </View>
 
@@ -896,14 +903,14 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             bij het kiezen). Toevoegen en verwijderen met projecten_bewerken. */}
         {project && (data.fotos.length || magProject) ? (
           <View style={styles.veldKolom}>
-            <Text style={styles.veldLabel}>Foto&apos;s</Text>
+            <Text style={styles.veldLabel}>{tx("Foto's")}</Text>
             <View style={styles.fotos}>
               {data.fotos.map((f, i) => (
                 <View key={f.id} style={styles.fotoVak}>
                   <Pressable
                     onPress={() => setFotoIndex(i)}
                     accessibilityRole="imagebutton"
-                    accessibilityLabel={`Foto ${i + 1} van ${data.fotos.length} bekijken`}
+                    accessibilityLabel={tx('Foto {nr} van {totaal} bekijken', { nr: i + 1, totaal: data.fotos.length })}
                   >
                     <Image source={{ uri: f.url }} style={styles.foto} />
                   </Pressable>
@@ -911,7 +918,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                     <Pressable
                       onPress={() => fotoWeg(f)}
                       accessibilityRole="button"
-                      accessibilityLabel="Foto verwijderen"
+                      accessibilityLabel={tx('Foto verwijderen')}
                       hitSlop={6}
                       style={styles.fotoWeg}
                     >
@@ -925,12 +932,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                   onPress={fotoToevoegen}
                   disabled={fotoBezig}
                   accessibilityRole="button"
-                  accessibilityLabel="Foto toevoegen"
+                  accessibilityLabel={tx('Foto toevoegen')}
                   accessibilityState={{ disabled: fotoBezig, busy: fotoBezig }}
                   style={({ pressed }) => [styles.fotoToevoegen, pressed && { opacity: 0.7 }]}
                 >
                   {fotoBezig ? <ActivityIndicator size="small" color={t.green700} /> : <Camera size={18} color={t.ink2} />}
-                  <Text style={styles.kleineKnopTekst}>{fotoBezig ? 'Bezig…' : 'Foto'}</Text>
+                  <Text style={styles.kleineKnopTekst}>{fotoBezig ? tx('Bezig…') : tx('Foto')}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -949,11 +956,11 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
       {project ? (
         <Blok
-          titel="Projectinformatie"
+          titel={tx('Projectinformatie')}
           actie={
             magProject ? (
               <KleineKnop
-                label="Bewerken"
+                label={tx('Bewerken')}
                 onPress={() => {
                   setSaveError(null);
                   setBewerk({
@@ -969,12 +976,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           }
         >
           <View style={styles.raster}>
-            <Veld label="Startdatum">
+            <Veld label={tx('Startdatum')}>
               <Text style={[styles.waarde, !project.start_date && { color: t.muted }]}>
-                {project.start_date ? formatDateNL(project.start_date) : 'Niet ingevuld'}
+                {project.start_date ? formatDateNL(project.start_date) : tx('Niet ingevuld')}
               </Text>
             </Veld>
-            <Veld label="Einddatum">
+            <Veld label={tx('Einddatum')}>
               <Text
                 style={[
                   styles.waarde,
@@ -982,11 +989,11 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                   verlopen && { color: t.statusRejectFg },
                 ]}
               >
-                {project.deadline ? formatDateNL(project.deadline) : 'Niet ingevuld'}
-                {verlopen ? '  verlopen' : ''}
+                {project.deadline ? formatDateNL(project.deadline) : tx('Niet ingevuld')}
+                {verlopen ? `  ${tx('verlopen')}` : ''}
               </Text>
             </Veld>
-            <Veld label="Begrote uren">
+            <Veld label={tx('Begrote uren')}>
               <Text style={styles.waarde}>{formatUren(project.quoted_hours)}</Text>
               {/* Waar de begrote uren vandaan komen: de urenregels en de
                   calculatie van de geaccepteerde offertes, of met de hand.
@@ -996,11 +1003,11 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               ) : null}
               {project.uren_bron === 'handmatig' && magProject ? (
                 <Pressable onPress={urenUitOffertes} accessibilityRole="link" hitSlop={8}>
-                  <Text style={styles.link}>uit de offertes halen</Text>
+                  <Text style={styles.link}>{tx('uit de offertes halen')}</Text>
                 </Pressable>
               ) : null}
             </Veld>
-            <Veld label="Gewerkte uren">
+            <Veld label={tx('Gewerkte uren')}>
               <Text style={styles.waarde}>
                 {formatUren(cijfers.usedHours)}
                 {Number(project.quoted_hours) > 0 ? (
@@ -1011,22 +1018,22 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               </Text>
             </Veld>
             {magBedragen ? (
-              <Veld label="Projectwaarde">
+              <Veld label={tx('Projectwaarde')}>
                 <Text style={styles.waarde}>{formatEUR(Number(project.project_value ?? 0))}</Text>
                 <Text style={styles.klein}>{waardeBronUitleg(project.waarde_bron)}</Text>
                 {project.waarde_bron === 'handmatig' && magProject ? (
                   <Pressable onPress={waardeAutomatisch} accessibilityRole="link" hitSlop={8}>
-                    <Text style={styles.link}>automatisch berekenen</Text>
+                    <Text style={styles.link}>{tx('automatisch berekenen')}</Text>
                   </Pressable>
                 ) : null}
               </Veld>
             ) : null}
             {magBedragen ? (
-              <Veld label="Gefactureerd">
+              <Veld label={tx('Gefactureerd')}>
                 <Text style={styles.waarde}>{formatEUR(cijfers.omzetExclBtw)}</Text>
                 {cijfers.remainingToInvoice > 0 ? (
                   <Text style={[styles.klein, { color: t.statusWarnFg }]}>
-                    nog {formatEUR(cijfers.remainingToInvoice)}
+                    {tx('nog {bedrag}', { bedrag: formatEUR(cijfers.remainingToInvoice) })}
                   </Text>
                 ) : null}
               </Veld>
@@ -1036,9 +1043,9 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       ) : null}
 
       {project ? (
-        <Blok titel="Planning">
+        <Blok titel={tx('Planning')}>
           {regels.length === 0 ? (
-            <Text style={styles.leeg}>Nog niets ingepland voor dit project.</Text>
+            <Text style={styles.leeg}>{tx('Nog niets ingepland voor dit project.')}</Text>
           ) : (
             (komend.length ? komend : regels).slice(0, 4).map((r) => (
               <Rij
@@ -1053,17 +1060,17 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       ) : null}
 
       {project && metWerkbonnen ? (
-        <Blok titel="Werkbonnen" onTitel={() => setTab('werkbonnen')}>
+        <Blok titel={tx('Werkbonnen')} onTitel={() => setTab('werkbonnen')}>
           {data.werkbonnen.length === 0 ? (
-            <Text style={styles.leeg}>Geen werkbonnen</Text>
+            <Text style={styles.leeg}>{tx('Geen werkbonnen')}</Text>
           ) : (
             [...data.werkbonnen]
               .sort((a, b) => String(b.gepland_op ?? '').localeCompare(String(a.gepland_op ?? '')))
               .map((w) => (
                 <Rij
                   key={w.id}
-                  titel={w.titel || 'Werkbon'}
-                  sub={`${w.nummer || 'geen nummer'}${w.locatie ? ` · ${w.locatie}` : ''}`}
+                  titel={w.titel || tx('Werkbon')}
+                  sub={`${w.nummer || tx('geen nummer')}${w.locatie ? ` · ${w.locatie}` : ''}`}
                   rechts={<StatusBadge status={w.status ?? 'gepland'} />}
                   onPress={() => router.push(`/work-orders/${w.id}`)}
                 />
@@ -1074,12 +1081,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
       {magOffertes ? (
         <Blok
-          titel="Offertes"
+          titel={tx('Offertes')}
           onTitel={project ? () => setTab('offertes') : undefined}
           actie={
             magProject && mag('offertes', 'maken') ? (
               <KleineKnop
-                label="Nieuwe offerte"
+                label={tx('Nieuwe offerte')}
                 icon="plus"
                 onPress={() =>
                   router.push(
@@ -1093,12 +1100,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           }
         >
           {data.offertes.length === 0 ? (
-            <Text style={styles.leeg}>Geen offertes</Text>
+            <Text style={styles.leeg}>{tx('Geen offertes')}</Text>
           ) : (
             data.offertes.map((o) => (
               <Rij
                 key={o.id}
-                titel={o.omschrijving || o.nummer || 'Offerte'}
+                titel={o.omschrijving || o.nummer || tx('Offerte')}
                 sub={[o.omschrijving ? o.nummer : null, OFFERTE_STATUS[o.status ?? ''] ?? o.status]
                   .filter(Boolean)
                   .join(' · ')}
@@ -1112,12 +1119,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
       {project && magBedragen ? (
         <Blok
-          titel="Facturen"
+          titel={tx('Facturen')}
           onTitel={magFacturen ? () => setTab('facturen') : undefined}
           actie={
             magProject && mag('facturen', 'maken') ? (
               <KleineKnop
-                label="Nieuwe factuur"
+                label={tx('Nieuwe factuur')}
                 icon="plus"
                 onPress={() =>
                   router.push(
@@ -1129,15 +1136,15 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           }
         >
           {data.facturen.length === 0 ? (
-            <Text style={styles.leeg}>Geen facturen</Text>
+            <Text style={styles.leeg}>{tx('Geen facturen')}</Text>
           ) : (
             data.facturen.map((f) => (
               <Rij
                 key={f.id}
-                titel={f.nummer || 'Factuur'}
+                titel={f.nummer || tx('Factuur')}
                 sub={[
                   f.factuurdatum ? formatDateNL(f.factuurdatum) : null,
-                  f.vervaldatum ? `vervalt ${formatDateNL(f.vervaldatum)}` : null,
+                  f.vervaldatum ? tx('vervalt {datum}', { datum: formatDateNL(f.vervaldatum) }) : null,
                   factuurStatusLabel(f.status),
                 ]
                   .filter(Boolean)
@@ -1152,11 +1159,11 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
       {deal ? (
         <Blok
-          titel="Activiteiten"
+          titel={tx('Activiteiten')}
           actie={
             magActiviteit ? (
               <KleineKnop
-                label="Inplannen"
+                label={tx('Inplannen')}
                 icon="plus"
                 onPress={() => {
                   setSaveError(null);
@@ -1167,7 +1174,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           }
         >
           {data.activiteiten.length === 0 ? (
-            <Text style={styles.leeg}>Geen activiteiten. Plan een vervolgactie in.</Text>
+            <Text style={styles.leeg}>{tx('Geen activiteiten. Plan een vervolgactie in.')}</Text>
           ) : (
             data.activiteiten.slice(0, 8).map((a) => {
               const dag = a.due_at ? lokaleDatum(a.due_at) : null;
@@ -1178,8 +1185,8 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                   titel={a.title || activiteitTypeLabel(a.type)}
                   sub={[
                     activiteitTypeLabel(a.type),
-                    dag ? formatDateNL(dag) : 'Geen datum',
-                    a.completed ? 'afgerond' : teLaat ? 'te laat' : null,
+                    dag ? formatDateNL(dag) : tx('Geen datum'),
+                    a.completed ? tx('afgerond') : teLaat ? tx('te laat') : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -1193,13 +1200,13 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
 
       {klant || (project && magProject) ? (
         <Blok
-          titel="Klantgegevens"
+          titel={tx('Klantgegevens')}
           actie={
             (project && magProject) || (klant && magKlantBewerken) ? (
               <View style={[styles.knoppen, { flexShrink: 1, justifyContent: 'flex-end' }]}>
                 {klant && magKlantBewerken ? (
                   <KleineKnop
-                    label="Bewerken"
+                    label={tx('Bewerken')}
                     onPress={() => {
                       setSaveError(null);
                       setBewerk({
@@ -1216,7 +1223,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                   />
                 ) : null}
                 {project && magProject ? (
-                  <KleineKnop label={klant ? 'Andere klant' : 'Klant kiezen'} onPress={openKlantKiezen} />
+                  <KleineKnop label={klant ? tx('Andere klant') : tx('Klant kiezen')} onPress={openKlantKiezen} />
                 ) : null}
               </View>
             ) : undefined
@@ -1225,21 +1232,21 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
           {klant ? (
             <>
               <Rij
-                titel={klant.name || 'Klant'}
-                sub="Klantkaart openen"
+                titel={klant.name || tx('Klant')}
+                sub={tx('Klantkaart openen')}
                 onPress={() => router.push(`/customers/${klant.id}`)}
               />
               <View style={styles.raster}>
-                <Veld label="Contactpersoon">
+                <Veld label={tx('Contactpersoon')}>
                   <Text style={styles.waarde}>{klant.contactpersoon || '—'}</Text>
                 </Veld>
-                <Veld label="Telefoon">
+                <Veld label={tx('Telefoon')}>
                   <Text style={styles.waarde}>{klant.phone || '—'}</Text>
                 </Veld>
-                <Veld label="E-mail">
+                <Veld label={tx('E-mail')}>
                   <Text style={styles.waarde}>{klant.email || '—'}</Text>
                 </Veld>
-                <Veld label="Adres">
+                <Veld label={tx('Adres')}>
                   <Text style={styles.waarde}>
                     {[klant.address, [klant.postcode, klant.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') ||
                       '—'}
@@ -1248,14 +1255,14 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
               </View>
             </>
           ) : (
-            <Text style={styles.leeg}>Geen klant gekoppeld.</Text>
+            <Text style={styles.leeg}>{tx('Geen klant gekoppeld.')}</Text>
           )}
         </Blok>
       ) : null}
 
       {project && magProjectWeg ? (
         <View style={styles.voet}>
-          <Button label="Verwijder project" variant="ghost" onPress={verwijderProject} />
+          <Button label={tx('Verwijder project')} variant="ghost" onPress={verwijderProject} />
         </View>
       ) : null}
     </>
@@ -1339,8 +1346,12 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
   };
 
   const tabs: { id: Tab; label: string; count?: number }[] = project
-    ? projectTabs.map((x) => (x.id === 'notities' ? { ...x, count: data.notities.length } : x))
-    : [{ id: 'overzicht', label: 'Overzicht' }];
+    ? projectTabs.map((x) => ({
+        ...x,
+        label: tx(x.label),
+        ...(x.id === 'notities' ? { count: data.notities.length } : {}),
+      }))
+    : [{ id: 'overzicht', label: tx('Overzicht') }];
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -1359,7 +1370,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                     magProject ? (
                       <HeaderIconButton
                         icon={Pencil}
-                        label="Projectnaam wijzigen"
+                        label={tx('Projectnaam wijzigen')}
                         onPress={() => {
                           setSaveError(null);
                           setBewerk({ soort: 'naam', naam: project.name ?? '' });
@@ -1388,7 +1399,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       <FotoViewer
         fotos={data.fotos}
         index={fotoIndex}
-        titel="Foto's bij de aanvraag"
+        titel={tx("Foto's bij de aanvraag")}
         onSluit={() => setFotoIndex(null)}
         onVerwijder={
           magProject
@@ -1411,18 +1422,19 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         visible={bewerk !== null}
         title={
           bewerk?.soort === 'naam'
-            ? 'Projectnaam'
+            ? tx('Projectnaam')
             : bewerk?.soort === 'aanvraag'
-              ? 'De aanvraag'
+              ? tx('De aanvraag')
               : bewerk?.soort === 'info'
-                ? 'Projectinformatie'
+                ? tx('Projectinformatie')
                 : bewerk?.soort === 'klant'
-                  ? 'Klant kiezen'
+                  ? tx('Klant kiezen')
                   : bewerk?.soort === 'klantgegevens'
-                    ? 'Klantgegevens'
+                    ? tx('Klantgegevens')
                   : bewerk?.soort === 'activiteit'
-                    ? 'Activiteit inplannen'
-                    : 'Aanvraag bewerken'
+                    ? tx('Activiteit inplannen')
+                    : tx('Aanvraag bewerken')
+
         }
         subtitle={titel}
         error={saveError}
@@ -1438,7 +1450,7 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
       >
         {bewerk?.soort === 'naam' ? (
           <FormField
-            label="Projectnaam"
+            label={tx('Projectnaam')}
             value={bewerk.naam}
             onChangeText={(v) => setBewerk({ ...bewerk, naam: v })}
             autoFocus
@@ -1446,10 +1458,10 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         ) : null}
         {bewerk?.soort === 'aanvraag' ? (
           <FormField
-            label="Omschrijving"
+            label={tx('Omschrijving')}
             value={bewerk.tekst}
             onChangeText={(v) => setBewerk({ ...bewerk, tekst: v })}
-            placeholder="Wat wil de klant? Wat moet er gebeuren, waar moet op gelet worden?"
+            placeholder={tx('Wat wil de klant? Wat moet er gebeuren, waar moet op gelet worden?')}
             multiline
             autoFocus
           />
@@ -1459,72 +1471,72 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             <View style={styles.formRij}>
               <View style={{ flex: 1 }}>
                 <DateField
-                  label="Startdatum"
+                  label={tx('Startdatum')}
                   value={bewerk.start || null}
                   onChange={(v) => setBewerk({ ...bewerk, start: v })}
                   maximum={bewerk.eind || null}
-                  placeholder="Kies"
+                  placeholder={tx('Kies')}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <DateField
-                  label="Einddatum"
+                  label={tx('Einddatum')}
                   value={bewerk.eind || null}
                   onChange={(v) => setBewerk({ ...bewerk, eind: v })}
                   minimum={bewerk.start || null}
-                  placeholder="Kies"
+                  placeholder={tx('Kies')}
                 />
               </View>
             </View>
             <FormField
-              label="Begrote uren"
+              label={tx('Begrote uren')}
               value={bewerk.uren}
               onChangeText={(v) => setBewerk({ ...bewerk, uren: v })}
               keyboardType="decimal-pad"
               placeholder="0"
-              hint="Zelf ingevulde uren komen niet meer uit de geaccepteerde offertes."
+              hint={tx('Zelf ingevulde uren komen niet meer uit de geaccepteerde offertes.')}
             />
             {magBedragen ? (
               <FormField
-                label="Projectwaarde (excl. btw)"
+                label={tx('Projectwaarde (excl. btw)')}
                 value={bewerk.waarde}
                 onChangeText={(v) => setBewerk({ ...bewerk, waarde: v })}
                 keyboardType="decimal-pad"
                 placeholder="0,00"
-                hint="Een zelf ingevulde waarde wordt niet meer automatisch berekend."
+                hint={tx('Een zelf ingevulde waarde wordt niet meer automatisch berekend.')}
               />
             ) : null}
           </>
         ) : null}
         {bewerk?.soort === 'klant' ? (
           <SelectField
-            label="Klant"
+            label={tx('Klant')}
             value={bewerk.klantId}
             options={klantOpties}
             onChange={(id) => setBewerk({ ...bewerk, klantId: id })}
             allowEmpty
-            emptyLabel="— Geen klant —"
-            placeholder="Kies een klant"
+            emptyLabel={tx('— Geen klant —')}
+            placeholder={tx('Kies een klant')}
             searchable
           />
         ) : null}
         {bewerk?.soort === 'klantgegevens' ? (
           <>
             {/* Dezelfde klant als op de klantkaart, geen kopie: dit schrijft naar customers. */}
-            <FormField label="Naam" value={bewerk.naam} onChangeText={(v) => setBewerk({ ...bewerk, naam: v })} />
+            <FormField label={tx('Naam')} value={bewerk.naam} onChangeText={(v) => setBewerk({ ...bewerk, naam: v })} />
             <FormField
-              label="Contactpersoon"
+              label={tx('Contactpersoon')}
               value={bewerk.contactpersoon}
               onChangeText={(v) => setBewerk({ ...bewerk, contactpersoon: v })}
             />
             <FormField
-              label="Telefoon"
+              label={tx('Telefoon')}
               value={bewerk.telefoon}
               onChangeText={(v) => setBewerk({ ...bewerk, telefoon: v })}
               keyboardType="phone-pad"
             />
             <FormField
-              label="E-mail"
+              label={tx('E-mail')}
               value={bewerk.email}
               onChangeText={(v) => setBewerk({ ...bewerk, email: v })}
               keyboardType="email-address"
@@ -1539,34 +1551,34 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
                 )
               }
             />
-            <FormField label="Adres" value={bewerk.adres} onChangeText={(v) => setBewerk({ ...bewerk, adres: v })} />
+            <FormField label={tx('Adres')} value={bewerk.adres} onChangeText={(v) => setBewerk({ ...bewerk, adres: v })} />
             <View style={styles.formRij}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Postcode"
+                  label={tx('Postcode')}
                   value={bewerk.postcode}
                   onChangeText={(v) => setBewerk({ ...bewerk, postcode: v })}
                   autoCapitalize="characters"
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <FormField label="Plaats" value={bewerk.plaats} onChangeText={(v) => setBewerk({ ...bewerk, plaats: v })} />
+                <FormField label={tx('Plaats')} value={bewerk.plaats} onChangeText={(v) => setBewerk({ ...bewerk, plaats: v })} />
               </View>
             </View>
           </>
         ) : null}
         {bewerk?.soort === 'deal' ? (
           <>
-            <FormField label="Titel" value={bewerk.titel} onChangeText={(v) => setBewerk({ ...bewerk, titel: v })} />
+            <FormField label={tx('Titel')} value={bewerk.titel} onChangeText={(v) => setBewerk({ ...bewerk, titel: v })} />
             <FormField
-              label="Verwachte omzet"
+              label={tx('Verwachte omzet')}
               value={bewerk.waarde}
               onChangeText={(v) => setBewerk({ ...bewerk, waarde: v })}
               keyboardType="decimal-pad"
               placeholder="0,00"
             />
             <FormField
-              label="Omschrijving"
+              label={tx('Omschrijving')}
               value={bewerk.tekst}
               onChangeText={(v) => setBewerk({ ...bewerk, tekst: v })}
               multiline
@@ -1576,10 +1588,10 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
         {bewerk?.soort === 'activiteit' ? (
           <>
             <FormField
-              label="Titel"
+              label={tx('Titel')}
               value={bewerk.titel}
               onChangeText={(v) => setBewerk({ ...bewerk, titel: v })}
-              placeholder="Bijv. Klant terugbellen"
+              placeholder={tx('Bijv. Klant terugbellen')}
               autoFocus
             />
             <View style={styles.chipRij}>
@@ -1602,14 +1614,14 @@ export function ProjectDetailScherm({ projectId, dealId }: { projectId?: string;
             <View style={styles.formRij}>
               <View style={{ flex: 1 }}>
                 <DateField
-                  label="Datum"
+                  label={tx('Datum')}
                   value={bewerk.datum || null}
                   onChange={(v) => setBewerk({ ...bewerk, datum: v })}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <TimeField
-                  label="Tijd"
+                  label={tx('Tijd')}
                   value={bewerk.tijd || null}
                   onChange={(v) => setBewerk({ ...bewerk, tijd: v })}
                   placeholder="09:00"

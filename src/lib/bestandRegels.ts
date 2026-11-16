@@ -1,8 +1,10 @@
 /**
  * Regels voor eigen bestanden (blok Bestanden), zonder afhankelijkheden zodat
  * ze los te testen zijn. Zelfde lijst en grenzen als het dashboard
- * (bestandenService.js), de bucket `bestanden` en de check op de tabel.
+ * (bestandenService.js), de bucket `bestanden` en de check op de tabel. Enige
+ * import is de vertaling.
  */
+import { tx, txm } from '@/i18n';
 
 // ── Wat je zelf mag uploaden ────────────────────────────────────────────────
 // Zelfde lijst als de bucket en de check op de tabel; geen SVG of HTML (die kan
@@ -28,7 +30,7 @@ const TYPES: Record<string, string> = {
 const TOEGESTAAN = new Set(Object.values(TYPES));
 export const BESTAND_MAX = 25 * 1024 * 1024;
 export const BESTAND_MAX_PER_KEER = 20;
-export const BESTAND_TYPES_UITLEG = 'PDF, foto, Word, Excel, CSV, tekst of DWG/DXF · max 25 MB per bestand';
+export const BESTAND_TYPES_UITLEG = txm('PDF, foto, Word, Excel, CSV, tekst of DWG/DXF · max 25 MB per bestand');
 
 export const extensie = (naam: string | null | undefined) => (String(naam || '').split('.').pop() || '').toLowerCase();
 
@@ -46,9 +48,9 @@ export function bestandType(b: { naam: string; mime?: string | null }): string |
 
 /** Waarom dit bestand niet kan, of null. */
 export function bestandFout(b: { naam: string; mime?: string | null; grootte: number }): string | null {
-  if (!bestandType(b)) return `${b.naam}: dit soort bestand kan niet. ${BESTAND_TYPES_UITLEG}.`;
-  if (b.grootte <= 0) return `${b.naam}: het bestand is leeg.`;
-  if (b.grootte > BESTAND_MAX) return `${b.naam}: het bestand is te groot. Maximaal 25 MB.`;
+  if (!bestandType(b)) return tx('{naam}: dit soort bestand kan niet. {uitleg}.', { naam: b.naam, uitleg: tx(BESTAND_TYPES_UITLEG) });
+  if (b.grootte <= 0) return tx('{naam}: het bestand is leeg.', { naam: b.naam });
+  if (b.grootte > BESTAND_MAX) return tx('{naam}: het bestand is te groot. Maximaal 25 MB.', { naam: b.naam });
   return null;
 }
 

@@ -20,6 +20,7 @@ import {
 import { maakFactuurPdf } from '@/lib/pdf';
 import { DOCUMENT_KLANT_KOLOMMEN, type DocumentKlant } from './offerteService';
 import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
+import { tx } from '@/i18n';
 
 /**
  * Facturen (`facturen`) en factuurregels (`factuur_regels`).
@@ -38,21 +39,23 @@ import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
  */
 
 export const FACTUUR_STATUS: Record<string, string> = {
-  concept: 'Concept',
-  verzonden: 'Verzonden',
-  betaald: 'Betaald',
+  get concept() { return tx('Concept'); },
+  get verzonden() { return tx('Verzonden'); },
+  get betaald() { return tx('Betaald'); },
 };
 
-export const FACTUUR_STATUS_OPTIES = Object.entries(FACTUUR_STATUS).map(([id, label]) => ({
+export const FACTUUR_STATUS_OPTIES = Object.keys(FACTUUR_STATUS).map((id) => ({
   id,
-  label,
+  get label() {
+    return FACTUUR_STATUS[id] ?? id;
+  },
 }));
 
 /** `geboekt` komt uit de boekhoudkoppeling en staat niet in de keuzelijst. */
 export function factuurStatusLabel(status: string | null | undefined): string {
-  if (!status) return 'Concept';
-  if (status === 'geboekt') return 'Uit SnelStart';
-  if (status === 'vervallen') return 'Vervallen';
+  if (!status) return tx('Concept');
+  if (status === 'geboekt') return tx('Uit SnelStart');
+  if (status === 'vervallen') return tx('Vervallen');
   return FACTUUR_STATUS[status] ?? status;
 }
 
@@ -153,7 +156,7 @@ export async function listFacturen(
 
   if (error) {
     console.warn('[factuurService.listFacturen]', error.message);
-    return { data: [], error: 'Facturen konden niet worden geladen.' };
+    return { data: [], error: tx('Facturen konden niet worden geladen.') };
   }
   return { data: (data as unknown as FactuurRow[]) ?? [], error: null };
 }
@@ -186,7 +189,7 @@ export async function getFactuurDetail(
     .maybeSingle();
   if (error) {
     console.warn('[factuurService.getFactuurDetail]', error.message);
-    return { data: null, error: 'De factuur kon niet worden geladen.' };
+    return { data: null, error: tx('De factuur kon niet worden geladen.') };
   }
   return { data: (data as unknown as FactuurDetail | null) ?? null, error: null };
 }
@@ -223,7 +226,7 @@ export async function getFactuurRegels(
   }
   if (error) {
     console.warn('[factuurService.getFactuurRegels]', error.message);
-    return { data: [], error: 'Factuurregels konden niet worden geladen.' };
+    return { data: [], error: tx('Factuurregels konden niet worden geladen.') };
   }
   return { data: (data as unknown as FactuurRegel[]) ?? [], error: null };
 }
@@ -269,7 +272,7 @@ export async function volgendFactuurNummer(): Promise<
   const { data, error } = await supabase.rpc('bb_volgend_factuurnummer', { p_credit: false });
   if (error || typeof data !== 'string') {
     console.warn('[factuurService.volgendFactuurNummer]', error?.message);
-    return { ok: false, melding: 'Het factuurnummer kon niet worden bepaald. Probeer het opnieuw.' };
+    return { ok: false, melding: tx('Het factuurnummer kon niet worden bepaald. Probeer het opnieuw.') };
   }
   return { ok: true, nummer: data };
 }
@@ -281,7 +284,7 @@ export async function volgendCreditNummer(): Promise<
   const { data, error } = await supabase.rpc('bb_volgend_factuurnummer', { p_credit: true });
   if (error || typeof data !== 'string') {
     console.warn('[factuurService.volgendCreditNummer]', error?.message);
-    return { ok: false, melding: 'Het creditnummer kon niet worden bepaald. Probeer het opnieuw.' };
+    return { ok: false, melding: tx('Het creditnummer kon niet worden bepaald. Probeer het opnieuw.') };
   }
   return { ok: true, nummer: data };
 }
@@ -360,20 +363,15 @@ export type FactuurInput = {
 };
 
 function valideerFactuur(input: Partial<FactuurInput>): string | null {
-  for (const [veld, label] of [
-    ['factuurdatum', 'factuurdatum'],
-    ['vervaldatum', 'vervaldatum'],
-  ] as const) {
-    const v = input[veld];
-    if (v && !isGeldigeDatum(v)) return `Vul een geldige ${label} in (JJJJ-MM-DD).`;
-  }
+  if (input.factuurdatum && !isGeldigeDatum(input.factuurdatum)) return tx('Vul een geldige factuurdatum in (JJJJ-MM-DD).');
+  if (input.vervaldatum && !isGeldigeDatum(input.vervaldatum)) return tx('Vul een geldige vervaldatum in (JJJJ-MM-DD).');
   if (
     input.betaaltermijn_dagen !== undefined &&
     (!Number.isInteger(input.betaaltermijn_dagen) ||
       input.betaaltermijn_dagen < 0 ||
       input.betaaltermijn_dagen > 365)
   ) {
-    return 'Vul een betaaltermijn tussen 0 en 365 dagen in.';
+    return tx('Vul een betaaltermijn tussen 0 en 365 dagen in.');
   }
   return null;
 }
@@ -406,7 +404,7 @@ export async function createFactuur(input: FactuurInput): Promise<WriteResult<Fa
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const res = await schrijf<FactuurRow>(
@@ -415,8 +413,7 @@ export async function createFactuur(input: FactuurInput): Promise<WriteResult<Fa
       context: 'factuurService.createFactuur',
       bedrijfReadonly: isReadonly(),
       leegMelding:
-        'De factuur is niet opgeslagen. Je hebt het recht Facturen nodig, en je abonnement ' +
-        'moet ruimte hebben voor een nieuwe factuur.',
+        tx('De factuur is niet opgeslagen. Je hebt het recht Facturen nodig, en je abonnement moet ruimte hebben voor een nieuwe factuur.'),
     },
   );
   if (!res.ok) return res;
@@ -448,10 +445,10 @@ export async function updateFactuur(
   const fout = valideerFactuur(input);
   if (fout) return writeFout('validatie', fout);
   if (input.status === 'betaald') {
-    return writeFout('validatie', 'Gebruik markeerBetaald om een factuur op betaald te zetten.');
+    return writeFout('validatie', tx('Gebruik markeerBetaald om een factuur op betaald te zetten.'));
   }
   if (input.status && !(input.status in FACTUUR_STATUS)) {
-    return writeFout('validatie', 'Onbekende factuurstatus.');
+    return writeFout('validatie', tx('Onbekende factuurstatus.'));
   }
 
   const inhoudsVelden: (keyof FactuurInput)[] = [
@@ -474,14 +471,13 @@ export async function updateFactuur(
     if (isGeimporteerd(huidig)) {
       return writeFout(
         'op-slot',
-        'Deze factuur komt uit je boekhouding en kan hier niet worden gewijzigd.',
+        tx('Deze factuur komt uit je boekhouding en kan hier niet worden gewijzigd.'),
       );
     }
     if (inhoudLigtVast(huidig)) {
       return writeFout(
         'op-slot',
-        'Deze factuur is verstuurd en kan niet meer inhoudelijk wijzigen. De status en de ' +
-          'betaalstand aanpassen kan wel.',
+        tx('Deze factuur is verstuurd en kan niet meer inhoudelijk wijzigen. De status en de betaalstand aanpassen kan wel.'),
       );
     }
   }
@@ -498,7 +494,7 @@ export async function updateFactuur(
   if (input.betalingskenmerk !== undefined) updates.betalingskenmerk = input.betalingskenmerk?.trim() || null;
   if (input.status !== undefined) updates.status = input.status;
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
   updates.updated_at = new Date().toISOString();
 
   const res = await schrijf<FactuurRow>(
@@ -506,7 +502,7 @@ export async function updateFactuur(
     {
       context: 'factuurService.updateFactuur',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'Er is niets gewijzigd. Je hebt het recht Facturen nodig.',
+      leegMelding: tx('Er is niets gewijzigd. Je hebt het recht Facturen nodig.'),
     },
   );
   if (res.ok && input.status === 'verzonden') logVerzonden(res.data);
@@ -551,7 +547,7 @@ export async function markeerBetaald(
   betaaldOp?: string | null,
 ): Promise<WriteResult<{ factuur: FactuurRow; gewijzigd: boolean }>> {
   if (betaaldOp && !isGeldigeDatum(betaaldOp)) {
-    return writeFout('validatie', 'Vul een geldige betaaldatum in (JJJJ-MM-DD).');
+    return writeFout('validatie', tx('Vul een geldige betaaldatum in (JJJJ-MM-DD).'));
   }
 
   const { data, error } = await supabase.rpc('mark_factuur_betaald', {
@@ -633,7 +629,7 @@ export async function deleteFactuur(
   if (huidig && !magFactuurVerwijderen(huidig)) {
     return writeFout(
       'op-slot',
-      'Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.',
+      tx('Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.'),
     );
   }
 
@@ -643,7 +639,7 @@ export async function deleteFactuur(
       context: 'factuurService.deleteFactuur',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De factuur is niet verwijderd. Je hebt het recht Facturen nodig.',
+      leegMelding: tx('De factuur is niet verwijderd. Je hebt het recht Facturen nodig.'),
     },
   );
   if (!res.ok) {
@@ -652,7 +648,7 @@ export async function deleteFactuur(
     if (/op vervallen/i.test(res.technisch ?? '')) {
       return writeFout(
         'op-slot',
-        'Deze factuur heeft al een nummer in de reeks en kan daarom niet weg. Zet hem op Vervallen: hij blijft in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+        tx('Deze factuur heeft al een nummer in de reeks en kan daarom niet weg. Zet hem op Vervallen: hij blijft in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.'),
         'vervallen_ipv_verwijderen',
       );
     }
@@ -660,7 +656,7 @@ export async function deleteFactuur(
     if (res.soort === 'validatie' && /verstuurde factuur|creditnota/i.test(res.technisch ?? '')) {
       return writeFout(
         'op-slot',
-        'Een verstuurde factuur of creditnota kun je niet verwijderen. Maak een creditnota om hem te corrigeren.',
+        tx('Een verstuurde factuur of creditnota kun je niet verwijderen. Maak een creditnota om hem te corrigeren.'),
       );
     }
     if (res.soort === 'conflict') {
@@ -668,8 +664,7 @@ export async function deleteFactuur(
       // verdwenen factuur wijst breekt de audittrail.
       return writeFout(
         'conflict',
-        'Deze factuur is gecrediteerd en kan niet verwijderd worden. Verwijder eerst de ' +
-          'bijbehorende creditfactuur.',
+        tx('Deze factuur is gecrediteerd en kan niet verwijderd worden. Verwijder eerst de bijbehorende creditfactuur.'),
       );
     }
     return res;
@@ -702,13 +697,13 @@ export type FactuurRegelInput = {
 export async function createFactuurRegel(
   input: FactuurRegelInput,
 ): Promise<WriteResult<FactuurRegel>> {
-  if (!input.factuur_id) return writeFout('validatie', 'Er is geen factuur gekozen.');
-  if (!input.omschrijving.trim()) return writeFout('validatie', 'Vul een omschrijving in.');
+  if (!input.factuur_id) return writeFout('validatie', tx('Er is geen factuur gekozen.'));
+  if (!input.omschrijving.trim()) return writeFout('validatie', tx('Vul een omschrijving in.'));
   if (!Number.isFinite(input.aantal) || input.aantal <= 0) {
-    return writeFout('validatie', 'Vul een geldig aantal in.');
+    return writeFout('validatie', tx('Vul een geldig aantal in.'));
   }
   if (!Number.isFinite(input.eenheidsprijs) || input.eenheidsprijs < 0) {
-    return writeFout('validatie', 'Vul een geldige prijs in.');
+    return writeFout('validatie', tx('Vul een geldige prijs in.'));
   }
 
   const btwRegime = input.btw_regime || (input.btw_pct === 0 ? 'vrijgesteld' : 'normaal');
@@ -725,14 +720,14 @@ export async function createFactuurRegel(
   };
 
   const payload = withCompanyId(basis);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   return schrijf<FactuurRegel>(
     () => supabase.from('factuur_regels').insert(payload).select(REGEL_COLUMNS),
     {
       context: 'factuurService.createFactuurRegel',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Facturen nodig.',
+      leegMelding: tx('De regel is niet opgeslagen. Je hebt het recht Facturen nodig.'),
     },
   );
 }
@@ -756,7 +751,7 @@ export async function deleteFactuurRegel(id: string): Promise<WriteStatus> {
       context: 'factuurService.deleteFactuurRegel',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De regel is niet verwijderd. Je hebt het recht Facturen nodig.',
+      leegMelding: tx('De regel is niet verwijderd. Je hebt het recht Facturen nodig.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -839,13 +834,13 @@ async function maakViaRpc(
     if (/verlegd_nul_check/.test(error.message ?? '')) {
       return writeFout(
         'validatie',
-        'Bij btw verlegd of vrijgesteld hoort 0% btw. Kies het regime opnieuw en probeer het nog eens.',
+        tx('Bij btw verlegd of vrijgesteld hoort 0% btw. Kies het regime opnieuw en probeer het nog eens.'),
       );
     }
     if (error.code === '22023') return writeFout('validatie', error.message);
     return classificeerFout(error, context, isReadonly());
   }
-  if (!id) return writeFout('onbekend', 'De factuur is niet aangemaakt.');
+  if (!id) return writeFout('onbekend', tx('De factuur is niet aangemaakt.'));
 
   const { data: vers, error: leesFout } = await supabase
     .from('facturen')
@@ -880,17 +875,17 @@ export async function createFactuurMetRegels(
   regels: NieuweFactuurRegelInvoer[],
 ): Promise<WriteResult<{ factuur: FactuurRow; regels: FactuurRegel[] }>> {
   if (regels.length === 0) {
-    return writeFout('validatie', 'Voeg minimaal één regel toe.');
+    return writeFout('validatie', tx('Voeg minimaal één regel toe.'));
   }
   const fout = valideerFactuur(input);
   if (fout) return writeFout('validatie', fout);
   for (const [i, r] of regels.entries()) {
-    if (!r.omschrijving.trim()) return writeFout('validatie', `Regel ${i + 1}: vul een omschrijving in.`);
+    if (!r.omschrijving.trim()) return writeFout('validatie', tx('Regel {nr}: vul een omschrijving in.', { nr: i + 1 }));
     if (!Number.isFinite(r.aantal) || r.aantal <= 0) {
-      return writeFout('validatie', `Regel ${i + 1}: vul een geldig aantal in.`);
+      return writeFout('validatie', tx('Regel {nr}: vul een geldig aantal in.', { nr: i + 1 }));
     }
     if (!Number.isFinite(r.eenheidsprijs) || r.eenheidsprijs < 0) {
-      return writeFout('validatie', `Regel ${i + 1}: vul een geldige prijs in.`);
+      return writeFout('validatie', tx('Regel {nr}: vul een geldige prijs in.', { nr: i + 1 }));
     }
   }
 
@@ -952,11 +947,11 @@ export async function slaFactuurConceptOp(
   kop: { vervaldatum: string | null; betalingskenmerk: string; notities: string } | null,
 ): Promise<WriteStatus> {
   if (regels) {
-    if (regels.length === 0) return writeFout('validatie', 'Een factuur heeft minstens één regel nodig.');
+    if (regels.length === 0) return writeFout('validatie', tx('Een factuur heeft minstens één regel nodig.'));
     for (const [i, r] of regels.entries()) {
-      if (!r.omschrijving.trim()) return writeFout('validatie', `Regel ${i + 1}: vul een omschrijving in.`);
+      if (!r.omschrijving.trim()) return writeFout('validatie', tx('Regel {nr}: vul een omschrijving in.', { nr: i + 1 }));
       if (!Number.isFinite(r.aantal) || !Number.isFinite(r.eenheidsprijs)) {
-        return writeFout('validatie', `Regel ${i + 1}: vul een geldig aantal en een geldige prijs in.`);
+        return writeFout('validatie', tx('Regel {nr}: vul een geldig aantal en een geldige prijs in.', { nr: i + 1 }));
       }
     }
   }
@@ -1026,15 +1021,14 @@ export async function createCreditFactuur(
   if (!magCrediteren(origineel)) {
     return writeFout(
       'op-slot',
-      'Deze factuur kan niet gecrediteerd worden. Alleen een verzonden of betaalde factuur ' +
-        'die nog niet gecrediteerd is, kan een creditfactuur krijgen.',
+      tx('Deze factuur kan niet gecrediteerd worden. Alleen een verzonden of betaalde factuur die nog niet gecrediteerd is, kan een creditfactuur krijgen.'),
     );
   }
 
   const regelRes = await getFactuurRegels(origineelId);
   if (regelRes.error) return writeFout('onbekend', regelRes.error);
   if (regelRes.data.length === 0) {
-    return writeFout('validatie', 'Deze factuur heeft geen regels om te crediteren.');
+    return writeFout('validatie', tx('Deze factuur heeft geen regels om te crediteren.'));
   }
 
   const nummerRes = await volgendCreditNummer();
@@ -1043,7 +1037,7 @@ export async function createCreditFactuur(
   // Kop, regels en `gecrediteerd = true` op het origineel in één transactie,
   // zoals het dashboard. De totalen rekent de databasetrigger uit de regels.
   if (gekozenRegels && gekozenRegels.length === 0) {
-    return writeFout('validatie', 'Selecteer minimaal één regel.');
+    return writeFout('validatie', tx('Selecteer minimaal één regel.'));
   }
   const credit = bouwCreditFactuur(gekozenRegels ?? regelRes.data);
   const kop: Record<string, unknown> = {

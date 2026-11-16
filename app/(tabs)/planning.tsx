@@ -79,12 +79,22 @@ import { useOnthouden } from '@/lib/useOnthouden';
 import { listDeals } from '@/services/dealService';
 import { getCompanySettings } from '@/services/settingsService';
 import { AfspraakExtra } from '@/components/planning/AfspraakExtra';
+import { tx, txn, txm, locale } from '@/i18n';
 
 type ViewMode = 'dag' | 'week' | 'maand';
 
-const NL_DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-const SHORT_DATE = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' });
-const MONTH_YEAR = new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric' });
+const NL_DAYS_SHORT = [txm('Ma'), txm('Di'), txm('Wo'), txm('Do'), txm('Vr'), txm('Za'), txm('Zo')];
+const SHORT_DATE = () => new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' });
+const MONTH_YEAR = () => new Intl.DateTimeFormat(locale(), { month: 'long', year: 'numeric' });
+
+/** "Ma" … "Zo" voor een datum, vertaald. */
+const dagKort = (d: Date) => tx(NL_DAYS_SHORT[(d.getDay() + 6) % 7] ?? '');
+
+const VIEW_LABELS: Record<ViewMode, string> = {
+  dag: txm('Dag'),
+  week: txm('Week'),
+  maand: txm('Maand'),
+};
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -96,10 +106,10 @@ function cap(s: string) {
 
 /** Typelabels van `calendar_events` (dashboard calendarService). */
 const EVENT_TYPE_LABEL: Record<string, string> = {
-  job: 'Klus',
-  visit: 'Opname',
-  activity: 'Activiteit',
-  event: 'Afspraak',
+  job: txm('Klus'),
+  visit: txm('Opname'),
+  activity: txm('Activiteit'),
+  event: txm('Afspraak'),
 };
 
 function eventType(e: AgendaEvent): string {
@@ -135,7 +145,7 @@ function eventNaarItem(e: AgendaEvent): PlanningItem {
     id: `event-${e.id}`,
     source: 'calendar_event',
     number: null,
-    title: e.title ?? 'Afspraak',
+    title: e.title ?? tx('Afspraak'),
     customerName: e.customer?.name ?? null,
     customerId: e.customer_id,
     description: e.notes,
@@ -148,7 +158,7 @@ function eventNaarItem(e: AgendaEvent): PlanningItem {
     assigneeName: null,
     assigneeId: e.assigned_to,
     workOrderId: null,
-    typeLabel: EVENT_TYPE_LABEL[eventType(e)] ?? 'Afspraak',
+    typeLabel: tx(EVENT_TYPE_LABEL[eventType(e)] ?? 'Afspraak'),
   };
 }
 
@@ -243,15 +253,15 @@ export default function PlanningScreen() {
       ]);
 
       if (evRes.error && wbRes.error) {
-        setError('Agenda laden is mislukt.');
+        setError(tx('Agenda laden is mislukt.'));
         setItems([]);
         return;
       }
       setDeelFout(
         evRes.error
-          ? 'Je afspraken konden niet worden geladen; alleen de werkbonnen staan hieronder.'
+          ? tx('Je afspraken konden niet worden geladen; alleen de werkbonnen staan hieronder.')
           : wbRes.error
-            ? 'De werkbonnen konden niet worden geladen; alleen je afspraken staan hieronder.'
+            ? tx('De werkbonnen konden niet worden geladen; alleen je afspraken staan hieronder.')
             : null,
       );
 
@@ -274,7 +284,7 @@ export default function PlanningScreen() {
           id: i.sleutel,
           source: 'work_order',
           number: w.nummer,
-          title: w.titel || 'Werkbon',
+          title: w.titel || tx('Werkbon'),
           customerName: w.customer?.name ?? null,
           customerId: w.customer_id,
           description: null,
@@ -287,7 +297,7 @@ export default function PlanningScreen() {
           assigneeName: null,
           assigneeId: null,
           workOrderId: w.id,
-          typeLabel: voertuig ? `Werkbon · ${voertuig}` : 'Werkbon',
+          typeLabel: voertuig ? tx('Werkbon · {voertuig}', { voertuig }) : tx('Werkbon'),
         };
       });
 
@@ -299,11 +309,11 @@ export default function PlanningScreen() {
       // mislukt hij, dan blijft de afspraak gewoon te maken — zonder klant.
       const [klantRes, dealRes, instRes] = await Promise.all([listCustomers(), listDeals(), getCompanySettings()]);
       if (!klantRes.error) {
-        setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
+        setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? tx('Klant') })));
       }
       if (!dealRes.error) {
         setProjectOpties(
-          dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Project', sub: d.customer?.name ?? undefined })),
+          dealRes.data.map((d) => ({ id: d.id, label: d.title ?? tx('Project'), sub: d.customer?.name ?? undefined })),
         );
       }
       // Het uurvenster van de agenda, zoals ingesteld (Instellingen › Agenda).
@@ -341,24 +351,24 @@ export default function PlanningScreen() {
     view === 'dag'
       ? formatPlanningDate(selectedDate)
       : view === 'week'
-        ? `${SHORT_DATE.format(range.start)} – ${SHORT_DATE.format(range.end)} · wk ${getWeekNumber(selectedDate)}`
-        : cap(MONTH_YEAR.format(selectedDate));
+        ? `${SHORT_DATE().format(range.start)} – ${SHORT_DATE().format(range.end)} · ${tx('wk {n}', { n: getWeekNumber(selectedDate) })}`
+        : cap(MONTH_YEAR().format(selectedDate));
 
   const subtitle =
     view === 'dag'
       ? isSameLocalDay(selectedDate, today)
-        ? 'Je agenda voor vandaag'
+        ? tx('Je agenda voor vandaag')
         : formatPlanningDate(selectedDate)
       : view === 'week'
-        ? 'Je agenda voor deze week'
-        : 'Overzicht van deze maand';
+        ? tx('Je agenda voor deze week')
+        : tx('Overzicht van deze maand');
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const onCall = (p: PlanningItem) => {
-    if (!callPhone(p.phone)) notAvailableAlert('Bellen', 'Geen telefoonnummer bekend.');
+    if (!callPhone(p.phone)) notAvailableAlert(tx('Bellen'), tx('Geen telefoonnummer bekend.'));
   };
   const onRoute = (p: PlanningItem) => {
-    if (!openMaps(p.address)) notAvailableAlert('Navigeren', 'Geen adres bekend.');
+    if (!openMaps(p.address)) notAvailableAlert(tx('Navigeren'), tx('Geen adres bekend.'));
   };
   const openItem = (p: PlanningItem) => {
     if (p.workOrderId) return router.push(`/work-orders/${p.workOrderId}`);
@@ -436,7 +446,7 @@ export default function PlanningScreen() {
   const afspraakVerwijderen = () => {
     if (!afspraak?.id) return;
     const id = afspraak.id;
-    bevestigVerwijderen('Afspraak', () => {
+    bevestigVerwijderen(tx('Afspraak'), () => {
       save(() => deleteAfspraak(id), {
         onSuccess: async () => {
           setAfspraak(null);
@@ -451,13 +461,13 @@ export default function PlanningScreen() {
       <AppScreen
         header={
           <AppTopBar
-            title="Agenda"
+            title={tx('Agenda')}
             subtitle={subtitle}
             rightAction={
               rechtenGeladen && mag('agenda', 'maken') ? (
                 <HeaderIconButton
                   icon={Plus}
-                  label="Nieuwe afspraak"
+                  label={tx('Nieuwe afspraak')}
                   size={42}
                   onPress={nieuweAfspraak}
                 />
@@ -483,7 +493,7 @@ export default function PlanningScreen() {
                   onPress={() => setView(v)}
                   style={[styles.toggleBtn, on && [styles.toggleBtnOn, dsShadow]]}
                 >
-                  <Text style={[styles.toggleLabel, on && styles.toggleLabelOn]}>{cap(v)}</Text>
+                  <Text style={[styles.toggleLabel, on && styles.toggleLabelOn]}>{tx(VIEW_LABELS[v])}</Text>
                 </Pressable>
               );
             })}
@@ -496,7 +506,7 @@ export default function PlanningScreen() {
             accessibilityRole="button"
             onPress={() => step(-1)}
             hitSlop={6}
-            accessibilityLabel="Vorige periode"
+            accessibilityLabel={tx('Vorige periode')}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronLeft size={20} color={th.ink} strokeWidth={2.4} />
@@ -508,16 +518,16 @@ export default function PlanningScreen() {
             accessibilityRole="button"
             onPress={goToday}
             hitSlop={6}
-            accessibilityLabel="Naar vandaag"
+            accessibilityLabel={tx('Naar vandaag')}
             style={({ pressed }) => [styles.todayBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.todayBtnText}>Vandaag</Text>
+            <Text style={styles.todayBtnText}>{tx('Vandaag')}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => step(1)}
             hitSlop={6}
-            accessibilityLabel="Volgende periode"
+            accessibilityLabel={tx('Volgende periode')}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronRight size={20} color={th.ink} strokeWidth={2.4} />
@@ -581,8 +591,8 @@ export default function PlanningScreen() {
         {!loading && !error && items.length > 0 ? (
           <Text style={[styles.scopeNote, { color: th.muted }]}>
             {gedeeld
-              ? 'Gedeelde agenda: afspraken en werkbonnen van het hele team'
-              : 'Je eigen agenda: jouw afspraken en de werkbondagen waarop jij staat'}
+              ? tx('Gedeelde agenda: afspraken en werkbonnen van het hele team')
+              : tx('Je eigen agenda: jouw afspraken en de werkbondagen waarop jij staat')}
           </Text>
         ) : null}
       </AppScreen>
@@ -593,7 +603,7 @@ export default function PlanningScreen() {
       <FormSheet
         visible={afspraak !== null}
         title={
-          !afspraak?.id ? 'Nieuwe afspraak' : afspraak.magBewerken ? 'Afspraak bewerken' : 'Afspraak'
+          !afspraak?.id ? tx('Nieuwe afspraak') : afspraak.magBewerken ? tx('Afspraak bewerken') : tx('Afspraak')
         }
         error={saveError}
         saving={saving}
@@ -609,38 +619,38 @@ export default function PlanningScreen() {
         onClose={() => setAfspraak(null)}
         destructive={
           afspraak?.id && afspraak.magBewerken && mag('agenda', 'verwijderen')
-            ? { label: 'Afspraak verwijderen', onPress: afspraakVerwijderen }
+            ? { label: tx('Afspraak verwijderen'), onPress: afspraakVerwijderen }
             : undefined
         }
       >
         {afspraak?.id && !afspraak.magBewerken ? (
           <NoticeBanner
             toon="info"
-            message="Alleen-lezen: dit item komt uit de planning of is van een collega. Wijzigen kan met het recht Planning."
+            message={tx('Alleen-lezen: dit item komt uit de planning of is van een collega. Wijzigen kan met het recht Planning.')}
           />
         ) : null}
         <FormField
-          label="Titel"
+          label={tx('Titel')}
           value={afspraak?.title ?? ''}
           onChangeText={(v) => setAfspraak((c) => (c ? { ...c, title: v } : c))}
-          placeholder="Bijv. Inmeten bij Jansen"
+          placeholder={tx('Bijv. Inmeten bij Jansen')}
           autoFocus={!afspraak?.id}
         />
         <SelectField
-          label="Type"
+          label={tx('Type')}
           value={afspraak?.type ?? 'event'}
-          options={AFSPRAAK_TYPES.map((x) => ({ id: x.id, label: x.label }))}
+          options={AFSPRAAK_TYPES.map((x) => ({ id: x.id, label: tx(x.label) }))}
           onChange={(id) => setAfspraak((c) => (c ? { ...c, type: (id as AfspraakType) ?? 'event' } : c))}
         />
         <DateField
-          label="Datum"
+          label={tx('Datum')}
           value={afspraak?.date ?? null}
           onChange={(v) => setAfspraak((c) => (c ? { ...c, date: v } : c))}
         />
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
             <TimeField
-              label="Van"
+              label={tx('Van')}
               value={afspraak?.time || null}
               onChange={(v) =>
                 setAfspraak((c) => {
@@ -651,42 +661,42 @@ export default function PlanningScreen() {
                   return { ...c, time: v, end: eind };
                 })
               }
-              placeholder="Kies"
+              placeholder={tx('Kies')}
             />
           </View>
           <View style={{ flex: 1 }}>
             <TimeField
-              label="Tot"
+              label={tx('Tot')}
               value={afspraak?.end || null}
               onChange={(v) => setAfspraak((c) => (c ? { ...c, end: v } : c))}
-              placeholder="Kies"
-              hint="Leeg = een uur"
+              placeholder={tx('Kies')}
+              hint={tx('Leeg = een uur')}
             />
           </View>
         </View>
         {afspraak?.time && afspraak?.end && minutenVanTijd(afspraak.end) <= minutenVanTijd(afspraak.time) ? (
           <NoticeBanner
             toon="waarschuwing"
-            message="De eindtijd ligt vóór de begintijd. Kies een latere eindtijd."
+            message={tx('De eindtijd ligt vóór de begintijd. Kies een latere eindtijd.')}
           />
         ) : null}
         <SelectField
-          label="Klant"
+          label={tx('Klant')}
           value={afspraak?.customerId ?? null}
           options={klanten}
           onChange={(id) => setAfspraak((c) => (c ? { ...c, customerId: id } : c))}
           allowEmpty
-          emptyLabel="Geen klant"
-          placeholder="Geen klant"
+          emptyLabel={tx('Geen klant')}
+          placeholder={tx('Geen klant')}
         />
         <SelectField
-          label="Project"
+          label={tx('Project')}
           value={afspraak?.dealId ?? null}
           options={projectOpties}
           onChange={(id) => setAfspraak((c) => (c ? { ...c, dealId: id } : c))}
           allowEmpty
-          emptyLabel="Geen project"
-          placeholder="Geen project"
+          emptyLabel={tx('Geen project')}
+          placeholder={tx('Geen project')}
           searchable
         />
         {afspraak?.id && (afspraak.customerId || afspraak.dealId) ? (
@@ -701,7 +711,7 @@ export default function PlanningScreen() {
                   router.push(`/customers/${id}`);
                 }}
               >
-                <Text style={styles.afspraakLink}>Klant openen ›</Text>
+                <Text style={styles.afspraakLink}>{tx('Klant openen ›')}</Text>
               </Pressable>
             ) : null}
             {afspraak.dealId ? (
@@ -714,24 +724,24 @@ export default function PlanningScreen() {
                   router.push(`/deal/${id}`);
                 }}
               >
-                <Text style={styles.afspraakLink}>Project openen ›</Text>
+                <Text style={styles.afspraakLink}>{tx('Project openen ›')}</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
         <AdresZoeker
-          label="Locatie"
+          label={tx('Locatie')}
           volledigAdres
           value={afspraak?.location ?? ''}
           onChangeText={(v) => setAfspraak((c) => (c ? { ...c, location: v } : c))}
-          placeholder="Adres of omschrijving van de plek"
-          hint="Kies een adres uit de lijst, of typ zelf een omschrijving van de plek."
+          placeholder={tx('Adres of omschrijving van de plek')}
+          hint={tx('Kies een adres uit de lijst, of typ zelf een omschrijving van de plek.')}
         />
         <FormField
-          label="Notities"
+          label={tx('Notities')}
           value={afspraak?.notes ?? ''}
           onChangeText={(v) => setAfspraak((c) => (c ? { ...c, notes: v } : c))}
-          placeholder="Optioneel"
+          placeholder={tx('Optioneel')}
           multiline
         />
         {afspraak?.id ? (
@@ -795,7 +805,11 @@ function DagView({
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               aria-pressed={on}
-              accessibilityLabel={`${NL_DAYS_SHORT[(d.getDay() + 6) % 7]} ${d.getDate()}${heeftWerk ? ', heeft werk' : ''}`}
+              accessibilityLabel={
+                heeftWerk
+                  ? tx('{dag} {datum}, heeft werk', { dag: dagKort(d), datum: d.getDate() })
+                  : `${dagKort(d)} ${d.getDate()}`
+              }
               style={({ pressed }) => [
                 styles.weekDay,
                 on && styles.weekDayOn,
@@ -804,7 +818,7 @@ function DagView({
               ]}
             >
               <Text style={[styles.weekDayLabel, on && styles.weekDayLabelOn]}>
-                {NL_DAYS_SHORT[(d.getDay() + 6) % 7]}
+                {dagKort(d)}
               </Text>
               <Text style={[styles.weekDayNum, on && styles.weekDayNumOn]}>{d.getDate()}</Text>
               <View
@@ -828,9 +842,9 @@ function DagView({
         agendaUren={agendaUren}
       />
 
-      <AppSection title="Tijdlijn" count={items.length} />
+      <AppSection title={tx('Tijdlijn')} count={items.length} />
       {items.length === 0 ? (
-        <EmptyCard message="Geen afspraken gepland voor deze dag." />
+        <EmptyCard message={tx('Geen afspraken gepland voor deze dag.')} />
       ) : (
         <View style={{ paddingHorizontal: 16, gap: 10 }}>
           {items.map((p) => (
@@ -1060,9 +1074,9 @@ function WeekView({
   return (
     <>
       <View style={styles.periodeKop}>
-        <Text style={styles.periodeTitel}>Week {getWeekNumber(selectedDate)}</Text>
+        <Text style={styles.periodeTitel}>{tx('Week {n}', { n: getWeekNumber(selectedDate) })}</Text>
         <Text style={styles.periodeMeta}>
-          {totalCount} {totalCount === 1 ? 'item' : 'items'}
+          {txn('{n} item', '{n} items', totalCount)}
         </Text>
       </View>
 
@@ -1085,7 +1099,10 @@ function WeekView({
               key={key}
               onPress={() => onPickDay(d)}
               accessibilityRole="button"
-              accessibilityLabel={`${NL_DAYS_SHORT[(d.getDay() + 6) % 7]} ${d.getDate()}, ${lijst.length} items`}
+              accessibilityLabel={txn('{dag} {datum}, {n} item', '{dag} {datum}, {n} items', lijst.length, {
+                dag: dagKort(d),
+                datum: d.getDate(),
+              })}
               style={({ pressed }) => [
                 styles.weekKolom,
                 isToday && styles.weekKolomVandaag,
@@ -1131,21 +1148,21 @@ function WeekView({
                 on && !isToday && { color: th.ink, fontWeight: '700' },
               ]}
             >
-              {NL_DAYS_SHORT[(d.getDay() + 6) % 7]} {d.getDate()}
+              {dagKort(d)} {d.getDate()}
             </Text>
           );
         })}
       </View>
 
-      <Text style={styles.weekHint}>Tik op een dag om de dagplanning te openen.</Text>
+      <Text style={styles.weekHint}>{tx('Tik op een dag om de dagplanning te openen.')}</Text>
 
       {totalCount === 0 ? (
-        <EmptyCard message="Geen agenda deze week." />
+        <EmptyCard message={tx('Geen agenda deze week.')} />
       ) : (
         <>
           <AppSection title={cap(formatPlanningDate(selectedDate))} count={dayItems.length} />
           {dayItems.length === 0 ? (
-            <EmptyCard message="Geen afspraken op deze dag." />
+            <EmptyCard message={tx('Geen afspraken op deze dag.')} />
           ) : (
             <View style={{ paddingHorizontal: 16, gap: 10 }}>
               {dayItems.map((p) => (
@@ -1196,9 +1213,9 @@ function MaandView({
   return (
     <>
       <View style={styles.periodeKop}>
-        <Text style={styles.periodeTitel}>{cap(MONTH_YEAR.format(selectedDate))}</Text>
+        <Text style={styles.periodeTitel}>{cap(MONTH_YEAR().format(selectedDate))}</Text>
         <Text style={styles.periodeMeta}>
-          {totalCount} {totalCount === 1 ? 'item' : 'items'}
+          {txn('{n} item', '{n} items', totalCount)}
         </Text>
       </View>
 
@@ -1206,7 +1223,7 @@ function MaandView({
         <View style={styles.monthHeaderRow}>
           {NL_DAYS_SHORT.map((d) => (
             <Text key={d} style={styles.monthHeaderCell}>
-              {d}
+              {tx(d)}
             </Text>
           ))}
         </View>
@@ -1255,12 +1272,12 @@ function MaandView({
       </View>
 
       {totalCount === 0 ? (
-        <EmptyCard message="Geen agenda deze maand." />
+        <EmptyCard message={tx('Geen agenda deze maand.')} />
       ) : (
         <>
           <AppSection title={cap(formatPlanningDate(selectedDate))} count={dayItems.length} />
           {dayItems.length === 0 ? (
-            <EmptyCard message="Geen afspraken op deze dag." />
+            <EmptyCard message={tx('Geen afspraken op deze dag.')} />
           ) : (
             <View style={{ paddingHorizontal: 16, gap: 10 }}>
               {dayItems.map((p) => (
@@ -1302,7 +1319,7 @@ function PlanningCard({
     ? endLabel
       ? `${startLabel} – ${endLabel}`
       : startLabel
-    : 'Hele dag';
+    : tx('Hele dag');
   // Een eigen afspraak opent het formulier, ook zonder klant (openItem).
   const tappable = !!item.workOrderId || !!item.customerId || item.source === 'calendar_event';
 
@@ -1366,19 +1383,19 @@ function PlanningCard({
         {!compact ? (
           <View style={styles.cardActions}>
             {item.phone ? (
-              <MiniBtn icon={<Phone size={13} color={th.ink} strokeWidth={2} />} label="Bel" onPress={() => onCall(item)} />
+              <MiniBtn icon={<Phone size={13} color={th.ink} strokeWidth={2} />} label={tx('Bel')} onPress={() => onCall(item)} />
             ) : null}
             {item.address ? (
               <MiniBtn
                 icon={<NavigationIcon size={13} color={th.ink} strokeWidth={2} />}
-                label="Route"
+                label={tx('Route')}
                 onPress={() => onRoute(item)}
               />
             ) : null}
             {item.workOrderId ? (
               <MiniBtn
                 icon={<ClipboardList size={13} color={th.ink} strokeWidth={2} />}
-                label="Werkbon"
+                label={tx('Werkbon')}
                 onPress={() => onOpen(item)}
               />
             ) : null}
@@ -1413,7 +1430,7 @@ function LoadingCard() {
   return (
     <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
       <AppCard padding={26} style={{ alignItems: 'center' }}>
-        <Text style={{ color: th.muted, fontSize: 13 }}>Agenda wordt geladen…</Text>
+        <Text style={{ color: th.muted, fontSize: 13 }}>{tx('Agenda wordt geladen…')}</Text>
       </AppCard>
     </View>
   );
@@ -1424,9 +1441,9 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
   return (
     <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
       <AppCard padding={20} style={{ alignItems: 'center', gap: 8 }}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: th.ink }}>Agenda niet geladen</Text>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: th.ink }}>{tx('Agenda niet geladen')}</Text>
         <Text style={{ fontSize: 13, color: th.muted, textAlign: 'center' }}>
-          {message} Controleer je verbinding en probeer opnieuw.
+          {message} {tx('Controleer je verbinding en probeer opnieuw.')}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -1436,7 +1453,7 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void 
             pressed && { opacity: 0.85 },
           ]}
         >
-          <Text style={{ color: ds.greenInk, fontWeight: '700' }}>Opnieuw proberen</Text>
+          <Text style={{ color: ds.greenInk, fontWeight: '700' }}>{tx('Opnieuw proberen')}</Text>
         </Pressable>
       </AppCard>
     </View>
@@ -1451,7 +1468,7 @@ function EmptyCard({ message }: { message: string }) {
         <View style={styles.emptyIcon}>
           <CalendarIcon size={28} color={ds.green} strokeWidth={1.8} />
         </View>
-        <Text style={styles.emptyTitle}>Geen afspraken gepland</Text>
+        <Text style={styles.emptyTitle}>{tx('Geen afspraken gepland')}</Text>
         <Text style={styles.emptyBody}>{message}</Text>
       </View>
     </View>

@@ -15,6 +15,7 @@ import { negeerRelatieBijImport } from './leverancierService';
 import type { FactuurVoorTotaal, PlanWerkbon } from '@/lib/relaties';
 import type { ActivityRow } from './activityService';
 import { metProjectBedragen } from './projectService';
+import { tx } from '@/i18n';
 
 /**
  * Columns we actually need. We intentionally do NOT select `updated_at`:
@@ -82,7 +83,7 @@ export async function listCustomers(): Promise<{
 
     // Real failure (RLS, network, etc.) — stop and report.
     console.warn('[customerService.listCustomers]', error.message);
-    return { data: [], error: 'Klanten konden niet worden geladen.' };
+    return { data: [], error: tx('Klanten konden niet worden geladen.') };
   }
 
   // Final fallback: no sort at all.
@@ -91,7 +92,7 @@ export async function listCustomers(): Promise<{
   );
   if (error) {
     console.warn('[customerService.listCustomers] unsorted fallback', error.message);
-    return { data: [], error: 'Klanten konden niet worden geladen.' };
+    return { data: [], error: tx('Klanten konden niet worden geladen.') };
   }
   return { data: (data as unknown as Customer[]) ?? [], error: null };
 }
@@ -165,10 +166,9 @@ export async function createCustomer(
     const fout = classificeerFout(error, 'customerService.createCustomer', isReadonly());
     const msg =
       fout.soort === 'geen-rechten'
-        ? 'Klant niet opgeslagen: je hebt geen recht om klanten aan te maken, of de ' +
-          'klantenlimiet van je abonnement is bereikt (Instellingen → Abonnement).'
+        ? tx('Klant niet opgeslagen: je hebt geen recht om klanten aan te maken, of de klantenlimiet van je abonnement is bereikt (Instellingen → Abonnement).')
         : fout.soort === 'onbekend'
-          ? 'Klant kon niet worden opgeslagen. Probeer het opnieuw.'
+          ? tx('Klant kon niet worden opgeslagen. Probeer het opnieuw.')
           : fout.melding;
     return { data: null, error: msg };
   }
@@ -202,7 +202,7 @@ export async function getCustomer(
 
   if (error) {
     console.warn('[customerService.getCustomer]', error.message);
-    return { data: null, error: 'Klant kon niet worden geladen.' };
+    return { data: null, error: tx('Klant kon niet worden geladen.') };
   }
   return { data: (data as unknown as Customer | null) ?? null, error: null };
 }
@@ -230,10 +230,10 @@ export async function updateCustomer(
   input: UpdateCustomerInput,
 ): Promise<WriteResult<Customer>> {
   if (input.name !== undefined && !input.name.trim()) {
-    return writeFout('validatie', 'De klantnaam mag niet leeg zijn.');
+    return writeFout('validatie', tx('De klantnaam mag niet leeg zijn.'));
   }
   if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email.trim())) {
-    return writeFout('validatie', 'Dit e-mailadres klopt niet.');
+    return writeFout('validatie', tx('Dit e-mailadres klopt niet.'));
   }
 
   const updates: Record<string, unknown> = {};
@@ -259,7 +259,7 @@ export async function updateCustomer(
   if (input.betaaltermijn_dagen !== undefined) updates.betaaltermijn_dagen = input.betaaltermijn_dagen;
   if (typeof updates.notes === 'string') updates.notes = alsHtml(updates.notes);
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<Customer>(
     () => supabase.from('customers').update(updates).eq('id', id).select(SAFE_COLUMNS),
@@ -267,9 +267,7 @@ export async function updateCustomer(
       context: 'customerService.updateCustomer',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding:
-        'De klant is niet gewijzigd. Je hebt het recht Klanten bewerken nodig, of de klant ' +
-        'bestaat niet meer.',
+      leegMelding: tx('De klant is niet gewijzigd. Je hebt het recht Klanten bewerken nodig, of de klant bestaat niet meer.'),
     },
   );
 }
@@ -290,7 +288,7 @@ export async function deleteCustomer(id: string): Promise<WriteStatus & { waarsc
       context: 'customerService.deleteCustomer',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De klant is niet verwijderd. Je hebt het recht Klanten verwijderen nodig.',
+      leegMelding: tx('De klant is niet verwijderd. Je hebt het recht Klanten verwijderen nodig.'),
     },
   );
   // FK's op de live database: aanvragen (deals), activiteiten, klanttijdlijn en
@@ -301,7 +299,7 @@ export async function deleteCustomer(id: string): Promise<WriteStatus & { waarsc
   if (!res.ok && res.soort === 'conflict') {
     return writeFout(
       'conflict',
-      'Deze klant heeft nog agenda-afspraken (direct of via een aanvraag). Verwijder die eerst in de agenda.',
+      tx('Deze klant heeft nog agenda-afspraken (direct of via een aanvraag). Verwijder die eerst in de agenda.'),
     );
   }
   if (!res.ok) return res;
@@ -332,7 +330,7 @@ export async function listFactuurTotaalRijen(): Promise<{
   );
   if (error) {
     console.warn('[customerService.listFactuurTotaalRijen]', error.message);
-    return { data: [], error: 'Bedragen konden niet worden geladen.' };
+    return { data: [], error: tx('Bedragen konden niet worden geladen.') };
   }
   return { data: (data as unknown as FactuurVoorTotaal[]) ?? [], error: null };
 }
@@ -406,7 +404,7 @@ export const listKlantOffertes = (customerId: string): Lijst<KlantOfferte> =>
     customerId,
     'created_at',
     'listKlantOffertes',
-    'Offertes konden niet worden geladen.',
+    tx('Offertes konden niet worden geladen.'),
   );
 
 export const listKlantFacturen = (customerId: string): Lijst<KlantFactuur> =>
@@ -417,7 +415,7 @@ export const listKlantFacturen = (customerId: string): Lijst<KlantFactuur> =>
     customerId,
     'created_at',
     'listKlantFacturen',
-    'Facturen konden niet worden geladen.',
+    tx('Facturen konden niet worden geladen.'),
   );
 
 /**
@@ -432,7 +430,7 @@ export const listKlantProjecten = async (customerId: string): Lijst<KlantProject
     customerId,
     'created_at',
     'listKlantProjecten',
-    'Projecten konden niet worden geladen.',
+    tx('Projecten konden niet worden geladen.'),
   );
   if (res.error || !res.data.length) return { data: [], error: res.error };
   const metBedrag = await metProjectBedragen(res.data);
@@ -449,7 +447,7 @@ export const listKlantActiviteiten = (customerId: string): Lijst<ActivityRow> =>
     customerId,
     'due_at',
     'listKlantActiviteiten',
-    'Activiteiten konden niet worden geladen.',
+    tx('Activiteiten konden niet worden geladen.'),
   );
 
 const WERKBON_KOLOMMEN =
@@ -467,7 +465,7 @@ export async function listKlantWerkbonnen(customerId: string): Lijst<KlantWerkbo
     customerId,
     'gepland_op',
     'listKlantWerkbonnen',
-    'Werkbonnen konden niet worden geladen.',
+    tx('Werkbonnen konden niet worden geladen.'),
   );
   if (!met.error) {
     return { data: met.data.map(({ werkbon_dagen, ...w }) => ({ ...w, dagen: werkbon_dagen ?? [] })), error: null };
@@ -478,6 +476,6 @@ export async function listKlantWerkbonnen(customerId: string): Lijst<KlantWerkbo
     customerId,
     'gepland_op',
     'listKlantWerkbonnen',
-    'Werkbonnen konden niet worden geladen.',
+    tx('Werkbonnen konden niet worden geladen.'),
   );
 }

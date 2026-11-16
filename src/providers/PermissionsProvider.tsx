@@ -21,6 +21,7 @@ import {
 } from '@/lib/permissions';
 import { setSessionStand } from '@/lib/sessionContext';
 import { useAuth } from './AuthProvider';
+import { tx } from '@/i18n';
 
 /**
  * Rechten en abonnementsstand, uit dezelfde twee bronnen als het dashboard:
@@ -128,14 +129,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
     if (permRes.error) {
       if (__DEV__) console.log('[PermissionsProvider] rechten laden mislukt', permRes.error);
-      error = 'Je rechten konden niet worden geladen.';
+      error = tx('Je rechten konden niet worden geladen.');
     } else {
       granted = ((permRes.data as { permission: string }[]) ?? []).map((r) => r.permission);
     }
 
     if (planRes.error) {
       if (__DEV__) console.log('[PermissionsProvider] plan laden mislukt', planRes.error);
-      error = error ?? 'De abonnementsgegevens konden niet worden geladen.';
+      error = error ?? tx('De abonnementsgegevens konden niet worden geladen.');
     } else {
       planStatus = (planRes.data as PlanStatus) ?? null;
     }
@@ -208,16 +209,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const gateWeigering = (gate: ActionGate): string | null => {
       if (gate.roles && !gate.roles.includes(role ?? '')) {
         return gate.roles.length === 1 && gate.roles[0] === 'admin'
-          ? 'Alleen een beheerder kan dit.'
-          : 'Je rol geeft hier geen toegang toe.';
+          ? tx('Alleen een beheerder kan dit.')
+          : tx('Je rol geeft hier geen toegang toe.');
       }
       // Acties zijn schrijven: strikt, zoals `magBewerken` in het dashboard
       // (de gedeelde werkruimte geeft alleen inzage).
       if (gate.permission && !canWithRole(gate.permission, role, granted)) {
-        return 'Je hebt hier geen rechten voor.';
+        return tx('Je hebt hier geen rechten voor.');
       }
       if (gate.feature && !hasFeature(gate.feature)) {
-        return 'Dit zit niet in je huidige abonnement.';
+        return tx('Dit zit niet in je huidige abonnement.');
       }
       if (gate.readonlyBlokkeert && readonly) {
         return readonlyTekst(planStatus?.readonlyReden ?? null).titel;
@@ -226,10 +227,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     };
 
     const waaromNiet = (module: string, actie: string): string | null => {
-      if (!loaded) return 'Rechten worden nog geladen.';
+      if (!loaded) return tx('Rechten worden nog geladen.');
       const gate = actieGate(module, actie);
       // Geen regel in de matrix = geen mobiele actie. Niet stilzwijgend toestaan.
-      if (!gate) return 'Deze actie bestaat niet in de app.';
+      if (!gate) return tx('Deze actie bestaat niet in de app.');
       return gateWeigering(gate);
     };
 

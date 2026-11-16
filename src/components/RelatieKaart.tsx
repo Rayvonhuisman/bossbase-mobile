@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * Bouwstenen voor de klantkaart en de leverancierskaart, zodat beide er
@@ -77,7 +78,7 @@ export function KaartBlok({
           <Pressable
             onPress={onToevoegen}
             accessibilityRole="button"
-            accessibilityLabel={toevoegLabel ?? `${titel} toevoegen`}
+            accessibilityLabel={toevoegLabel ?? tx('{titel} toevoegen', { titel })}
             style={({ pressed }) => [styles.plus, pressed && { opacity: 0.7 }]}
           >
             <Plus size={18} color={t.ink} strokeWidth={2.2} />

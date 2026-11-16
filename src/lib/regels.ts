@@ -22,6 +22,7 @@
  * omzetting naar de database staat in de servicelaag, niet hier.
  */
 
+import { tx } from '@/i18n';
 import { getalOfNul } from './getalNl';
 
 // ── Regeltypes (regelTypes.js in het dashboard) ────────────────────────────
@@ -38,15 +39,15 @@ export type RegelTypeConfig = {
 };
 
 const VAST: Record<string, RegelTypeConfig> = {
-  uren: { value: 'uren', label: 'Uren', omschrijvingFallback: 'Arbeidsuren', eenheid: 'u' },
-  km: { value: 'km', label: 'Km', omschrijvingFallback: 'Reisvergoeding', eenheid: 'km' },
-  vast: { value: 'vast', label: 'Overig', omschrijvingFallback: 'Overige kosten', eenheid: '' },
+  uren: { value: 'uren', get label() { return tx('Uren'); }, omschrijvingFallback: 'Arbeidsuren', eenheid: 'u' },
+  km: { value: 'km', get label() { return tx('Km'); }, omschrijvingFallback: 'Reisvergoeding', eenheid: 'km' },
+  vast: { value: 'vast', get label() { return tx('Overig'); }, omschrijvingFallback: 'Overige kosten', eenheid: '' },
 };
 
 /** Verwijderde types; blijven leesbaar voor oude regels, staan niet in de keuzelijst. */
 const LEGACY: Record<string, RegelTypeConfig> = {
   m2: { value: 'm2', label: 'm²', omschrijvingFallback: 'Prijs per m²', eenheid: 'm²' },
-  stuks: { value: 'stuks', label: 'Stuks', omschrijvingFallback: 'Materiaalkosten', eenheid: 'st' },
+  stuks: { value: 'stuks', get label() { return tx('Stuks'); }, omschrijvingFallback: 'Materiaalkosten', eenheid: 'st' },
 };
 
 export const VASTE_TYPES = ['uren', 'km', 'vast'] as const;
@@ -105,10 +106,10 @@ export function typeOpties(
 export type BtwRegime = 'normaal' | 'verlaagd' | 'vrijgesteld' | 'verlegd';
 
 export const BTW_REGIMES: { value: BtwRegime; pct: number; label: string; kort?: string }[] = [
-  { value: 'normaal', pct: 21, label: '21% — normaal' },
-  { value: 'verlaagd', pct: 9, label: '9% — verlaagd' },
-  { value: 'vrijgesteld', pct: 0, label: '0% — vrijgesteld', kort: 'Geen btw van toepassing' },
-  { value: 'verlegd', pct: 0, label: '0% — btw verlegd', kort: 'Je klant draagt de btw af' },
+  { value: 'normaal', pct: 21, get label() { return tx('21% — normaal'); } },
+  { value: 'verlaagd', pct: 9, get label() { return tx('9% — verlaagd'); } },
+  { value: 'vrijgesteld', pct: 0, get label() { return tx('0% — vrijgesteld'); }, get kort() { return tx('Geen btw van toepassing'); } },
+  { value: 'verlegd', pct: 0, get label() { return tx('0% — btw verlegd'); }, get kort() { return tx('Je klant draagt de btw af'); } },
 ];
 
 export const STANDAARD_REGIME: BtwRegime = 'normaal';

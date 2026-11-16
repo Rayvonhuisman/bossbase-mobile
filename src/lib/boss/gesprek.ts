@@ -2,6 +2,7 @@
  * Kleine regels van het Boss-gesprek, gedeeld door offerte en factuur. Puur;
  * dezelfde als in het dashboard (`BossOfferte.jsx`, `BossAssistent.jsx`).
  */
+import { locale } from '@/i18n';
 
 let teller = 0;
 /** Id van een kaart in het gesprek. */
@@ -21,7 +22,7 @@ export const wachtOpJou = (items: { t: string; status?: string; antwoord?: unkno
   ).length;
 
 export const getalNl = (n: number | null | undefined) =>
-  n == null ? '?' : Number(n).toLocaleString('nl-NL', { maximumFractionDigits: 3 });
+  n == null ? '?' : Number(n).toLocaleString(locale(), { maximumFractionDigits: 3 });
 
 // Een klant die in de opdracht bij naam genoemd wordt ("offerte voor Jeroen
 // Bakker"). Eerst de volledige naam, anders een achternaam die maar bij één

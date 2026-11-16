@@ -16,6 +16,7 @@ import { StatusBadge, statusTone } from './StatusBadge';
 import { useTheme } from '@/providers';
 import type { ThemeColors } from '@/theme';
 import type { WorkOrderWithCustomer } from '@/types/domain';
+import { tx } from '@/i18n';
 
 /**
  * De kaartkleuren komen nu uit het thema in plaats van uit een eigen lijstje.
@@ -65,7 +66,7 @@ export function WorkOrderCard({
   const styles = useMemo(() => makeStyles(C, t), [C, t]);
   const tone = statusTone(workOrder.status, t);
   const city = extractCity(workOrder.locatie ?? workOrder.customer?.address ?? null);
-  const assignee = workOrder.assigned_to ? 'Toegewezen' : null;
+  const assignee = workOrder.assigned_to ? tx('Toegewezen') : null;
 
   return (
     <Pressable
@@ -141,7 +142,7 @@ export function WorkOrderCard({
           {onCall ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Bellen"
+              accessibilityLabel={tx('Bellen')}
               onPress={(e) => {
                 e.stopPropagation();
                 onCall();
@@ -155,7 +156,7 @@ export function WorkOrderCard({
           {onNavigate ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Route"
+              accessibilityLabel={tx('Route')}
               onPress={(e) => {
                 e.stopPropagation();
                 onNavigate();
@@ -174,7 +175,7 @@ export function WorkOrderCard({
             }}
             style={({ pressed }) => [styles.openBtn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.openLabel}>Open</Text>
+            <Text style={styles.openLabel}>{tx('Open', undefined, 'actie')}</Text>
             <ChevronRight size={14} color={C.greenInk} strokeWidth={2.4} />
           </Pressable>
         </View>

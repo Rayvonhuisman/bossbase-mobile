@@ -25,6 +25,7 @@ import {
   type ContractDetail,
 } from '@/services/contractService';
 import { seizoenLabel } from '@/lib/contractSeizoen';
+import { tx, txn } from '@/i18n';
 
 /**
  * Eén onderhoudscontract, alleen-lezen. De app beheert geen contracten (dat
@@ -37,14 +38,14 @@ import { seizoenLabel } from '@/lib/contractSeizoen';
  */
 export default function ContractScherm() {
   return (
-    <PermissionGate permission="contracten" feature="contracten" label="Contracten" fallback="/customers">
+    <PermissionGate permission="contracten" feature="contracten" label={tx('Contracten')} fallback="/customers">
       <ContractInhoud />
     </PermissionGate>
   );
 }
 
 function uren(v: number | null | undefined): string {
-  return v == null ? '—' : `${String(v).replace('.', ',')} u`;
+  return v == null ? '—' : tx('{n} u', { n: String(v).replace('.', ',') });
 }
 
 function ContractInhoud() {
@@ -57,7 +58,7 @@ function ContractInhoud() {
   const laad = useCallback(async () => {
     if (!id) return;
     const r = await getContract(id);
-    setFout(r.error ?? (r.data ? null : 'Dit contract bestaat niet of je hebt er geen toegang toe.'));
+    setFout(r.error ?? (r.data ? null : tx('Dit contract bestaat niet of je hebt er geen toegang toe.')));
     if (r.data) setContract(r.data);
   }, [id]);
   const { loading, refreshing, onRefresh, opnieuw } = useLaden(laad, { onFout: setFout });
@@ -69,8 +70,8 @@ function ContractInhoud() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Contract" onBack={terug} />
-          <LoadingScreen label="Contract laden..." />
+          <AppTopBar variant="detail" title={tx('Contract')} onBack={terug} />
+          <LoadingScreen label={tx('Contract laden...')} />
         </View>
       </>
     );
@@ -80,8 +81,8 @@ function ContractInhoud() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Contract" onBack={terug} />
-          <ErrorState title="Contract niet gevonden" message={fout ?? 'Onbekende fout.'} onRetry={opnieuw} />
+          <AppTopBar variant="detail" title={tx('Contract')} onBack={terug} />
+          <ErrorState title={tx('Contract niet gevonden')} message={fout ?? tx('Onbekende fout.')} onRetry={opnieuw} />
         </View>
       </>
     );
@@ -89,14 +90,19 @@ function ContractInhoud() {
 
   const c = contract;
   const adres = [c.adres, [c.postcode, c.plaats].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-  const looptijd = `${formatDateNL(c.startdatum)} – ${c.einddatum ? formatDateNL(c.einddatum) : 'onbepaalde tijd'}`;
+  const looptijd = `${formatDateNL(c.startdatum)} – ${c.einddatum ? formatDateNL(c.einddatum) : tx('onbepaalde tijd')}`;
   const verlengen = c.stilzwijgend_verlengen
-    ? `Stilzwijgend, telkens ${c.verleng_maanden ?? 12} maanden`
-    : 'Niet stilzwijgend';
+    ? tx('Stilzwijgend, telkens {n} maanden', { n: c.verleng_maanden ?? 12 })
+    : tx('Niet stilzwijgend');
   const prijs =
     c.prijs_excl != null
-      ? `${formatEUR(Number(c.prijs_excl))} excl. btw${c.factuur_ritme ? ` ${FACTUUR_RITME_LABEL[c.factuur_ritme] ?? ''}` : ''}`
-      : 'Geen vast bedrag';
+      ? c.factuur_ritme && FACTUUR_RITME_LABEL[c.factuur_ritme]
+        ? tx('{bedrag} excl. btw {ritme}', {
+            bedrag: formatEUR(Number(c.prijs_excl)),
+            ritme: tx(FACTUUR_RITME_LABEL[c.factuur_ritme] ?? ''),
+          })
+        : tx('{bedrag} excl. btw', { bedrag: formatEUR(Number(c.prijs_excl)) })
+      : tx('Geen vast bedrag');
   const binnen = alsTekst(c.binnen_contract ?? '').trim();
 
   return (
@@ -116,45 +122,49 @@ function ContractInhoud() {
             <AppTopBar
               variant="detail"
               onBack={terug}
-              eyebrow={c.nummer ?? 'Contract'}
+              eyebrow={c.nummer ?? tx('Contract')}
               title={c.titel}
               subtitle={c.customer?.name ?? undefined}
               rightAction={
                 <KaartPil
-                  tekst={CONTRACT_STATUS_LABEL[c.status] ?? c.status}
+                  tekst={CONTRACT_STATUS_LABEL[c.status] ? tx(CONTRACT_STATUS_LABEL[c.status] ?? '') : c.status}
                   toon={c.status === 'actief' ? 'goed' : c.status === 'opgezegd' ? 'let-op' : 'neutraal'}
                 />
               }
             />
             <View style={leesbreedte}>
-              <KaartBlok titel="Gegevens">
+              <KaartBlok titel={tx('Gegevens')}>
                 {c.customer ? (
                   <GegevensRij
                     eerste
-                    label="Klant"
+                    label={tx('Klant')}
                     waarde={c.customer.name}
                     onPress={() => router.push(`/customers/${c.customer!.id}`)}
                   />
                 ) : null}
-                {adres ? <GegevensRij eerste={!c.customer} label="Adres" waarde={adres} /> : null}
-                <GegevensRij eerste={!c.customer && !adres} label="Looptijd" waarde={looptijd} />
-                {c.einddatum ? <GegevensRij label="Verlengen" waarde={verlengen} /> : null}
+                {adres ? <GegevensRij eerste={!c.customer} label={tx('Adres')} waarde={adres} /> : null}
+                <GegevensRij eerste={!c.customer && !adres} label={tx('Looptijd')} waarde={looptijd} />
+                {c.einddatum ? <GegevensRij label={tx('Verlengen')} waarde={verlengen} /> : null}
                 {c.opzegtermijn_dagen != null ? (
-                  <GegevensRij label="Opzegtermijn" waarde={`${c.opzegtermijn_dagen} dagen`} />
+                  <GegevensRij label={tx('Opzegtermijn')} waarde={txn('{n} dag', '{n} dagen', c.opzegtermijn_dagen)} />
                 ) : null}
-                {c.opgezegd_op ? <GegevensRij label="Opgezegd op" waarde={formatDateNL(c.opgezegd_op)} /> : null}
-                <GegevensRij label="Prijs" waarde={prijs} />
+                {c.opgezegd_op ? <GegevensRij label={tx('Opgezegd op')} waarde={formatDateNL(c.opgezegd_op)} /> : null}
+                <GegevensRij label={tx('Prijs')} waarde={prijs} />
                 {c.ondertekend_op ? (
                   <GegevensRij
-                    label="Ondertekend"
-                    waarde={`${formatDateNL(c.ondertekend_op)}${c.ondertekend_door_naam ? ` door ${c.ondertekend_door_naam}` : ''}`}
+                    label={tx('Ondertekend')}
+                    waarde={
+                      c.ondertekend_door_naam
+                        ? tx('{datum} door {naam}', { datum: formatDateNL(c.ondertekend_op), naam: c.ondertekend_door_naam })
+                        : formatDateNL(c.ondertekend_op)
+                    }
                   />
                 ) : null}
               </KaartBlok>
 
-              <KaartBlok titel="Onderhoudsbeurten" aantal={c.beurten.length}>
+              <KaartBlok titel={tx('Onderhoudsbeurten')} aantal={c.beurten.length}>
                 {c.beurten.length === 0 ? (
-                  <KaartLeeg tekst="Geen vaste beurten in dit contract." />
+                  <KaartLeeg tekst={tx('Geen vaste beurten in dit contract.')} />
                 ) : (
                   c.beurten.map((b, i) => (
                     <KaartRij
@@ -166,8 +176,8 @@ function ContractInhoud() {
                         [intervalLabel(b.interval_aantal, b.interval_eenheid), seizoenLabel(b.seizoen_van, b.seizoen_tot)]
                           .filter(Boolean)
                           .join(', '),
-                        b.volgende_op ? `volgende ${formatDateNL(b.volgende_op)}` : null,
-                        b.actief ? null : 'gestopt',
+                        b.volgende_op ? tx('volgende {datum}', { datum: formatDateNL(b.volgende_op) }) : null,
+                        b.actief ? null : tx('gestopt'),
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -177,45 +187,48 @@ function ContractInhoud() {
               </KaartBlok>
 
               {c.sla ? (
-                <KaartBlok titel={`SLA ${c.sla.naam}`}>
+                <KaartBlok titel={tx('SLA {naam}', { naam: c.sla.naam })}>
                   <GegevensRij
                     eerste
-                    label="Klok"
-                    waarde={c.sla.klok === 'altijd' ? 'Altijd (24/7)' : 'Werkuren (ma–vr 8–17, zonder feestdagen)'}
+                    label={tx('Klok')}
+                    waarde={c.sla.klok === 'altijd' ? tx('Altijd (24/7)') : tx('Werkuren (ma–vr 8–17, zonder feestdagen)')}
                   />
                   {PRIORITEITEN.map((p) => (
                     <GegevensRij
                       key={p}
-                      label={PRIORITEIT_LABEL[p]}
-                      waarde={`reageren ${uren(c.sla![`reactie_${p}_uren`])} · oplossen ${uren(c.sla![`oplos_${p}_uren`])}`}
+                      label={tx(PRIORITEIT_LABEL[p])}
+                      waarde={tx('reageren {reactie} · oplossen {oplossen}', {
+                        reactie: uren(c.sla![`reactie_${p}_uren`]),
+                        oplossen: uren(c.sla![`oplos_${p}_uren`]),
+                      })}
                     />
                   ))}
                 </KaartBlok>
               ) : null}
 
-              <KaartBlok titel="Installaties" aantal={c.installaties.length}>
+              <KaartBlok titel={tx('Installaties')} aantal={c.installaties.length}>
                 {c.installaties.length === 0 ? (
-                  <KaartLeeg tekst="Geen installaties aan dit contract gekoppeld." />
+                  <KaartLeeg tekst={tx('Geen installaties aan dit contract gekoppeld.')} />
                 ) : (
                   c.installaties.map((ins, i) => (
                     <KaartRij
                       key={ins.id}
                       eerste={i === 0}
                       titel={installatieNaam(ins)}
-                      sub={[ins.serienummer ? `Serienr. ${ins.serienummer}` : null, ins.plaats].filter(Boolean).join(' · ')}
+                      sub={[ins.serienummer ? tx('Serienr. {nummer}', { nummer: ins.serienummer }) : null, ins.plaats].filter(Boolean).join(' · ')}
                     />
                   ))
                 )}
               </KaartBlok>
 
               {binnen ? (
-                <KaartBlok titel="Binnen het contract">
+                <KaartBlok titel={tx('Binnen het contract')}>
                   <Text style={{ padding: 14, fontSize: 14, lineHeight: 20, color: th.ink }}>{binnen}</Text>
                 </KaartBlok>
               ) : null}
 
               <Text style={{ paddingHorizontal: 20, paddingTop: 8, fontSize: 12.5, lineHeight: 18, color: th.muted }}>
-                Contracten wijzigen, versturen en laten ondertekenen doe je in het dashboard.
+                {tx('Contracten wijzigen, versturen en laten ondertekenen doe je in het dashboard.')}
               </Text>
             </View>
           </ScrollView>

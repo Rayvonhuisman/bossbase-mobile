@@ -9,6 +9,7 @@ import {
 } from '@/lib/projectKostenLogica';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
+import { tx, locale } from '@/i18n';
 
 /**
  * Begroot tegenover werkelijk voor één project — `NacalculatieTabel.jsx` van
@@ -29,9 +30,9 @@ import { spacing, type ThemeColors } from '@/theme';
  */
 
 const urenTekst = (n: number | null) =>
-  `${Number(n || 0).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} u`;
+  tx('{n} u', { n: Number(n || 0).toLocaleString(locale(), { maximumFractionDigits: 1 }) });
 const pctTekst = (n: number | null) =>
-  n == null ? '' : `${n.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`;
+  n == null ? '' : `${n.toLocaleString(locale(), { maximumFractionDigits: 1 })}%`;
 
 function useNcStijl() {
   const { colors: t } = useTheme();
@@ -56,7 +57,7 @@ function Verschil({
   const { t, styles } = useNcStijl();
   const v = nacalculatieVerschil(begroot, werkelijk, Boolean(kostenKant));
   if (v.soort === 'leeg') return <Text style={[styles.getal, styles.leeg]}>—</Text>;
-  if (v.soort === 'gelijk') return <Text style={[styles.getal, styles.leeg]}>gelijk</Text>;
+  if (v.soort === 'gelijk') return <Text style={[styles.getal, styles.leeg]}>{tx('gelijk')}</Text>;
   return (
     <Text style={[styles.getal, { color: v.soort === 'goed' ? t.green700 : t.statusRejectFg }]}>
       {v.teken}
@@ -132,55 +133,65 @@ export function NacalculatieTabel({
     <View style={{ gap: spacing.md }}>
       <View>
         <View style={[styles.rij, styles.kop]}>
-          <Text style={[styles.kopTekst, styles.labelKolom]}>Excl. btw</Text>
-          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>Begroot</Text>
-          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>Werkelijk</Text>
-          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>Verschil</Text>
+          <Text style={[styles.kopTekst, styles.labelKolom]}>{tx('Excl. btw')}</Text>
+          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>{tx('Begroot')}</Text>
+          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>{tx('Werkelijk')}</Text>
+          <Text style={[styles.kopTekst, styles.getalKolom, styles.rechts]}>{tx('Verschil')}</Text>
         </View>
         <Regel
-          label="Arbeid"
-          sub={`${arbeid.urenBegroot == null ? '' : `${urenTekst(arbeid.urenBegroot)} begroot · `}${urenTekst(
-            arbeid.urenWerkelijk,
-          )} geschreven`}
+          label={tx('Arbeid')}
+          sub={
+            arbeid.urenBegroot == null
+              ? tx('{geschreven} geschreven', { geschreven: urenTekst(arbeid.urenWerkelijk) })
+              : tx('{begroot} begroot · {geschreven} geschreven', {
+                  begroot: urenTekst(arbeid.urenBegroot),
+                  geschreven: urenTekst(arbeid.urenWerkelijk),
+                })
+          }
           begroot={arbeid.begroot}
           werkelijk={arbeid.werkelijk}
           kostenKant
         />
         <Regel
-          label="Materiaal en inkopen"
+          label={tx('Materiaal en inkopen')}
           sub={
             materiaal.materiaal > 0 || materiaal.inkopen > 0
-              ? `materiaal ${formatEUR(materiaal.materiaal)} · inkopen ${formatEUR(materiaal.inkopen)}`
+              ? tx('materiaal {materiaal} · inkopen {inkopen}', {
+                  materiaal: formatEUR(materiaal.materiaal),
+                  inkopen: formatEUR(materiaal.inkopen),
+                })
               : undefined
           }
           begroot={materiaal.begroot}
           werkelijk={materiaal.werkelijk}
           kostenKant
         />
-        <Regel label="Kosten" begroot={kosten.begroot} werkelijk={kosten.werkelijk} kostenKant som />
+        <Regel label={tx('Kosten')} begroot={kosten.begroot} werkelijk={kosten.werkelijk} kostenKant som />
         {magBedragen ? (
           <>
             <Regel
-              label="Opbrengst"
+              label={tx('Opbrengst')}
               sub={
                 nc.meerwerk.bedrag > 0
-                  ? `begroot: opdracht ${formatEUR(opbrengst.opdracht)} + meerwerk ${formatEUR(
-                      nc.meerwerk.bedrag,
-                    )} · werkelijk: gefactureerd`
-                  : 'begroot: opdracht · werkelijk: gefactureerd'
+                  ? tx('begroot: opdracht {opdracht} + meerwerk {meerwerk} · werkelijk: gefactureerd', {
+                      opdracht: formatEUR(opbrengst.opdracht),
+                      meerwerk: formatEUR(nc.meerwerk.bedrag),
+                    })
+                  : tx('begroot: opdracht · werkelijk: gefactureerd')
               }
               begroot={opbrengst.begroot}
               werkelijk={opbrengst.werkelijk}
               zonderVerschil={nc.voorlopig}
             />
             <Regel
-              label="Resultaat"
+              label={tx('Resultaat')}
               begroot={resultaat.begroot}
               werkelijk={resultaat.werkelijk}
               som
               begrootSub={pctTekst(resultaat.margeBegroot) || undefined}
               // Nog niet alles gefactureerd: een tussenstand, niet rood en niet vergeleken.
-              werkelijkSub={nc.voorlopig ? 'voorlopig' : pctTekst(resultaat.margeWerkelijk) || undefined}
+              werkelijkSub={nc.voorlopig ? tx('voorlopig') :
+ pctTekst(resultaat.margeWerkelijk) || undefined}
               werkelijkKleur={nc.voorlopig ? t.muted : resultaat.werkelijk < 0 ? t.statusRejectFg : undefined}
               zonderVerschil={nc.voorlopig}
             />

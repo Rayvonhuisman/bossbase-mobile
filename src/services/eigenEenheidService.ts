@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { EigenEenheid } from '@/lib/regels';
+import { tx } from '@/i18n';
 
 /**
  * Eigen eenheden (`eigen_eenheden`): zelf aangemaakte regeltypes met een
@@ -23,7 +24,7 @@ export async function listEigenEenheden(): Promise<{
 
   if (error) {
     console.warn('[eigenEenheidService.listEigenEenheden]', error.message);
-    return { data: [], error: 'Eenheidsprijzen konden niet worden geladen.' };
+    return { data: [], error: tx('Eenheidsprijzen konden niet worden geladen.') };
   }
 
   const rijen = (data ?? []) as {

@@ -8,6 +8,7 @@ import {
   listWerkbonUrenForProfile,
 } from './werkbonUrenService';
 import type { TimeEntry, UrenRegel, WerkbonUur } from '@/types/domain';
+import { tx } from '@/i18n';
 
 // Werkdaguren: loon en verlof. Uren op een klus staan in werkbon_uren (zie
 // werkbonUrenService).
@@ -165,7 +166,7 @@ export async function listUrenForProfile(
     ...werkdag.data.map(timeEntryNaarRegel),
     ...werkbon.data.map(werkbonUurNaarRegel),
   ]);
-  return { data, error: error ? 'Niet alle uren konden worden geladen.' : null };
+  return { data, error: error ? tx('Niet alle uren konden worden geladen.') : null };
 }
 
 /** Bedrijfsbreed overzicht in een periode (admin of recht planning; RLS). */
@@ -183,7 +184,7 @@ export async function listCompanyUren(
     ...werkdag.data.map(timeEntryNaarRegel),
     ...werkbon.data.map(werkbonUurNaarRegel),
   ]);
-  return { data, error: error ? 'Niet alle uren konden worden geladen.' : null };
+  return { data, error: error ? tx('Niet alle uren konden worden geladen.') : null };
 }
 
 export type CreateWerkdagUurInput = {
@@ -223,24 +224,24 @@ export async function createWerkdagUur(
   input: CreateWerkdagUurInput,
 ): Promise<WriteResult<TimeEntry>> {
   if (!isGeldigeDatum(input.datum)) {
-    return writeFout('validatie', 'Vul een geldige datum in.');
+    return writeFout('validatie', tx('Vul een geldige datum in.'));
   }
   // Twee decimalen, zoals het dashboard (zie lib/urenBerekening).
   const uren = rondUrenAf(input.uren);
   if (!Number.isFinite(uren) || uren <= 0) {
-    return writeFout('validatie', 'Vul een geldig aantal uren in.');
+    return writeFout('validatie', tx('Vul een geldig aantal uren in.'));
   }
   for (const v of [input.start_tijd, input.eind_tijd]) {
-    if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
+    if (v && !isGeldigeTijd(v)) return writeFout('validatie', tx('Vul een geldige tijd in (uu:mm).'));
   }
   if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
-    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+    return writeFout('validatie', tx('Vul een geldig aantal kilometers in.'));
   }
   if (
     input.pauze_minuten !== undefined &&
     (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)
   ) {
-    return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
+    return writeFout('validatie', tx('Vul een geldig aantal pauzeminuten in.'));
   }
 
   return schrijf<TimeEntry>(
@@ -263,7 +264,7 @@ export async function createWerkdagUur(
       context: 'timeEntryService.createWerkdagUur',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De uren zijn niet opgeslagen — je kunt alleen je eigen uren vastleggen.',
+      leegMelding: tx('De uren zijn niet opgeslagen — je kunt alleen je eigen uren vastleggen.'),
     },
   );
 }
@@ -294,20 +295,20 @@ export async function updateTimeEntry(
   const updates: Record<string, unknown> = {};
   if (input.datum !== undefined) {
     if (!isGeldigeDatum(input.datum)) {
-      return writeFout('validatie', 'Vul een geldige datum in (JJJJ-MM-DD).');
+      return writeFout('validatie', tx('Vul een geldige datum in (JJJJ-MM-DD).'));
     }
     updates.datum = input.datum;
   }
   for (const veld of ['start_tijd', 'eind_tijd'] as const) {
     const v = input[veld];
     if (v !== undefined) {
-      if (v && !isGeldigeTijd(v)) return writeFout('validatie', 'Vul een geldige tijd in (uu:mm).');
+      if (v && !isGeldigeTijd(v)) return writeFout('validatie', tx('Vul een geldige tijd in (uu:mm).'));
       updates[veld] = v || null;
     }
   }
   if (input.pauze_minuten !== undefined) {
     if (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0) {
-      return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
+      return writeFout('validatie', tx('Vul een geldig aantal pauzeminuten in.'));
     }
     updates.pauze_minuten = input.pauze_minuten;
   }
@@ -315,24 +316,24 @@ export async function updateTimeEntry(
     ? berekenUren(input.start_tijd, input.eind_tijd, input.pauze_minuten ?? 0)
     : null;
   if (input.start_tijd && input.eind_tijd && herberekend === null) {
-    return writeFout('validatie', 'De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.');
+    return writeFout('validatie', tx('De eindtijd moet na de begintijd liggen, en de pauze moet erin passen.'));
   }
   const uren = herberekend ?? (input.uren !== undefined ? rondUrenAf(input.uren) : undefined);
   if (uren !== undefined) {
     if (!Number.isFinite(uren) || uren <= 0) {
-      return writeFout('validatie', 'Vul een geldig aantal uren in.');
+      return writeFout('validatie', tx('Vul een geldig aantal uren in.'));
     }
     updates.uren = uren;
   }
   if (input.notitie !== undefined) updates.notitie = input.notitie?.trim() || null;
   if (input.reis_km !== undefined) {
     if (input.reis_km !== null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
-      return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+      return writeFout('validatie', tx('Vul een geldig aantal kilometers in.'));
     }
     updates.reis_km = input.reis_km;
   }
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
   updates.updated_at = new Date().toISOString();
 
   return schrijf<TimeEntry>(
@@ -341,7 +342,7 @@ export async function updateTimeEntry(
       context: 'timeEntryService.updateTimeEntry',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De uren zijn niet gewijzigd. Je kunt alleen je eigen uren aanpassen.',
+      leegMelding: tx('De uren zijn niet gewijzigd. Je kunt alleen je eigen uren aanpassen.'),
     },
   );
 }
@@ -353,7 +354,7 @@ export async function deleteTimeEntry(id: string): Promise<WriteStatus> {
       context: 'timeEntryService.deleteTimeEntry',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De uren zijn niet verwijderd. Je kunt alleen je eigen uren verwijderen.',
+      leegMelding: tx('De uren zijn niet verwijderd. Je kunt alleen je eigen uren verwijderen.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;

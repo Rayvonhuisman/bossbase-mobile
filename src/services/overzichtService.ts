@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { haalInStukken } from '@/lib/inStukken';
 import type { DealKern, FactuurKern, FaseKern, OfferteKern } from '@/lib/overzichtCijfers';
+import { tx } from '@/i18n';
 
 /**
  * Lichte, alleen-lezen bronnen voor de overzichtstegels op de homepage. Per
@@ -29,7 +30,7 @@ async function lees<T>(
   });
   if (error) {
     console.warn(`[overzichtService.${context}]`, error.message);
-    return { data: [], error: 'Kon niet worden geladen.' };
+    return { data: [], error: tx('Kon niet worden geladen.') };
   }
   return { data, error: null };
 }
@@ -68,7 +69,7 @@ export async function telKlanten(): Promise<{ aantal: number | null; error: stri
     .select('id', { count: 'exact', head: true });
   if (error) {
     console.warn('[overzichtService.telKlanten]', error.message);
-    return { aantal: null, error: 'Kon niet worden geladen.' };
+    return { aantal: null, error: tx('Kon niet worden geladen.') };
   }
   return { aantal: count ?? 0, error: null };
 }

@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { HeaderActions, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { tx } from '@/i18n';
 
 export default function WorkOrdersLayout() {
   const { status, session } = useAuth();
@@ -24,9 +25,9 @@ export default function WorkOrdersLayout() {
         headerRight: () => <HeaderActions iconSize={32} />,
       }}
     >
-      <Stack.Screen name="[id]" options={{ title: 'Werkbon' }} />
-      <Stack.Screen name="new" options={{ title: 'Nieuwe werkbon' }} />
-      <Stack.Screen name="bewerk/[id]" options={{ title: 'Werkbon bewerken' }} />
+      <Stack.Screen name="[id]" options={{ title: tx('Werkbon') }} />
+      <Stack.Screen name="new" options={{ title: tx('Nieuwe werkbon') }} />
+      <Stack.Screen name="bewerk/[id]" options={{ title: tx('Werkbon bewerken') }} />
     </Stack>
   );
 }

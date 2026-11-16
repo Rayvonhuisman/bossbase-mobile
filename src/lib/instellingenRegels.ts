@@ -5,6 +5,8 @@
  *
  * Geen React en geen Supabase: dit draait ook in de Node-tests.
  */
+import { tx, txm } from '@/i18n';
+import { vertaald } from './vertaald';
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 
@@ -46,20 +48,20 @@ export function zichtbareTabs(stand: {
   isAdmin: boolean;
   voertuigen: boolean;
 }): { id: InstellingenTab; label: string }[] {
-  const tabs: { id: InstellingenTab; label: string }[] = [{ id: 'profiel', label: 'Mijn profiel' }];
+  const tabs: { id: InstellingenTab; label: string }[] = [{ id: 'profiel', label: tx('Mijn profiel') }];
   if (!stand.instellingen) return tabs;
-  tabs.push({ id: 'bedrijf', label: 'Bedrijfsprofiel' });
-  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: 'Abonnement' });
+  tabs.push({ id: 'bedrijf', label: tx('Bedrijfsprofiel') });
+  if (stand.isAdmin) tabs.push({ id: 'abonnement', label: tx('Abonnement') });
   tabs.push(
-    { id: 'standaard', label: 'Tarieven en termijnen' },
-    { id: 'eenheden', label: 'Eenheidsprijzen' },
-    { id: 'templates', label: 'E-mailtemplates' },
-    { id: 'pipeline', label: 'Pipeline' },
-    { id: 'agenda', label: 'Agenda' },
-    { id: 'herinneringen', label: 'Urenherinnering' },
+    { id: 'standaard', label: tx('Tarieven en termijnen') },
+    { id: 'eenheden', label: tx('Eenheidsprijzen') },
+    { id: 'templates', label: tx('E-mailtemplates') },
+    { id: 'pipeline', label: tx('Pipeline') },
+    { id: 'agenda', label: tx('Agenda') },
+    { id: 'herinneringen', label: tx('Urenherinnering') },
   );
-  if (stand.isAdmin && stand.voertuigen) tabs.push({ id: 'voertuigen', label: 'Voertuigen' });
-  tabs.push({ id: 'integraties', label: 'Integraties' });
+  if (stand.isAdmin && stand.voertuigen) tabs.push({ id: 'voertuigen', label: tx('Voertuigen') });
+  tabs.push({ id: 'integraties', label: tx('Integraties') });
   return tabs;
 }
 
@@ -75,10 +77,10 @@ export function kiesTab(
 // ── Wachtwoord ─────────────────────────────────────────────────────────────
 
 export const WACHTWOORD_REGELS: { key: string; label: string; test: (p: string) => boolean }[] = [
-  { key: 'len', label: 'Minimaal 8 tekens', test: (p) => p.length >= 8 },
-  { key: 'upper', label: 'Minimaal 1 hoofdletter', test: (p) => /[A-Z]/.test(p) },
-  { key: 'digit', label: 'Minimaal 1 cijfer', test: (p) => /[0-9]/.test(p) },
-  { key: 'special', label: 'Minimaal 1 speciaal teken', test: (p) => /[^A-Za-z0-9]/.test(p) },
+  { key: 'len', get label() { return tx('Minimaal 8 tekens'); }, test: (p) => p.length >= 8 },
+  { key: 'upper', get label() { return tx('Minimaal 1 hoofdletter'); }, test: (p) => /[A-Z]/.test(p) },
+  { key: 'digit', get label() { return tx('Minimaal 1 cijfer'); }, test: (p) => /[0-9]/.test(p) },
+  { key: 'special', get label() { return tx('Minimaal 1 speciaal teken'); }, test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 export function wachtwoordGeldig(p: string): boolean {
@@ -88,20 +90,28 @@ export function wachtwoordGeldig(p: string): boolean {
 // ── Standaardwaarden ───────────────────────────────────────────────────────
 
 export const HERINNERING_INTERVALLEN = [
-  { id: '15', label: 'Elke 15 minuten' },
-  { id: '30', label: 'Elke 30 minuten' },
-  { id: '60', label: 'Elk uur' },
-  { id: '120', label: 'Elke 2 uur' },
-  { id: '240', label: 'Elke 4 uur' },
+  { id: '15', get label() { return tx('Elke 15 minuten'); } },
+  { id: '30', get label() { return tx('Elke 30 minuten'); } },
+  { id: '60', get label() { return tx('Elk uur'); } },
+  { id: '120', get label() { return tx('Elke 2 uur'); } },
+  { id: '240', get label() { return tx('Elke 4 uur'); } },
 ];
 
 export const HERINNERING_MOMENTEN = [
-  { id: 'na_werkdag', label: 'Na afloop van de ingeplande werkdag' },
-  { id: 'einde_dag', label: 'Aan het einde van de dag' },
-  { id: 'volgende_ochtend', label: 'De volgende ochtend' },
+  { id: 'na_werkdag', get label() { return tx('Na afloop van de ingeplande werkdag'); } },
+  { id: 'einde_dag', get label() { return tx('Aan het einde van de dag'); } },
+  { id: 'volgende_ochtend', get label() { return tx('De volgende ochtend'); } },
 ];
 
-export const WEEKDAGEN = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
+export const WEEKDAGEN = vertaald([
+  txm('Maandag'),
+  txm('Dinsdag'),
+  txm('Woensdag'),
+  txm('Donderdag'),
+  txm('Vrijdag'),
+  txm('Zaterdag'),
+  txm('Zondag'),
+]);
 
 /** Waarde aan- of uitvinken in een lijst (weekdagen, uitgesloten medewerkers). */
 export function wisselInLijst<T>(lijst: readonly T[], waarde: T, erin: boolean): T[] {
@@ -130,14 +140,14 @@ export type TemplateConfig = {
 };
 
 export const TEMPLATE_CONFIGS: TemplateConfig[] = [
-  { type: 'offerte', label: 'Offerte', vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer', 'totaal_bedrag', 'vervaldatum', 'link'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'factuur', label: 'Factuur', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum', 'betaalinstructie', 'iban'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
-  { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
-  { type: 'aanvraag_ontvangen', label: 'Aanvraag ontvangen', vars: ['klant_naam', 'bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },
-  { type: 'afspraak_bevestiging', label: 'Afspraak bevestiging', vars: ['klant_naam', 'bedrijfsnaam', 'afspraak_datum', 'afspraak_tijd'], showAutoToggle: true, showAutoDagen: false },
-  { type: 'afspraak_herinnering', label: 'Afspraak herinnering', vars: ['klant_naam', 'bedrijfsnaam', 'afspraak_datum', 'afspraak_tijd'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dag(en) voor afspraak' },
+  { type: 'offerte', get label() { return tx('Offerte'); }, vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer', 'totaal_bedrag', 'vervaldatum', 'link'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'offerte_geaccepteerd', get label() { return tx('Offerte geaccepteerd'); }, vars: ['klant_naam', 'bedrijfsnaam', 'offerte_nummer'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'factuur', get label() { return tx('Factuur'); }, vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum', 'betaalinstructie', 'iban'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'herinnering_1', get label() { return tx('Herinnering 1'); }, vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, get dagenLabel() { return tx('dagen na vervaldatum'); }, feature: 'betaalherinneringen' },
+  { type: 'herinnering_2', get label() { return tx('Herinnering 2'); }, vars: ['klant_naam', 'bedrijfsnaam', 'factuur_nummer', 'totaal_bedrag', 'vervaldatum'], showAutoToggle: true, showAutoDagen: true, get dagenLabel() { return tx('dagen na vervaldatum'); }, feature: 'betaalherinneringen' },
+  { type: 'aanvraag_ontvangen', get label() { return tx('Aanvraag ontvangen'); }, vars: ['klant_naam', 'bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },
+  { type: 'afspraak_bevestiging', get label() { return tx('Afspraak bevestiging'); }, vars: ['klant_naam', 'bedrijfsnaam', 'afspraak_datum', 'afspraak_tijd'], showAutoToggle: true, showAutoDagen: false },
+  { type: 'afspraak_herinnering', get label() { return tx('Afspraak herinnering'); }, vars: ['klant_naam', 'bedrijfsnaam', 'afspraak_datum', 'afspraak_tijd'], showAutoToggle: true, showAutoDagen: true, get dagenLabel() { return tx('dag(en) voor afspraak'); } },
 ];
 
 export const STANDAARD_TEMPLATE_TYPES = new Set(TEMPLATE_CONFIGS.map((c) => c.type));
@@ -182,11 +192,11 @@ export function controleerNieuwTemplate(
   type: string,
   bestaand: readonly string[],
 ): { ok: true; slug: string } | { ok: false; melding: string } {
-  if (!naam.trim()) return { ok: false, melding: 'Naam is verplicht' };
+  if (!naam.trim()) return { ok: false, melding: tx('Naam is verplicht') };
   const slug = type.trim() || slugify(naam);
-  if (!slug) return { ok: false, melding: 'Type/slug is verplicht' };
-  if (STANDAARD_TEMPLATE_TYPES.has(slug)) return { ok: false, melding: 'Dit type is al een standaard template' };
-  if (bestaand.includes(slug)) return { ok: false, melding: 'Een template met dit type bestaat al' };
+  if (!slug) return { ok: false, melding: tx('Type/slug is verplicht') };
+  if (STANDAARD_TEMPLATE_TYPES.has(slug)) return { ok: false, melding: tx('Dit type is al een standaard template') };
+  if (bestaand.includes(slug)) return { ok: false, melding: tx('Een template met dit type bestaat al') };
   return { ok: true, slug };
 }
 
@@ -208,24 +218,24 @@ export function tekstNaarEditorHtml(tekst: string): string {
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
 export const PIPELINE_MOMENTEN = [
-  { key: 'offerte_verstuurd', label: 'Offerte verstuurd', uitleg: 'Zodra een offerte voor deze aanvraag is verstuurd, vanuit het dashboard of de app.' },
-  { key: 'akkoord', label: 'Akkoord', uitleg: 'Vanaf deze fase telt de aanvraag in de cijfers als binnengehaald. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
-  { key: 'gepland', label: 'Werkbon gepland', uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
-  { key: 'in_uitvoering', label: 'Klus gestart', uitleg: 'Zodra iemand op "Start klus" drukt.' },
-  { key: 'gefactureerd', label: 'Factuur verstuurd', uitleg: 'Zodra een factuur voor dit project is verstuurd.' },
-  { key: 'betaald', label: 'Factuur betaald', uitleg: 'Zodra de factuur als betaald is gemarkeerd.' },
-  { key: 'verloren', label: 'Verloren', uitleg: 'Een aanvraag die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },
+  { key: 'offerte_verstuurd', get label() { return tx('Offerte verstuurd'); }, get uitleg() { return tx('Zodra een offerte voor deze aanvraag is verstuurd, vanuit het dashboard of de app.'); } },
+  { key: 'akkoord', get label() { return tx('Akkoord'); }, get uitleg() { return tx('Vanaf deze fase telt de aanvraag in de cijfers als binnengehaald. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.'); } },
+  { key: 'gepland', get label() { return tx('Werkbon gepland'); }, get uitleg() { return tx('Zodra een werkbon voor dit project is ingepland.'); } },
+  { key: 'in_uitvoering', get label() { return tx('Klus gestart'); }, get uitleg() { return tx('Zodra iemand op "Start klus" drukt.'); } },
+  { key: 'gefactureerd', get label() { return tx('Factuur verstuurd'); }, get uitleg() { return tx('Zodra een factuur voor dit project is verstuurd.'); } },
+  { key: 'betaald', get label() { return tx('Factuur betaald'); }, get uitleg() { return tx('Zodra de factuur als betaald is gemarkeerd.'); } },
+  { key: 'verloren', get label() { return tx('Verloren'); }, get uitleg() { return tx('Een aanvraag die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.'); } },
 ];
 
 export const FASE_KLEUREN = [
-  { label: 'Blauw', value: '#3b82f6' },
-  { label: 'Groen', value: '#1DDB62' },
-  { label: 'Oranje', value: '#f97316' },
-  { label: 'Rood', value: '#ef4444' },
-  { label: 'Paars', value: '#a855f7' },
-  { label: 'Geel', value: '#eab308' },
-  { label: 'Roze', value: '#ec4899' },
-  { label: 'Grijs', value: '#6b7280' },
+  { get label() { return tx('Blauw'); }, value: '#3b82f6' },
+  { get label() { return tx('Groen'); }, value: '#1DDB62' },
+  { get label() { return tx('Oranje'); }, value: '#f97316' },
+  { get label() { return tx('Rood'); }, value: '#ef4444' },
+  { get label() { return tx('Paars'); }, value: '#a855f7' },
+  { get label() { return tx('Geel'); }, value: '#eab308' },
+  { get label() { return tx('Roze'); }, value: '#ec4899' },
+  { get label() { return tx('Grijs'); }, value: '#6b7280' },
 ];
 
 /**
@@ -234,29 +244,29 @@ export const FASE_KLEUREN = [
  * kun je kiezen.
  */
 export const FASE_KLEUR_OPTIES = [
-  { label: 'Rood', value: '#ef4444' },
-  { label: 'Roze-rood', value: '#f43f5e' },
-  { label: 'Roze', value: '#ec4899' },
-  { label: 'Paars', value: '#a855f7' },
-  { label: 'Violet', value: '#8b5cf6' },
-  { label: 'Indigo', value: '#6366f1' },
-  { label: 'Blauw', value: '#3b82f6' },
-  { label: 'Hemelsblauw', value: '#0ea5e9' },
-  { label: 'Cyaan', value: '#06b6d4' },
-  { label: 'Groenblauw', value: '#14b8a6' },
-  { label: 'Smaragd', value: '#10b981' },
-  { label: 'Groen', value: '#1DDB62' },
-  { label: 'Limoen', value: '#84cc16' },
-  { label: 'Geel', value: '#eab308' },
-  { label: 'Oker', value: '#a16207' },
-  { label: 'Oranje', value: '#f97316' },
-  { label: 'Grijs', value: '#6b7280' },
+  { get label() { return tx('Rood'); }, value: '#ef4444' },
+  { get label() { return tx('Roze-rood'); }, value: '#f43f5e' },
+  { get label() { return tx('Roze'); }, value: '#ec4899' },
+  { get label() { return tx('Paars'); }, value: '#a855f7' },
+  { get label() { return tx('Violet'); }, value: '#8b5cf6' },
+  { get label() { return tx('Indigo'); }, value: '#6366f1' },
+  { get label() { return tx('Blauw'); }, value: '#3b82f6' },
+  { get label() { return tx('Hemelsblauw'); }, value: '#0ea5e9' },
+  { get label() { return tx('Cyaan'); }, value: '#06b6d4' },
+  { get label() { return tx('Groenblauw'); }, value: '#14b8a6' },
+  { get label() { return tx('Smaragd'); }, value: '#10b981' },
+  { get label() { return tx('Groen'); }, value: '#1DDB62' },
+  { get label() { return tx('Limoen'); }, value: '#84cc16' },
+  { get label() { return tx('Geel'); }, value: '#eab308' },
+  { get label() { return tx('Oker'); }, value: '#a16207' },
+  { get label() { return tx('Oranje'); }, value: '#f97316' },
+  { get label() { return tx('Grijs'); }, value: '#6b7280' },
 ];
 
 /** Naam van een getoonde fasekleur (`kleurNaam` in Instellingen van het dashboard). */
 export function faseKleurNaam(hex: string | null | undefined): string {
   const h = String(hex ?? '').toLowerCase();
-  return FASE_KLEUR_OPTIES.find((k) => k.value.toLowerCase() === h)?.label ?? 'Eigen kleur';
+  return FASE_KLEUR_OPTIES.find((k) => k.value.toLowerCase() === h)?.label ?? tx('Eigen kleur');
 }
 
 export const STANDAARD_FASE_KLEUR = '#6b7280';
@@ -287,7 +297,7 @@ export function faseKleurHex(kleur: string | null | undefined): string {
 
 export function faseKleurLabel(kleur: string | null | undefined): string {
   const hex = faseKleurHex(kleur).toLowerCase();
-  return FASE_KLEUREN.find((k) => k.value.toLowerCase() === hex)?.label ?? 'Grijs';
+  return FASE_KLEUREN.find((k) => k.value.toLowerCase() === hex)?.label ?? tx('Grijs');
 }
 
 // ── Voertuigen ─────────────────────────────────────────────────────────────
@@ -308,45 +318,45 @@ export const PAKKETTEN: Record<string, { label: string; prijs: number }> = {
 export const EXTRA_GEBRUIKER_PRIJS = 10;
 
 export const pakketLabel = (tier: string | null | undefined) =>
-  PAKKETTEN[tier ?? '']?.label ?? tier ?? 'Onbekend';
+  PAKKETTEN[tier ?? '']?.label ?? tier ?? tx('Onbekend');
 
 export function maandbedrag(tier: string | null | undefined, extraGebruikers: number): number {
   return (PAKKETTEN[tier ?? '']?.prijs ?? 0) + (extraGebruikers || 0) * EXTRA_GEBRUIKER_PRIJS;
 }
 
 export const MODULES: Record<string, { label: string; prijs: number }> = {
-  stripe_betaallink: { label: 'Stripe betaallink', prijs: 10 },
-  planning: { label: 'Planningsmodule', prijs: 10 },
-  voertuigen: { label: 'Voertuigen', prijs: 5 },
-  hosting: { label: 'Website-hosting', prijs: 5 },
+  stripe_betaallink: { get label() { return tx('Stripe betaallink'); }, prijs: 10 },
+  planning: { get label() { return tx('Planningsmodule'); }, prijs: 10 },
+  voertuigen: { get label() { return tx('Voertuigen'); }, prijs: 5 },
+  hosting: { get label() { return tx('Website-hosting'); }, prijs: 5 },
 };
 
-export const LIMIET_LABELS: Record<string, string> = {
-  gebruikers: 'Gebruikers',
-  klanten: 'Klanten',
-  offertes: 'Offertes',
-  facturen: 'Facturen',
-};
+export const LIMIET_LABELS: Record<string, string> = vertaald({
+  gebruikers: txm('Gebruikers'),
+  klanten: txm('Klanten'),
+  offertes: txm('Offertes'),
+  facturen: txm('Facturen'),
+});
 
-export const ABONNEMENT_STATUS: Record<string, string> = {
-  trial: 'Gratis uitproberen',
-  actief: 'Actief',
-  betaalprobleem: 'Betaling mislukt',
-  opgezegd: 'Opgezegd',
-};
+export const ABONNEMENT_STATUS: Record<string, string> = vertaald({
+  trial: txm('Gratis uitproberen'),
+  actief: txm('Actief'),
+  betaalprobleem: txm('Betaling mislukt'),
+  opgezegd: txm('Opgezegd'),
+});
 
 export const WELKOMSTACTIES: Record<string, { label: string; kort: string }> = {
-  gratis_maanden: { label: 'Eerste 2 maanden gratis', kort: 'Je betaalt 10 van de 12 maanden.' },
+  gratis_maanden: { get label() { return tx('Eerste 2 maanden gratis'); }, get kort() { return tx('Je betaalt 10 van de 12 maanden.'); } },
   gratis_website: {
-    label: 'Gratis website',
-    kort: 'Wij bouwen eenmalig een professionele website voor je bedrijf.',
+    get label() { return tx('Gratis website'); },
+    get kort() { return tx('Wij bouwen eenmalig een professionele website voor je bedrijf.'); },
   },
 };
 
-export const WEBSITE_STATUS: Record<string, string> = {
-  open: 'aangevraagd',
-  gegevens_gevraagd: 'we hebben je gegevens opgevraagd per mail',
-  in_behandeling: 'in aanbouw',
-  opgeleverd: 'opgeleverd',
-  geannuleerd: 'geannuleerd',
-};
+export const WEBSITE_STATUS: Record<string, string> = vertaald({
+  open: txm('aangevraagd'),
+  gegevens_gevraagd: txm('we hebben je gegevens opgevraagd per mail'),
+  in_behandeling: txm('in aanbouw'),
+  opgeleverd: txm('opgeleverd'),
+  geannuleerd: txm('geannuleerd'),
+});

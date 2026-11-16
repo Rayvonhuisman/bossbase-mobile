@@ -14,6 +14,7 @@ import { getCompanySettings } from './settingsService';
 import { listCompanyProfiles } from './teamService';
 import { listWerkbonnenInBereik } from './planningService';
 import { listUrenForProfile } from './timeEntryService';
+import { tx } from '@/i18n';
 
 /**
  * De gegevens voor "Vul je werkdag in" (zie `lib/urenHerinnering.ts`): dezelfde
@@ -65,7 +66,7 @@ export async function laadUrenHerinnering(
       gepland.push({
         datum: it.datum,
         eind: it.eindtijd,
-        label: [it.werkbon.titel, it.werkbon.customer?.name].filter(Boolean).join(' · ') || 'Werkbon',
+        label: [it.werkbon.titel, it.werkbon.customer?.name].filter(Boolean).join(' · ') || tx('Werkbon'),
         werkbonId: it.werkbon.id,
       });
     }
@@ -75,7 +76,7 @@ export async function laadUrenHerinnering(
       // Het dashboard telt de lijst met toegewezenen; de oude enkele kolom als terugval.
       const ids = a.assigned_to_ids?.length ? a.assigned_to_ids : a.assigned_to ? [a.assigned_to] : [];
       if (!ids.includes(uid)) continue;
-      gepland.push({ datum: lokaleDatum(a.due_at), eind: a.end_time ?? null, label: a.title || 'Activiteit', werkbonId: null });
+      gepland.push({ datum: lokaleDatum(a.due_at), eind: a.end_time ?? null, label: a.title || tx('Activiteit'), werkbonId: null });
     }
     const geboekt = (urenRes.data ?? [])
       .filter((r) => r.bron === 'werkdag' && Number(r.uren) > 0)

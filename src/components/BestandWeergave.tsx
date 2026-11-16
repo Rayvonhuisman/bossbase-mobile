@@ -6,6 +6,7 @@ import { BestandFout, haalBestand, isTeBekijken, type Bestand, type GeladenBesta
 import { bewaarBestand, deelBestand } from '@/lib/pdfDelen';
 import { Dialog } from '@/lib/dialog';
 import { PdfFrame, type PdfBericht } from './PdfFrame';
+import { tx } from '@/i18n';
 
 /**
  * Eén bestand uit het blok Bestanden bekijken: een PDF schermvullend (zoals
@@ -53,7 +54,7 @@ function Inhoud({
       .then((b) => actief && setGeladen(b))
       .catch((e) => {
         if (__DEV__) console.log('[BestandWeergave] laden mislukt', e);
-        if (actief) setFout(e instanceof BestandFout ? e.message : 'Dit bestand kon niet worden geladen. Probeer het opnieuw.');
+        if (actief) setFout(e instanceof BestandFout ? e.message : tx('Dit bestand kon niet worden geladen. Probeer het opnieuw.'));
       });
     return () => {
       actief = false;
@@ -62,7 +63,7 @@ function Inhoud({
 
   const bericht = (b: PdfBericht) => {
     if (b.type === 'tik') setKnoppen((k) => !k);
-    if (b.type === 'fout') setFout('De PDF kon niet worden getoond.');
+    if (b.type === 'fout') setFout(tx('De PDF kon niet worden getoond.'));
   };
 
   const actie = async (soort: 'delen' | 'bewaren') => {
@@ -72,7 +73,7 @@ function Inhoud({
       if (soort === 'delen') await deelBestand(geladen.base64, geladen.bestandsnaam, geladen.mime);
       else await bewaarBestand(geladen.base64, geladen.bestandsnaam, geladen.mime);
     } catch {
-      Dialog.alert(soort === 'delen' ? 'Delen lukte niet' : 'Bewaren lukte niet', 'Probeer het opnieuw.');
+      Dialog.alert(soort === 'delen' ? tx('Delen lukte niet') : tx('Bewaren lukte niet'), tx('Probeer het opnieuw.'));
     } finally {
       setBezig(null);
     }
@@ -92,7 +93,7 @@ function Inhoud({
           ) : !geladen ? (
             <>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.melding}>Laden…</Text>
+              <Text style={styles.melding}>{tx('Laden…')}</Text>
             </>
           ) : foto ? (
             <Image
@@ -106,7 +107,7 @@ function Inhoud({
             <View style={styles.geenVoorbeeld}>
               <FileIcon size={44} color="#ddd" strokeWidth={1.5} />
               <Text style={styles.naam}>{geladen.bestandsnaam}</Text>
-              <Text style={styles.melding}>Dit soort bestand kan de app niet tonen. Deel het of bewaar het op je toestel.</Text>
+              <Text style={styles.melding}>{tx('Dit soort bestand kan de app niet tonen. Deel het of bewaar het op je toestel.')}</Text>
             </View>
           )}
         </Pressable>
@@ -114,7 +115,7 @@ function Inhoud({
 
       {knoppen || fout || (geladen && !tonen) ? (
         <View style={[styles.balk, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-          <Pressable onPress={onSluit} accessibilityRole="button" accessibilityLabel="Sluiten" hitSlop={8} style={styles.knop}>
+          <Pressable onPress={onSluit} accessibilityRole="button" accessibilityLabel={tx('Sluiten')} hitSlop={8} style={styles.knop}>
             <X size={24} color="#fff" strokeWidth={2.4} />
           </Pressable>
           <Text style={styles.titel} numberOfLines={1}>
@@ -125,7 +126,7 @@ function Inhoud({
               <Pressable
                 onPress={() => onVerwijder(bestand)}
                 accessibilityRole="button"
-                accessibilityLabel="Bestand verwijderen"
+                accessibilityLabel={tx('Bestand verwijderen')}
                 hitSlop={6}
                 style={styles.knop}
               >
@@ -136,7 +137,7 @@ function Inhoud({
               onPress={() => actie('bewaren')}
               disabled={!geladen || !!bezig}
               accessibilityRole="button"
-              accessibilityLabel="Downloaden"
+              accessibilityLabel={tx('Downloaden')}
               hitSlop={6}
               style={[styles.knop, !geladen && styles.uit]}
             >
@@ -146,12 +147,12 @@ function Inhoud({
               onPress={() => actie('delen')}
               disabled={!geladen || !!bezig}
               accessibilityRole="button"
-              accessibilityLabel="Delen"
+              accessibilityLabel={tx('Delen')}
               hitSlop={6}
               style={[styles.deelKnop, !geladen && styles.uit]}
             >
               {bezig === 'delen' ? <ActivityIndicator color="#0D0D0D" /> : <Share2 size={18} color="#0D0D0D" />}
-              <Text style={styles.deelTekst}>Delen</Text>
+              <Text style={styles.deelTekst}>{tx('Delen')}</Text>
             </Pressable>
           </View>
         </View>

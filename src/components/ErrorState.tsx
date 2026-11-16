@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react-native';
 import { Button } from './Button';
 import { spacing, type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
+import { tx } from '@/i18n';
 
 type Props = {
   title?: string;
@@ -22,10 +23,10 @@ type Props = {
  * leesbaar blijft.
  */
 export function ErrorState({
-  title = 'Er ging iets mis',
-  message = 'Probeer het opnieuw.',
+  title,
+  message,
   onRetry,
-  retryLabel = 'Opnieuw proberen',
+  retryLabel,
 }: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
@@ -34,11 +35,11 @@ export function ErrorState({
       <View style={styles.icon}>
         <AlertCircle size={28} color={t.statusRejectFg} strokeWidth={1.8} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.message}>{message}</Text>
+      <Text style={styles.title}>{title ?? tx('Er ging iets mis')}</Text>
+      <Text style={styles.message}>{message ?? tx('Probeer het opnieuw.')}</Text>
       {onRetry ? (
         <View style={styles.action}>
-          <Button label={retryLabel} variant="secondary" onPress={onRetry} />
+          <Button label={retryLabel ?? tx('Opnieuw proberen')} variant="secondary" onPress={onRetry} />
         </View>
       ) : null}
     </View>

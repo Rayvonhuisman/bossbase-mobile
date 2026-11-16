@@ -18,6 +18,7 @@ import { MobielKader } from '@/components/MobielKader';
 import { QrCode } from '@/components/QrCode';
 import { Dialog } from '@/lib/dialog';
 import { deelPdf } from '@/lib/pdfDelen';
+import { locale, tx, txm } from '@/i18n';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import {
@@ -41,16 +42,16 @@ import { HandtekeningVak } from './HandtekeningVak';
  */
 
 const STAPPEN: { fase: VerhuisFase; label: string }[] = [
-  { fase: 'voorbereiding', label: 'Afspraken' },
-  { fase: 'akkoord_start', label: 'Getekend vooraf' },
-  { fase: 'gestart', label: 'Bezig' },
-  { fase: 'beeindigd', label: 'Afrekening' },
-  { fase: 'akkoord_eind', label: 'Getekend achteraf' },
-  { fase: 'gefactureerd', label: 'Factuur' },
+  { fase: 'voorbereiding', label: txm('Afspraken') },
+  { fase: 'akkoord_start', label: txm('Getekend vooraf') },
+  { fase: 'gestart', label: txm('Bezig') },
+  { fase: 'beeindigd', label: txm('Afrekening') },
+  { fase: 'akkoord_eind', label: txm('Getekend achteraf') },
+  { fase: 'gefactureerd', label: txm('Factuur') },
 ];
 
 const tijd = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  iso ? new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
 export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: string; onWerkbonGewijzigd?: () => void }) {
   const { colors: th } = useTheme();
@@ -83,7 +84,7 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
       if (opties.werkbon) onWerkbonGewijzigd?.();
       return true;
     } catch (e) {
-      Dialog.alert('Niet gelukt', (e as Error).message);
+      Dialog.alert(tx('Niet gelukt'), (e as Error).message);
       await laad();
       return false;
     } finally {
@@ -94,8 +95,8 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
   if (!v) {
     return laadFout ? (
       <View style={s.kaart}>
-        <Text style={s.fout}>Verhuisgegevens laden lukte niet: {laadFout}</Text>
-        <Button label="Opnieuw" variant="secondary" onPress={laad} />
+        <Text style={s.fout}>{tx('Verhuisgegevens laden lukte niet: {fout}', { fout: laadFout })}</Text>
+        <Button label={tx('Opnieuw')} variant="secondary" onPress={laad} />
       </View>
     ) : null;
   }
@@ -112,11 +113,11 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
   return (
     <View style={s.kaart}>
       <View style={s.kopRij}>
-        <Text style={s.kopTitel}>Verhuizing</Text>
-        <Text style={s.fase}>{FASE_LABEL[v.fase]}</Text>
+        <Text style={s.kopTitel}>{tx('Verhuizing')}</Text>
+        <Text style={s.fase}>{tx(FASE_LABEL[v.fase])}</Text>
       </View>
-      <Text style={s.stap} accessibilityLabel={`Stap ${faseIdx + 1} van 6: ${STAPPEN[faseIdx]?.label}`}>
-        Stap {faseIdx + 1} van 6 · {STAPPEN[faseIdx]?.label}
+      <Text style={s.stap} accessibilityLabel={tx('Stap {stap} van 6: {naam}', { stap: faseIdx + 1, naam: tx(STAPPEN[faseIdx]?.label ?? '') })}>
+        {tx('Stap {stap} van 6 · {naam}', { stap: faseIdx + 1, naam: tx(STAPPEN[faseIdx]?.label ?? '') })}
       </Text>
       <View style={s.balk}>
         {STAPPEN.map((x, i) => (
@@ -125,7 +126,7 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
       </View>
 
       {!v.bestaat ? (
-        <Text style={s.hint}>De afspraken voor deze verhuizing zijn nog niet ingevuld. Dat gebeurt in het dashboard (werkbon › Verhuizing).</Text>
+        <Text style={s.hint}>{tx('De afspraken voor deze verhuizing zijn nog niet ingevuld. Dat gebeurt in het dashboard (werkbon › Verhuizing).')}</Text>
       ) : (
         <>
           <Gegevens v={v} s={s} />
@@ -141,20 +142,20 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
               onTekenen={() => setTekenen(true)} />
           ) : null}
 
-          {geannuleerd ? <Text style={s.hint}>Deze werkbon is geannuleerd.</Text> : null}
+          {geannuleerd ? <Text style={s.hint}>{tx('Deze werkbon is geannuleerd.')}</Text> : null}
 
           {!geannuleerd && v.fase === 'voorbereiding' && mag.uitvoeren ? (
-            <Button label="Klant laten tekenen vóór de start" onPress={() => setTekenen(true)} disabled={!!bezig} />
+            <Button label={tx('Klant laten tekenen vóór de start')} onPress={() => setTekenen(true)} disabled={!!bezig} />
           ) : null}
 
           {!geannuleerd && v.fase === 'akkoord_start' && mag.uitvoeren ? (
             <Button
-              label="Werkzaamheden starten"
+              label={tx('Werkzaamheden starten')}
               loading={bezig === 'start'}
               onPress={() =>
-                Dialog.alert('Werkzaamheden starten', 'De starttijd wordt nu vastgelegd.', [
-                  { text: 'Annuleren', style: 'cancel' },
-                  { text: 'Starten', onPress: () => { doe('start', () => start(werkbonId), { werkbon: true }); } },
+                Dialog.alert(tx('Werkzaamheden starten'), tx('De starttijd wordt nu vastgelegd.'), [
+                  { text: tx('Annuleren'), style: 'cancel' },
+                  { text: tx('Starten'), onPress: () => { doe('start', () => start(werkbonId), { werkbon: true }); } },
                 ])
               }
             />
@@ -162,15 +163,15 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
 
           {!geannuleerd && v.fase === 'gestart' ? (
             <View style={{ gap: spacing.sm }}>
-              <Text style={s.tekst}>Gestart {tijd(g?.gestart_op)}</Text>
+              <Text style={s.tekst}>{tx('Gestart {wanneer}', { wanneer: tijd(g?.gestart_op) })}</Text>
               {mag.uitvoeren ? (
                 <Button
-                  label="Werkzaamheden beëindigen"
+                  label={tx('Werkzaamheden beëindigen')}
                   loading={bezig === 'einde'}
                   onPress={() =>
-                    Dialog.alert('Werkzaamheden beëindigen', 'De eindtijd wordt nu vastgelegd. Daarna controleer je de uren en kosten.', [
-                      { text: 'Annuleren', style: 'cancel' },
-                      { text: 'Beëindigen', onPress: () => { doe('einde', () => beeindig(werkbonId)); } },
+                    Dialog.alert(tx('Werkzaamheden beëindigen'), tx('De eindtijd wordt nu vastgelegd. Daarna controleer je de uren en kosten.'), [
+                      { text: tx('Annuleren'), style: 'cancel' },
+                      { text: tx('Beëindigen'), onPress: () => { doe('einde', () => beeindig(werkbonId)); } },
                     ])
                   }
                 />
@@ -180,10 +181,10 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
 
           {v.fase === 'akkoord_eind' ? (
             mag.factureren ? (
-              <Button label="Eindafrekening factureren" loading={bezig === 'factuur'}
+              <Button label={tx('Eindafrekening factureren')} loading={bezig === 'factuur'}
                 onPress={() => doe('factuur', async () => { await maakFactuur(werkbonId); return null; })} />
             ) : (
-              <Text style={s.hint}>De klant heeft de afrekening getekend. Iemand met het recht Facturen maakt nu de factuur.</Text>
+              <Text style={s.hint}>{tx('De klant heeft de afrekening getekend. Iemand met het recht Facturen maakt nu de factuur.')}</Text>
             )
           ) : null}
 
@@ -191,20 +192,20 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
 
           {(v.fase === 'akkoord_eind' || v.fase === 'gefactureerd') ? (
             v.google_review_url ? (
-              <QrKaart soort="review" waarde={v.google_review_url} titel="Review op Google" s={s}
-                regel="Scan om een review achter te laten."
-                uitleg="Toon deze code aan elke klant, ongeacht hoe de klus ging. Dit is geen betaling." />
+              <QrKaart soort="review" waarde={v.google_review_url} titel={tx('Review op Google')} s={s}
+                regel={tx('Scan om een review achter te laten.')}
+                uitleg={tx('Toon deze code aan elke klant, ongeacht hoe de klus ging. Dit is geen betaling.')} />
             ) : mag.instellingen ? (
-              <Text style={s.melding}>Review-QR: er is nog geen Google-reviewlink ingesteld. Stel hem in het dashboard in bij Instellingen › Verhuizingen.</Text>
+              <Text style={s.melding}>{tx('Review-QR: er is nog geen Google-reviewlink ingesteld. Stel hem in het dashboard in bij Instellingen › Verhuizingen.')}</Text>
             ) : null
           ) : null}
 
           {v.handtekeningen?.length ? (
             <View style={{ gap: 4 }}>
-              <Text style={s.lbl}>Handtekeningen</Text>
+              <Text style={s.lbl}>{tx('Handtekeningen')}</Text>
               {v.handtekeningen.map((h) => (
                 <Text key={h.soort} style={s.sub}>
-                  {h.soort === 'start' ? 'Vooraf' : 'Achteraf'}: {h.naam} · {tijd(h.getekend_op)} · {euro(h.inhoud?.totaal_incl)}
+                  {h.soort === 'start' ? tx('Vooraf') : tx('Achteraf')}: {h.naam} · {tijd(h.getekend_op)} · {euro(h.inhoud?.totaal_incl)}
                 </Text>
               ))}
             </View>
@@ -240,7 +241,7 @@ function Gegevens({ v, s }: { v: Verhuis; s: S }) {
   return (
     <View style={{ gap: spacing.sm }}>
       <View>
-        <Text style={s.lbl}>Klant</Text>
+        <Text style={s.lbl}>{tx('Klant')}</Text>
         <Text style={s.waarde}>{g.klant_naam ?? '—'}</Text>
         {tel ? (
           <Pressable onPress={() => Linking.openURL(`tel:${tel}`)} accessibilityRole="link" hitSlop={6}>
@@ -250,25 +251,25 @@ function Gegevens({ v, s }: { v: Verhuis; s: S }) {
         {g.email ? <Text style={s.sub}>{g.email}</Text> : null}
       </View>
       <View>
-        <Text style={s.lbl}>Van</Text>
+        <Text style={s.lbl}>{tx('Van')}</Text>
         <Text style={s.waarde}>{g.vertrek_adres ?? '—'}</Text>
-        <Text style={[s.lbl, { marginTop: 6 }]}>Naar</Text>
+        <Text style={[s.lbl, { marginTop: 6 }]}>{tx('Naar')}</Text>
         <Text style={s.waarde}>{g.bestemming_adres ?? '—'}</Text>
         {route ? (
           <Pressable onPress={() => Linking.openURL(route)} accessibilityRole="link" hitSlop={6}>
-            <Text style={s.link}>Route openen</Text>
+            <Text style={s.link}>{tx('Route openen')}</Text>
           </Pressable>
         ) : null}
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.lg }}>
         <View>
-          <Text style={s.lbl}>Geschat</Text>
+          <Text style={s.lbl}>{tx('Geschat')}</Text>
           <Text style={s.waarde}>{g.geschatte_uren != null ? uren(g.geschatte_uren) : '—'}</Text>
-          {g.minimum_uren != null ? <Text style={s.sub}>minimaal {uren(g.minimum_uren)}</Text> : null}
+          {g.minimum_uren != null ? <Text style={s.sub}>{tx('minimaal {uren}', { uren: uren(g.minimum_uren) })}</Text> : null}
         </View>
         {g.werkelijke_uren != null ? (
           <View>
-            <Text style={s.lbl}>Werkelijk</Text>
+            <Text style={s.lbl}>{tx('Werkelijk')}</Text>
             <Text style={s.waarde}>{uren(g.werkelijke_uren)}</Text>
             <Text style={s.sub}>{tijd(g.gestart_op)} – {tijd(g.beeindigd_op)}</Text>
           </View>
@@ -276,7 +277,7 @@ function Gegevens({ v, s }: { v: Verhuis; s: S }) {
       </View>
       {g.afspraken ? (
         <View style={s.afspraken}>
-          <Text style={s.lbl}>Afspraken</Text>
+          <Text style={s.lbl}>{tx('Afspraken')}</Text>
           <Text style={s.tekst}>{g.afspraken}</Text>
         </View>
       ) : null}
@@ -290,16 +291,16 @@ function RegelsLijst({ inhoud, werkelijk, s }: { inhoud: Inhoud; werkelijk: bool
       {inhoud.regels.map((r, i) => (
         <View key={i} style={s.regel}>
           <View style={{ flex: 1 }}>
-            <Text style={s.tekst}>{r.omschrijving}{r.extra ? '  · extra' : ''}</Text>
-            <Text style={s.sub}>{euro(r.eenheidsprijs)} {SOORT_LABEL[r.soort]} excl. btw · {r.btw_pct}% btw · {r.soort === 'uur' ? uren(r.aantal) : `${nl(r.aantal)}${r.soort === 'km' ? ' km' : '×'}`}</Text>
+            <Text style={s.tekst}>{r.omschrijving}{r.extra ? `  · ${tx('extra')}` : ''}</Text>
+            <Text style={s.sub}>{tx('{prijs} {per} excl. btw · {pct}% btw · {aantal}', { prijs: euro(r.eenheidsprijs), per: tx(SOORT_LABEL[r.soort]), pct: r.btw_pct, aantal: r.soort === 'uur' ? uren(r.aantal) : `${nl(r.aantal)}${r.soort === 'km' ? ' km' : '×'}` })}</Text>
           </View>
           <Text style={s.bedrag}>{euro(r.bedrag)}</Text>
         </View>
       ))}
-      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>Totaal excl. btw</Text><Text style={s.sub}>{euro(inhoud.totaal_excl)}</Text></View>
-      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>Btw</Text><Text style={s.sub}>{euro(inhoud.btw)}</Text></View>
+      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Totaal excl. btw')}</Text><Text style={s.sub}>{euro(inhoud.totaal_excl)}</Text></View>
+      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Btw')}</Text><Text style={s.sub}>{euro(inhoud.btw)}</Text></View>
       <View style={[s.regel, s.totaal]}>
-        <Text style={[s.waarde, { flex: 1 }]}>{werkelijk ? 'Totaal' : 'Geschat totaal'} incl. btw</Text>
+        <Text style={[s.waarde, { flex: 1 }]}>{werkelijk ? tx('Totaal incl. btw') : tx('Geschat totaal incl. btw')}</Text>
         <Text style={s.waarde}>{euro(inhoud.totaal_incl)}</Text>
       </View>
     </View>
@@ -334,19 +335,19 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
 
   return (
     <View style={s.afrekening}>
-      <Text style={s.lbl}>Afrekening controleren</Text>
-      <Text style={s.hint}>De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.</Text>
-      <FormField label="Werkelijke uren" value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
+      <Text style={s.lbl}>{tx('Afrekening controleren')}</Text>
+      <Text style={s.hint}>{tx('De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.')}</Text>
+      <FormField label={tx('Werkelijke uren')} value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
       {regels.map((r, i) => (
         <View key={r.id ?? `n${i}`} style={s.invoerRegel}>
           {r.extra ? (
             <>
-              <TextInput style={s.invoer} value={r.omschrijving} placeholder="Omschrijving, bijv. parkeren" editable={kan}
-                accessibilityLabel="Omschrijving extra kosten" onChangeText={(w) => zet(i, 'omschrijving', w)} />
-              <TextInput style={s.invoer} value={r.eenheidsprijs} placeholder="Prijs excl. btw" keyboardType="decimal-pad"
-                editable={kan} accessibilityLabel="Prijs excl. btw" onChangeText={(w) => zet(i, 'eenheidsprijs', w)} />
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} accessibilityRole="radiogroup" accessibilityLabel="Btw">
-                <Text style={s.sub}>Btw</Text>
+              <TextInput style={s.invoer} value={r.omschrijving} placeholder={tx('Omschrijving, bijv. parkeren')} editable={kan}
+                accessibilityLabel={tx('Omschrijving extra kosten')} onChangeText={(w) => zet(i, 'omschrijving', w)} />
+              <TextInput style={s.invoer} value={r.eenheidsprijs} placeholder={tx('Prijs excl. btw')} keyboardType="decimal-pad"
+                editable={kan} accessibilityLabel={tx('Prijs excl. btw')} onChangeText={(w) => zet(i, 'eenheidsprijs', w)} />
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} accessibilityRole="radiogroup" accessibilityLabel={tx('Btw')}>
+                <Text style={s.sub}>{tx('Btw')}</Text>
                 {(['21', '9', '0'] as const).map((p) => (
                   <Pressable key={p} onPress={() => kan && zet(i, 'btw_pct', p)} accessibilityRole="radio"
                     accessibilityState={{ checked: r.btw_pct === p }} aria-checked={r.btw_pct === p} style={[s.chip, r.btw_pct === p && s.chipAan]}>
@@ -356,33 +357,33 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
               </View>
             </>
           ) : (
-            <Text style={s.tekst}>{r.omschrijving} <Text style={s.sub}>· {euro(getal(r.eenheidsprijs))} {SOORT_LABEL[r.soort as 'uur']}</Text></Text>
+            <Text style={s.tekst}>{r.omschrijving} <Text style={s.sub}>· {euro(getal(r.eenheidsprijs))} {tx(SOORT_LABEL[r.soort as 'uur'])}</Text></Text>
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={s.sub}>Aantal</Text>
+            <Text style={s.sub}>{tx('Aantal')}</Text>
             <TextInput style={[s.invoer, { width: 96 }]} value={r.werkelijk_aantal} keyboardType="decimal-pad" editable={kan}
-              accessibilityLabel={`Aantal ${r.omschrijving || 'extra kosten'}`} onChangeText={(w) => zet(i, 'werkelijk_aantal', w)} />
+              accessibilityLabel={tx('Aantal {wat}', { wat: r.omschrijving || tx('extra kosten') })} onChangeText={(w) => zet(i, 'werkelijk_aantal', w)} />
             {r.extra && kan ? (
-              <Pressable onPress={() => setRegels((rs) => rs.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel="Regel verwijderen" hitSlop={8}>
-                <Text style={s.verwijder}>Verwijderen</Text>
+              <Pressable onPress={() => setRegels((rs) => rs.filter((_, j) => j !== i))} accessibilityRole="button" accessibilityLabel={tx('Regel verwijderen')} hitSlop={8}>
+                <Text style={s.verwijder}>{tx('Verwijderen')}</Text>
               </Pressable>
             ) : null}
           </View>
         </View>
       ))}
       {kan ? (
-        <Button label="+ Extra kosten" variant="secondary"
+        <Button label={tx('+ Extra kosten')} variant="secondary"
           onPress={() => setRegels((rs) => [...rs, { soort: 'vast', omschrijving: '', eenheidsprijs: '', btw_pct: '21', werkelijk_aantal: '1', extra: true }])} />
       ) : null}
-      {inhoud && !gewijzigd ? <Text style={s.waarde}>Totaal incl. btw: {euro(inhoud.totaal_incl)}</Text> : null}
+      {inhoud && !gewijzigd ? <Text style={s.waarde}>{tx('Totaal incl. btw: {bedrag}', { bedrag: euro(inhoud.totaal_incl) })}</Text> : null}
       {kan ? (
         <View style={{ gap: spacing.sm }}>
-          <Button label="Afrekening opslaan" variant="secondary" loading={bezig === 'afrekening'} disabled={!gewijzigd || ongeldig || !!bezig}
+          <Button label={tx('Afrekening opslaan')} variant="secondary" loading={bezig === 'afrekening'} disabled={!gewijzigd || ongeldig || !!bezig}
             onPress={() => onOpslaan(getal(urenTxt), regels.map((r) => (r.id && !r.extra
               ? { id: r.id, werkelijk_aantal: getal(r.werkelijk_aantal) }
               : { ...(r.id ? { id: r.id } : {}), soort: r.soort, omschrijving: r.omschrijving.trim(), eenheidsprijs: getal(r.eenheidsprijs), btw_pct: Number(r.btw_pct), werkelijk_aantal: getal(r.werkelijk_aantal) })))} />
-          <Button label="Afrekening laten tekenen" disabled={gewijzigd || !!bezig} onPress={onTekenen} />
-          {gewijzigd ? <Text style={s.hint}>Sla eerst op; de klant tekent voor wat is opgeslagen.</Text> : null}
+          <Button label={tx('Afrekening laten tekenen')} disabled={gewijzigd || !!bezig} onPress={onTekenen} />
+          {gewijzigd ? <Text style={s.hint}>{tx('Sla eerst op; de klant tekent voor wat is opgeslagen.')}</Text> : null}
         </View>
       ) : null}
     </View>
@@ -406,9 +407,9 @@ function TekenModal({ tekenen, standaardNaam, bezig, onClose, onTeken }: {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={s.modalKop}>
             <Pressable onPress={() => !bezig && onClose()} hitSlop={8} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }}>
-              <Text style={s.annuleer}>Annuleren</Text>
+              <Text style={s.annuleer}>{tx('Annuleren')}</Text>
             </Pressable>
-            <Text style={s.modalTitel} numberOfLines={1}>{isStart ? 'Akkoord vooraf' : 'Akkoord afrekening'}</Text>
+            <Text style={s.modalTitel} numberOfLines={1}>{isStart ? tx('Akkoord vooraf') : tx('Akkoord afrekening')}</Text>
             <View style={{ minWidth: 64 }} />
           </View>
           <ScrollView contentContainerStyle={s.modalBody} keyboardShouldPersistTaps="handled" scrollEnabled={!tekent}>
@@ -418,18 +419,18 @@ function TekenModal({ tekenen, standaardNaam, bezig, onClose, onTeken }: {
                 : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}.`}
             </Text>
             {inh.afspraken ? (
-              <View style={s.afspraken}><Text style={s.lbl}>Afspraken</Text><Text style={s.tekst}>{inh.afspraken}</Text></View>
+              <View style={s.afspraken}><Text style={s.lbl}>{tx('Afspraken')}</Text><Text style={s.tekst}>{inh.afspraken}</Text></View>
             ) : null}
             <RegelsLijst inhoud={inh} werkelijk={!isStart} s={s} />
-            {!isStart ? <Text style={s.hint}>Hierna volgt de factuur. Betalen kan met iDEAL via de QR-code; tekenen is nog geen betaling.</Text> : null}
-            <FormField label="Naam ondertekenaar" value={naam} onChangeText={setNaam} editable={!bezig} autoComplete="name" />
+            {!isStart ? <Text style={s.hint}>{tx('Hierna volgt de factuur. Betalen kan met iDEAL via de QR-code; tekenen is nog geen betaling.')}</Text> : null}
+            <FormField label={tx('Naam ondertekenaar')} value={naam} onChangeText={setNaam} editable={!bezig} autoComplete="name" />
             {/* Niet `disabled` doorgeven: de webversie wist het canvas als die wisselt,
                 en na een mislukte poging moet de handtekening blijven staan. */}
             <View pointerEvents={bezig ? 'none' : 'auto'} style={bezig ? { opacity: 0.6 } : undefined}>
               <HandtekeningVak onChange={setPng} onTekenen={setTekent} />
             </View>
-            <Text style={s.sub}>Vastgelegd worden: naam, tijdstip en deze inhoud (kenmerk {tekenen.sha256.slice(0, 12)}…).</Text>
-            <Button label="Akkoord en tekenen" loading={bezig} disabled={!png || !naam.trim()} onPress={() => png && onTeken(naam.trim(), png)} />
+            <Text style={s.sub}>{tx('Vastgelegd worden: naam, tijdstip en deze inhoud (kenmerk {kenmerk}…).', { kenmerk: tekenen.sha256.slice(0, 12) })}</Text>
+            <Button label={tx('Akkoord en tekenen')} loading={bezig} disabled={!png || !naam.trim()} onPress={() => png && onTeken(naam.trim(), png)} />
           </ScrollView>
         </KeyboardAvoidingView>
       </MobielKader>
@@ -468,19 +469,23 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
 
   return (
     <View style={s.factuur}>
-      <Text style={s.lbl}>Factuur</Text>
+      <Text style={s.lbl}>{tx('Factuur')}</Text>
       <Text style={s.waarde}>{f.nummer} · {euro(f.totaal_incl)}</Text>
       <Text style={[s.status, betaald && s.statusOk]}>
-        {betaald ? `Betaald${f.betaald_op ? ` op ${new Date(f.betaald_op).toLocaleDateString('nl-NL')}` : ''}` : 'Nog niet betaald'}
+        {betaald
+          ? f.betaald_op
+            ? tx('Betaald op {datum}', { datum: new Date(f.betaald_op).toLocaleDateString(locale()) })
+            : tx('Betaald')
+          : tx('Nog niet betaald')}
       </Text>
-      <Button label="Factuur-PDF delen of openen" variant="secondary" loading={pdfBezig}
+      <Button label={tx('Factuur-PDF delen of openen')} variant="secondary" loading={pdfBezig}
         onPress={async () => {
           setPdfBezig(true);
           try {
             const { pdf_base64, bestandsnaam } = await getFactuurPdf(werkbonId);
             await deelPdf(pdf_base64, bestandsnaam);
           } catch (e) {
-            Dialog.alert('PDF niet gelukt', (e as Error).message);
+            Dialog.alert(tx('PDF niet gelukt'), (e as Error).message);
           } finally {
             setPdfBezig(false);
           }
@@ -488,38 +493,45 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
 
       {!betaald ? (
         link?.url ? (
-          <QrKaart soort="betalen" waarde={link.url} titel="Betalen met iDEAL" s={s}
-            regel={`Te betalen: ${euro(f.totaal_incl)}`}
-            uitleg="Laat de klant deze code scannen met de camera of de bank-app. De factuur staat pas op betaald als Stripe de betaling bevestigt." />
+          <QrKaart soort="betalen" waarde={link.url} titel={tx('Betalen met iDEAL')} s={s}
+            regel={tx('Te betalen: {bedrag}', { bedrag: euro(f.totaal_incl) })}
+            uitleg={tx('Laat de klant deze code scannen met de camera of de bank-app. De factuur staat pas op betaald als Stripe de betaling bevestigt.')} />
         ) : link ? (
           <View style={{ gap: 6 }}>
-            <Text style={s.melding}>Geen betaal-QR. {link.fout ?? BETAALLINK_REDEN[link.reden ?? ''] ?? 'Betaallink niet beschikbaar.'}</Text>
-            {link.fout ? <Button label="Opnieuw" variant="ghost" onPress={haalLink} /> : null}
+            <Text style={s.melding}>
+              {tx('Geen betaal-QR.')}{' '}
+              {link.fout ?? redenTekst(link.reden)}
+            </Text>
+            {link.fout ? <Button label={tx('Opnieuw')} variant="ghost" onPress={haalLink} /> : null}
           </View>
         ) : (
-          <Text style={s.hint}>Betaallink ophalen…</Text>
+          <Text style={s.hint}>{tx('Betaallink ophalen…')}</Text>
         )
       ) : null}
 
       <Text style={s.sub}>
-        {!betaald ? 'Na de betaling krijgt de klant de factuur automatisch per e-mail.' : null}
-        {betaald && mailStatus === 'verstuurd' ? `Factuur gemaild naar de klant op ${tijd(v.gegevens?.factuurmail_verstuurd_op)}.` : null}
-        {wachtOpWebhook ? 'Factuur wordt naar de klant gemaild…' : null}
-        {buitenStripe && mailStatus === 'wacht' ? 'Betaald buiten iDEAL; de factuur is niet automatisch gemaild.' : null}
-        {betaald && mailStatus === 'geen_adres' ? 'Er is geen e-mailadres bekend; deel de PDF met de klant.' : null}
+        {!betaald ? tx('Na de betaling krijgt de klant de factuur automatisch per e-mail.') : null}
+        {betaald && mailStatus === 'verstuurd' ? tx('Factuur gemaild naar de klant op {wanneer}.', { wanneer: tijd(v.gegevens?.factuurmail_verstuurd_op) }) : null}
+        {wachtOpWebhook ? tx('Factuur wordt naar de klant gemaild…') : null}
+        {buitenStripe && mailStatus === 'wacht' ? tx('Betaald buiten iDEAL; de factuur is niet automatisch gemaild.') : null}
+        {betaald && mailStatus === 'geen_adres' ? tx('Er is geen e-mailadres bekend; deel de PDF met de klant.') : null}
       </Text>
       {betaald && mailStatus === 'mislukt' ? (
-        <Text style={s.fout}>Mailen van de factuur is mislukt{v.gegevens?.factuurmail_fout ? ` (${v.gegevens.factuurmail_fout})` : ''}.</Text>
+        <Text style={s.fout}>
+          {v.gegevens?.factuurmail_fout
+            ? tx('Mailen van de factuur is mislukt ({fout}).', { fout: v.gegevens.factuurmail_fout })
+            : tx('Mailen van de factuur is mislukt.')}
+        </Text>
       ) : null}
       {magMailen ? (
-        <Button label={mailStatus === 'mislukt' ? 'Opnieuw versturen' : 'Factuur mailen'} variant="secondary" loading={mailBezig}
+        <Button label={mailStatus === 'mislukt' ? tx('Opnieuw versturen') : tx('Factuur mailen')} variant="secondary" loading={mailBezig}
           onPress={async () => {
             setMailBezig(true);
             try {
               const r = await verstuurFactuurmailOpnieuw(werkbonId);
-              if (r.uitkomst !== 'verstuurd') Dialog.alert('Niet verstuurd', r.fout ?? 'Mailen is niet gelukt.');
+              if (r.uitkomst !== 'verstuurd') Dialog.alert(tx('Niet verstuurd'), r.fout ?? tx('Mailen is niet gelukt.'));
             } catch (e) {
-              Dialog.alert('Niet verstuurd', (e as Error).message);
+              Dialog.alert(tx('Niet verstuurd'), (e as Error).message);
             } finally {
               setMailBezig(false);
               await onVernieuw();
@@ -528,6 +540,11 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
       ) : null}
     </View>
   );
+}
+
+function redenTekst(reden?: string) {
+  const r = reden ? BETAALLINK_REDEN[reden] : undefined;
+  return r ? tx(r) : tx('Betaallink niet beschikbaar.');
 }
 
 function QrKaart({ soort, waarde, titel, regel, uitleg, s }: {
@@ -539,22 +556,22 @@ function QrKaart({ soort, waarde, titel, regel, uitleg, s }: {
   return (
     <View style={[s.qr, soort === 'betalen' ? s.qrBetalen : s.qrReview]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Text style={[s.qrLabel, { backgroundColor: soort === 'betalen' ? '#15A34A' : '#B45309' }]}>{soort === 'betalen' ? '€ BETALEN' : '★ REVIEW'}</Text>
+        <Text style={[s.qrLabel, { backgroundColor: soort === 'betalen' ? '#15A34A' : '#B45309' }]}>{soort === 'betalen' ? `€ ${tx('BETALEN')}` : `★ ${tx('REVIEW')}`}</Text>
         <Text style={s.qrTitel}>{titel}</Text>
       </View>
-      <Pressable onPress={() => setGroot(true)} accessibilityRole="button" accessibilityLabel={`${titel}: QR-code groot tonen`} style={{ alignSelf: 'center' }}>
+      <Pressable onPress={() => setGroot(true)} accessibilityRole="button" accessibilityLabel={tx('{titel}: QR-code groot tonen', { titel })} style={{ alignSelf: 'center' }}>
         <QrCode waarde={waarde} grootte={klein} label={titel} />
       </Pressable>
       <Text style={s.qrTekst}>{regel}</Text>
       <Text style={s.qrSub}>{uitleg}</Text>
-      <Button label="Groot tonen" variant="ghost" onPress={() => setGroot(true)} />
+      <Button label={tx('Groot tonen')} variant="ghost" onPress={() => setGroot(true)} />
       <Modal visible={groot} animationType="fade" onRequestClose={() => setGroot(false)} transparent>
-        <Pressable style={s.grootAchter} onPress={() => setGroot(false)} accessibilityRole="button" accessibilityLabel="Sluiten">
+        <Pressable style={s.grootAchter} onPress={() => setGroot(false)} accessibilityRole="button" accessibilityLabel={tx('Sluiten')}>
           <View style={[s.grootKaart, soort === 'betalen' ? s.qrBetalen : s.qrReview]}>
             <Text style={s.qrTitel}>{titel}</Text>
             <QrCode waarde={waarde} grootte={Math.min(width - 64, 420)} label={titel} />
             <Text style={s.qrTekst}>{regel}</Text>
-            <Text style={s.qrSub}>Tik om te sluiten</Text>
+            <Text style={s.qrSub}>{tx('Tik om te sluiten')}</Text>
           </View>
         </Pressable>
       </Modal>

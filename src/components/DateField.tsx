@@ -11,6 +11,7 @@ import {
   parseISOTijd,
   tijdVanDatum,
 } from '@/lib/datum';
+import { tx, locale } from '@/i18n';
 
 /**
  * Datum- en tijdselectie voor de hele app.
@@ -56,7 +57,7 @@ export function DateField({
   hint,
   minimum,
   maximum,
-  placeholder = 'Kies een datum',
+  placeholder: placeholderProp,
   disabled,
 }: DateProps) {
   const { colors: t, colorMode } = useTheme();
@@ -65,6 +66,7 @@ export function DateField({
 
   const gekozen = parseISODatum(value) ?? new Date();
   const label_ = nlDatum(value);
+  const placeholder = placeholderProp ?? tx('Kies een datum');
 
   const zet = (event: DateTimePickerEvent, d?: Date) => {
     if (Platform.OS === 'android') {
@@ -97,7 +99,7 @@ export function DateField({
             value={gekozen}
             mode="date"
             display="inline"
-            locale="nl-NL"
+            locale={locale()}
             themeVariant={colorMode}
             minimumDate={parseISODatum(minimum) ?? undefined}
             maximumDate={parseISODatum(maximum) ?? undefined}
@@ -135,7 +137,7 @@ export function TimeField({
   value,
   onChange,
   hint,
-  placeholder = 'Kies een tijd',
+  placeholder: placeholderProp,
   disabled,
 }: TimeProps) {
   const { colors: t, colorMode } = useTheme();
@@ -143,6 +145,7 @@ export function TimeField({
   const [open, setOpen] = useState(false);
 
   const gekozen = parseISOTijd(value) ?? new Date();
+  const placeholder = placeholderProp ?? tx('Kies een tijd');
 
   const zet = (event: DateTimePickerEvent, d?: Date) => {
     if (Platform.OS === 'android') {
@@ -175,7 +178,7 @@ export function TimeField({
             value={gekozen}
             mode="time"
             display="spinner"
-            locale="nl-NL"
+            locale={locale()}
             themeVariant={colorMode}
             minuteInterval={5}
             onChange={zet}
@@ -210,7 +213,7 @@ function KiezerVel({
           <View style={styles.velKop}>
             <Text style={styles.velTitel}>{titel}</Text>
             <Pressable onPress={onSluit} hitSlop={10} accessibilityRole="button">
-              <Text style={styles.velGereed}>Gereed</Text>
+              <Text style={styles.velGereed}>{tx('Gereed')}</Text>
             </Pressable>
           </View>
           {children}

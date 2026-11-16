@@ -7,6 +7,7 @@
  * De status van een deal (`open | won | lost`) zet de database zelf, via de
  * trigger `bb_deal_status_uit_fase`. Hier wordt hij alleen gelezen.
  */
+import { tx } from '@/i18n';
 
 // ── Fasekleuren ────────────────────────────────────────────────────────────
 
@@ -204,10 +205,10 @@ export const STANDAARD_FILTER: PipelineFilter = {
 };
 
 export const STATUS_FILTER_OPTIES: { id: PipelineStatusFilter; label: string }[] = [
-  { id: 'open', label: 'Lopend' },
-  { id: 'done', label: 'Project voltooid' },
-  { id: 'lost', label: 'Verloren' },
-  { id: 'any', label: 'Alles tonen' },
+  { id: 'open', get label() { return tx('Lopend'); } },
+  { id: 'done', get label() { return tx('Project voltooid'); } },
+  { id: 'lost', get label() { return tx('Verloren'); } },
+  { id: 'any', get label() { return tx('Alles tonen'); } },
 ];
 
 export function filterIsActief(f: PipelineFilter): boolean {

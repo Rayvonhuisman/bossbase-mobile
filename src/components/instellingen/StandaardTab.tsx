@@ -33,6 +33,13 @@ import {
   type EigenEenheid,
 } from '@/services/instellingenService';
 import { Keuze, Kaart, Schakel, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { tx, locale } from '@/i18n';
+
+/** Weekdag i (0 = maandag) in de taal van de gebruiker. */
+const weekdagNaam = (i: number, weekday: 'long' | 'short') => {
+  const naam = new Intl.DateTimeFormat(locale(), { weekday, timeZone: 'UTC' }).format(new Date(Date.UTC(2024, 0, 1 + i)));
+  return naam.charAt(0).toLocaleUpperCase(locale()) + naam.slice(1);
+};
 
 type Form = {
   uurtarief: string;
@@ -143,19 +150,19 @@ export function StandaardTab({
       samen: [['agenda_start_uur', 'agenda_eind_uur']],
     });
     if (isLeeg(wijzigingen)) {
-      toon('Er is niets gewijzigd.', 'info');
+      toon(tx('Er is niets gewijzigd.'), 'info');
       return;
     }
     return save(() => upsertCompanySettings(wijzigingen), {
       onSuccess: () => onGewijzigd(),
-      succesMelding: 'Instellingen opgeslagen',
+      succesMelding: tx('Instellingen opgeslagen'),
     });
   };
 
   const opslaanKnop = magWijzigen ? (
     <>
       {error ? <Uitleg toon="fout">{error}</Uitleg> : null}
-      <Button label="Opslaan" loading={saving} disabled={saving} onPress={opslaan} />
+      <Button label={tx('Opslaan')} loading={saving} disabled={saving} onPress={opslaan} />
     </>
   ) : null;
 
@@ -166,23 +173,23 @@ export function StandaardTab({
         setEenheid(null);
         await laadEenheden();
       },
-      succesMelding: 'Eenheidsprijs opgeslagen',
+      succesMelding: tx('Eenheidsprijs opgeslagen'),
     });
   };
 
   const eenheidWeg = (e: EigenEenheid) =>
     Dialog.alert(
-      'Eenheidsprijs verwijderen?',
-      'Bestaande offertes/facturen behouden hun bedrag.',
+      tx('Eenheidsprijs verwijderen?'),
+      tx('Bestaande offertes/facturen behouden hun bedrag.'),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Verwijderen',
+          text: tx('Verwijderen'),
           style: 'destructive',
           onPress: () =>
             saveE(() => deleteEenheid(e.id), {
               onSuccess: () => laadEenheden(),
-              succesMelding: 'Eenheidsprijs verwijderd',
+              succesMelding: tx('Eenheidsprijs verwijderd'),
             }),
         },
       ],
@@ -194,16 +201,16 @@ export function StandaardTab({
     <>
       {!magWijzigen ? (
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <Uitleg>Je kunt deze instellingen bekijken. Wijzigen kan alleen een beheerder.</Uitleg>
+          <Uitleg>{tx('Je kunt deze instellingen bekijken. Wijzigen kan alleen een beheerder.')}</Uitleg>
         </View>
       ) : null}
 
       {deel === 'standaard' ? (
-      <Kaart titel="Tarieven en termijnen" sub="Wordt vooringevuld bij nieuwe offertes en werkbonnen.">
+      <Kaart titel={tx('Tarieven en termijnen')} sub={tx('Wordt vooringevuld bij nieuwe offertes en werkbonnen.')}>
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Uurtarief (€/uur)"
+              label={tx('Uurtarief (€/uur)')}
               value={form.uurtarief}
               onChangeText={(v) => setForm((f) => ({ ...f, uurtarief: v }))}
               keyboardType="decimal-pad"
@@ -212,7 +219,7 @@ export function StandaardTab({
           </View>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Reiskosten (€/km)"
+              label={tx('Reiskosten (€/km)')}
               value={form.reiskosten}
               onChangeText={(v) => setForm((f) => ({ ...f, reiskosten: v }))}
               keyboardType="decimal-pad"
@@ -223,7 +230,7 @@ export function StandaardTab({
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="BTW (%)"
+              label={tx('BTW (%)')}
               value={form.btw}
               onChangeText={(v) => setForm((f) => ({ ...f, btw: v }))}
               keyboardType="decimal-pad"
@@ -232,7 +239,7 @@ export function StandaardTab({
           </View>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Offerte geldig (dagen)"
+              label={tx('Offerte geldig (dagen)')}
               value={form.geldig}
               onChangeText={(v) => setForm((f) => ({ ...f, geldig: v }))}
               keyboardType="number-pad"
@@ -241,26 +248,26 @@ export function StandaardTab({
           </View>
         </View>
         <FormField
-          label="Betaaltermijn facturen (dagen)"
+          label={tx('Betaaltermijn facturen (dagen)')}
           value={form.betaaltermijn}
           onChangeText={(v) => setForm((f) => ({ ...f, betaaltermijn: v }))}
           keyboardType="number-pad"
           editable={magWijzigen}
-          hint="Na hoeveel dagen een nieuwe factuur vervalt. Heeft een klant een eigen betaaltermijn, dan geldt die. Bestaande facturen houden hun vervaldatum."
+          hint={tx('Na hoeveel dagen een nieuwe factuur vervalt. Heeft een klant een eigen betaaltermijn, dan geldt die. Bestaande facturen houden hun vervaldatum.')}
         />
         <Keuze
-          label="BTW-stelsel"
+          label={tx('BTW-stelsel')}
           opties={[
-            { id: 'factuur', label: 'Factuurstelsel' },
-            { id: 'kas', label: 'Kasstelsel' },
+            { id: 'factuur', label: tx('Factuurstelsel') },
+            { id: 'kas', label: tx('Kasstelsel') },
           ]}
           waarde={form.btwStelsel}
           onKies={(v) => setForm((f) => ({ ...f, btwStelsel: v }))}
           uitgeschakeld={!magWijzigen}
           hint={
             form.btwStelsel === 'kas'
-              ? 'Kasstelsel — omzet telt op betaaldatum'
-              : 'Factuurstelsel — omzet telt op factuurdatum'
+              ? tx('Kasstelsel — omzet telt op betaaldatum')
+              : tx('Factuurstelsel — omzet telt op factuurdatum')
           }
         />
         {opslaanKnop}
@@ -269,12 +276,12 @@ export function StandaardTab({
 
       {deel === 'herinneringen' ? (
       <Kaart
-        titel="Herinneringen"
-        sub="Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen."
+        titel={tx('Herinneringen')}
+        sub={tx('Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen.')}
       >
         <Schakel
-          titel="Uren-herinnering"
-          uitleg="Medewerkers die gepland stonden en nog geen werkdag hebben ingevuld, krijgen de melding 'Vul je werkdag in'. De beheerder krijgt hem zelf niet."
+          titel={tx('Uren-herinnering')}
+          uitleg={tx('Medewerkers die gepland stonden en nog geen werkdag hebben ingevuld, krijgen de melding \'Vul je werkdag in\'. De beheerder krijgt hem zelf niet.')}
           waarde={herinneringAan}
           onWissel={(v) => setForm((f) => ({ ...f, interval: v ? 60 : 0 }))}
           uitgeschakeld={!magWijzigen}
@@ -282,18 +289,18 @@ export function StandaardTab({
         {herinneringAan ? (
           <>
             <Keuze
-              label="Herhalen"
+              label={tx('Herhalen')}
               opties={HERINNERING_INTERVALLEN}
               waarde={String(form.interval)}
               onKies={(v) => setForm((f) => ({ ...f, interval: Number(v) }))}
               uitgeschakeld={!magWijzigen}
-              hint="De melding in de app kan worden weggeklikt en keert op dit interval terug tot de werkdag is ingevuld. Een mail gaat één keer per werkdag."
+              hint={tx('De melding in de app kan worden weggeklikt en keert op dit interval terug tot de werkdag is ingevuld. Een mail gaat één keer per werkdag.')}
             />
             <Keuze
-              label="Voor wie"
+              label={tx('Voor wie')}
               opties={[
-                { id: 'alle', label: 'Alle medewerkers' },
-                { id: 'per', label: 'Per medewerker instellen' },
+                { id: 'alle', label: tx('Alle medewerkers') },
+                { id: 'per', label: tx('Per medewerker instellen') },
               ]}
               waarde={perMedewerker ? 'per' : 'alle'}
               onKies={(v) => {
@@ -305,8 +312,8 @@ export function StandaardTab({
             />
             {perMedewerker ? (
               <View style={{ gap: 4 }}>
-                <Text style={s.label}>Medewerkers die de herinnering krijgen</Text>
-                {team.length === 0 ? <Text style={s.hint}>Er zijn nog geen medewerkers.</Text> : null}
+                <Text style={s.label}>{tx('Medewerkers die de herinnering krijgen')}</Text>
+                {team.length === 0 ? <Text style={s.hint}>{tx('Er zijn nog geen medewerkers.')}</Text> : null}
                 {team.map((m) => (
                   <Schakel
                     key={m.id}
@@ -321,15 +328,15 @@ export function StandaardTab({
               </View>
             ) : null}
             <Keuze
-              label="Wanneer"
+              label={tx('Wanneer')}
               opties={HERINNERING_MOMENTEN}
               waarde={form.moment}
               onKies={(v) => setForm((f) => ({ ...f, moment: v as HerinneringMoment }))}
               uitgeschakeld={!magWijzigen}
-              hint="Na afloop van de werkdag: vanaf de eindtijd die voor de medewerker gepland staat (zonder eindtijd 17:00). Einde van de dag: vanaf 17:00. De volgende ochtend: de dag erna, per mail om 07:00."
+              hint={tx('Na afloop van de werkdag: vanaf de eindtijd die voor de medewerker gepland staat (zonder eindtijd 17:00). Einde van de dag: vanaf 17:00. De volgende ochtend: de dag erna, per mail om 07:00.')}
             />
             <View style={{ gap: 4 }}>
-              <Text style={s.label}>Op welke dagen</Text>
+              <Text style={s.label}>{tx('Op welke dagen')}</Text>
               <View style={s.chipRij}>
                 {WEEKDAGEN.map((naam, i) => {
                   const aan = form.dagen.includes(i + 1);
@@ -343,23 +350,23 @@ export function StandaardTab({
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: aan, disabled: !magWijzigen }}
                       aria-checked={aan}
-                      accessibilityLabel={naam}
+                      accessibilityLabel={weekdagNaam(i, 'long')}
                       style={[s.chip, aan && s.chipActief, !magWijzigen && s.uit]}
                     >
-                      <Text style={[s.chipTekst, aan && s.chipTekstActief]}>{naam.slice(0, 2)}</Text>
+                      <Text style={[s.chipTekst, aan && s.chipTekstActief]}>{weekdagNaam(i, 'short').slice(0, 2)}</Text>
                     </Pressable>
                   );
                 })}
               </View>
               <Text style={s.hint}>
-                Staat een dag uit, dan komt de herinnering op de eerstvolgende dag die aan staat.
+                {tx('Staat een dag uit, dan komt de herinnering op de eerstvolgende dag die aan staat.')}
               </Text>
             </View>
             <Keuze
-              label="Hoe"
+              label={tx('Hoe')}
               opties={[
-                { id: 'app', label: 'Melding in de app' },
-                { id: 'mail', label: 'In de app en per mail' },
+                { id: 'app', label: tx('Melding in de app') },
+                { id: 'mail', label: tx('In de app en per mail') },
               ]}
               waarde={form.mail ? 'mail' : 'app'}
               onKies={(v) => setForm((f) => ({ ...f, mail: v === 'mail' }))}
@@ -373,11 +380,11 @@ export function StandaardTab({
 
       {deel === 'agenda' ? (
       <Kaart
-        titel="Agenda"
-        sub="Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster."
+        titel={tx('Agenda')}
+        sub={tx('Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster.')}
       >
         <SelectField
-          label="Eerste zichtbare uur"
+          label={tx('Eerste zichtbare uur')}
           options={AGENDA_START_UREN.map((u) => ({ id: String(u), label: uurLabel(u) }))}
           value={String(form.agendaStart)}
           onChange={(v) =>
@@ -389,7 +396,7 @@ export function StandaardTab({
           disabled={!magWijzigen}
         />
         <SelectField
-          label="Laatste zichtbare uur"
+          label={tx('Laatste zichtbare uur')}
           options={agendaEindUren(form.agendaStart).map((u) => ({ id: String(u), label: uurLabel(u) }))}
           value={String(form.agendaEind)}
           onChange={(v) => setForm((f) => ({ ...f, agendaEind: Number(v ?? f.agendaEind) }))}
@@ -401,27 +408,27 @@ export function StandaardTab({
 
       {deel === 'eenheden' ? (
       <Kaart
-        titel="Eenheidsprijzen"
-        sub="Een prijs per eenheid voor werk dat je verkoopt, zoals m² sauzen of een kozijn plaatsen. In een offerte of factuur kies je hem als regeltype."
+        titel={tx('Eenheidsprijzen')}
+        sub={tx('Een prijs per eenheid voor werk dat je verkoopt, zoals m² sauzen of een kozijn plaatsen. In een offerte of factuur kies je hem als regeltype.')}
         rechts={
           magWijzigen ? (
             <Button
-              label="Toevoegen"
+              label={tx('Toevoegen')}
               variant="secondary"
               onPress={() => setEenheid({ id: null, naam: '', standaard_prijs: '', eenheid_label: '', btw_pct: '' })}
             />
           ) : undefined
         }
       >
-        {eenheden.length === 0 ? <Text style={s.hint}>Nog geen eenheidsprijzen.</Text> : null}
+        {eenheden.length === 0 ? <Text style={s.hint}>{tx('Nog geen eenheidsprijzen.')}</Text> : null}
         {eenheden.map((e) => (
           <View key={e.id} style={s.lijstRij}>
             <View style={{ flex: 1 }}>
               <Text style={s.lijstTitel}>{e.naam}</Text>
               <Text style={s.lijstSub}>
                 {formatEUR(e.standaard_prijs)}
-                {e.eenheid_label ? ` per ${e.eenheid_label}` : ''}
-                {e.btw_pct != null ? ` · ${e.btw_pct}% btw` : ''}
+                {e.eenheid_label ? ` ${tx('per {eenheid}', { eenheid: e.eenheid_label })}` : ''}
+                {e.btw_pct != null ? ` · ${tx('{pct}% btw', { pct: e.btw_pct })}` : ''}
               </Text>
             </View>
             {magWijzigen ? (
@@ -437,7 +444,7 @@ export function StandaardTab({
                     })
                   }
                   accessibilityRole="button"
-                  accessibilityLabel={`${e.naam} bewerken`}
+                  accessibilityLabel={tx('{naam} bewerken', { naam: e.naam })}
                   style={s.iconKnop}
                 >
                   <Pencil size={17} color={t.muted} />
@@ -445,7 +452,7 @@ export function StandaardTab({
                 <Pressable
                   onPress={() => eenheidWeg(e)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${e.naam} verwijderen`}
+                  accessibilityLabel={tx('{naam} verwijderen', { naam: e.naam })}
                   style={s.iconKnop}
                 >
                   <Trash2 size={17} color={t.statusRejectFg} />
@@ -459,7 +466,7 @@ export function StandaardTab({
 
       <FormSheet
         visible={eenheid !== null}
-        title={eenheid?.id ? 'Eenheidsprijs bewerken' : 'Nieuwe eenheidsprijs'}
+        title={eenheid?.id ? tx('Eenheidsprijs bewerken') : tx('Nieuwe eenheidsprijs')}
         error={eFout}
         saving={eBezig}
         submitDisabled={!eenheid?.naam.trim()}
@@ -467,30 +474,30 @@ export function StandaardTab({
         onClose={() => setEenheid(null)}
       >
         <FormField
-          label="Naam *"
+          label={tx('Naam *')}
           value={eenheid?.naam ?? ''}
           onChangeText={(v) => setEenheid((c) => (c ? { ...c, naam: v } : c))}
-          placeholder="Bijv. Liter verf"
+          placeholder={tx('Bijv. Liter verf')}
           autoFocus
         />
         <FormField
-          label="Standaardprijs (€)"
+          label={tx('Standaardprijs (€)')}
           value={eenheid?.standaard_prijs ?? ''}
           onChangeText={(v) => setEenheid((c) => (c ? { ...c, standaard_prijs: v } : c))}
           placeholder="0,00"
           keyboardType="decimal-pad"
         />
         <FormField
-          label="Eenheid-label (optioneel)"
+          label={tx('Eenheid-label (optioneel)')}
           value={eenheid?.eenheid_label ?? ''}
           onChangeText={(v) => setEenheid((c) => (c ? { ...c, eenheid_label: v } : c))}
-          placeholder="Bijv. liter"
+          placeholder={tx('Bijv. liter')}
         />
         <FormField
-          label="BTW % (optioneel)"
+          label={tx('BTW % (optioneel)')}
           value={eenheid?.btw_pct ?? ''}
           onChangeText={(v) => setEenheid((c) => (c ? { ...c, btw_pct: v } : c))}
-          placeholder="Bedrijfsstandaard"
+          placeholder={tx('Bedrijfsstandaard')}
           keyboardType="decimal-pad"
         />
       </FormSheet>

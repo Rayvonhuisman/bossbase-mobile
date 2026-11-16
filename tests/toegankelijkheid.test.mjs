@@ -88,8 +88,8 @@ test('WerkbonFormulier: maandnavigatie is een knop, kalenderdagen hebben aria-ch
   // De kalender en de dagkaarten staan sinds de planning in een eigen onderdeel.
   assert.match(bron, /<WerkbonKalender/);
   const kalender = lees('src/components/WerkbonDagenVelden.tsx');
-  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(-1\)\} accessibilityLabel="Vorige maand"/);
-  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(1\)\} accessibilityLabel="Volgende maand"/);
+  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(-1\)\} accessibilityLabel=\{tx\('Vorige maand'\)\}/);
+  assert.match(kalender, /accessibilityRole="button" onPress=\{\(\) => schuif\(1\)\} accessibilityLabel=\{tx\('Volgende maand'\)\}/);
   assert.match(kalender, /aria-checked=\{gekozen\.includes\(iso\)\}/);
   // De ploegkeuze (vinkjes + ster) staat sinds de planning in een eigen onderdeel.
   assert.match(bron, /<PloegKeuze/);

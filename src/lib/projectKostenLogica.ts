@@ -21,8 +21,9 @@
  * de werkbon. Kilometers staan als aantal bij de arbeid en hebben geen bedrag.
  * Het totaal is arbeid + materiaal + inkopen: de kostprijs van de klus.
  *
- * Geen imports: draait rechtstreeks in de Node-tests.
+ * Alleen de vertaling als import: draait in de Node-tests.
  */
+import { locale, tx, txn } from '@/i18n';
 
 const rond = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -151,7 +152,10 @@ export function arbeidUitUren(urenRegels: UrenRegel[] = []): Arbeid {
 }
 
 /** "1 uur", "2,5 uur": voor de meldingen over uren zonder kostprijs. */
-export const fmtUren = (n: number) => `${Number(n || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
+export const fmtUren = (n: number) =>
+  txn('{n} uur', '{n} uur', Number(n || 0), {
+    n: Number(n || 0).toLocaleString(locale(), { maximumFractionDigits: 2 }),
+  });
 
 // ── Het overzicht ──────────────────────────────────────────────────────────
 
@@ -416,32 +420,38 @@ export function nacalculatieMeldingen(
   const { arbeid, materiaal } = nc;
   const uit: { letOp: boolean; tekst: string }[] = [];
   if (arbeid.urenZonderKostprijs > 0) {
-    const een = arbeid.urenZonderKostprijs === 1;
+    const zin = txn(
+      '{uren} op de werkbonnen heeft geen kostprijs per uur en telt niet mee in de arbeid. Het resultaat is daardoor te hoog.',
+      '{uren} op de werkbonnen hebben geen kostprijs per uur en tellen niet mee in de arbeid. Het resultaat is daardoor te hoog.',
+      arbeid.urenZonderKostprijs,
+      { uren: fmtUren(arbeid.urenZonderKostprijs) },
+    );
     uit.push({
       letOp: true,
-      tekst: `${fmtUren(arbeid.urenZonderKostprijs)} op de werkbonnen ${een ? 'heeft' : 'hebben'} geen kostprijs per uur en ${
-        een ? 'telt' : 'tellen'
-      } niet mee in de arbeid. Het resultaat is daardoor te hoog.${
-        isAdmin ? ' Stel de kostprijs per uur in via het dashboard, bij Instellingen › Tarieven en termijnen.' : ''
-      }`,
+      tekst: isAdmin
+        ? `${zin} ${tx('Stel de kostprijs per uur in via het dashboard, bij Instellingen › Tarieven en termijnen.')}`
+        : zin,
     });
   }
   if (nc.heeftBegroting && arbeid.begrootUrenZonderKostprijs > 0) {
     uit.push({
       letOp: true,
-      tekst: `${fmtUren(arbeid.begrootUrenZonderKostprijs)} in de offerte ${
-        arbeid.begrootUrenZonderKostprijs === 1 ? 'is' : 'zijn'
-      } begroot zonder kostprijs per uur. Vul die in bij de calculatie van de offerte, in het dashboard.`,
+      tekst: txn(
+        '{uren} in de offerte is begroot zonder kostprijs per uur. Vul die in bij de calculatie van de offerte, in het dashboard.',
+        '{uren} in de offerte zijn begroot zonder kostprijs per uur. Vul die in bij de calculatie van de offerte, in het dashboard.',
+        arbeid.begrootUrenZonderKostprijs,
+        { uren: fmtUren(arbeid.begrootUrenZonderKostprijs) },
+      ),
     });
   }
   if (nc.heeftBegroting && materiaal.regelsZonderCalculatie > 0) {
     uit.push({
       letOp: true,
-      tekst: `${
-        materiaal.regelsZonderCalculatie === 1
-          ? '1 offerteregel heeft'
-          : `${materiaal.regelsZonderCalculatie} offerteregels hebben`
-      } geen calculatie (uren of kostprijs). De begrote kosten zijn daardoor te laag. Vul ze in bij de offerte, onder Calculatie (in het dashboard).`,
+      tekst: txn(
+        '{n} offerteregel heeft geen calculatie (uren of kostprijs). De begrote kosten zijn daardoor te laag. Vul ze in bij de offerte, onder Calculatie (in het dashboard).',
+        '{n} offerteregels hebben geen calculatie (uren of kostprijs). De begrote kosten zijn daardoor te laag. Vul ze in bij de offerte, onder Calculatie (in het dashboard).',
+        materiaal.regelsZonderCalculatie,
+      ),
     });
   }
   if (!nc.heeftBegroting) {
@@ -449,23 +459,27 @@ export function nacalculatieMeldingen(
       letOp: false,
       tekst:
         wat === 'klant'
-          ? 'Geen geaccepteerde offertes bij de projecten van deze klant: de kolom Begroot blijft leeg.'
-          : 'Nog geen geaccepteerde offerte bij dit project: de kolom Begroot blijft leeg. Een geaccepteerde offerte met calculatie wordt de begroting.',
+          ? tx('Geen geaccepteerde offertes bij de projecten van deze klant: de kolom Begroot blijft leeg.')
+          : tx('Nog geen geaccepteerde offerte bij dit project: de kolom Begroot blijft leeg. Een geaccepteerde offerte met calculatie wordt de begroting.'),
     });
   }
   if (magBedragen && nc.meerwerk.zonderBedrag > 0) {
-    const n = nc.meerwerk.zonderBedrag;
     uit.push({
       letOp: true,
-      tekst: `${n === 1 ? '1 meerwerkregel heeft' : `${n} meerwerkregels hebben`} nog geen bedrag en ${
-        n === 1 ? 'telt' : 'tellen'
-      } niet mee in de opbrengst. Vul het bedrag in bij het meerwerk op de werkbon.`,
+      tekst: txn(
+        '{n} meerwerkregel heeft nog geen bedrag en telt niet mee in de opbrengst. Vul het bedrag in bij het meerwerk op de werkbon.',
+        '{n} meerwerkregels hebben nog geen bedrag en tellen niet mee in de opbrengst. Vul het bedrag in bij het meerwerk op de werkbon.',
+        nc.meerwerk.zonderBedrag,
+      ),
     });
   }
   if (magBedragen && nc.nogTeFactureren > 0.5) {
     uit.push({
       letOp: false,
-      tekst: `Nog te factureren: ${fmt(nc.nogTeFactureren)} excl. btw. Tot alles gefactureerd is, is het werkelijke resultaat een tussenstand. Bij de kosten zegt Verschil hoeveel er van de begroting over is (min) of hoeveel je erboven zit (plus).`,
+      tekst: tx(
+        'Nog te factureren: {bedrag} excl. btw. Tot alles gefactureerd is, is het werkelijke resultaat een tussenstand. Bij de kosten zegt Verschil hoeveel er van de begroting over is (min) of hoeveel je erboven zit (plus).',
+        { bedrag: fmt(nc.nogTeFactureren) },
+      ),
     });
   }
   return uit;

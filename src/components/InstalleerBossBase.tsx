@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Download, Share } from 'lucide-react-native';
 import { useInstallatie } from '@/lib/pwa';
 import { useTheme } from '@/providers';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * "Installeer BossBase" onder het inlogformulier van de webapp.
@@ -41,34 +42,50 @@ export function InstalleerBossBase() {
         style={({ pressed }) => [styles.knop, pressed && { opacity: 0.7 }]}
       >
         <Download size={17} color={t.green700} strokeWidth={2.2} />
-        <Text style={styles.knopTekst}>Installeer BossBase</Text>
+        <Text style={styles.knopTekst}>{tx('Installeer BossBase')}</Text>
       </Pressable>
 
       {soort === 'ios' && iosUitleg ? (
         <View style={styles.uitleg}>
           {safari ? (
             <Text style={styles.uitlegTekst}>
-              Tik {apparaat === 'ipad' ? 'rechtsboven ' : ''}op{' '}
-              <Share size={14} color={t.ink} strokeWidth={2.2} />{' '}
-              <Text style={styles.vet}>Delen</Text> en kies{' '}
-              <Text style={styles.vet}>Zet op beginscherm</Text>.
+              {metOnderdelen(
+                apparaat === 'ipad'
+                  ? tx('Tik rechtsboven op {icoon} {delen} en kies {beginscherm}.')
+                  : tx('Tik op {icoon} {delen} en kies {beginscherm}.'),
+                {
+                  icoon: <Share size={14} color={t.ink} strokeWidth={2.2} />,
+                  delen: <Text style={styles.vet}>{tx('Delen')}</Text>,
+                  beginscherm: <Text style={styles.vet}>{tx('Zet op beginscherm')}</Text>,
+                },
+              )}
             </Text>
           ) : (
             // Chrome, Firefox of een ingebouwde browser op iPhone/iPad: daar
             // ontbreekt "Zet op beginscherm" vaak.
             <Text style={styles.uitlegTekst}>
-              Open <Text style={styles.vet}>app.bossbase.nl</Text> in{' '}
-              <Text style={styles.vet}>Safari</Text> om BossBase te installeren.
+              {metOnderdelen(tx('Open {adres} in {safari} om BossBase te installeren.'), {
+                adres: <Text style={styles.vet}>app.bossbase.nl</Text>,
+                safari: <Text style={styles.vet}>Safari</Text>,
+              })}
             </Text>
           )}
         </View>
       ) : null}
 
       <Pressable onPress={() => router.push('/installeren')} accessibilityRole="link" hitSlop={8}>
-        <Text style={styles.meer}>Hoe werkt installeren?</Text>
+        <Text style={styles.meer}>{tx('Hoe werkt installeren?')}</Text>
       </Pressable>
     </View>
   );
+}
+
+/** Zet onderdelen (icoon, vette tekst) op de plek van {plaatshouders} in een vertaalde zin. */
+function metOnderdelen(zin: string, onderdelen: Record<string, ReactNode>): ReactNode[] {
+  return zin.split(/(\{\w+\})/).map((stuk, i) => {
+    const naam = /^\{(\w+)\}$/.exec(stuk)?.[1];
+    return naam !== undefined && naam in onderdelen ? <Fragment key={i}>{onderdelen[naam]}</Fragment> : stuk;
+  });
 }
 
 const makeStyles = (t: ThemeColors) =>

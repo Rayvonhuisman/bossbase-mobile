@@ -18,28 +18,30 @@
  * (`created_at`) tot de deadline — niet de SLA-uren of werkuren. Zo zeggen
  * lijst en detail altijd hetzelfde (besluit 09-11-2026).
  *
- * Geen runtime-imports: draait ook rechtstreeks in de Node-tests.
+ * Alleen de vertaling als runtime-import: draait ook in de Node-tests.
  */
+import { locale, tx, txm, txn } from '@/i18n';
+import { vertaald } from './vertaald';
 
 export type SlaStatus = 'op_tijd' | 'bijna' | 'te_laat' | 'gehaald';
 
 export type SlaSoort = 'reactie' | 'oplossen';
 
-export const SLA_STATUS_LABEL: Record<SlaStatus, string> = {
-  op_tijd: 'Op tijd',
-  bijna: 'Bijna',
-  te_laat: 'Te laat',
-  gehaald: 'Gehaald',
-};
+export const SLA_STATUS_LABEL: Record<SlaStatus, string> = vertaald({
+  op_tijd: txm('Op tijd'),
+  bijna: txm('Bijna'),
+  te_laat: txm('Te laat'),
+  gehaald: txm('Gehaald'),
+});
 
 export const PRIORITEITEN = ['spoed', 'normaal', 'laag'] as const;
 export type Prioriteit = (typeof PRIORITEITEN)[number];
 
-export const PRIORITEIT_LABEL: Record<Prioriteit, string> = {
-  spoed: 'Spoed',
-  normaal: 'Normaal',
-  laag: 'Laag',
-};
+export const PRIORITEIT_LABEL: Record<Prioriteit, string> = vertaald({
+  spoed: txm('Spoed'),
+  normaal: txm('Normaal'),
+  laag: txm('Laag'),
+});
 
 /** Minder dan dit is altijd "bijna", hoe lang de norm ook is. */
 export const BIJNA_MINIMUM_MS = 2 * 60 * 60 * 1000;
@@ -161,15 +163,21 @@ export function resterendTekst(deadline: string | null | undefined, nu: Date | n
   const uren = Math.floor(min / 60);
   const dagen = Math.floor(uren / 24);
   const duur =
-    uren >= 48 ? `${dagen} dagen` : uren >= 1 ? `${uren} u${min % 60 ? ` ${min % 60} min` : ''}` : `${min} min`;
-  return verschil >= 0 ? `nog ${duur}` : `${duur} te laat`;
+    uren >= 48
+      ? txn('{n} dag', '{n} dagen', dagen)
+      : uren >= 1
+        ? min % 60
+          ? tx('{uren} u {min} min', { uren, min: min % 60 })
+          : tx('{uren} u', { uren })
+        : tx('{min} min', { min });
+  return verschil >= 0 ? tx('nog {duur}', { duur }) : tx('{duur} te laat', { duur });
 }
 
 /** "ma 10 nov 14:30" in Nederlandse tijd. */
 export function deadlineTekst(deadline: string | null | undefined): string {
   const d = ms(deadline);
   if (d === null) return '';
-  return new Date(d).toLocaleString('nl-NL', {
+  return new Date(d).toLocaleString(locale(), {
     timeZone: 'Europe/Amsterdam',
     weekday: 'short',
     day: 'numeric',
@@ -181,7 +189,7 @@ export function deadlineTekst(deadline: string | null | undefined): string {
 
 /** "Reageren voor" / "Oplossen voor". */
 export function slaSoortLabel(soort: SlaSoort): string {
-  return soort === 'reactie' ? 'Reageren voor' : 'Oplossen voor';
+  return soort === 'reactie' ? tx('Reageren voor') : tx('Oplossen voor');
 }
 
 /**

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { FormField } from '@/components/FormField';
 import { DateField } from '@/components/DateField';
 import { SelectField } from '@/components/SelectField';
+import { tx } from '@/i18n';
 import { useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import {
@@ -66,12 +67,12 @@ export function FilterPaneel({
     </View>
   );
 
-  const jaNee = (label: string, waarde: JaNee, onKies: (v: JaNee) => void, ja = 'Ja', nee = 'Nee') => (
+  const jaNee = (label: string, waarde: JaNee, onKies: (v: JaNee) => void, ja = tx('Ja'), nee = tx('Nee')) => (
     <View style={{ gap: 4 }}>
       <Text style={s.label}>{label}</Text>
       {chips(
         [
-          { id: 'alles', label: 'Alles' },
+          { id: 'alles', label: tx('Alles') },
           { id: 'ja', label: ja },
           { id: 'nee', label: nee },
         ],
@@ -95,7 +96,7 @@ export function FilterPaneel({
   );
 
   const datum = (label: string, waarde: string, k: keyof DbFilters) => (
-    <DateField label={label} value={waarde || null} onChange={(v) => zet(k, v as never)} placeholder="Geen" />
+    <DateField label={label} value={waarde || null} onChange={(v) => zet(k, v as never)} placeholder={tx('Geen')} />
   );
 
   const getal = (label: string, waarde: string, k: keyof DbFilters, placeholder?: string) => (
@@ -109,80 +110,82 @@ export function FilterPaneel({
   );
 
   const koppelingen = [...extra.boekhouding];
+  // Vaste keuzelijsten uit lib/databaseFilters: alleen het label vertalen, de id blijft.
+  const vertaal = (opties: { id: string; label: string }[]) => opties.map((o) => ({ ...o, label: tx(o.label) }));
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Sectie titel="Klant" open s={s} t={t}>
-        <FormField label="Stad / regio" value={f.stad} onChangeText={(v) => zet('stad', v)} placeholder="Bijv. Utrecht" />
-        {datum('Aangemaakt van', f.aanmaakVan, 'aanmaakVan')}
-        {datum('Aangemaakt tot', f.aanmaakTot, 'aanmaakTot')}
-        {jaNee('KvK-nummer', f.heeftKvk, (v) => zet('heeftKvk', v), 'Heeft KvK', 'Geen KvK')}
+      <Sectie titel={tx('Klant')} open s={s} t={t}>
+        <FormField label={tx('Stad / regio')} value={f.stad} onChangeText={(v) => zet('stad', v)} placeholder={tx('Bijv. Utrecht')} />
+        {datum(tx('Aangemaakt van'), f.aanmaakVan, 'aanmaakVan')}
+        {datum(tx('Aangemaakt tot'), f.aanmaakTot, 'aanmaakTot')}
+        {jaNee(tx('KvK-nummer'), f.heeftKvk, (v) => zet('heeftKvk', v), tx('Heeft KvK'), tx('Geen KvK'))}
         {koppelingen.length > 0
           ? jaNee(
-              `${koppelingen.map((k) => (k === 'moneybird' ? 'Moneybird' : k === 'snelstart' ? 'SnelStart' : 'AFAS')).join(' / ')} sync`,
+              tx('{koppeling} sync', { koppeling: koppelingen.map((k) => (k === 'moneybird' ? 'Moneybird' : k === 'snelstart' ? 'SnelStart' : 'AFAS')).join(' / ') }),
               f.heeftMoneybird,
               (v) => zet('heeftMoneybird', v),
-              'Gesynchroniseerd',
-              'Niet gesynchroniseerd',
+              tx('Gesynchroniseerd'),
+              tx('Niet gesynchroniseerd'),
             )
           : null}
-        {vinkje('Nog nooit een project', f.geenProject, (v) => zet('geenProject', v))}
+        {vinkje(tx('Nog nooit een project'), f.geenProject, (v) => zet('geenProject', v))}
         <View style={{ gap: 4 }}>
-          <Text style={s.label}>Laatste contact ouder dan</Text>
+          <Text style={s.label}>{tx('Laatste contact ouder dan')}</Text>
           {chips(
-            CONTACT_DAGEN_OPTIES,
+            vertaal(CONTACT_DAGEN_OPTIES),
             (id) => f.laatsteContactDagen === id,
             (id) => zet('laatsteContactDagen', f.laatsteContactDagen === id ? '' : id),
           )}
         </View>
       </Sectie>
 
-      <Sectie titel="Projecten" s={s} t={t}>
-        <Text style={s.label}>Status</Text>
-        {chips(PROJECT_STATUS_OPTIES, (id) => f.projectStatussen.includes(id), (id) => multi('projectStatussen', id))}
-        {datum('Startdatum van', f.projectStartVan, 'projectStartVan')}
-        {datum('Startdatum tot', f.projectStartTot, 'projectStartTot')}
-        {datum('Deadline van', f.projectDeadlineVan, 'projectDeadlineVan')}
-        {datum('Deadline tot', f.projectDeadlineTot, 'projectDeadlineTot')}
-        {vinkje('Overschrijding uren', f.heeftOverrun, (v) => zet('heeftOverrun', v))}
-        {vinkje('Heeft lopend project', f.heeftLopendProject, (v) => zet('heeftLopendProject', v))}
+      <Sectie titel={tx('Projecten')} s={s} t={t}>
+        <Text style={s.label}>{tx('Status')}</Text>
+        {chips(vertaal(PROJECT_STATUS_OPTIES), (id) => f.projectStatussen.includes(id), (id) => multi('projectStatussen', id))}
+        {datum(tx('Startdatum van'), f.projectStartVan, 'projectStartVan')}
+        {datum(tx('Startdatum tot'), f.projectStartTot, 'projectStartTot')}
+        {datum(tx('Deadline van'), f.projectDeadlineVan, 'projectDeadlineVan')}
+        {datum(tx('Deadline tot'), f.projectDeadlineTot, 'projectDeadlineTot')}
+        {vinkje(tx('Overschrijding uren'), f.heeftOverrun, (v) => zet('heeftOverrun', v))}
+        {vinkje(tx('Heeft lopend project'), f.heeftLopendProject, (v) => zet('heeftLopendProject', v))}
         <SelectField
-          label="Medewerker"
+          label={tx('Medewerker')}
           options={extra.medewerkers.map((m) => ({ id: m.id, label: m.naam }))}
           value={f.projectMedewerker || null}
           onChange={(v) => zet('projectMedewerker', v ?? '')}
           allowEmpty
-          emptyLabel="Iedereen"
-          placeholder="Iedereen"
+          emptyLabel={tx('Iedereen')}
+          placeholder={tx('Iedereen')}
         />
       </Sectie>
 
-      <Sectie titel="Offertes" s={s} t={t}>
-        <Text style={s.label}>Status</Text>
-        {chips(OFFERTE_STATUS_OPTIES, (id) => f.offerteStatussen.includes(id), (id) => multi('offerteStatussen', id))}
-        {vinkje('Verlopen', f.offerteVerlopen, (v) => zet('offerteVerlopen', v))}
-        {jaNee('Digitaal ondertekend', f.offerteOndertekend, (v) => zet('offerteOndertekend', v))}
+      <Sectie titel={tx('Offertes')} s={s} t={t}>
+        <Text style={s.label}>{tx('Status')}</Text>
+        {chips(vertaal(OFFERTE_STATUS_OPTIES), (id) => f.offerteStatussen.includes(id), (id) => multi('offerteStatussen', id))}
+        {vinkje(tx('Verlopen'), f.offerteVerlopen, (v) => zet('offerteVerlopen', v))}
+        {jaNee(tx('Digitaal ondertekend'), f.offerteOndertekend, (v) => zet('offerteOndertekend', v))}
         <View style={s.rij}>
-          <View style={{ flex: 1 }}>{getal('Bedrag min (€)', f.offerteBedragMin, 'offerteBedragMin')}</View>
-          <View style={{ flex: 1 }}>{getal('Bedrag max (€)', f.offerteBedragMax, 'offerteBedragMax')}</View>
+          <View style={{ flex: 1 }}>{getal(tx('Bedrag min (€)'), f.offerteBedragMin, 'offerteBedragMin')}</View>
+          <View style={{ flex: 1 }}>{getal(tx('Bedrag max (€)'), f.offerteBedragMax, 'offerteBedragMax')}</View>
         </View>
       </Sectie>
 
-      <Sectie titel="Facturen" s={s} t={t}>
-        <Text style={s.label}>Status</Text>
-        {chips(FACTUUR_STATUS_OPTIES, (id) => f.factuurStatussen.includes(id), (id) => multi('factuurStatussen', id))}
-        {vinkje('Vervallen', f.factuurVervallen, (v) => zet('factuurVervallen', v))}
-        {jaNee('Herinnering 1 verstuurd', f.herinnering1, (v) => zet('herinnering1', v))}
-        {jaNee('Herinnering 2 verstuurd', f.herinnering2, (v) => zet('herinnering2', v))}
-        {vinkje('Creditnota', f.isCreditnota, (v) => zet('isCreditnota', v))}
-        {datum('Betaald van', f.betaaldVan, 'betaaldVan')}
-        {datum('Betaald tot', f.betaaldTot, 'betaaldTot')}
+      <Sectie titel={tx('Facturen')} s={s} t={t}>
+        <Text style={s.label}>{tx('Status')}</Text>
+        {chips(vertaal(FACTUUR_STATUS_OPTIES), (id) => f.factuurStatussen.includes(id), (id) => multi('factuurStatussen', id))}
+        {vinkje(tx('Vervallen'), f.factuurVervallen, (v) => zet('factuurVervallen', v))}
+        {jaNee(tx('Herinnering 1 verstuurd'), f.herinnering1, (v) => zet('herinnering1', v))}
+        {jaNee(tx('Herinnering 2 verstuurd'), f.herinnering2, (v) => zet('herinnering2', v))}
+        {vinkje(tx('Creditnota'), f.isCreditnota, (v) => zet('isCreditnota', v))}
+        {datum(tx('Betaald van'), f.betaaldVan, 'betaaldVan')}
+        {datum(tx('Betaald tot'), f.betaaldTot, 'betaaldTot')}
       </Sectie>
 
-      <Sectie titel="CRM Pipeline" s={s} t={t}>
+      <Sectie titel={tx('CRM Pipeline')} s={s} t={t}>
         {extra.fasen.length > 0 ? (
           <>
-            <Text style={s.label}>Fase</Text>
+            <Text style={s.label}>{tx('Fase')}</Text>
             {chips(
               extra.fasen.map((x) => ({ id: x.id, label: x.naam })),
               (id) => f.dealFasen.includes(id),
@@ -192,7 +195,7 @@ export function FilterPaneel({
         ) : null}
         {extra.verlorenRedenen.length > 0 ? (
           <>
-            <Text style={s.label}>Verloren-reden</Text>
+            <Text style={s.label}>{tx('Verloren-reden')}</Text>
             {chips(
               extra.verlorenRedenen.map((r) => ({ id: r, label: r })),
               (id) => f.dealVerlorenRedenen.includes(id),
@@ -201,42 +204,42 @@ export function FilterPaneel({
           </>
         ) : null}
         <View style={s.rij}>
-          <View style={{ flex: 1 }}>{getal('Waarde min (€)', f.dealWaardeMin, 'dealWaardeMin')}</View>
-          <View style={{ flex: 1 }}>{getal('Waarde max (€)', f.dealWaardeMax, 'dealWaardeMax')}</View>
+          <View style={{ flex: 1 }}>{getal(tx('Waarde min (€)'), f.dealWaardeMin, 'dealWaardeMin')}</View>
+          <View style={{ flex: 1 }}>{getal(tx('Waarde max (€)'), f.dealWaardeMax, 'dealWaardeMax')}</View>
         </View>
-        {vinkje('Open activiteiten', f.heeftOpenActiviteiten, (v) => zet('heeftOpenActiviteiten', v))}
-        <Text style={s.label}>Activiteitstype</Text>
-        {chips(ACTIVITEIT_TYPE_OPTIES, (id) => f.activiteitTypen.includes(id), (id) => multi('activiteitTypen', id))}
+        {vinkje(tx('Open activiteiten'), f.heeftOpenActiviteiten, (v) => zet('heeftOpenActiviteiten', v))}
+        <Text style={s.label}>{tx('Activiteitstype')}</Text>
+        {chips(vertaal(ACTIVITEIT_TYPE_OPTIES), (id) => f.activiteitTypen.includes(id), (id) => multi('activiteitTypen', id))}
       </Sectie>
 
-      <Sectie titel="Communicatie" s={s} t={t}>
-        {jaNee('Heeft mail ontvangen', f.heeftMail, (v) => zet('heeftMail', v))}
-        {getal('Laatste mail ouder dan (dagen)', f.mailOuderDanDagen, 'mailOuderDanDagen', 'Bijv. 30')}
+      <Sectie titel={tx('Communicatie')} s={s} t={t}>
+        {jaNee(tx('Heeft mail ontvangen'), f.heeftMail, (v) => zet('heeftMail', v))}
+        {getal(tx('Laatste mail ouder dan (dagen)'), f.mailOuderDanDagen, 'mailOuderDanDagen', tx('Bijv. 30'))}
         {extra.mailTypes.length > 0 ? (
           <SelectField
-            label="Mailtype"
+            label={tx('Mailtype')}
             options={extra.mailTypes}
             value={f.mailTemplateType || null}
             onChange={(v) => zet('mailTemplateType', v ?? '')}
             allowEmpty
-            emptyLabel="Alle types"
-            placeholder="Alle types"
+            emptyLabel={tx('Alle types')}
+            placeholder={tx('Alle types')}
           />
         ) : null}
       </Sectie>
 
-      <Sectie titel="Uren" s={s} t={t}>
-        {vinkje('Heeft factureerbare uren', f.heeftFactureerbareUren, (v) => zet('heeftFactureerbareUren', v))}
+      <Sectie titel={tx('Uren')} s={s} t={t}>
+        {vinkje(tx('Heeft factureerbare uren'), f.heeftFactureerbareUren, (v) => zet('heeftFactureerbareUren', v))}
       </Sectie>
 
-      <Sectie titel="Documenten" s={s} t={t}>
-        {vinkje('Heeft offertes', f.heeftOffertes, (v) => zet('heeftOffertes', v))}
-        {vinkje('Heeft facturen', f.heeftFacturen, (v) => zet('heeftFacturen', v))}
-        {vinkje('Heeft getekende offerte', f.heeftGetekendOfferte, (v) => zet('heeftGetekendOfferte', v))}
-        {vinkje('Heeft onbetaalde facturen', f.heeftOnbetaaldeFacturen, (v) => zet('heeftOnbetaaldeFacturen', v))}
-        {vinkje('Heeft verlopen offertes', f.heeftVerlopenOffertes, (v) => zet('heeftVerlopenOffertes', v))}
-        {datum('Periode van', f.documentenPeriodeVan, 'documentenPeriodeVan')}
-        {datum('Periode tot', f.documentenPeriodeTot, 'documentenPeriodeTot')}
+      <Sectie titel={tx('Documenten')} s={s} t={t}>
+        {vinkje(tx('Heeft offertes'), f.heeftOffertes, (v) => zet('heeftOffertes', v))}
+        {vinkje(tx('Heeft facturen'), f.heeftFacturen, (v) => zet('heeftFacturen', v))}
+        {vinkje(tx('Heeft getekende offerte'), f.heeftGetekendOfferte, (v) => zet('heeftGetekendOfferte', v))}
+        {vinkje(tx('Heeft onbetaalde facturen'), f.heeftOnbetaaldeFacturen, (v) => zet('heeftOnbetaaldeFacturen', v))}
+        {vinkje(tx('Heeft verlopen offertes'), f.heeftVerlopenOffertes, (v) => zet('heeftVerlopenOffertes', v))}
+        {datum(tx('Periode van'), f.documentenPeriodeVan, 'documentenPeriodeVan')}
+        {datum(tx('Periode tot'), f.documentenPeriodeTot, 'documentenPeriodeTot')}
       </Sectie>
     </View>
   );

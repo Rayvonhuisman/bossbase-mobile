@@ -1,22 +1,24 @@
 /**
  * Pure regels achter de projectenpagina — overgenomen uit het dashboard
  * (`projectsService.js`, `ProjectsPage.jsx`, `customerTotalsService.js`,
- * `ProjectDetailDrawer.jsx`). Geen imports, zodat `tests/projecten.test.mjs`
- * ze los in Node kan draaien.
+ * `ProjectDetailDrawer.jsx`). Alleen de vertaling als import, zodat de tests
+ * ze los in Node kunnen draaien.
  *
  * De projectstatus wordt niet getypt maar door de database afgeleid uit de
  * werkbonnen (trigger `bb_project_status_bijwerken`), en de check-constraint
  * `projects_status_check` laat alleen deze drie waarden toe.
  */
+import { locale, tx, txm, txn } from '@/i18n';
+import { vertaald } from './vertaald';
 
-export const PROJECT_STATUS: Record<string, string> = {
-  gepland: 'Gepland',
-  in_uitvoering: 'In uitvoering',
-  afgerond: 'Afgerond',
-};
+export const PROJECT_STATUS: Record<string, string> = vertaald({
+  gepland: txm('Gepland'),
+  in_uitvoering: txm('In uitvoering'),
+  afgerond: txm('Afgerond'),
+});
 
 export function projectStatusLabel(status: string | null | undefined): string {
-  if (!status) return 'Gepland';
+  if (!status) return tx('Gepland');
   return PROJECT_STATUS[status] ?? status;
 }
 
@@ -182,7 +184,7 @@ export function urenToon(percentage: number): 'rood' | 'oranje' | 'normaal' {
 
 export function formatUren(h: number | null | undefined): string {
   const n = Number(h || 0);
-  return `${n.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}u`;
+  return tx('{uren}u', { uren: n.toLocaleString(locale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 }) });
 }
 
 // ── Planning uit werkbonnen ────────────────────────────────────────────────
@@ -236,7 +238,7 @@ export function planRegels(
       regels.push({
         sleutel: `${w.id}-${d.datum}`,
         werkbonId: w.id,
-        titel: w.titel || 'Werkbon',
+        titel: w.titel || tx('Werkbon'),
         datum: String(d.datum).slice(0, 10),
         starttijd: hhmm(d.starttijd ?? w.starttijd),
         eindtijd: hhmm(d.eindtijd ?? w.eindtijd),
@@ -258,20 +260,22 @@ export function wanneerLabel(regels: PlanRegel[], startDate: string | null, vand
   const eerste = komend[0];
   if (eerste) {
     const extra = komend.length - 1;
-    return `Ingepland ${nlDatum(eerste.datum)}${extra > 0 ? ` (+${extra} ${extra === 1 ? 'dag' : 'dagen'})` : ''}`;
+    return extra > 0
+      ? txn('Ingepland {datum} (+{n} dag)', 'Ingepland {datum} (+{n} dagen)', extra, { datum: nlDatum(eerste.datum) })
+      : tx('Ingepland {datum}', { datum: nlDatum(eerste.datum) });
   }
   const begin = regels[0];
   const eind = regels[regels.length - 1];
   if (begin && eind && regels.length === 1) return nlDatum(begin.datum);
-  if (begin && eind) return `${nlDatum(begin.datum)} t/m ${nlDatum(eind.datum)}`;
-  return startDate ? `Gestart ${nlDatum(startDate)}` : 'Nog niet ingepland';
+  if (begin && eind) return tx('{van} t/m {tot}', { van: nlDatum(begin.datum), tot: nlDatum(eind.datum) });
+  return startDate ? tx('Gestart {datum}', { datum: nlDatum(startDate) }) : tx('Nog niet ingepland');
 }
 
 /** Uitleg onder de projectwaarde (`waarde_bron`). */
 export function waardeBronUitleg(bron: string | null | undefined): string {
-  if (bron === 'offertes') return 'Som van de geaccepteerde offertes, excl. btw';
-  if (bron === 'handmatig') return 'Met de hand ingesteld';
-  return 'Geschat in de aanvraag';
+  if (bron === 'offertes') return tx('Som van de geaccepteerde offertes, excl. btw');
+  if (bron === 'handmatig') return tx('Met de hand ingesteld');
+  return tx('Geschat in de aanvraag');
 }
 
 /**
@@ -280,8 +284,8 @@ export function waardeBronUitleg(bron: string | null | undefined): string {
  * plus de begrote uren van de calculatie), of met de hand ingesteld.
  */
 export function urenBronUitleg(bron: string | null | undefined, quotedHours: number | null | undefined): string {
-  if (bron === 'handmatig') return 'Met de hand ingesteld';
-  return Number(quotedHours) > 0 ? 'Uit de geaccepteerde offertes' : 'Komt uit de geaccepteerde offerte';
+  if (bron === 'handmatig') return tx('Met de hand ingesteld');
+  return Number(quotedHours) > 0 ? tx('Uit de geaccepteerde offertes') : tx('Komt uit de geaccepteerde offerte');
 }
 
 // ── Tabs van de projectkaart ───────────────────────────────────────────────
@@ -289,14 +293,14 @@ export function urenBronUitleg(bron: string | null | undefined, quotedHours: num
 export type ProjectTab = 'overzicht' | 'offertes' | 'facturen' | 'uren' | 'kosten' | 'werkbonnen' | 'notities';
 
 export const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
-  { id: 'overzicht', label: 'Overzicht' },
-  { id: 'offertes', label: 'Offertes' },
-  { id: 'facturen', label: 'Facturen' },
-  { id: 'uren', label: 'Uren' },
+  { id: 'overzicht', get label() { return tx('Overzicht'); } },
+  { id: 'offertes', get label() { return tx('Offertes'); } },
+  { id: 'facturen', get label() { return tx('Facturen'); } },
+  { id: 'uren', get label() { return tx('Uren'); } },
   // Zelfde naam als het dashboard: begroot tegenover werkelijk.
-  { id: 'kosten', label: 'Nacalculatie' },
-  { id: 'werkbonnen', label: 'Werkbonnen' },
-  { id: 'notities', label: 'Notities' },
+  { id: 'kosten', get label() { return tx('Nacalculatie'); } },
+  { id: 'werkbonnen', get label() { return tx('Werkbonnen'); } },
+  { id: 'notities', get label() { return tx('Notities'); } },
 ];
 
 /**

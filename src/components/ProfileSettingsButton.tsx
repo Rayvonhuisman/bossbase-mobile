@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/providers';
 import { ds } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * The canonical top-right profile/account shortcut.
@@ -23,7 +24,7 @@ export function ProfileSettingsButton({ size = 40 }: { size?: number }) {
     <Pressable
       onPress={() => router.push('/profile')}
       accessibilityRole="button"
-      accessibilityLabel="Profiel en accountinstellingen openen"
+      accessibilityLabel={tx('Profiel en accountinstellingen openen')}
       hitSlop={8}
       style={({ pressed }) => [
         styles.avatar,

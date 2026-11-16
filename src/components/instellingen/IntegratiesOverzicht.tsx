@@ -13,6 +13,13 @@ import {
   type IntegratieStand,
 } from '@/services/integrationService';
 import { Kaart, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { tx } from '@/i18n';
+
+const STRIPE_LABEL: Record<ReturnType<typeof stripeLabel>, () => string> = {
+  Actief: () => tx('Actief'),
+  'In verificatie': () => tx('In verificatie'),
+  'Niet gekoppeld': () => tx('Niet gekoppeld'),
+};
 
 type Pil = { tekst: string; toon: 'aan' | 'neutraal' | 'binnenkort' };
 
@@ -59,7 +66,7 @@ export function IntegratiesOverzicht() {
   if (!stand) {
     return (
       <Kaart>
-        <Text style={s.hint}>Koppelingen laden…</Text>
+        <Text style={s.hint}>{tx('Koppelingen laden…')}</Text>
       </Kaart>
     );
   }
@@ -86,43 +93,43 @@ export function IntegratiesOverzicht() {
             title="Moneybird"
             subtitle={
               boekhoudGate
-                ? 'Facturen automatisch naar je boekhouding horen bij Groei.'
+                ? tx('Facturen automatisch naar je boekhouding horen bij Groei.')
                 : mbAan
                   ? mb?.lastSyncedAt
-                    ? `Laatst gesynchroniseerd ${formatDateNL(mb.lastSyncedAt)}`
-                    : 'Synchroniseer facturen automatisch naar Moneybird.'
-                  : 'Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.'
+                    ? tx('Laatst gesynchroniseerd {datum}', { datum: formatDateNL(mb.lastSyncedAt) })
+                    : tx('Synchroniseer facturen automatisch naar Moneybird.')
+                  : tx('Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.')
             }
             trailing={pil(
               boekhoudGate
-                ? { tekst: 'Vanaf Groei', toon: 'neutraal' }
-                : { tekst: mbAan ? 'Actief' : 'Niet gekoppeld', toon: mbAan ? 'aan' : 'neutraal' },
+                ? { tekst: tx('Vanaf Groei'), toon: 'neutraal' }
+                : { tekst: mbAan ? tx('Actief') : tx('Niet gekoppeld'), toon: mbAan ? 'aan' : 'neutraal' },
             )}
           />
           <AppListItem
             icon={Landmark}
             title="SnelStart"
-            subtitle="Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten."
-            trailing={pil({ tekst: 'Binnenkort beschikbaar', toon: 'binnenkort' })}
+            subtitle={tx('Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.')}
+            trailing={pil({ tekst: tx('Binnenkort beschikbaar'), toon: 'binnenkort' })}
           />
           <AppListItem
             icon={Landmark}
             title="AFAS"
-            subtitle="Koppel je AFAS administratie met BossBase."
-            trailing={pil({ tekst: 'Binnenkort beschikbaar', toon: 'binnenkort' })}
+            subtitle={tx('Koppel je AFAS administratie met BossBase.')}
+            trailing={pil({ tekst: tx('Binnenkort beschikbaar'), toon: 'binnenkort' })}
           />
           <AppListItem
             icon={CreditCard}
             title="Stripe"
             subtitle={
               stripeGate
-                ? 'Online betalen van facturen hoort bij Team, of als module bij Groei.'
-                : 'Laat klanten je facturen online betalen.'
+                ? tx('Online betalen van facturen hoort bij Team, of als module bij Groei.')
+                : tx('Laat klanten je facturen online betalen.')
             }
             trailing={pil(
               stripeGate
-                ? { tekst: 'Vanaf Team', toon: 'neutraal' }
-                : { tekst: stripeTekst, toon: stripeTekst === 'Actief' ? 'aan' : 'neutraal' },
+                ? { tekst: tx('Vanaf Team'), toon: 'neutraal' }
+                : { tekst: STRIPE_LABEL[stripeTekst](), toon: stripeTekst === 'Actief' ? 'aan' : 'neutraal' },
             )}
           />
         </AppListGroup>
@@ -130,11 +137,10 @@ export function IntegratiesOverzicht() {
 
       <Kaart>
         <Text style={s.hint}>
-          Koppelen, ontkoppelen en synchroniseren doe je op het dashboard. De app toont alleen of een
-          koppeling actief is.
+          {tx('Koppelen, ontkoppelen en synchroniseren doe je op het dashboard. De app toont alleen of een koppeling actief is.')}
         </Text>
         <Button
-          label="Koppelingen beheren op het dashboard"
+          label={tx('Koppelingen beheren op het dashboard')}
           variant="secondary"
           onPress={() => openDashboard('instellingen', 'integraties')}
         />

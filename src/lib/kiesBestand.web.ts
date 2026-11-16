@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { tx } from '@/i18n';
 import { Dialog } from './dialog';
 import type { KandidaatBestand } from './kiesBestandType';
 
@@ -26,7 +27,7 @@ export async function kiesBestanden(): Promise<KandidaatBestand[] | null> {
       },
     }));
   } catch {
-    Dialog.alert('Bestand niet gelezen', 'Er ging iets mis bij het kiezen van het bestand.');
+    Dialog.alert(tx('Bestand niet gelezen'), tx('Er ging iets mis bij het kiezen van het bestand.'));
     return null;
   }
 }

@@ -54,6 +54,7 @@ import { getOfferteRegelsVoorWerkbon, takenUitOfferte } from '@/services/werkbon
 import { deelOfferteRegelsIn, offerteLabel, standaardTaakIds, type OfferteBron } from '@/lib/werkbonUitOfferte';
 import { listContractKeuzes, type KlantContractKeuze } from '@/services/contractService';
 import { deadlineTekst, PRIORITEIT_LABEL, PRIORITEITEN, slaSoortLabel, type Prioriteit } from '@/lib/sla';
+import { tx, txn } from '@/i18n';
 
 type Collega = { id: string; full_name: string | null; role: string | null };
 type Project = { id: string; name: string | null; customer_id: string | null };
@@ -218,7 +219,7 @@ export function WerkbonFormulier({
     // ze wissen.
     setVoertuigen(vt && !vt.error ? vt.data : null);
     const fouten = [k.error, tm.error, pr.error].filter(Boolean);
-    setLaadFout(fouten.length ? 'Niet alle keuzelijsten konden worden geladen.' : null);
+    setLaadFout(fouten.length ? tx('Niet alle keuzelijsten konden worden geladen.') : null);
     setLaden(false);
   }, [metVoertuigen, werkbon, klantVooraf]);
 
@@ -242,9 +243,9 @@ export function WerkbonFormulier({
       setLocatie(adres);
       return;
     }
-    Dialog.alert(`Adres van ${k.name ?? 'de klant'} overnemen?`, adres, [
-      { text: 'Huidige houden', style: 'cancel' },
-      { text: 'Overnemen', onPress: () => setLocatie(adres) },
+    Dialog.alert(k.name ? tx('Adres van {naam} overnemen?', { naam: k.name }) : tx('Adres van de klant overnemen?'), adres, [
+      { text: tx('Huidige houden'), style: 'cancel' },
+      { text: tx('Overnemen'), onPress: () => setLocatie(adres) },
     ]);
   };
 
@@ -255,7 +256,7 @@ export function WerkbonFormulier({
   };
 
   // ── Ploeg ─────────────────────────────────────────────────────────────────
-  const naam = (id: string) => team.find((c) => c.id === id)?.full_name ?? 'Onbekend';
+  const naam = (id: string) => team.find((c) => c.id === id)?.full_name ?? tx('Onbekend');
 
   // ── Planning ──────────────────────────────────────────────────────────────
   const datums = geplandeDatums(planning);
@@ -274,11 +275,11 @@ export function WerkbonFormulier({
   // ── Opslaan ───────────────────────────────────────────────────────────────
   const opslaanBon = async () => {
     setFout(null);
-    if (!titel.trim()) return setFout('Titel is verplicht');
-    if (uitvoerders.length && !verantwoordelijken.length) return setFout('Wijs minimaal één verantwoordelijke aan.');
+    if (!titel.trim()) return setFout(tx('Titel is verplicht'));
+    if (uitvoerders.length && !verantwoordelijken.length) return setFout(tx('Wijs minimaal één verantwoordelijke aan.'));
     const planFout = controleerPlanning(planning, standaard);
     if (planningBewerkbaar && planFout) return setFout(planFout);
-    if (!companyId) return setFout('Je sessie is nog niet geladen. Probeer het zo opnieuw.');
+    if (!companyId) return setFout(tx('Je sessie is nog niet geladen. Probeer het zo opnieuw.'));
 
     const dagen = meerdaags ? dagenUitPlanning(planning, uitvoerders, standaard) : [];
     const planVelden = planningBewerkbaar
@@ -317,7 +318,7 @@ export function WerkbonFormulier({
       });
       if (res.error || !res.data) {
         setOpslaan(false);
-        return setFout(res.error ?? 'Opslaan mislukt');
+        return setFout(res.error ?? tx('Opslaan mislukt'));
       }
       opgeslagen = res.data;
     } else {
@@ -333,13 +334,13 @@ export function WerkbonFormulier({
       });
       if (res.error || !res.data) {
         setOpslaan(false);
-        return setFout(res.error ?? 'De werkbon kon niet worden aangemaakt.');
+        return setFout(res.error ?? tx('De werkbon kon niet worden aangemaakt.'));
       }
       opgeslagen = res.data;
       const uitOfferte = offerteKeuzes.find((o) => o.id === overnemenUit);
       if (uitOfferte) {
         const tk = await takenUitOfferte(opgeslagen.id, uitOfferte.id, standaardTaakIds(uitOfferte));
-        if (tk.error) Dialog.alert('Werkbon aangemaakt', `Maar de taken uit de offerte niet: ${tk.error}`);
+        if (tk.error) Dialog.alert(tx('Werkbon aangemaakt'), tx('Maar de taken uit de offerte niet: {fout}', { fout: tk.error }));
       }
       // De notitie uit het aanmaakformulier wordt de eerste interne logregel.
       if (notitie.trim() && user?.id) {
@@ -350,7 +351,7 @@ export function WerkbonFormulier({
           note: alsHtml(notitie),
           voor_klant: false,
         });
-        if (n.error) Dialog.alert('Werkbon opgeslagen', `Maar de notitie niet: ${n.error}`);
+        if (n.error) Dialog.alert(tx('Werkbon opgeslagen'), tx('Maar de notitie niet: {fout}', { fout: n.error }));
       }
     }
 
@@ -358,7 +359,7 @@ export function WerkbonFormulier({
     // dit, dan staat de bon er al: melden en gewoon doorgaan, geen dubbele.
     if (meerdaags && planningBewerkbaar) {
       const d = await zetWerkbonDagen(opgeslagen.id, dagen);
-      if (d.error) Dialog.alert('Werkbon opgeslagen', `Maar de dagen niet: ${d.error}`);
+      if (d.error) Dialog.alert(tx('Werkbon opgeslagen'), tx('Maar de dagen niet: {fout}', { fout: d.error }));
       else if (d.data) opgeslagen = d.data;
     }
 
@@ -424,7 +425,7 @@ export function WerkbonFormulier({
     // De deadlines rekende de server bij het opslaan; laat ze meteen zien.
     if (!bewerken && (opgeslagen.sla_reactie_voor || opgeslagen.sla_oplossen_voor)) {
       Dialog.alert(
-        'Werkbon aangemaakt',
+        tx('Werkbon aangemaakt'),
         [
           opgeslagen.sla_reactie_voor ? `${slaSoortLabel('reactie')} ${deadlineTekst(opgeslagen.sla_reactie_voor)}` : null,
           opgeslagen.sla_oplossen_voor
@@ -438,11 +439,11 @@ export function WerkbonFormulier({
     onKlaar(opgeslagen.id);
   };
 
-  if (laden) return <LoadingScreen label="Gegevens laden..." />;
+  if (laden) return <LoadingScreen label={tx('Gegevens laden...')} />;
 
   const projectOpties = projecten
     .filter((p) => !p.customer_id || !klantId || p.customer_id === klantId)
-    .map((p) => ({ id: p.id, label: p.name ?? 'Project' }));
+    .map((p) => ({ id: p.id, label: p.name ?? tx('Project') }));
   const zichtbareVoertuigen = (voertuigen ?? []).filter((v) => v.actief || voertuigIds.includes(v.id));
 
   return (
@@ -456,7 +457,7 @@ export function WerkbonFormulier({
 
         {bewerken ? (
           <View style={styles.blok}>
-            <Text style={styles.label}>Status</Text>
+            <Text style={styles.label}>{tx('Status')}</Text>
             <View style={styles.chipRij}>
               {/* Een geannuleerde bon toont zijn eigen status en kan terug; annuleren zelf gaat in het dashboard. */}
               {(werkbon?.status === 'geannuleerd' ? [...WERKBON_STATUSSEN, 'geannuleerd' as const] : WERKBON_STATUSSEN).map((s) => {
@@ -472,7 +473,7 @@ export function WerkbonFormulier({
                     style={[styles.chip, aan && { backgroundColor: st.bg, borderColor: st.kleur }]}
                   >
                     <View style={[styles.dot, { backgroundColor: st.dot }]} />
-                    <Text style={[styles.chipTekst, aan && { color: st.kleur }]}>{st.label}</Text>
+                    <Text style={[styles.chipTekst, aan && { color: st.kleur }]}>{tx(st.label)}</Text>
                   </Pressable>
                 );
               })}
@@ -481,19 +482,19 @@ export function WerkbonFormulier({
         ) : null}
 
         <FormField
-          label="Titel *"
+          label={tx('Titel *')}
           value={titel}
           onChangeText={setTitel}
-          placeholder="Bv. Lekkage badkamer leiding repareren"
+          placeholder={tx('Bv. Lekkage badkamer leiding repareren')}
         />
 
         <SelectField
-          label="Klant"
+          label={tx('Klant')}
           value={klantId}
           onChange={kiesKlant}
           allowEmpty
-          emptyLabel="— Geen klant —"
-          placeholder="— Geen klant —"
+          emptyLabel={tx('— Geen klant —')}
+          placeholder={tx('— Geen klant —')}
           options={klanten.map((c) => ({
             id: c.id,
             label: c.name ?? '—',
@@ -504,22 +505,22 @@ export function WerkbonFormulier({
         {metContracten && contractKeuzes.length > 0 ? (
           <View style={styles.blok}>
             <SelectField
-              label="Onder contract"
+              label={tx('Onder contract')}
               value={contractId}
               onChange={setContractId}
               allowEmpty
-              emptyLabel="— Geen contract —"
-              placeholder="— Geen contract —"
+              emptyLabel={tx('— Geen contract —')}
+              placeholder={tx('— Geen contract —')}
               options={contractKeuzes.map((c) => ({
                 id: c.id,
-                label: [c.nummer, c.titel].filter(Boolean).join(' · ') || 'Contract',
-                sub: c.heeft_sla ? `SLA ${c.sla_niveau ?? ''}`.trim() : 'Zonder SLA',
+                label: [c.nummer, c.titel].filter(Boolean).join(' · ') || tx('Contract'),
+                sub: c.heeft_sla ? `SLA ${c.sla_niveau ?? ''}`.trim() : tx('Zonder SLA'),
               }))}
-              hint="Bijvoorbeeld een storing bij een klant met een onderhouds- of storingscontract."
+              hint={tx('Bijvoorbeeld een storing bij een klant met een onderhouds- of storingscontract.')}
             />
             {gekozenContract?.heeft_sla ? (
               <>
-                <Text style={styles.label}>Prioriteit</Text>
+                <Text style={styles.label}>{tx('Prioriteit')}</Text>
                 <View style={styles.chipRij}>
                   {PRIORITEITEN.map((p) => {
                     const aan = prioriteit === p;
@@ -532,74 +533,76 @@ export function WerkbonFormulier({
                         aria-checked={aan}
                         style={[styles.chip, aan && styles.chipAan]}
                       >
-                        <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{PRIORITEIT_LABEL[p]}</Text>
+                        <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{tx(PRIORITEIT_LABEL[p])}</Text>
                       </Pressable>
                     );
                   })}
                 </View>
                 <Text style={styles.hint}>
-                  De reactie- en oplostijd volgen uit SLA {gekozenContract.sla_niveau ?? ''} en tellen vanaf het
-                  opslaan. Je ziet de deadline zodra de werkbon is aangemaakt.
+                  {tx(
+                    'De reactie- en oplostijd volgen uit SLA {niveau} en tellen vanaf het opslaan. Je ziet de deadline zodra de werkbon is aangemaakt.',
+                    { niveau: gekozenContract.sla_niveau ?? '' },
+                  )}
                 </Text>
               </>
             ) : null}
             {gekozenContract?.binnen_contract ? (
-              <Text style={styles.hint}>Binnen het contract: {alsTekst(gekozenContract.binnen_contract)}</Text>
+              <Text style={styles.hint}>{tx('Binnen het contract: {tekst}', { tekst: alsTekst(gekozenContract.binnen_contract) })}</Text>
             ) : null}
           </View>
         ) : null}
 
         <SelectField
-          label="Project (optioneel)"
+          label={tx('Project (optioneel)')}
           value={projectId}
           onChange={kiesProject}
           allowEmpty
-          emptyLabel="— Geen project —"
-          placeholder="— Geen project —"
+          emptyLabel={tx('— Geen project —')}
+          placeholder={tx('— Geen project —')}
           options={projectOpties}
         />
 
         {!bewerken && offerteKeuzes.length > 0 ? (
           <SelectField
-            label="Taken uit offerte overnemen"
+            label={tx('Taken uit offerte overnemen')}
             value={overnemenUit}
             onChange={setOvernemenUit}
             allowEmpty
-            emptyLabel="Niet overnemen"
-            placeholder="Niet overnemen"
+            emptyLabel={tx('Niet overnemen')}
+            placeholder={tx('Niet overnemen')}
             options={offerteKeuzes.map((o) => {
               const n = standaardTaakIds(o).length;
-              return { id: o.id, label: `${offerteLabel(o)} (${n === 1 ? '1 taak' : `${n} taken`})` };
+              return { id: o.id, label: `${offerteLabel(o)} (${txn('{n} taak', '{n} taken', n)})` };
             })}
-            hint="De regels van de offerte worden taken op de werkbon (geen kilometers, geen materiaal). Op de werkbon kun je daarna nog regels bijkiezen."
+            hint={tx('De regels van de offerte worden taken op de werkbon (geen kilometers, geen materiaal). Op de werkbon kun je daarna nog regels bijkiezen.')}
           />
         ) : null}
 
         <AdresZoeker
-          label="Locatie"
+          label={tx('Locatie')}
           volledigAdres
           value={locatie}
           onChangeText={setLocatie}
-          placeholder="Zoek straat + huisnummer + plaats"
-          hint="Kies een adres uit de lijst, of typ zelf een omschrijving (bijv. bouwkavel)."
+          placeholder={tx('Zoek straat + huisnummer + plaats')}
+          hint={tx('Kies een adres uit de lijst, of typ zelf een omschrijving (bijv. bouwkavel).')}
         />
 
         {/* Dagen en tijden */}
         <View style={styles.blok}>
-          <Text style={styles.label}>{meerdaags ? 'Dagen en tijden' : 'Dag en tijd'}</Text>
+          <Text style={styles.label}>{meerdaags ? tx('Dagen en tijden') : tx('Dag en tijd')}</Text>
           {!planningBewerkbaar ? (
             <Text style={styles.hint}>
               {werkbon?.ondertekend_op
-                ? 'De werkbon is ondertekend: datum en tijden staan op slot.'
-                : 'Datum en tijd aanpassen vraagt het planningrecht.'}
+                ? tx('De werkbon is ondertekend: datum en tijden staan op slot.')
+                : tx('Datum en tijd aanpassen vraagt het planningrecht.')}
             </Text>
           ) : (
             <Text style={styles.hint}>
               {meerdaags
-                ? 'Tik de dagen van de klus aan. Elke dag heeft een eigen begin- en eindtijd.'
+                ? tx('Tik de dagen van de klus aan. Elke dag heeft een eigen begin- en eindtijd.')
                 : datums.length > 1
-                  ? 'Startdag: de hele klus schuift mee.'
-                  : 'Tik op de dag van de klus.'}
+                  ? tx('Startdag: de hele klus schuift mee.')
+                  : tx('Tik op de dag van de klus.')}
             </Text>
           )}
           <WerkbonKalender gekozen={datums} onTik={tikDag} uit={!planningBewerkbaar} />
@@ -614,10 +617,10 @@ export function WerkbonFormulier({
           ) : datums.length ? (
             <View style={styles.tijdRij}>
               <View style={{ flex: 1 }}>
-                <TimeField label="Begin" value={enkelStart || null} onChange={setEnkelStart} disabled={!planningBewerkbaar} />
+                <TimeField label={tx('Begin')} value={enkelStart || null} onChange={setEnkelStart} disabled={!planningBewerkbaar} />
               </View>
               <View style={{ flex: 1 }}>
-                <TimeField label="Eind" value={enkelEind || null} onChange={setEnkelEind} disabled={!planningBewerkbaar} />
+                <TimeField label={tx('Eind')} value={enkelEind || null} onChange={setEnkelEind} disabled={!planningBewerkbaar} />
               </View>
             </View>
           ) : null}
@@ -626,10 +629,11 @@ export function WerkbonFormulier({
         {/* Medewerkers + verantwoordelijke */}
         {team.length ? (
           <View style={styles.blok}>
-            <Text style={styles.label}>Medewerkers</Text>
+            <Text style={styles.label}>{tx('Medewerkers')}</Text>
             <Text style={styles.hint}>
-              Vink aan wie op de klus staat. De ster maakt iemand verantwoordelijk: die mag de bon bewerken en is
-              het aanspreekpunt.
+              {tx(
+                'Vink aan wie op de klus staat. De ster maakt iemand verantwoordelijk: die mag de bon bewerken en is het aanspreekpunt.',
+              )}
             </Text>
             <PloegKeuze
               team={team}
@@ -642,8 +646,8 @@ export function WerkbonFormulier({
               eigenId={user?.id ?? null}
             />
             <Schakel
-              titel="Ook per e-mail laten weten"
-              uitleg="Wie nieuw op de klus komt of verantwoordelijk wordt, krijgt naast de melding in de app een mail — zoals vanuit het dashboard."
+              titel={tx('Ook per e-mail laten weten')}
+              uitleg={tx('Wie nieuw op de klus komt of verantwoordelijk wordt, krijgt naast de melding in de app een mail — zoals vanuit het dashboard.')}
               waarde={stuurMail}
               onWissel={setStuurMail}
             />
@@ -653,13 +657,15 @@ export function WerkbonFormulier({
         {/* Voertuigen (modules planning + voertuigen) */}
         {metVoertuigen && voertuigen ? (
           <View style={styles.blok}>
-            <Text style={styles.label}>Voertuigen op deze klus</Text>
+            <Text style={styles.label}>{tx('Voertuigen op deze klus')}</Text>
             {zichtbareVoertuigen.length === 0 ? (
-              <Text style={styles.hint}>Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.</Text>
+              <Text style={styles.hint}>{tx('Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.')}</Text>
             ) : (
               <>
                 <Text style={styles.hint}>
-                  Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je in de Planning: tik op een blok en kies Dagen, ploeg en voertuig aanpassen.
+                  {tx(
+                    'Meerdere mogelijk. Wie per dag in welk voertuig zit, plan je in de Planning: tik op een blok en kies Dagen, ploeg en voertuig aanpassen.',
+                  )}
                 </Text>
                 <View style={styles.chipRij}>
                   {zichtbareVoertuigen.map((v) => {
@@ -678,7 +684,7 @@ export function WerkbonFormulier({
                         <View style={[styles.dot, { backgroundColor: v.kleur ?? ds.green }]} />
                         <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>
                           {v.naam}
-                          {v.zitplaatsen ? ` · ${v.zitplaatsen} plek${v.zitplaatsen === 1 ? '' : 'ken'}` : ''}
+                          {v.zitplaatsen ? ` · ${txn('{n} plek', '{n} plekken', v.zitplaatsen)}` : ''}
                         </Text>
                       </Pressable>
                     );
@@ -690,24 +696,24 @@ export function WerkbonFormulier({
         ) : null}
 
         <FormField
-          label="Omschrijving"
+          label={tx('Omschrijving')}
           value={omschrijving}
           onChangeText={setOmschrijving}
-          placeholder="Wat moet er gebeuren op locatie?"
+          placeholder={tx('Wat moet er gebeuren op locatie?')}
           multiline
         />
 
         {!bewerken ? (
           <FormField
-            label="Interne notitie"
+            label={tx('Interne notitie')}
             value={notitie}
             onChangeText={setNotitie}
-            placeholder="Komt als eerste interne notitie in het log"
+            placeholder={tx('Komt als eerste interne notitie in het log')}
             multiline
           />
         ) : beginNotes ? (
           <FormField
-            label="Interne notitie (oud veld)"
+            label={tx('Interne notitie (oud veld)')}
             value={notitie}
             onChangeText={setNotitie}
             multiline
@@ -715,7 +721,7 @@ export function WerkbonFormulier({
         ) : null}
       </ScrollView>
       <FormFooter
-        label={bewerken ? 'Werkbon opslaan' : 'Werkbon aanmaken'}
+        label={bewerken ? tx('Werkbon opslaan') : tx('Werkbon aanmaken')}
         onPress={opslaanBon}
         loading={opslaan}
         error={fout}

@@ -1,8 +1,8 @@
 /**
  * Financiën — de rekenregels van `RevenuePage` in het dashboard
  * (`src/pages/BbPages2.jsx`), `customerTotalsService.js` en de klanttoewijzing
- * uit `kostenOverzichtService.js`. Pure functies zonder imports, zodat ze
- * rechtstreeks in de Node-tests draaien.
+ * uit `kostenOverzichtService.js`. Pure functies (alleen vertaling en
+ * kalendernamen als import), zodat ze in de Node-tests draaien.
  *
  * Drie onderdelen, elk met zijn eigen bron en tijdvak:
  *
@@ -16,6 +16,9 @@
  *              btw − (arbeid + materiaal + inkopen). Arbeid is uren × de
  *              kostprijs per uur; uren zonder kostprijs tellen niet mee.
  */
+import { locale, tx, txm, txn } from '@/i18n';
+import { dagNaam, hoofdletter, maandNaam } from './kalenderNamen';
+import { vertaald } from './vertaald';
 
 const rond = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -113,21 +116,21 @@ export function totalenPerKlant(facturen: FinFactuur[]): Map<string, KlantTotale
 export type KpiPeriode = 'deze-maand' | 'vorige-maand' | 'dit-jaar' | 'vorig-jaar' | 'aangepast';
 
 export const KPI_PERIODES: { id: KpiPeriode; label: string }[] = [
-  { id: 'deze-maand', label: 'Deze maand' },
-  { id: 'vorige-maand', label: 'Vorige maand' },
-  { id: 'dit-jaar', label: 'Dit jaar' },
-  { id: 'vorig-jaar', label: 'Vorig jaar' },
-  { id: 'aangepast', label: 'Aangepast' },
+  { id: 'deze-maand', get label() { return tx('Deze maand'); } },
+  { id: 'vorige-maand', get label() { return tx('Vorige maand'); } },
+  { id: 'dit-jaar', get label() { return tx('Dit jaar'); } },
+  { id: 'vorig-jaar', get label() { return tx('Vorig jaar'); } },
+  { id: 'aangepast', get label() { return tx('Aangepast'); } },
 ];
 
 /** Hoe het tijdvak in de tegellabels heet ("Gefactureerd deze maand"). */
-export const PERIODE_LABEL: Record<KpiPeriode, string> = {
-  'deze-maand': 'deze maand',
-  'vorige-maand': 'vorige maand',
-  'dit-jaar': 'dit jaar',
-  'vorig-jaar': 'vorig jaar',
-  aangepast: 'geselecteerde periode',
-};
+export const PERIODE_LABEL: Record<KpiPeriode, string> = vertaald({
+  'deze-maand': txm('deze maand'),
+  'vorige-maand': txm('vorige maand'),
+  'dit-jaar': txm('dit jaar'),
+  'vorig-jaar': txm('vorig jaar'),
+  aangepast: txm('geselecteerde periode'),
+});
 
 /**
  * Begin- en einddatum (inclusief) van het gekozen tijdvak, zoals `kpiRange` en
@@ -177,24 +180,24 @@ export type KpiTegel = { id: string; label: string; bedrag: number; uitleg: stri
  * nettoresultaat, dus ook niet zo genoemd.
  */
 export function kpiTegels(kpi: FinancienKpi, periode: KpiPeriode): KpiTegel[] {
-  const p = PERIODE_LABEL[periode] ?? 'deze periode';
+  const p = PERIODE_LABEL[periode] ?? tx('deze periode');
   const netto = kpi.ontvangen - kpi.kosten;
   return [
     {
       id: 'gefactureerd',
-      label: `Gefactureerd ${p}`,
+      label: tx('Gefactureerd {periode}', { periode: p }),
       bedrag: kpi.gefactureerd,
-      uitleg: 'Min creditfacturen, incl. btw',
+      uitleg: tx('Min creditfacturen, incl. btw'),
     },
-    { id: 'ontvangen', label: 'Ontvangen', bedrag: kpi.ontvangen, uitleg: `Betaalde facturen ${p}` },
-    { id: 'openstaand', label: 'Openstaand', bedrag: kpi.openstaand, uitleg: 'Nog niet betaald, alle periodes' },
-    { id: 'te-verwachten', label: 'Te verwachten', bedrag: kpi.teVerwachten, uitleg: 'Geaccepteerde offertes' },
-    { id: 'kosten', label: `Kosten ${p}`, bedrag: kpi.kosten, uitleg: `Alle kostenregels ${p}` },
+    { id: 'ontvangen', label: tx('Ontvangen'), bedrag: kpi.ontvangen, uitleg: tx('Betaalde facturen {periode}', { periode: p }) },
+    { id: 'openstaand', label: tx('Openstaand'), bedrag: kpi.openstaand, uitleg: tx('Nog niet betaald, alle periodes') },
+    { id: 'te-verwachten', label: tx('Te verwachten'), bedrag: kpi.teVerwachten, uitleg: tx('Geaccepteerde offertes') },
+    { id: 'kosten', label: tx('Kosten {periode}', { periode: p }), bedrag: kpi.kosten, uitleg: tx('Alle kostenregels {periode}', { periode: p }) },
     {
       id: 'netto',
-      label: 'Ontvangen min kosten',
+      label: tx('Ontvangen min kosten'),
       bedrag: rond(netto),
-      uitleg: `Ontvangen incl. btw, kosten excl. btw, ${p}`,
+      uitleg: tx('Ontvangen incl. btw, kosten excl. btw, {periode}', { periode: p }),
       toon: netto >= 0 ? 'goed' : 'slecht',
     },
   ];
@@ -206,24 +209,24 @@ export type GrafiekPeriode = 'week' | 'maand' | 'kwartaal' | 'jaar';
 export type GrafiekModus = 'gefactureerd' | 'ontvangen' | 'kosten';
 
 export const GRAFIEK_PERIODES: { id: GrafiekPeriode; label: string }[] = [
-  { id: 'week', label: 'Week' },
-  { id: 'maand', label: 'Maand' },
-  { id: 'kwartaal', label: 'Kwartaal' },
-  { id: 'jaar', label: 'Jaar' },
+  { id: 'week', get label() { return tx('Week'); } },
+  { id: 'maand', get label() { return tx('Maand'); } },
+  { id: 'kwartaal', get label() { return tx('Kwartaal'); } },
+  { id: 'jaar', get label() { return tx('Jaar'); } },
 ];
 
 export const GRAFIEK_MODI: { id: GrafiekModus; label: string }[] = [
-  { id: 'gefactureerd', label: 'Gefactureerd' },
-  { id: 'ontvangen', label: 'Ontvangen' },
-  { id: 'kosten', label: 'Kosten' },
+  { id: 'gefactureerd', get label() { return tx('Gefactureerd'); } },
+  { id: 'ontvangen', get label() { return tx('Ontvangen'); } },
+  { id: 'kosten', get label() { return tx('Kosten'); } },
 ];
 
-export const GRAFIEK_PERIODE_LABEL: Record<GrafiekPeriode, string> = {
-  week: 'afgelopen 7 dagen',
-  maand: 'afgelopen 30 dagen',
-  kwartaal: 'afgelopen kwartaal',
-  jaar: 'afgelopen 12 maanden',
-};
+export const GRAFIEK_PERIODE_LABEL: Record<GrafiekPeriode, string> = vertaald({
+  week: txm('afgelopen 7 dagen'),
+  maand: txm('afgelopen 30 dagen'),
+  kwartaal: txm('afgelopen kwartaal'),
+  jaar: txm('afgelopen 12 maanden'),
+});
 
 /** Een geboekte kostenregel: `amount` excl. btw, datum = cost_date (anders aanmaakdatum). */
 export type FinKost = { amount: number | null; datum: string | null };
@@ -237,8 +240,6 @@ export type Staaf = {
   kosten: number;
 };
 
-const DAG_KORT = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
 /**
  * De staven van de omzetgrafiek, zoals `chartData` van het dashboard:
@@ -271,7 +272,7 @@ export function grafiekStaven(
   if (periode === 'week') {
     return Array.from({ length: 7 }, (_, i) => {
       const d = dag(6 - i);
-      return staaf(DAG_KORT[d.getDay()] ?? '', iso(d), iso(d));
+      return staaf(hoofdletter(dagNaam(d.getDay(), 'kort')), iso(d), iso(d));
     });
   }
   if (periode === 'maand') {
@@ -284,13 +285,13 @@ export function grafiekStaven(
     return Array.from({ length: 13 }, (_, i) => {
       const eind = dag((12 - i) * 7);
       const begin = new Date(eind.getFullYear(), eind.getMonth(), eind.getDate() - 6);
-      return staaf(`${begin.getDate()} ${MAAND_KORT[begin.getMonth()] ?? ''}`, iso(begin), iso(eind));
+      return staaf(tx('{dag} {maand}', { dag: begin.getDate(), maand: maandNaam(begin.getMonth(), 'kort') }), iso(begin), iso(eind));
     });
   }
   return Array.from({ length: 12 }, (_, i) => {
     const begin = new Date(nu.getFullYear(), nu.getMonth() - (11 - i), 1);
     const eind = new Date(begin.getFullYear(), begin.getMonth() + 1, 0);
-    return staaf(MAAND_KORT[begin.getMonth()] ?? '', iso(begin), iso(eind));
+    return staaf(maandNaam(begin.getMonth(), 'kort'), iso(begin), iso(eind));
   });
 }
 
@@ -423,7 +424,7 @@ export function klantRijen(
     const profit = t.omzetExcl - c.totaal;
     return {
       id: k.id,
-      naam: (k.name ?? '').trim() || 'Naamloos',
+      naam: (k.name ?? '').trim() || tx('Naamloos'),
       plaats: k.city ?? '',
       total: t.total,
       paid: t.paid,
@@ -465,4 +466,6 @@ export function totaalRij(rijen: KlantRij[]) {
 
 /** Uren als aantal, zoals `fmtUren` van het dashboard: "12,5 uur". */
 export const formatUrenAantal = (u: number) =>
-  `${Number(u || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
+  txn('{n} uur', '{n} uur', Number(u || 0), {
+    n: Number(u || 0).toLocaleString(locale(), { maximumFractionDigits: 2 }),
+  });

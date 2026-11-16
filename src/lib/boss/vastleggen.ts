@@ -7,6 +7,8 @@
  * (RLS en rechten gelden vanzelf). Zelfde vorm als het dashboard
  * (`src/components/BossKaart.jsx`).
  */
+import { tx, txm } from '@/i18n';
+import { dagNaam, maandNaam } from '../kalenderNamen';
 
 export type BossKaart = {
   id: string;
@@ -27,9 +29,13 @@ export type BossKaart = {
   stand?: 'open' | 'opgeslagen' | 'doorgezet' | 'weg';
 };
 
-const TAAK_LABEL: Record<string, string> = { call: 'Bellen', email: 'E-mail', visit: 'Bezoek', task: 'Taak', follow: 'Opvolgen' };
-const WEEKDAG = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAAND = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const TAAK_LABEL: Record<string, string> = {
+  call: txm('Bellen'),
+  email: txm('E-mail'),
+  visit: txm('Bezoek'),
+  task: txm('Taak'),
+  follow: txm('Opvolgen'),
+};
 
 /** "do 12 nov" */
 export function datumTekst(iso: string): string {
@@ -37,15 +43,20 @@ export function datumTekst(iso: string): string {
   if (!m) return '';
   const [j, mnd, dag] = [Number(m[1]), Number(m[2]), Number(m[3])];
   const d = new Date(Date.UTC(j, mnd - 1, dag, 12));
-  return `${WEEKDAG[d.getUTCDay()]} ${dag} ${MAAND[mnd - 1]}`;
+  return tx('{weekdag} {dag} {maand}', { weekdag: dagNaam(d.getUTCDay(), 'kort'), dag, maand: maandNaam(mnd - 1, 'kort') });
 }
 
 /** Kop van het kaartje: "Notitie bij Jan Jansen", "Bellen · Jan Jansen", "Metingen voor …". */
 export function kopVan(k: BossKaart): string {
-  const bij = k.project ? `project ${k.project.naam}` : k.klant?.naam || '';
-  if (k.soort === 'notitie') return bij ? `Notitie bij ${bij}` : 'Notitie';
-  if (k.soort === 'taak') return `${TAAK_LABEL[k.taak_soort] || 'Taak'}${k.klant ? ` · ${k.klant.naam}` : ''}`;
-  return k.project ? `Metingen voor ${k.project.naam}` : 'Metingen';
+  if (k.soort === 'notitie') {
+    if (k.project) return tx('Notitie bij project {naam}', { naam: k.project.naam });
+    return k.klant?.naam ? tx('Notitie bij {naam}', { naam: k.klant.naam }) : tx('Notitie');
+  }
+  if (k.soort === 'taak') {
+    const soort = tx(TAAK_LABEL[k.taak_soort] || 'Taak');
+    return k.klant ? `${soort} · ${k.klant.naam}` : soort;
+  }
+  return k.project ? tx('Metingen voor {naam}', { naam: k.project.naam }) : tx('Metingen');
 }
 
 /** De gebruiker kiest een van de klanten of projecten op het kaartje. */
@@ -67,13 +78,20 @@ export function kiesKeuze(k: BossKaart, id: string): BossKaart {
 /** Waarom er (nog) niet opgeslagen kan worden; null = het kan. */
 export function waaromNiet(k: BossKaart): string | null {
   if (k.geweigerd) return k.geweigerd;
-  if (k.keuzes.length) return `${k.keuze_soort === 'project' ? 'Welk project' : 'Welke klant'} bedoel je${k.gezocht ? ` met "${k.gezocht}"` : ''}?`;
-  if (k.soort !== 'taak' && !k.klant && !k.project) {
-    return k.gezocht
-      ? `Ik vind geen ${k.soort === 'metingen' || k.project ? 'project' : 'klant'} bij "${k.gezocht}" die jij kunt zien. Controleer de naam en vraag het opnieuw.`
-      : 'Bij welke klant hoort dit? Noem de naam erbij, of open eerst de klant.';
+  if (k.keuzes.length) {
+    const gezocht = k.gezocht;
+    if (k.keuze_soort === 'project') {
+      return gezocht ? tx('Welk project bedoel je met "{gezocht}"?', { gezocht }) : tx('Welk project bedoel je?');
+    }
+    return gezocht ? tx('Welke klant bedoel je met "{gezocht}"?', { gezocht }) : tx('Welke klant bedoel je?');
   }
-  if (!k.tekst.trim()) return 'Er staat nog niets in.';
+  if (k.soort !== 'taak' && !k.klant && !k.project) {
+    if (!k.gezocht) return tx('Bij welke klant hoort dit? Noem de naam erbij, of open eerst de klant.');
+    return k.soort === 'metingen' || k.project
+      ? tx('Ik vind geen project bij "{gezocht}" die jij kunt zien. Controleer de naam en vraag het opnieuw.', { gezocht: k.gezocht })
+      : tx('Ik vind geen klant bij "{gezocht}" die jij kunt zien. Controleer de naam en vraag het opnieuw.', { gezocht: k.gezocht });
+  }
+  if (!k.tekst.trim()) return tx('Er staat nog niets in.');
   return null;
 }
 

@@ -6,6 +6,7 @@ import { formatEUR } from '@/lib/format';
 import { inclusiefBtw, leesBedrag, materiaalSubtotaal } from '@/lib/werkbonLogica';
 import type { Inkoop } from '@/lib/werkbonKosten';
 import type { MateriaalWijziging, WerkbonMateriaalRegel } from '@/services/workOrderService';
+import { tx } from '@/i18n';
 import { useTheme } from '@/providers';
 import { ds, spacing, type ThemeColors } from '@/theme';
 
@@ -94,17 +95,17 @@ function Knoppen({
   if (bezig) return <ActivityIndicator size="small" color={ds.green700} style={styles.icoonKnop} />;
   return open ? (
     <View style={{ flexDirection: 'row' }}>
-      <Pressable onPress={onKlaar} accessibilityRole="button" accessibilityLabel="Klaar met bewerken" style={styles.icoonKnop}>
+      <Pressable onPress={onKlaar} accessibilityRole="button" accessibilityLabel={tx('Klaar met bewerken')} style={styles.icoonKnop}>
         <Check size={18} color={ds.green700} strokeWidth={2.4} />
       </Pressable>
       {onDelete ? (
-        <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={`${label} verwijderen`} style={styles.icoonKnop}>
+        <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={tx('{naam} verwijderen', { naam: label })} style={styles.icoonKnop}>
           <Trash2 size={16} color="#dc2626" strokeWidth={2} />
         </Pressable>
       ) : null}
     </View>
   ) : (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${label} bewerken`} style={styles.icoonKnop}>
+    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={tx('{naam} bewerken', { naam: label })} style={styles.icoonKnop}>
       <Pencil size={15} color={th.muted} strokeWidth={2} />
     </Pressable>
   );
@@ -166,7 +167,7 @@ export function MateriaalRegel({
         ) : (
           <Veld
             styles={styles}
-            label="Materiaal"
+            label={tx('Materiaal')}
             waarde={regel.naam}
             onKlaar={(v) => v.trim() && wijzig({ naam: v.trim() })}
           />
@@ -189,7 +190,7 @@ export function MateriaalRegel({
           <View style={styles.veldRij}>
             <Veld
               styles={styles}
-              label="Aantal"
+              label={tx('Aantal')}
               waarde={alsTekst(regel.aantal)}
               getalVeld
               onKlaar={(v) => {
@@ -199,15 +200,15 @@ export function MateriaalRegel({
             />
             <Veld
               styles={styles}
-              label="Eenheid"
+              label={tx('Eenheid')}
               waarde={regel.eenheid ?? ''}
-              placeholder="stuk"
+              placeholder={tx('stuk')}
               onKlaar={(v) => wijzig({ eenheid: v.trim() || null })}
             />
             {magBedragen ? (
               <Veld
                 styles={styles}
-                label="Verkoop"
+                label={tx('Verkoop')}
                 waarde={alsTekst(regel.prijs_per)}
                 getalVeld
                 onKlaar={(v) => wijzig({ prijs_per: leesBedrag(v) ?? 0 })}
@@ -217,13 +218,14 @@ export function MateriaalRegel({
           {magInkoop ? (
             vast ? (
               <Text style={styles.vast}>
-                {regel.inkoopprijs_per != null ? `Inkoop ${formatEUR(regel.inkoopprijs_per)} p/st` : 'Inkoop —'} · ligt vast op het
-                materiaal in de bibliotheek
+                {regel.inkoopprijs_per != null
+                  ? tx('Inkoop {bedrag} p/st · ligt vast op het materiaal in de bibliotheek', { bedrag: formatEUR(regel.inkoopprijs_per) })
+                  : tx('Inkoop — · ligt vast op het materiaal in de bibliotheek')}
               </Text>
             ) : (
               <Veld
                 styles={styles}
-                label="Inkoopprijs per stuk (intern)"
+                label={tx('Inkoopprijs per stuk (intern)')}
                 waarde={alsTekst(regel.inkoopprijs_per)}
                 getalVeld
                 onKlaar={(v) => wijzig({ inkoopprijs_per: v.trim() === '' ? null : (leesBedrag(v) ?? null) })}
@@ -231,15 +233,15 @@ export function MateriaalRegel({
             )
           ) : null}
           {vast ? (
-            <Text style={styles.vast}>Leverancier: {levNaam || '—'} (ligt vast op het materiaal)</Text>
+            <Text style={styles.vast}>{tx('Leverancier: {naam} (ligt vast op het materiaal)', { naam: levNaam || '—' })}</Text>
           ) : (
             <SelectField
-              label="Leverancier"
+              label={tx('Leverancier')}
               value={regel.leverancier_id}
               onChange={(id) => wijzig({ leverancier_id: id })}
               allowEmpty
-              emptyLabel="— Geen leverancier —"
-              placeholder="— Geen leverancier —"
+              emptyLabel={`— ${tx('Geen leverancier')} —`}
+              placeholder={`— ${tx('Geen leverancier')} —`}
               options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
               disabled={bezig}
             />
@@ -248,10 +250,12 @@ export function MateriaalRegel({
       ) : null}
       <Text style={styles.meta}>
         {[
-          !open && magBedragen ? `Verkoop ${formatEUR(regel.prijs_per)}` : null,
-          !open && magInkoop && regel.inkoopprijs_per != null ? `Inkoop ${formatEUR(regel.inkoopprijs_per)}` : null,
+          !open && magBedragen ? tx('Verkoop {bedrag}', { bedrag: formatEUR(regel.prijs_per) }) : null,
+          !open && magInkoop && regel.inkoopprijs_per != null ? tx('Inkoop {bedrag}', { bedrag: formatEUR(regel.inkoopprijs_per) }) : null,
           !open && levNaam ? levNaam : null,
-          magBedragen ? `Subtotaal ${formatEUR(sub)} (${formatEUR(inclusiefBtw(sub, regel.btw_percentage))} incl.)` : null,
+          magBedragen
+            ? tx('Subtotaal {bedrag} ({incl} incl.)', { bedrag: formatEUR(sub), incl: formatEUR(inclusiefBtw(sub, regel.btw_percentage)) })
+            : null,
         ]
           .filter(Boolean)
           .join(' · ')}
@@ -308,7 +312,7 @@ export function InkoopRegel({
           </>
         ) : (
           // De omschrijving pas bij verlaten opslaan, en nooit leeg (de database weigert dat).
-          <Veld styles={styles} label="Omschrijving" waarde={inkoop.naam} onKlaar={(v) => v.trim() && wijzig({ naam: v.trim() })} />
+          <Veld styles={styles} label={tx('Omschrijving')} waarde={inkoop.naam} onKlaar={(v) => v.trim() && wijzig({ naam: v.trim() })} />
         )}
         {kanBewerken ? (
           <Knoppen
@@ -328,34 +332,38 @@ export function InkoopRegel({
           <View style={styles.veldRij}>
             <Veld
               styles={styles}
-              label="Aantal"
+              label={tx('Aantal')}
               waarde={alsTekst(inkoop.aantal)}
               getalVeld
               onKlaar={(v) => wijzig({ aantal: getal(v) ?? 0 })}
             />
-            <Veld styles={styles} label="Eenheid" waarde={inkoop.eenheid} placeholder="stuk" onKlaar={(v) => wijzig({ eenheid: v })} />
+            <Veld styles={styles} label={tx('Eenheid')} waarde={inkoop.eenheid} placeholder={tx('stuk')} onKlaar={(v) => wijzig({ eenheid: v })} />
             <Veld
               styles={styles}
-              label="Kostprijs"
+              label={tx('Kostprijs')}
               waarde={alsTekst(inkoop.prijsPer)}
               getalVeld
               onKlaar={(v) => wijzig({ prijs_per: leesBedrag(v) ?? 0 })}
             />
           </View>
           <SelectField
-            label="Leverancier"
+            label={tx('Leverancier')}
             value={inkoop.leverancierId}
             onChange={(id) => wijzig({ leverancier_id: id })}
             allowEmpty
-            emptyLabel="Geen leverancier"
-            placeholder="Geen leverancier"
+            emptyLabel={tx('Geen leverancier')}
+            placeholder={tx('Geen leverancier')}
             options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
             disabled={bezig}
           />
         </View>
       ) : null}
       <Text style={styles.meta}>
-        {[!open ? `Kostprijs ${formatEUR(inkoop.prijsPer)}` : null, !open && levNaam ? levNaam : null, `Subtotaal ${formatEUR(inkoop.bedrag)}`]
+        {[
+          !open ? tx('Kostprijs {bedrag}', { bedrag: formatEUR(inkoop.prijsPer) }) : null,
+          !open && levNaam ? levNaam : null,
+          tx('Subtotaal {bedrag}', { bedrag: formatEUR(inkoop.bedrag) }),
+        ]
           .filter(Boolean)
           .join(' · ')}
       </Text>
@@ -398,39 +406,39 @@ export function InkoopInvoer({
   return (
     <View style={styles.invoer}>
       <View style={{ gap: 4 }}>
-        <Text style={styles.veldLabel}>Omschrijving</Text>
+        <Text style={styles.veldLabel}>{tx('Omschrijving')}</Text>
         <TextInput
           value={f.naam}
           onChangeText={(v) => setF((x) => ({ ...x, naam: v }))}
-          placeholder="Bijv. steigerhuur"
+          placeholder={tx('Bijv. steigerhuur')}
           placeholderTextColor="#9ca3af"
           onSubmitEditing={voegToe}
           returnKeyType="done"
           style={styles.input}
-          accessibilityLabel="Omschrijving inkoop"
+          accessibilityLabel={tx('Omschrijving inkoop')}
         />
       </View>
       <View style={styles.veldRij}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.veldLabel}>Aantal</Text>
-          <TextInput value={f.aantal} onChangeText={(v) => setF((x) => ({ ...x, aantal: v }))} keyboardType="decimal-pad" style={styles.input} accessibilityLabel="Aantal" />
+          <Text style={styles.veldLabel}>{tx('Aantal')}</Text>
+          <TextInput value={f.aantal} onChangeText={(v) => setF((x) => ({ ...x, aantal: v }))} keyboardType="decimal-pad" style={styles.input} accessibilityLabel={tx('Aantal')} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.veldLabel}>Eenheid</Text>
-          <TextInput value={f.eenheid} onChangeText={(v) => setF((x) => ({ ...x, eenheid: v }))} placeholder="stuk" placeholderTextColor="#9ca3af" style={styles.input} accessibilityLabel="Eenheid" />
+          <Text style={styles.veldLabel}>{tx('Eenheid')}</Text>
+          <TextInput value={f.eenheid} onChangeText={(v) => setF((x) => ({ ...x, eenheid: v }))} placeholder={tx('stuk')} placeholderTextColor="#9ca3af" style={styles.input} accessibilityLabel={tx('Eenheid')} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.veldLabel}>Kostprijs</Text>
-          <TextInput value={f.prijs} onChangeText={(v) => setF((x) => ({ ...x, prijs: v }))} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor="#9ca3af" style={styles.input} accessibilityLabel="Kostprijs per eenheid, excl. btw" />
+          <Text style={styles.veldLabel}>{tx('Kostprijs')}</Text>
+          <TextInput value={f.prijs} onChangeText={(v) => setF((x) => ({ ...x, prijs: v }))} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor="#9ca3af" style={styles.input} accessibilityLabel={tx('Kostprijs per eenheid, excl. btw')} />
         </View>
       </View>
       <SelectField
-        label="Leverancier"
+        label={tx('Leverancier')}
         value={f.lev}
         onChange={(id) => setF((x) => ({ ...x, lev: id }))}
         allowEmpty
-        emptyLabel="Geen leverancier"
-        placeholder="Geen leverancier"
+        emptyLabel={tx('Geen leverancier')}
+        placeholder={tx('Geen leverancier')}
         options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
       />
       <View style={styles.invoerVoet}>
@@ -439,11 +447,11 @@ export function InkoopInvoer({
           onPress={voegToe}
           disabled={!kan}
           accessibilityRole="button"
-          accessibilityLabel="Inkoop toevoegen"
+          accessibilityLabel={tx('Inkoop toevoegen')}
           style={({ pressed }) => [styles.plusKnop, !kan && { opacity: 0.45 }, pressed && { opacity: 0.8 }]}
         >
           {bezig ? <ActivityIndicator size="small" color={ds.greenInk} /> : <Plus size={18} color={ds.greenInk} strokeWidth={2.4} />}
-          <Text style={styles.plusTekst}>Toevoegen</Text>
+          <Text style={styles.plusTekst}>{tx('Toevoegen')}</Text>
         </Pressable>
       </View>
     </View>

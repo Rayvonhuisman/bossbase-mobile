@@ -31,6 +31,7 @@ import {
 } from './BossGesprek';
 import { bronVoorBoss, useVoortgang } from './gedeeld';
 import { useWerkruimte } from './Werkruimte';
+import { tx, txm, txn } from '@/i18n';
 
 type Stand = { regels: Regel[]; groepen: Groep[] };
 type Vraag = { sleutel: string; tekst: string; toelichting?: string; opties?: { label: string; waarde: string }[]; vrije_invoer: 'geen' | 'tekst' | 'getal' | 'bedrag'; eenheid?: string };
@@ -121,11 +122,11 @@ export function OfferteGesprek({
     setItems((l) => l.map((i) => (i.id === id ? ({ ...i, ...(typeof patch === 'function' ? patch(i) : patch) } as Item) : i)));
 
   const labels: Label[] = [];
-  if (klant && !zonderKlant) labels.push({ sleutel: 'klant', soort: 'Klant', naam: klant.name || 'Klant', onWeg: () => setZonderKlant(true) });
-  if (projectId) labels.push({ sleutel: 'project', soort: 'Project', naam: project?.name || '…', onWeg: () => setProjectId(null) });
-  if (voorbeeldId) labels.push({ sleutel: 'offerte', soort: 'Voorbeeld', naam: voorbeeld?.nummer || '…', onWeg: () => setVoorbeeldId(null) });
-  if (bestand) labels.push({ sleutel: 'bestand', soort: 'Bestand', naam: bestand.naam, onWeg: () => { setBestand(null); setMaten([]); } });
-  if (maten?.length) labels.push({ sleutel: 'maten', soort: 'Maten', naam: `${maten.length} gecontroleerd`, onWeg: () => setMaten([]) });
+  if (klant && !zonderKlant) labels.push({ sleutel: 'klant', soort: tx('Klant'), naam: klant.name || tx('Klant'), onWeg: () => setZonderKlant(true) });
+  if (projectId) labels.push({ sleutel: 'project', soort: tx('Project'), naam: project?.name || '…', onWeg: () => setProjectId(null) });
+  if (voorbeeldId) labels.push({ sleutel: 'offerte', soort: tx('Voorbeeld'), naam: voorbeeld?.nummer || '…', onWeg: () => setVoorbeeldId(null) });
+  if (bestand) labels.push({ sleutel: 'bestand', soort: tx('Bestand'), naam: bestand.naam, onWeg: () => { setBestand(null); setMaten([]); } });
+  if (maten?.length) labels.push({ sleutel: 'maten', soort: tx('Maten'), naam: tx('{n} gecontroleerd', { n: maten.length }), onWeg: () => setMaten([]) });
 
   const vraag = async (opdracht: string, extra: Extra = {}) => {
     const ant = { ...antwoorden, ...(extra.antwoorden || {}) };
@@ -133,10 +134,10 @@ export function OfferteGesprek({
     gestopt.current = false;
     setBusy(true);
     startStappen([
-      bestand && !mtn.length ? `${bestand.naam} lezen: maten` : 'Opdracht lezen',
-      voorbeeldId ? 'Voorbeeldofferte en prijzen bekijken' : 'Prijzen zoeken in Materialen en Instellingen',
-      'Groepen en regels voorbereiden',
-      'Bedragen en hoeveelheden controleren',
+      bestand && !mtn.length ? tx('{bestand} lezen: maten', { bestand: bestand.naam }) : tx('Opdracht lezen'),
+      voorbeeldId ? tx('Voorbeeldofferte en prijzen bekijken') : tx('Prijzen zoeken in Materialen en Instellingen'),
+      tx('Groepen en regels voorbereiden'),
+      tx('Bedragen en hoeveelheden controleren'),
     ]);
     const voor: Stand = { regels: stand.regels.map((r) => ({ ...r })), groepen: stand.groepen.map((g) => ({ ...g })) };
     // Nog geen klant gekozen maar wel een genoemd: die zetten we op de offerte.
@@ -157,10 +158,10 @@ export function OfferteGesprek({
       else if (resultaat.soort === 'voorstel') {
         setItems((l) => l.map((i) => (i.t === 'voorstel' && i.status === 'open' ? { ...i, status: 'vervangen' } : i)));
         push({ t: 'voorstel', status: 'open', voor, resultaat, waarschuwingen, keuze: {} });
-      } else push({ t: 'melding', tekst: resultaat.melding || 'Klaar.', waarschuwingen });
+      } else push({ t: 'melding', tekst: resultaat.melding || tx('Klaar.'), waarschuwingen });
     } catch (e) {
       if (!gestopt.current) {
-        push({ t: 'fout', tekst: `${(e as Error).message} Er is niets aan de offerte veranderd. Je opdracht staat weer in het invoerveld.`, opdracht, herhaal: extra });
+        push({ t: 'fout', tekst: tx('{fout} Er is niets aan de offerte veranderd. Je opdracht staat weer in het invoerveld.', { fout: (e as Error).message }), opdracht, herhaal: extra });
         setDraft(opdracht);
       }
     } finally {
@@ -187,11 +188,15 @@ export function OfferteGesprek({
     const ontbreekt = res.regels.filter((r) => (r.herkomst?.ontbreekt || []).some((x) => (x === 'aantal' ? r.aantal === '' : r.prijs === ''))).length;
     setItems((l) => [...l, {
       id: kaartId, t: 'toegepast', overgeslagen: res.overgeslagen,
-      tekst: `${zin(it.resultaat.samenvatting) || 'Voorstel toegepast.'} Totaal nu ${formatEURCent(tot.incl)} incl. btw.${ontbreekt ? ` Nog ${ontbreekt} ${ontbreekt === 1 ? 'regel' : 'regels'} in te vullen.` : ''}`,
+      tekst: [
+        zin(it.resultaat.samenvatting) || tx('Voorstel toegepast.'),
+        tx('Totaal nu {bedrag} incl. btw.', { bedrag: formatEURCent(tot.incl) }),
+        ontbreekt ? txn('Nog {n} regel in te vullen.', 'Nog {n} regels in te vullen.', ontbreekt) : '',
+      ].filter(Boolean).join(' '),
     }]);
     onToegepast(res.gewijzigd);
     const n = res.gewijzigd.length;
-    wr?.meldToegepast(`${n} ${n === 1 ? 'wijziging' : 'wijzigingen'} in de offerte`);
+    wr?.meldToegepast(txn('{n} wijziging in de offerte', '{n} wijzigingen in de offerte', n));
   };
   const ongedaan = (it: Extract<Item, { t: 'toegepast' }>) => {
     if (!undo || undo.kaartId !== it.id) return;
@@ -207,25 +212,27 @@ export function OfferteGesprek({
       if (!b) return;
       setBestand(b);
       setMaten([]);
-      push({ t: 'melding', tekst: `${soort === 'bestand' ? b.naam : 'De foto'} is toegevoegd. Bij je volgende opdracht lees ik eerst de maten; die controleer jij voordat ik ermee reken.` });
+      push({ t: 'melding', tekst: soort === 'bestand'
+        ? tx('{bestand} is toegevoegd. Bij je volgende opdracht lees ik eerst de maten; die controleer jij voordat ik ermee reken.', { bestand: b.naam })
+        : tx('De foto is toegevoegd. Bij je volgende opdracht lees ik eerst de maten; die controleer jij voordat ik ermee reken.') });
     } catch (e) {
-      push({ t: 'fout', titel: 'Kan dit niet lezen', tekst: `${(e as Error).message} Er is niets aan de offerte veranderd.` });
+      push({ t: 'fout', titel: tx('Kan dit niet lezen'), tekst: tx('{fout} Er is niets aan de offerte veranderd.', { fout: (e as Error).message }) });
     }
   };
 
   const heeftRegels = stand.regels.some((r) => !isLegeRegel(r));
-  const suggesties = heeftRegels ? ['Controleer of er iets ontbreekt.', 'Maak de werkzaamheden per groep duidelijker voor de klant.'] : [];
+  const suggesties = heeftRegels ? [tx('Controleer of er iets ontbreekt.'), tx('Maak de werkzaamheden per groep duidelijker voor de klant.')] : [];
   const eersteKeer = !items.some((i) => i.t === 'ik');
 
   const intro = eersteKeer ? (
     <View style={{ gap: 10 }}>
-      <BossBubbel tekst="Beschrijf de klus in je eigen woorden. Ik vraag wat ik niet weet en verzin geen prijzen, maten of uren. Je ziet altijd eerst een voorstel." />
+      <BossBubbel tekst={tx('Beschrijf de klus in je eigen woorden. Ik vraag wat ik niet weet en verzin geen prijzen, maten of uren. Je ziet altijd eerst een voorstel.')} />
       <StartKnoppen
         knoppen={[
-          { titel: 'Foto maken', sub: 'Van een tekening of plattegrond', onPress: () => void bron('camera') },
-          { titel: 'Bestand', sub: 'Pdf of foto uit je bestanden', onPress: () => void bron('bestand') },
-          { titel: 'Eerdere offerte', sub: 'Als voorbeeld voor uren', onPress: () => push({ t: 'kies', soort: 'offerte' }) },
-          { titel: 'Project', sub: klantId ? 'Van deze klant' : 'Kies eerst een klant', onPress: () => push({ t: 'kies', soort: 'project' }), uit: !klantId },
+          { titel: tx('Foto maken'), sub: tx('Van een tekening of plattegrond'), onPress: () => void bron('camera') },
+          { titel: tx('Bestand'), sub: tx('Pdf of foto uit je bestanden'), onPress: () => void bron('bestand') },
+          { titel: tx('Eerdere offerte'), sub: tx('Als voorbeeld voor uren'), onPress: () => push({ t: 'kies', soort: 'offerte' }) },
+          { titel: tx('Project'), sub: klantId ? tx('Van deze klant') : tx('Kies eerst een klant'), onPress: () => push({ t: 'kies', soort: 'project' }), uit: !klantId },
         ]}
       />
     </View>
@@ -237,19 +244,19 @@ export function OfferteGesprek({
       intro={intro}
       busy={busy}
       voortgang={stappen}
-      onStop={() => { gestopt.current = true; stopStappen(); setBusy(false); push({ t: 'melding', tekst: 'Gestopt. Er is niets aan de offerte veranderd.' }); }}
+      onStop={() => { gestopt.current = true; stopStappen(); setBusy(false); push({ t: 'melding', tekst: tx('Gestopt. Er is niets aan de offerte veranderd.') }); }}
       draft={draft}
       setDraft={setDraft}
       onSend={verstuur}
       suggesties={suggesties}
-      placeholder={heeftRegels ? 'Vraag Boss iets aan te passen…' : 'Beschrijf de opdracht…'}
+      placeholder={heeftRegels ? tx('Vraag Boss iets aan te passen…') : tx('Beschrijf de opdracht…')}
       scrollSleutel={`${items.length}-${items[items.length - 1]?.id ?? ''}`}
       plusOpties={[
-        { label: 'Foto maken', sub: 'Tekening, plattegrond of de situatie', icoon: 'camera', onPress: () => void bron('camera') },
-        { label: 'Foto kiezen', sub: 'Uit je fotobibliotheek', icoon: 'foto', onPress: () => void bron('foto') },
-        { label: 'Bestand', sub: 'Pdf, jpg of png, tot 4 MB', icoon: 'bestand', onPress: () => void bron('bestand') },
-        { label: 'Eerdere offerte', sub: 'Als voorbeeld voor uren en aantallen', icoon: 'offerte', onPress: () => push({ t: 'kies', soort: 'offerte' }) },
-        ...(klantId ? [{ label: 'Project', sub: 'Van deze klant', icoon: 'project' as const, onPress: () => push({ t: 'kies', soort: 'project' }) }] : []),
+        { label: tx('Foto maken'), sub: tx('Tekening, plattegrond of de situatie'), icoon: 'camera', onPress: () => void bron('camera') },
+        { label: tx('Foto kiezen'), sub: tx('Uit je fotobibliotheek'), icoon: 'foto', onPress: () => void bron('foto') },
+        { label: tx('Bestand'), sub: tx('Pdf, jpg of png, tot 4 MB'), icoon: 'bestand', onPress: () => void bron('bestand') },
+        { label: tx('Eerdere offerte'), sub: tx('Als voorbeeld voor uren en aantallen'), icoon: 'offerte', onPress: () => push({ t: 'kies', soort: 'offerte' }) },
+        ...(klantId ? [{ label: tx('Project'), sub: tx('Van deze klant'), icoon: 'project' as const, onPress: () => push({ t: 'kies', soort: 'project' }) }] : []),
       ]}
     >
       {items.map((it) => (
@@ -260,10 +267,10 @@ export function OfferteGesprek({
           ) : null}
           {it.t === 'fout' ? (
             <Kaart soort="fout" rol="alert">
-              <KaartKop titel={it.titel || 'Dit lukte niet'} icoon="fout" />
+              <KaartKop titel={it.titel || tx('Dit lukte niet')} icoon="fout" />
               <KaartTekst>{it.tekst}</KaartTekst>
               {it.opdracht ? (
-                <Knoppen><KleineKnop label="Opnieuw proberen" variant="secundair" disabled={busy} onPress={() => { upd(it.id, { t: 'melding', tekst: 'Opnieuw geprobeerd.' }); setDraft(''); void vraag(it.opdracht!, it.herhaal); }} /></Knoppen>
+                <Knoppen><KleineKnop label={tx('Opnieuw proberen')} variant="secundair" disabled={busy} onPress={() => { upd(it.id, { t: 'melding', tekst: tx('Opnieuw geprobeerd.') }); setDraft(''); void vraag(it.opdracht!, it.herhaal); }} /></Knoppen>
               ) : null}
             </Kaart>
           ) : null}
@@ -275,18 +282,18 @@ export function OfferteGesprek({
           ) : null}
           {it.t === 'kies' ? (
             it.gekozen ? (
-              <Kaart soort="oud"><KaartTekst>{it.soort === 'project' ? 'Project' : 'Offerte'} {it.gekozen} staat in de context.</KaartTekst></Kaart>
+              <Kaart soort="oud"><KaartTekst>{it.soort === 'project' ? tx('Project {naam} staat in de context.', { naam: it.gekozen }) : tx('Offerte {naam} staat in de context.', { naam: it.gekozen })}</KaartTekst></Kaart>
             ) : (
               <Kaart soort="vraag">
-                <KaartKop titel={it.soort === 'project' ? 'Welk project?' : 'Welke offerte als voorbeeld?'} icoon="vraag" />
-                {it.soort === 'offerte' ? <KaartTekst klein>Ik gebruik er alleen uren, aantallen en prijzen uit, en laat zien waar ze vandaan komen.</KaartTekst> : null}
+                <KaartKop titel={it.soort === 'project' ? tx('Welk project?') : tx('Welke offerte als voorbeeld?')} icoon="vraag" />
+                {it.soort === 'offerte' ? <KaartTekst klein>{tx('Ik gebruik er alleen uren, aantallen en prijzen uit, en laat zien waar ze vandaan komen.')}</KaartTekst> : null}
                 {(it.soort === 'project' ? projecten.length : andereOffertes.length) === 0 ? (
-                  <KaartTekst>{it.soort === 'project' ? 'Geen projecten gevonden voor deze klant.' : 'Geen offertes gevonden.'}</KaartTekst>
+                  <KaartTekst>{it.soort === 'project' ? tx('Geen projecten gevonden voor deze klant.') : tx('Geen offertes gevonden.')}</KaartTekst>
                 ) : (
                   <KiesLijst
                     items={it.soort === 'project'
-                      ? projecten.map((p) => ({ id: p.id, titel: p.name || 'Project', sub: p.status || undefined }))
-                      : andereOffertes.slice(0, 15).map((o) => ({ id: o.id, titel: o.nummer || 'Offerte', sub: [o.omschrijving, o.customer?.name].filter(Boolean).join(' · ') }))}
+                      ? projecten.map((p) => ({ id: p.id, titel: p.name || tx('Project'), sub: p.status || undefined }))
+                      : andereOffertes.slice(0, 15).map((o) => ({ id: o.id, titel: o.nummer || tx('Offerte'), sub: [o.omschrijving, o.customer?.name].filter(Boolean).join(' · ') }))}
                     onKies={(id) => {
                       if (it.soort === 'project') { setProjectId(id); upd(it.id, { gekozen: projecten.find((p) => p.id === id)?.name || '' }); }
                       else { setVoorbeeldId(id); upd(it.id, { gekozen: offertes.find((o) => o.id === id)?.nummer || '' }); }
@@ -301,7 +308,7 @@ export function OfferteGesprek({
               it={it}
               onToepassen={() => pasToe(it)}
               onKeuze={(i, aan) => upd(it.id, (k) => ({ keuze: { ...(k as Extract<Item, { t: 'voorstel' }>).keuze, [i]: aan } }))}
-              onAanpassen={() => setDraft('Pas het voorstel aan: ')}
+              onAanpassen={() => setDraft(tx('Pas het voorstel aan: '))}
               onNegeren={() => upd(it.id, { status: 'genegeerd' })}
               onDetails={() => upd(it.id, { details: true })}
               maakRegel={maakRegel}
@@ -310,18 +317,18 @@ export function OfferteGesprek({
           ) : null}
           {it.t === 'toegepast' ? (
             it.ongedaan ? (
-              <Kaart><KaartTekst>Teruggedraaid. De offerte staat weer zoals hij was; het voorstel kun je opnieuw toepassen.</KaartTekst></Kaart>
+              <Kaart><KaartTekst>{tx('Teruggedraaid. De offerte staat weer zoals hij was; het voorstel kun je opnieuw toepassen.')}</KaartTekst></Kaart>
             ) : (
               <Kaart soort="klaar" rol="status">
-                <KaartKop titel="Toegepast in de offerte" icoon="ok" />
+                <KaartKop titel={tx('Toegepast in de offerte')} icoon="ok" />
                 <KaartTekst>{it.tekst}</KaartTekst>
                 {it.overgeslagen.length ? <Waarschuwingen lijst={it.overgeslagen} /> : null}
                 <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
-                  <Lock size={12} color={t.muted} /><KaartTekst klein>Nog niets opgeslagen of verstuurd.</KaartTekst>
+                  <Lock size={12} color={t.muted} /><KaartTekst klein>{tx('Nog niets opgeslagen of verstuurd.')}</KaartTekst>
                 </View>
                 <Knoppen>
-                  {undo?.kaartId === it.id ? <KleineKnop label="Terugdraaien" variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => ongedaan(it)} /> : null}
-                  {wr && !wr.naastElkaar ? <KleineKnop label="Bekijk document" variant="stil" onPress={wr.toonDocument} /> : null}
+                  {undo?.kaartId === it.id ? <KleineKnop label={tx('Terugdraaien')} variant="secundair" icoon={<Undo2 size={14} color={t.ink} />} onPress={() => ongedaan(it)} /> : null}
+                  {wr && !wr.naastElkaar ? <KleineKnop label={tx('Bekijk document')} variant="stil" onPress={wr.toonDocument} /> : null}
                 </Knoppen>
               </Kaart>
             )
@@ -366,7 +373,7 @@ function VragenKaart({ it, busy, onAntwoord }: {
   if (it.antwoord) {
     return (
       <Kaart soort="oud">
-        <KaartKop titel={it.vragen.length === 1 ? it.vragen[0]!.tekst : `${it.vragen.length} vragen beantwoord`} icoon="vraag" />
+        <KaartKop titel={it.vragen.length === 1 ? it.vragen[0]!.tekst : tx('{n} vragen beantwoord', { n: it.vragen.length })} icoon="vraag" />
         {it.antwoord.map((a) => <KaartTekst key={a.sleutel} klein>{a.vraag}: {a.label}</KaartTekst>)}
       </Kaart>
     );
@@ -379,8 +386,8 @@ function VragenKaart({ it, busy, onAntwoord }: {
       const a = w[v.sleutel]!;
       let waarde: string;
       let label: string;
-      if (a.keuze === '__vrij') { waarde = a.vrij.trim(); label = waarde ? `${waarde}${v.eenheid ? ` ${v.eenheid}` : ''}` : 'onbekend'; }
-      else if (a.keuze === '__onbekend') { waarde = 'onbekend'; label = 'weet ik niet, vul ik zelf in'; }
+      if (a.keuze === '__vrij') { waarde = a.vrij.trim(); label = waarde ? `${waarde}${v.eenheid ? ` ${v.eenheid}` : ''}` : tx('onbekend'); }
+      else if (a.keuze === '__onbekend') { waarde = 'onbekend'; label = tx('weet ik niet, vul ik zelf in'); }
       else { waarde = a.keuze; label = v.opties?.find((o) => o.waarde === a.keuze)?.label || a.keuze; }
       antwoorden[v.sleutel] = waarde || 'onbekend';
       lijst.push({ sleutel: v.sleutel, vraag: v.tekst, label });
@@ -389,8 +396,8 @@ function VragenKaart({ it, busy, onAntwoord }: {
   };
   return (
     <Kaart soort="vraag">
-      <KaartKop titel={it.vragen.length === 1 ? 'Nog één ding voor ik kan rekenen' : `Nog ${it.vragen.length} dingen voor ik kan rekenen`} icoon="vraag" />
-      <KaartTekst klein>Weet je iets niet, kies dan ‘Weet ik niet’. Die regel komt zonder hoeveelheid of prijs in de offerte en verschijnt bij Nog nodig.</KaartTekst>
+      <KaartKop titel={txn('Nog één ding voor ik kan rekenen', 'Nog {n} dingen voor ik kan rekenen', it.vragen.length)} icoon="vraag" />
+      <KaartTekst klein>{tx('Weet je iets niet, kies dan ‘Weet ik niet’. Die regel komt zonder hoeveelheid of prijs in de offerte en verschijnt bij Nog nodig.')}</KaartTekst>
       {it.vragen.map((v) => (
         <View key={v.sleutel} style={{ gap: 6 }}>
           <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>{v.tekst}</Text>
@@ -398,8 +405,8 @@ function VragenKaart({ it, busy, onAntwoord }: {
           <Opties
             opties={[
               ...(v.opties ?? []),
-              ...(v.vrije_invoer !== 'geen' ? [{ waarde: '__vrij', label: v.vrije_invoer === 'bedrag' ? 'Bedrag' : v.vrije_invoer === 'getal' ? (v.opties?.length ? 'Ander aantal' : 'Aantal') : 'Zelf beschrijven' }] : []),
-              { waarde: '__onbekend', label: 'Weet ik niet' },
+              ...(v.vrije_invoer !== 'geen' ? [{ waarde: '__vrij', label: v.vrije_invoer === 'bedrag' ? tx('Bedrag') : v.vrije_invoer === 'getal' ? (v.opties?.length ? tx('Ander aantal') : tx('Aantal')) : tx('Zelf beschrijven') }] : []),
+              { waarde: '__onbekend', label: tx('Weet ik niet') },
             ]}
             gekozen={w[v.sleutel]!.keuze}
             onKies={(k) => zet(v.sleutel, { keuze: k })}
@@ -408,7 +415,7 @@ function VragenKaart({ it, busy, onAntwoord }: {
             <TextInput
               value={w[v.sleutel]!.vrij}
               onChangeText={(x) => zet(v.sleutel, { vrij: x })}
-              placeholder={v.vrije_invoer === 'bedrag' ? 'Bijv. 54,00' : v.vrije_invoer === 'getal' ? `Bijv. 2,50${v.eenheid ? ` ${v.eenheid}` : ''}` : ''}
+              placeholder={v.vrije_invoer === 'bedrag' ? tx('Bijv. 54,00') : v.vrije_invoer === 'getal' ? (v.eenheid ? tx('Bijv. 2,50 {eenheid}', { eenheid: v.eenheid }) : tx('Bijv. 2,50')) : ''}
               placeholderTextColor={t.muted2}
               keyboardType={v.vrije_invoer === 'tekst' ? 'default' : 'decimal-pad'}
               accessibilityLabel={v.tekst}
@@ -417,7 +424,7 @@ function VragenKaart({ it, busy, onAntwoord }: {
           ) : null}
         </View>
       ))}
-      <Knoppen><KleineKnop label="Verder" disabled={busy} onPress={verder} /></Knoppen>
+      <Knoppen><KleineKnop label={tx('Verder')} disabled={busy} onPress={verder} /></Knoppen>
     </Kaart>
   );
 }
@@ -433,16 +440,16 @@ function MatenKaart({ it, busy, onBevestig }: {
   if (it.bevestigd) {
     return (
       <Kaart soort="oud">
-        <KaartKop titel="Maten gecontroleerd" icoon="ok" />
+        <KaartKop titel={tx('Maten gecontroleerd')} icoon="ok" />
         <KaartTekst klein>{it.bevestigd.map((m) => `${m.naam} ${getalNl(m.waarde)} ${m.eenheid}`).join(' · ')}</KaartTekst>
       </Kaart>
     );
   }
-  const soortLabel = { vermeld: 'Staat op het bestand', berekend: 'Berekend', ontbreekt: 'Niet te lezen' } as const;
+  const soortLabel = { vermeld: tx('Staat op het bestand'), berekend: tx('Berekend'), ontbreekt: tx('Niet te lezen') };
   return (
     <Kaart soort="vraag">
-      <KaartKop titel="Kloppen deze maten?" icoon="vraag" />
-      <KaartTekst klein>Pas aan wat niet klopt en vul aan wat ontbreekt. Ik reken alleen met maten die je hier bevestigt.</KaartTekst>
+      <KaartKop titel={tx('Kloppen deze maten?')} icoon="vraag" />
+      <KaartTekst klein>{tx('Pas aan wat niet klopt en vul aan wat ontbreekt. Ik reken alleen met maten die je hier bevestigt.')}</KaartTekst>
       {rijen.map((m, i) => (
         <View key={`${m.naam}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ flex: 1 }}>
@@ -455,7 +462,7 @@ function MatenKaart({ it, busy, onBevestig }: {
             placeholder="?"
             placeholderTextColor={t.muted2}
             keyboardType="decimal-pad"
-            accessibilityLabel={`${m.naam} in ${m.eenheid}`}
+            accessibilityLabel={tx('{naam} in {eenheid}', { naam: m.naam, eenheid: m.eenheid })}
             style={{ width: 84, height: 40, borderRadius: 12, backgroundColor: t.bgAlt, paddingHorizontal: 10, fontSize: 15, color: t.ink, textAlign: 'right' }}
           />
           <Text style={{ width: 28, fontSize: 13, color: t.muted }}>{m.eenheid}</Text>
@@ -463,7 +470,7 @@ function MatenKaart({ it, busy, onBevestig }: {
       ))}
       <Knoppen>
         <KleineKnop
-          label="Maten kloppen, ga verder"
+          label={tx('Maten kloppen, ga verder')}
           icoon={<Check size={14} color="#0D0D0D" strokeWidth={2.6} />}
           disabled={busy}
           onPress={() => onBevestig(
@@ -479,15 +486,15 @@ function MatenKaart({ it, busy, onBevestig }: {
 
 // ── Het voorstel ─────────────────────────────────────────────────────────────
 const BRON: Record<string, string> = {
-  opdracht: 'je opdracht', antwoord: 'jouw antwoord', bestand: 'gecontroleerde maat', huidig: 'stond al zo',
-  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eenheidsprijzen',
+  opdracht: txm('je opdracht'), antwoord: txm('jouw antwoord'), bestand: txm('gecontroleerde maat'), huidig: txm('stond al zo'),
+  instellingen: txm('Instellingen'), materiaal: txm('Materialen'), eigen_eenheid: txm('Eenheidsprijzen'),
 };
 const bronTekst = (x?: unknown) => {
   const b = x as { soort?: string; formule?: string; offerte?: string } | null | undefined;
   if (!b?.soort) return null;
   if (b.soort === 'berekening' && b.formule) return b.formule;
-  if (b.soort === 'offerte') return b.offerte || 'voorbeeldofferte';
-  return BRON[b.soort] ?? 'geen bron';
+  if (b.soort === 'offerte') return b.offerte || tx('voorbeeldofferte');
+  return BRON[b.soort] ? tx(BRON[b.soort]!) : tx('geen bron');
 };
 const bedragVan = (b: VoorstelRegel) => (b.aantal == null || b.eenheidsprijs == null ? '—' : formatEURCent(Math.round(b.aantal * b.eenheidsprijs * 100) / 100));
 
@@ -513,16 +520,16 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
   const n = opgegeven.length + aanvullingen.filter((x) => it.keuze[x.i]).length + (r.verwijderen?.length || 0);
 
   if (it.status === 'vervangen' || it.status === 'genegeerd') {
-    return <Kaart soort="oud"><KaartKop titel={r.samenvatting || 'Voorstel'} badge={{ tekst: it.status === 'vervangen' ? 'Vervangen' : 'Niet gebruikt', toon: 'grijs' }} /></Kaart>;
+    return <Kaart soort="oud"><KaartKop titel={r.samenvatting || tx('Voorstel')} badge={{ tekst: it.status === 'vervangen' ? tx('Vervangen') : tx('Niet gebruikt'), toon: 'grijs' }} /></Kaart>;
   }
   const open = it.status === 'open';
   // Toegepast: het resultaat staat in het document; hier alleen de kop.
   if (!open && !it.details) {
     return (
       <Kaart soort="oud">
-        <KaartKop titel={r.samenvatting || 'Voorstel'} badge={{ tekst: 'Toegepast', toon: 'ok' }} />
+        <KaartKop titel={r.samenvatting || tx('Voorstel')} badge={{ tekst: tx('Toegepast'), toon: 'ok' }} />
         <Pressable onPress={onDetails} accessibilityRole="button" hitSlop={6}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: t.green700 }}>{n} {n === 1 ? 'wijziging' : 'wijzigingen'} tonen</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: t.green700 }}>{txn('{n} wijziging tonen', '{n} wijzigingen tonen', n)}</Text>
         </Pressable>
       </Kaart>
     );
@@ -538,10 +545,10 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
 
   return (
     <Kaart soort="ai">
-      <KaartKop titel={r.samenvatting || 'Voorstel voor de offerte'} badge={open ? { tekst: 'Ter controle', toon: 'ctrl' } : { tekst: 'Toegepast', toon: 'ok' }} />
-      {open ? <KaartTekst klein>Pas na Toepassen verandert de offerte.</KaartTekst> : null}
+      <KaartKop titel={r.samenvatting || tx('Voorstel voor de offerte')} badge={open ? { tekst: tx('Ter controle'), toon: 'ctrl' } : { tekst: tx('Toegepast'), toon: 'ok' }} />
+      {open ? <KaartTekst klein>{tx('Pas na Toepassen verandert de offerte.')}</KaartTekst> : null}
       {r.groepen.filter((g) => g.ref).map((g) => (
-        <WijzigRegel key={g.ref!} teken="~" titel={`Groep ${g.naam}`} sub={g.werkzaamheden || undefined} />
+        <WijzigRegel key={g.ref!} teken="~" titel={tx('Groep {naam}', { naam: g.naam })} sub={g.werkzaamheden || undefined} />
       ))}
       <Inklap
         items={regelsInVolgorde}
@@ -555,16 +562,16 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
               <View key={`k${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 }}>
                 <Layers size={14} color={t.ink2} />
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: t.ink }}>{naam}</Text>
-                {nieuw ? <Text style={{ fontSize: 11.5, fontWeight: '600', color: t.green700 }}>nieuwe groep</Text> : null}
+                {nieuw ? <Text style={{ fontSize: 11.5, fontWeight: '600', color: t.green700 }}>{tx('nieuwe groep')}</Text> : null}
                 {werk ? <Text style={{ flex: 1, fontSize: 12, color: t.muted }} numberOfLines={1}>· {werk}</Text> : null}
               </View>
             );
           }
           const { b } = rij.x;
           const oud = b.ref ? voorRegels.get(b.ref) : undefined;
-          const prijs = b.eenheidsprijs == null ? 'prijs ontbreekt' : formatEURCent(b.eenheidsprijs);
-          const aantal = b.aantal == null ? 'hoeveelheid ontbreekt' : `${getalNl(b.aantal)} ${b.eenheid || ''}`.trim();
-          const bronnen = [bronTekst(b.herkomst?.aantal) && `Hoev.: ${bronTekst(b.herkomst?.aantal)}`, bronTekst(b.herkomst?.prijs) && `Prijs: ${bronTekst(b.herkomst?.prijs)}`].filter(Boolean).join(' · ');
+          const prijs = b.eenheidsprijs == null ? tx('prijs ontbreekt') : formatEURCent(b.eenheidsprijs);
+          const aantal = b.aantal == null ? tx('hoeveelheid ontbreekt') : `${getalNl(b.aantal)} ${b.eenheid || ''}`.trim();
+          const bronnen = [bronTekst(b.herkomst?.aantal) && tx('Hoev.: {bron}', { bron: bronTekst(b.herkomst?.aantal) }), bronTekst(b.herkomst?.prijs) && tx('Prijs: {bron}', { bron: bronTekst(b.herkomst?.prijs) })].filter(Boolean).join(' · ');
           return (
             <WijzigRegel
               key={`r${idx}`}
@@ -578,12 +585,12 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
         }}
       />
       {r.verwijderen?.map((ref) => (
-        <WijzigRegel key={ref} teken="−" titel={voorRegels.get(ref)?.omschrijving || 'Regel'} />
+        <WijzigRegel key={ref} teken="−" titel={voorRegels.get(ref)?.omschrijving || tx('Regel')} />
       ))}
       {aanvullingen.length ? (
         <View style={{ gap: 6, borderWidth: 1, borderStyle: 'dashed', borderColor: '#F5C26B', borderRadius: 12, padding: 10 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: t.statusWarnFg }}>Voorgestelde aanvullingen</Text>
-          <KaartTekst klein>Deze staan niet in je opdracht. Ze gaan alleen mee als je ze aanvinkt.</KaartTekst>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: t.statusWarnFg }}>{tx('Voorgestelde aanvullingen')}</Text>
+          <KaartTekst klein>{tx('Deze staan niet in je opdracht. Ze gaan alleen mee als je ze aanvinkt.')}</KaartTekst>
           {aanvullingen.map(({ b, i }) => (
             <Pressable
               key={i}
@@ -622,9 +629,9 @@ function VoorstelKaart({ it, onToepassen, onKeuze, onAanpassen, onNegeren, onDet
       <Uitleg lijst={r.onderbouwing} />
       {open ? (
         <Knoppen>
-          <KleineKnop label={`Toepassen${n ? ` (${n})` : ''}`} icoon={<Check size={14} color="#0D0D0D" strokeWidth={2.6} />} onPress={onToepassen} />
-          <KleineKnop label="Aanpassen" variant="secundair" onPress={onAanpassen} />
-          <KleineKnop label="Negeren" variant="stil" onPress={onNegeren} />
+          <KleineKnop label={n ? tx('Toepassen ({n})', { n }) : tx('Toepassen')} icoon={<Check size={14} color="#0D0D0D" strokeWidth={2.6} />} onPress={onToepassen} />
+          <KleineKnop label={tx('Aanpassen')} variant="secundair" onPress={onAanpassen} />
+          <KleineKnop label={tx('Negeren')} variant="stil" onPress={onNegeren} />
         </Knoppen>
       ) : null}
     </Kaart>

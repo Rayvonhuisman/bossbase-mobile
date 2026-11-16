@@ -9,6 +9,7 @@ import { useSave } from '@/lib/useSave';
 import { FASE_KLEUREN } from '@/lib/instellingenRegels';
 import { deleteVoertuig, listVoertuigen, saveVoertuig, type Voertuig } from '@/services/instellingenService';
 import { Kaart, Schakel, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { tx, txn } from '@/i18n';
 
 type Concept = {
   id: string | null;
@@ -53,15 +54,15 @@ export function VoertuigenTab() {
         setConcept(null);
         await laad();
       },
-      succesMelding: concept.id ? 'Voertuig bijgewerkt' : 'Voertuig toegevoegd',
+      succesMelding: concept.id ? tx('Voertuig bijgewerkt') : tx('Voertuig toegevoegd'),
     });
   };
 
   const verwijderen = (v: Voertuig) =>
-    Dialog.alert(`${v.naam} verwijderen?`, 'Dit kan niet ongedaan worden gemaakt.', [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('{naam} verwijderen?', { naam: v.naam }), tx('Dit kan niet ongedaan worden gemaakt.'), [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: () =>
           save(() => deleteVoertuig(v.id), {
@@ -69,7 +70,7 @@ export function VoertuigenTab() {
               setConcept(null);
               await laad();
             },
-            succesMelding: 'Voertuig verwijderd',
+            succesMelding: tx('Voertuig verwijderd'),
           }),
       },
     ]);
@@ -77,11 +78,11 @@ export function VoertuigenTab() {
   return (
     <>
       <Kaart
-        titel="Voertuigen"
-        sub="Bestelauto's, aanhangers, machines: alles wat je bij een klus inplant."
+        titel={tx('Voertuigen')}
+        sub={tx('Bestelauto\'s, aanhangers, machines: alles wat je bij een klus inplant.')}
         rechts={
           <Button
-            label="Toevoegen"
+            label={tx('Toevoegen')}
             variant="secondary"
             onPress={() => {
               setError(null);
@@ -91,7 +92,7 @@ export function VoertuigenTab() {
         }
       >
         {fout ? <Uitleg toon="fout">{fout}</Uitleg> : null}
-        {lijst.length === 0 && !fout ? <Text style={s.hint}>Nog geen voertuigen.</Text> : null}
+        {lijst.length === 0 && !fout ? <Text style={s.hint}>{tx('Nog geen voertuigen.')}</Text> : null}
         {lijst.map((v) => (
           <Pressable
             key={v.id}
@@ -107,7 +108,7 @@ export function VoertuigenTab() {
               });
             }}
             accessibilityRole="button"
-            accessibilityLabel={`${v.naam} bewerken`}
+            accessibilityLabel={tx('{naam} bewerken', { naam: v.naam })}
             style={({ pressed }) => [s.lijstRij, pressed && { opacity: 0.8 }]}
           >
             <View style={[s.stip, { backgroundColor: v.kleur }]} />
@@ -116,8 +117,8 @@ export function VoertuigenTab() {
               <Text style={s.lijstSub}>
                 {[
                   v.kenteken || null,
-                  v.zitplaatsen != null ? `${v.zitplaatsen} zitplaatsen` : 'Geen limiet',
-                  v.actief ? 'Actief' : 'Inactief',
+                  v.zitplaatsen != null ? txn('{n} zitplaats', '{n} zitplaatsen', v.zitplaatsen) : tx('Geen limiet'),
+                  v.actief ? tx('Actief') : tx('Inactief'),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -129,7 +130,7 @@ export function VoertuigenTab() {
 
       <FormSheet
         visible={concept !== null}
-        title={concept?.id ? 'Voertuig bewerken' : 'Nieuw voertuig'}
+        title={concept?.id ? tx('Voertuig bewerken') : tx('Nieuw voertuig')}
         error={error}
         saving={saving}
         submitDisabled={!concept?.naam.trim()}
@@ -138,7 +139,7 @@ export function VoertuigenTab() {
         destructive={
           concept?.id
             ? {
-                label: 'Voertuig verwijderen',
+                label: tx('Voertuig verwijderen'),
                 onPress: () => {
                   const v = lijst.find((x) => x.id === concept.id);
                   if (v) verwijderen(v);
@@ -148,16 +149,16 @@ export function VoertuigenTab() {
         }
       >
         <FormField
-          label="Naam *"
+          label={tx('Naam *')}
           value={concept?.naam ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, naam: v } : c))}
-          placeholder="Bijv. Bestelauto 1"
+          placeholder={tx('Bijv. Bestelauto 1')}
           autoFocus={!concept?.id}
         />
         <View style={s.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Kenteken"
+              label={tx('Kenteken')}
               value={concept?.kenteken ?? ''}
               onChangeText={(v) => setConcept((c) => (c ? { ...c, kenteken: v } : c))}
               autoCapitalize="characters"
@@ -165,15 +166,15 @@ export function VoertuigenTab() {
           </View>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Zitplaatsen"
+              label={tx('Zitplaatsen')}
               value={concept?.zitplaatsen ?? ''}
               onChangeText={(v) => setConcept((c) => (c ? { ...c, zitplaatsen: v } : c))}
               keyboardType="number-pad"
-              placeholder="Geen limiet"
+              placeholder={tx('Geen limiet')}
             />
           </View>
         </View>
-        <Text style={s.label}>Kleur</Text>
+        <Text style={s.label}>{tx('Kleur')}</Text>
         <View style={s.chipRij}>
           {FASE_KLEUREN.map((k) => {
             const gekozen = (concept?.kleur ?? '').toLowerCase() === k.value.toLowerCase();
@@ -182,7 +183,7 @@ export function VoertuigenTab() {
                 key={k.value}
                 onPress={() => setConcept((c) => (c ? { ...c, kleur: k.value } : c))}
                 accessibilityRole="button"
-                accessibilityLabel={`Kleur ${k.label}`}
+                accessibilityLabel={tx('Kleur {kleur}', { kleur: k.label })}
                 accessibilityState={{ selected: gekozen }}
                 aria-pressed={gekozen}
                 style={{
@@ -202,8 +203,8 @@ export function VoertuigenTab() {
         </View>
         {concept?.id ? (
           <Schakel
-            titel="Actief"
-            uitleg="Een inactief voertuig blijft bewaard maar kun je niet meer inplannen."
+            titel={tx('Actief')}
+            uitleg={tx('Een inactief voertuig blijft bewaard maar kun je niet meer inplannen.')}
             waarde={concept.actief}
             onWissel={(v) => setConcept((c) => (c ? { ...c, actief: v } : c))}
           />

@@ -13,6 +13,7 @@
  * ziet — en dat is precies het soort verschil dat niemand opmerkt tot het
  * misgaat.
  */
+import { tx } from '@/i18n';
 
 /** Subrechten zoals ze in `user_permissions.permission` staan. */
 export const PERMISSIONS = [
@@ -169,31 +170,39 @@ export function gateFor(route: string): NavGate | null {
 
 export const READONLY_TEKSTEN: Record<string, { titel: string; uitleg: string }> = {
   proefperiode_verlopen: {
-    titel: 'Je gratis periode is voorbij',
-    uitleg:
-      'Je kunt alles blijven bekijken, zoeken en exporteren. Toevoegen, wijzigen, ' +
-      'verwijderen en versturen kan weer zodra je een abonnement kiest.',
+    get titel() {
+      return tx('Je gratis periode is voorbij');
+    },
+    get uitleg() {
+      return tx('Je kunt alles blijven bekijken, zoeken en exporteren. Toevoegen, wijzigen, verwijderen en versturen kan weer zodra je een abonnement kiest.');
+    },
   },
   betaling_mislukt: {
-    titel: 'Je laatste betaling is niet gelukt',
-    uitleg:
-      'Daardoor staat je account tijdelijk op alleen-lezen: bekijken en exporteren kan, ' +
-      'wijzigen en versturen niet. Werk je betaalgegevens bij en alles gaat direct weer open.',
+    get titel() {
+      return tx('Je laatste betaling is niet gelukt');
+    },
+    get uitleg() {
+      return tx('Daardoor staat je account tijdelijk op alleen-lezen: bekijken en exporteren kan, wijzigen en versturen niet. Werk je betaalgegevens bij en alles gaat direct weer open.');
+    },
   },
   opgezegd: {
-    titel: 'Je abonnement is gestopt',
-    uitleg:
-      'Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Toevoegen, ' +
-      'wijzigen, verwijderen en versturen kan weer met een abonnement.',
+    get titel() {
+      return tx('Je abonnement is gestopt');
+    },
+    get uitleg() {
+      return tx('Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Toevoegen, wijzigen, verwijderen en versturen kan weer met een abonnement.');
+    },
   },
 };
 
 /** Vangnet voor een reden die de database wel kent en de app nog niet. */
 export const READONLY_ALGEMEEN = {
-  titel: 'Je account staat op alleen-lezen',
-  uitleg:
-    'Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Wijzigen en ' +
-    'versturen kan weer zodra er een lopend abonnement is.',
+  get titel() {
+    return tx('Je account staat op alleen-lezen');
+  },
+  get uitleg() {
+    return tx('Je gegevens staan er nog gewoon en je kunt ze bekijken en exporteren. Wijzigen en versturen kan weer zodra er een lopend abonnement is.');
+  },
 };
 
 export function readonlyTekst(reden: string | null | undefined) {

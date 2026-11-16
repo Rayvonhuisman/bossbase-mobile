@@ -31,6 +31,7 @@ import { Blok, KleineKnop } from './bouwstenen';
 import { MetingVelden } from './MetingVelden';
 import { VertelHetBoss } from './VertelHetBoss';
 import { pakBossMeting } from '@/lib/boss/vastleggen';
+import { tx, txn, locale } from '@/i18n';
 
 /**
  * Metingen op de projectkaart, zoals het blok in het dashboard
@@ -73,7 +74,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
       setFout(null);
     } catch (e) {
       if (__DEV__) console.warn('[metingen] laden mislukt', e);
-      setFout('De metingen konden niet worden geladen.');
+      setFout(tx('De metingen konden niet worden geladen.'));
     } finally {
       setLaden(false);
     }
@@ -85,7 +86,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
       .then((l) => actief && (setMetingen(l), setFout(null)))
       .catch((e) => {
         if (__DEV__) console.warn('[metingen] laden mislukt', e);
-        if (actief) setFout('De metingen konden niet worden geladen.');
+        if (actief) setFout(tx('De metingen konden niet worden geladen.'));
       })
       .finally(() => actief && setLaden(false));
     magMetingenBeheren(projectId).then((m) => {
@@ -118,7 +119,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
   const bewaar = async () => {
     if (!form) return;
     if (!form.naam.trim()) {
-      setFormFout('Geef de meting een naam, bijvoorbeeld "Raam woonkamer links".');
+      setFormFout(tx('Geef de meting een naam, bijvoorbeeld "Raam woonkamer links".'));
       return;
     }
     setFormBezig(true);
@@ -133,12 +134,12 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
     }
     if (form.id) setMetingen((l) => l.map((x) => (x.id === res.data.id ? res.data : x)));
     else setMetingen((l) => [...l, res.data]);
-    toon(form.id ? 'Meting opgeslagen' : 'Meting toegevoegd', 'succes');
+    toon(form.id ? tx('Meting opgeslagen') : tx('Meting toegevoegd'), 'succes');
     setForm(null);
   };
 
   const verwijder = (m: Meting) => {
-    bevestigVerwijderen(`Meting "${m.naam}"`, async () => {
+    bevestigVerwijderen(tx('Meting "{naam}"', { naam: m.naam }), async () => {
       const res = await deleteMeting(m);
       if (!res.ok) {
         toon(res.melding, 'fout');
@@ -146,18 +147,18 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
       }
       setMetingen((l) => l.filter((x) => x.id !== m.id));
       setForm(null);
-      toon('Meting verwijderd', 'succes');
+      toon(tx('Meting verwijderd'), 'succes');
     });
   };
 
   const openVertel = () => {
     if (!hasFeature('metingen_uitlezen')) {
       Dialog.alert(
-        'Vertel het Boss',
-        'Metingen aan Boss vertellen (inspreken of typen) zit in Groei en Team. Metingen zelf invullen kan in elk pakket. Je abonnement wijzig je op het dashboard.',
+        tx('Vertel het Boss'),
+        tx('Metingen aan Boss vertellen (inspreken of typen) zit in Groei en Team. Metingen zelf invullen kan in elk pakket. Je abonnement wijzig je op het dashboard.'),
         [
-          { text: 'Sluiten', style: 'cancel' },
-          { text: 'Naar het dashboard', onPress: () => void openDashboard('abonnement') },
+          { text: tx('Sluiten'), style: 'cancel' },
+          { text: tx('Naar het dashboard'), onPress: () => void openDashboard('abonnement') },
         ],
       );
       return;
@@ -170,7 +171,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Blok titel="Metingen" actie={kanWijzigen ? <KleineKnop label="Meting" icon="plus" onPress={nieuw} /> : undefined}>
+      <Blok titel={tx('Metingen')} actie={kanWijzigen ? <KleineKnop label={tx('Meting')} icon="plus" onPress={nieuw} /> : undefined}>
         <View style={s.inhoud}>
           {kop ? <Text style={s.kop}>{kop}</Text> : null}
 
@@ -178,7 +179,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
             <Pressable
               onPress={openVertel}
               accessibilityRole="button"
-              accessibilityLabel="Vertel het Boss: metingen inspreken of typen"
+              accessibilityLabel={tx('Vertel het Boss: metingen inspreken of typen')}
               testID="metingen-vertel-boss"
               style={({ pressed }) => [s.vertel, pressed && { opacity: 0.85 }]}
             >
@@ -186,19 +187,19 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
                 <Mic size={20} color={ds.greenInk} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.vertelTitel}>Vertel het Boss</Text>
-                <Text style={s.vertelSub}>Spreek in wat je meet, Boss maakt er metingen van</Text>
+                <Text style={s.vertelTitel}>{tx('Vertel het Boss')}</Text>
+                <Text style={s.vertelSub}>{tx('Spreek in wat je meet, Boss maakt er metingen van')}</Text>
               </View>
             </Pressable>
           ) : null}
 
           {laden ? (
-            <Text style={s.klein}>Laden…</Text>
+            <Text style={s.klein}>{tx('Laden…')}</Text>
           ) : fout ? (
             <View style={{ gap: 8, alignItems: 'flex-start' }}>
               <Text style={s.klein}>{fout}</Text>
               <KleineKnop
-                label="Opnieuw proberen"
+                label={tx('Opnieuw proberen')}
                 onPress={() => {
                   setLaden(true);
                   laad();
@@ -207,18 +208,20 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
             </View>
           ) : metingen.length === 0 ? (
             <Text style={s.klein}>
-              {kanWijzigen ? 'Nog geen metingen. Vertel ze aan Boss of voeg ze zelf toe.' : 'Nog geen metingen bij dit project.'}
+              {kanWijzigen
+                ? tx('Nog geen metingen. Vertel ze aan Boss of voeg ze zelf toe.')
+                : tx('Nog geen metingen bij dit project.')}
             </Text>
           ) : (
             <View>
               {metingen.map((m, i) => {
                 const extra = extraRegels(m.extra, branche) as { key: string; waarde: string }[];
                 const sub = [
-                  m.aantal !== 1 ? `${m.aantal.toLocaleString('nl-NL')}×` : null,
+                  m.aantal !== 1 ? `${m.aantal.toLocaleString(locale())}×` : null,
                   toonMaat(m),
                   extra.map((e) => e.waarde).join(', ') || null,
-                  m.werkbonId ? 'nagemeten op werkbon' : null,
-                  m.fotos.length ? (m.fotos.length === 1 ? '1 foto' : `${m.fotos.length} foto's`) : null,
+                  m.werkbonId ? tx('nagemeten op werkbon') : null,
+                  m.fotos.length ? txn('{n} foto', "{n} foto's", m.fotos.length) : null,
                 ]
                   .filter(Boolean)
                   .join(' · ');
@@ -235,7 +238,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
                     }
                     disabled={!kanWijzigen}
                     accessibilityRole={kanWijzigen ? 'button' : undefined}
-                    accessibilityLabel={kanWijzigen ? `${m.naam} wijzigen` : undefined}
+                    accessibilityLabel={kanWijzigen ? tx('{naam} wijzigen', { naam: m.naam }) : undefined}
                     style={({ pressed }) => [s.rij, i === 0 && s.eerste, pressed && kanWijzigen && { opacity: 0.7 }]}
                   >
                     <View style={{ flex: 1, minWidth: 0 }}>
@@ -244,7 +247,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
                       {m.opmerking ? <Text style={s.opmerking}>{m.opmerking}</Text> : null}
                     </View>
                     <Text style={[s.waarde, m.waarde == null && { color: t.statusWarnFg }]}>
-                      {m.waarde == null ? 'maat ontbreekt' : toonWaarde(m.waarde, m.waardeEenheid)}
+                      {m.waarde == null ? tx('maat ontbreekt') : toonWaarde(m.waarde, m.waardeEenheid)}
                     </Text>
                     {kanWijzigen ? <Pencil size={14} color={t.muted2} /> : null}
                   </Pressable>
@@ -257,17 +260,17 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
 
       <FormSheet
         visible={form !== null}
-        title={form?.id ? 'Meting wijzigen' : 'Meting toevoegen'}
+        title={form?.id ? tx('Meting wijzigen') : tx('Meting toevoegen')}
         error={formFout}
         saving={formBezig}
-        submitLabel={formBezig ? 'Opslaan…' : 'Opslaan'}
+        submitLabel={formBezig ? tx('Opslaan…') : tx('Opslaan')}
         submitDisabled={!form?.naam.trim()}
         onSubmit={bewaar}
         onClose={() => setForm(null)}
         destructive={
           form?.id
             ? {
-                label: 'Verwijderen',
+                label: tx('Verwijderen'),
                 onPress: () => {
                   const m = metingen.find((x) => x.id === form.id);
                   if (m) verwijder(m);
@@ -299,7 +302,8 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
           }}
           onOpgeslagen={(nieuw) => {
             setMetingen((l) => [...l, ...nieuw]);
-            toon(nieuw.length === 1 ? '1 meting opgeslagen' : `${nieuw.length} metingen opgeslagen`, 'succes');
+            toon(txn('{n} meting opgeslagen', '{n} metingen opgeslagen', nieuw.length), 'succes');
+
           }}
         />
       ) : null}

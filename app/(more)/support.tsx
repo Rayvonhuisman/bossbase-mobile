@@ -8,6 +8,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 import { FAQ_URL, HULP_MAIL, HULP_TELEFOON, HULP_TELEFOON_LINK, KENNISBANK_URL } from '@/lib/hulp';
 import { useTheme } from '@/providers';
 import { useHulp } from '@/providers/HulpProvider';
+import { tx } from '@/i18n';
 
 /**
  * Help & support. Help opent Boss, de helpagent van het dashboard; daaronder
@@ -23,26 +24,26 @@ export default function SupportScreen() {
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AppScreen
         header={
-          <AppTopBar variant="detail" title="Help & support" subtitle="We helpen je graag verder" onBack={() => terugOfNaar(router, '/menu')} />
+          <AppTopBar variant="detail" title={tx('Help & support')} subtitle={tx('We helpen je graag verder')} onBack={() => terugOfNaar(router, '/menu')} />
         }
       >
-        <AppSection title="Hulp" variant="eyebrow" />
+        <AppSection title={tx('Hulp')} variant="eyebrow" />
         <AppListGroup>
-          <AppListItem first icon={MessageCircleQuestion} title="Vraag het Boss" subtitle="Onze helpagent, direct antwoord" onPress={() => openBoss()} />
-          <AppListItem icon={BookOpen} title="Kennisbank" subtitle="Uitleg en handleidingen op bossbase.nl" onPress={() => void Linking.openURL(KENNISBANK_URL)} />
-          <AppListItem icon={HelpCircle} title="Veelgestelde vragen" subtitle="Snel antwoord op bossbase.nl" onPress={() => void Linking.openURL(FAQ_URL)} />
-          <AppListItem icon={Bug} title="Bug of idee" subtitle="Meld het en help BossBase beter maken" onPress={openMelden} />
+          <AppListItem first icon={MessageCircleQuestion} title={tx('Vraag het Boss')} subtitle={tx('Onze helpagent, direct antwoord')} onPress={() => openBoss()} />
+          <AppListItem icon={BookOpen} title={tx('Kennisbank')} subtitle={tx('Uitleg en handleidingen op bossbase.nl')} onPress={() => void Linking.openURL(KENNISBANK_URL)} />
+          <AppListItem icon={HelpCircle} title={tx('Veelgestelde vragen')} subtitle={tx('Snel antwoord op bossbase.nl')} onPress={() => void Linking.openURL(FAQ_URL)} />
+          <AppListItem icon={Bug} title={tx('Bug of idee')} subtitle={tx('Meld het en help BossBase beter maken')} onPress={openMelden} />
         </AppListGroup>
 
-        <AppSection title="Contact" variant="eyebrow" />
+        <AppSection title={tx('Contact')} variant="eyebrow" />
         <AppListGroup>
-          <AppListItem first icon={Phone} title="Bel support" subtitle={HULP_TELEFOON} onPress={() => void Linking.openURL(HULP_TELEFOON_LINK)} />
-          <AppListItem icon={Mail} title="E-mail support" subtitle={HULP_MAIL} onPress={() => sendMail(HULP_MAIL)} />
+          <AppListItem first icon={Phone} title={tx('Bel support')} subtitle={HULP_TELEFOON} onPress={() => void Linking.openURL(HULP_TELEFOON_LINK)} />
+          <AppListItem icon={Mail} title={tx('E-mail support')} subtitle={HULP_MAIL} onPress={() => sendMail(HULP_MAIL)} />
         </AppListGroup>
 
-        <AppSection title="Over" variant="eyebrow" />
+        <AppSection title={tx('Over')} variant="eyebrow" />
         <AppListGroup>
-          <AppListItem first icon={Info} title="Versie-informatie" subtitle={`BossBase · v${appVersion}`} />
+          <AppListItem first icon={Info} title={tx('Versie-informatie')} subtitle={`BossBase · v${appVersion}`} />
         </AppListGroup>
       </AppScreen>
     </View>

@@ -11,6 +11,7 @@ import { berekenTotalen, regelprijs, typeConfig, type EigenEenheid, type Groep, 
 import { isLegeRegel, ontbreektIn } from '@/lib/boss/offerteRegels';
 import { prijsOntbreekt } from '@/lib/boss/factuurRegels';
 import type { ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 type Klant = { name?: string | null; address?: string | null; postcode?: string | null; city?: string | null } | null;
 
@@ -56,7 +57,7 @@ export function DocumentVoorbeeld({
   };
 
   return (
-    <View style={s.vel} accessibilityLabel={`Voorbeeld van de ${soort}`}>
+    <View style={s.vel} accessibilityLabel={soort === 'offerte' ? tx('Voorbeeld van de offerte') : tx('Voorbeeld van de factuur')}>
       <View style={s.kop}>
         <View>
           <Text style={s.soort}>{soort === 'offerte' ? 'Offerte' : 'Factuur'}</Text>
@@ -76,10 +77,10 @@ export function DocumentVoorbeeld({
             {klant.address ? <Text style={s.tekst}>{klant.address}</Text> : null}
             {klant.postcode || klant.city ? <Text style={s.tekst}>{[klant.postcode, klant.city].filter(Boolean).join(' ')}</Text> : null}
           </>
-        ) : <Text style={s.leeg}>Nog geen klant gekozen</Text>}
+        ) : <Text style={s.leeg}>{tx('Nog geen klant gekozen')}</Text>}
       </View>
       {omschrijving ? <Text style={s.tekst}>{omschrijving}</Text> : null}
-      {echt.length === 0 ? <Text style={s.leeg}>Nog geen regels.</Text> : (
+      {echt.length === 0 ? <Text style={s.leeg}>{tx('Nog geen regels.')}</Text> : (
         <View style={{ gap: 2 }}>
           {blokken.filter((b) => b.regels.length).map((b, i) => (
             <View key={`${b.naam}-${i}`} style={{ gap: 2 }}>

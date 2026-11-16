@@ -1,5 +1,6 @@
 import { Dimensions, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { tx } from '@/i18n';
 
 /**
  * "Bug of idee" — hetzelfde meldpunt als het dashboard: Edge Function
@@ -56,7 +57,7 @@ export async function verstuurMelding(input: {
 > {
   const omschrijving = input.omschrijving.trim();
   if (omschrijving.length < MIN_LENGTE) {
-    return { ok: false, melding: `Schrijf minstens ${MIN_LENGTE} tekens.` };
+    return { ok: false, melding: tx('Schrijf minstens {n} tekens.', { n: MIN_LENGTE }) };
   }
   const { data, error } = await supabase.functions.invoke('meldpunt', {
     body: {
@@ -79,7 +80,7 @@ export async function verstuurMelding(input: {
       ok: false,
       melding:
         melding ??
-        'Versturen lukte niet. Probeer het zo nog eens, of mail je melding naar info@bossbase.nl.',
+        tx('Versturen lukte niet. Probeer het zo nog eens, of mail je melding naar info@bossbase.nl.'),
     };
   }
   return {

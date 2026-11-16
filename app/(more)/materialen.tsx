@@ -34,6 +34,7 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { leesbreedte } from '@/lib/schermklasseRegels';
 import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
 import { MaterialenImporteren } from '@/components/MaterialenImporteren';
+import { tx, txn } from '@/i18n';
 
 /**
  * Materialen — de bibliotheek van het dashboard (`MaterialenPage`):
@@ -83,19 +84,19 @@ export default function MaterialenScreen() {
 
   const verwijder = (m: Materiaal) =>
     Dialog.alert(
-      `"${m.naam}" verwijderen?`,
-      'Werkbonregels die dit materiaal gebruiken blijven bestaan met hun eigen prijzen.',
+      tx('"{naam}" verwijderen?', { naam: m.naam }),
+      tx('Werkbonregels die dit materiaal gebruiken blijven bestaan met hun eigen prijzen.'),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Verwijderen',
+          text: tx('Verwijderen'),
           style: 'destructive',
           onPress: async () => {
             const { error } = await deleteMateriaal(m.id);
-            if (error) return Dialog.alert('Niet verwijderd', error);
+            if (error) return Dialog.alert(tx('Niet verwijderd'), error);
             setLijst((l) => l.filter((x) => x.id !== m.id));
             setModal(null);
-            Dialog.alert('Materiaal verwijderd');
+            Dialog.alert(tx('Materiaal verwijderd'));
           },
         },
       ],
@@ -106,11 +107,11 @@ export default function MaterialenScreen() {
       variant="detail"
       // "Prijslijst" zoals het dashboard; daar staan de eenheidsprijzen in een
       // tweede tabblad, in de app (nog) onder Instellingen › Eenheidsprijzen.
-      title="Prijslijst"
-      subtitle={`${lijst.length} ${lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek`}
+      title={tx('Prijslijst')}
+      subtitle={txn('{n} materiaal in je bibliotheek', '{n} materialen in je bibliotheek', lijst.length)}
       onBack={() => terugOfNaar(router, '/menu')}
       rightAction={
-        magBeheren ? <HeaderIconButton icon={Plus} label="Nieuw materiaal" onPress={() => setModal('nieuw')} /> : undefined
+        magBeheren ? <HeaderIconButton icon={Plus} label={tx('Nieuw materiaal')} onPress={() => setModal('nieuw')} /> : undefined
       }
     />
   );
@@ -119,7 +120,7 @@ export default function MaterialenScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         {kop}
-        <LoadingScreen label="Materialen laden…" />
+        <LoadingScreen label={tx('Materialen laden…')} />
       </View>
     );
   }
@@ -127,7 +128,7 @@ export default function MaterialenScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         {kop}
-        <ErrorState title="Materialen laden is mislukt." message={fout} onRetry={opnieuw} />
+        <ErrorState title={tx('Materialen laden is mislukt.')} message={fout} onRetry={opnieuw} />
       </View>
     );
   }
@@ -139,7 +140,7 @@ export default function MaterialenScreen() {
       <AppScreen header={kop} refreshing={refreshing} onRefresh={onRefresh}>
         <View style={styles.inhoud}>
           {fout ? <NoticeBanner toon="fout" message={fout} onPress={() => herlaad()} /> : null}
-          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek op naam of artikelnummer…" />
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder={tx('Zoek op naam of artikelnummer…')} />
           {/* Een prijslijst in één keer inlezen (MaterialenImporteren), met
               hetzelfde recht als nieuw materiaal. */}
           {magBeheren ? (
@@ -149,8 +150,8 @@ export default function MaterialenScreen() {
               style={({ pressed }) => [styles.importKnop, pressed && { opacity: 0.7 }]}
             >
               <FileUp size={18} color={t.green700} />
-              <Text style={styles.importTekst}>Prijslijst importeren</Text>
-              <Text style={styles.importSub}>CSV, PDF of foto</Text>
+              <Text style={styles.importTekst}>{tx('Prijslijst importeren')}</Text>
+              <Text style={styles.importSub}>{tx('CSV, PDF of foto')}</Text>
             </Pressable>
           ) : null}
 
@@ -159,11 +160,11 @@ export default function MaterialenScreen() {
               <View style={styles.leegIcoon}>
                 <Package size={26} color={t.green700} />
               </View>
-              <Text style={styles.leegTitel}>Geen materialen gevonden</Text>
+              <Text style={styles.leegTitel}>{tx('Geen materialen gevonden')}</Text>
               <Text style={styles.leegTekst}>
                 {lijst.length === 0
-                  ? 'Voeg je veelgebruikte materialen toe — dan staan prijs en leverancier meteen goed op een werkbon.'
-                  : 'Pas je zoekopdracht aan.'}
+                  ? tx('Voeg je veelgebruikte materialen toe — dan staan prijs en leverancier meteen goed op een werkbon.')
+                  : tx('Pas je zoekopdracht aan.')}
               </Text>
             </View>
           ) : (
@@ -177,7 +178,7 @@ export default function MaterialenScreen() {
                     onPress={magBeheren ? () => setModal(m) : undefined}
                     disabled={!magBeheren}
                     accessibilityRole={magBeheren ? 'button' : undefined}
-                    accessibilityLabel={magBeheren ? `${m.naam} bewerken` : m.naam}
+                    accessibilityLabel={magBeheren ? tx('{naam} bewerken', { naam: m.naam }) : m.naam}
                     style={({ pressed }) => [
                       styles.kaart,
                       tablet && styles.kaartTablet,
@@ -192,7 +193,7 @@ export default function MaterialenScreen() {
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.naam} numberOfLines={2}>
                           {m.naam}
-                          {!m.actief ? <Text style={styles.inactief}>  inactief</Text> : null}
+                          {!m.actief ? <Text style={styles.inactief}>{'  '}{tx('inactief')}</Text> : null}
                         </Text>
                         <Text style={styles.sub} numberOfLines={1}>
                           {[m.artikelnummer, m.eenheid, levNaam(m.leverancierId)].filter(Boolean).join(' · ')}
@@ -202,25 +203,25 @@ export default function MaterialenScreen() {
                     </View>
                     <View style={styles.prijsRij}>
                       {magInkoop ? (
-                        <Prijs styles={styles} label="Inkoop" waarde={m.inkoopprijs != null ? formatEUR(m.inkoopprijs) : '—'} />
+                        <Prijs styles={styles} label={tx('Inkoop')} waarde={m.inkoopprijs != null ? formatEUR(m.inkoopprijs) : '—'} />
                       ) : null}
-                      <Prijs styles={styles} label="Verkoop" waarde={m.verkoopprijs != null ? formatEUR(m.verkoopprijs) : '—'} sterk />
+                      <Prijs styles={styles} label={tx('Verkoop')} waarde={m.verkoopprijs != null ? formatEUR(m.verkoopprijs) : '—'} sterk />
                       {magInkoop ? (
                         <Prijs
                           styles={styles}
-                          label="Marge"
+                          label={tx('Marge')}
                           waarde={mg ? `${formatEUR(mg.bedrag)}${mg.pct != null ? ` · ${mg.pct}%` : ''}` : '—'}
                           kleur={mg ? (mg.bedrag < 0 ? '#dc2626' : '#15A34A') : undefined}
                         />
                       ) : null}
-                      <Prijs styles={styles} label="BTW" waarde={`${m.btwPct}%`} />
+                      <Prijs styles={styles} label={tx('BTW')} waarde={`${m.btwPct}%`} />
                     </View>
                   </Pressable>
                 );
               })}
             </View>
           )}
-          <Text style={styles.voet}>Prijzen excl. btw. Geen voorraadbeheer: je koopt per klus in.</Text>
+          <Text style={styles.voet}>{tx('Prijzen excl. btw. Geen voorraadbeheer: je koopt per klus in.')}</Text>
         </View>
       </AppScreen>
 
@@ -241,14 +242,14 @@ export default function MaterialenScreen() {
           onClose={() => setModal(null)}
           onVerwijder={modal !== 'nieuw' && magBeheren ? () => verwijder(modal) : undefined}
           onOpslaan={async (form) => {
-            if (!companyId) return 'Je sessie is nog niet geladen.';
+            if (!companyId) return tx('Je sessie is nog niet geladen.');
             const res = modal === 'nieuw' ? await createMateriaal(companyId, form) : await updateMateriaal(modal.id, form);
-            if (!res.data) return res.error ?? 'Opslaan mislukt';
+            if (!res.data) return res.error ?? tx('Opslaan mislukt');
             setModal(null);
             herlaad();
             Dialog.alert(
-              modal === 'nieuw' ? 'Materiaal toegevoegd' : 'Materiaal bijgewerkt',
-              res.error ? `Maar de inkoopprijs niet: ${res.error}` : undefined,
+              modal === 'nieuw' ? tx('Materiaal toegevoegd') : tx('Materiaal bijgewerkt'),
+              res.error ? tx('Maar de inkoopprijs niet: {fout}', { fout: res.error }) : undefined,
             );
             return null;
           }}
@@ -318,13 +319,13 @@ function MateriaalSheet({
     .map((l) => ({ id: l.id, label: l.naam }));
 
   const submit = async () => {
-    if (!naam.trim()) return setFout('Naam is verplicht');
+    if (!naam.trim()) return setFout(tx('Naam is verplicht'));
     // Verplicht omdat hij via de kostenregel naar de boekhouding gaat.
-    if (!leverancierId) return setFout('Kies een leverancier');
+    if (!leverancierId) return setFout(tx('Kies een leverancier'));
     const vk = verkoop.trim() ? leesBedrag(verkoop) : null;
-    if (verkoop.trim() && vk === null) return setFout('Vul een geldige verkoopprijs in.');
+    if (verkoop.trim() && vk === null) return setFout(tx('Vul een geldige verkoopprijs in.'));
     const ik = inkoop.trim() ? leesBedrag(inkoop) : null;
-    if (magInkoop && inkoop.trim() && ik === null) return setFout('Vul een geldige inkoopprijs in.');
+    if (magInkoop && inkoop.trim() && ik === null) return setFout(tx('Vul een geldige inkoopprijs in.'));
     setBezig(true);
     setFout(null);
     const melding = await onOpslaan({
@@ -344,17 +345,17 @@ function MateriaalSheet({
   return (
     <FormSheet
       visible
-      title={bewerken ? 'Materiaal bewerken' : 'Nieuw materiaal'}
-      subtitle="Prijzen excl. btw"
+      title={bewerken ? tx('Materiaal bewerken') : tx('Nieuw materiaal')}
+      subtitle={tx('Prijzen excl. btw')}
       error={fout}
       saving={bezig}
       onSubmit={submit}
       onClose={onClose}
-      destructive={onVerwijder ? { label: 'Verwijderen', onPress: onVerwijder } : undefined}
+      destructive={onVerwijder ? { label: tx('Verwijderen'), onPress: onVerwijder } : undefined}
     >
-      <FormField label="Naam *" value={naam} onChangeText={setNaam} placeholder="Bijv. Installatiedraad 2,5mm²" autoFocus={!bewerken} />
+      <FormField label={tx('Naam *')} value={naam} onChangeText={setNaam} placeholder={tx('Bijv. Installatiedraad 2,5mm²')} autoFocus={!bewerken} />
       <View>
-        <Text style={styles.veldLabel}>Eenheid</Text>
+        <Text style={styles.veldLabel}>{tx('Eenheid')}</Text>
         <View style={styles.chipRij}>
           {eenheden.map((e) => (
             <Pressable
@@ -370,33 +371,34 @@ function MateriaalSheet({
           ))}
         </View>
       </View>
-      <FormField label="Artikelnummer (optioneel)" value={artikelnummer} onChangeText={setArtikelnummer} autoCapitalize="none" />
+      <FormField label={tx('Artikelnummer (optioneel)')} value={artikelnummer} onChangeText={setArtikelnummer} autoCapitalize="none" />
       {magInkoop ? (
-        <FormField label="Inkoopprijs (excl. btw · intern)" value={inkoop} onChangeText={setInkoop} keyboardType="decimal-pad" placeholder="0,00" />
+        <FormField label={tx('Inkoopprijs (excl. btw · intern)')} value={inkoop} onChangeText={setInkoop} keyboardType="decimal-pad" placeholder="0,00" />
       ) : null}
-      <FormField label="Verkoopprijs (excl. btw · naar de klant)" value={verkoop} onChangeText={setVerkoop} keyboardType="decimal-pad" placeholder="0,00" />
+      <FormField label={tx('Verkoopprijs (excl. btw · naar de klant)')} value={verkoop} onChangeText={setVerkoop} keyboardType="decimal-pad" placeholder="0,00" />
       {magInkoop && mg ? (
         <Text style={[styles.marge, { color: mg.bedrag < 0 ? '#dc2626' : '#15A34A' }]}>
-          Marge: {formatEUR(mg.bedrag)}
-          {mg.pct != null ? ` · ${mg.pct}%` : ''} (excl. btw)
+          {mg.pct != null
+            ? tx('Marge: {bedrag} · {pct}% (excl. btw)', { bedrag: formatEUR(mg.bedrag), pct: mg.pct })
+            : tx('Marge: {bedrag} (excl. btw)', { bedrag: formatEUR(mg.bedrag) })}
         </Text>
       ) : null}
       <SelectField
-        label="Leverancier *"
+        label={tx('Leverancier *')}
         value={leverancierId}
         onChange={setLeverancierId}
         options={levOpties}
-        placeholder="Kies een leverancier"
+        placeholder={tx('Kies een leverancier')}
         hint={
           bewerken && !materiaal?.leverancierId
-            ? 'Dit materiaal heeft nog geen leverancier. Vul hem aan om op te kunnen slaan.'
+            ? tx('Dit materiaal heeft nog geen leverancier. Vul hem aan om op te kunnen slaan.')
             : levOpties.length === 0
-              ? 'Nog geen leveranciers. Voeg ze toe op het dashboard (Leveranciers).'
+              ? tx('Nog geen leveranciers. Voeg ze toe op het dashboard (Leveranciers).')
               : undefined
         }
       />
       <View>
-        <Text style={styles.veldLabel}>BTW-tarief</Text>
+        <Text style={styles.veldLabel}>{tx('BTW-tarief')}</Text>
         <View style={styles.chipRij}>
           {BTW_TARIEVEN.map((p) => (
             <Pressable
@@ -415,13 +417,13 @@ function MateriaalSheet({
       {bewerken ? (
         <View style={styles.actiefRij}>
           <Text style={styles.actiefTekst}>
-            Actief — inactieve materialen zijn niet meer te kiezen op een werkbon
+            {tx('Actief — inactieve materialen zijn niet meer te kiezen op een werkbon')}
           </Text>
           <Switch
             value={actief}
             onValueChange={setActief}
             trackColor={{ true: ds.green, false: t.line }}
-            accessibilityLabel="Actief"
+            accessibilityLabel={tx('Actief')}
           />
         </View>
       ) : null}

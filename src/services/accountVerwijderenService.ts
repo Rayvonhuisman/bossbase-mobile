@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { writeFout, writeOk, type WriteResult } from '@/lib/writeResult';
+import { tx } from '@/i18n';
 
 /**
  * Account of bedrijf verwijderen via de Edge Function `account-verwijderen`,
@@ -26,7 +27,7 @@ export async function verwijderActie<T = Record<string, unknown>>(
 ): Promise<WriteResult<T>> {
   const { data, error } = await supabase.functions.invoke('account-verwijderen', { body: { actie, ...extra } });
   if (error) {
-    let melding = 'Er ging iets mis. Probeer het later opnieuw.';
+    let melding = tx('Er ging iets mis. Probeer het later opnieuw.');
     try {
       const body = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.();
       if (body?.error) melding = body.error;
@@ -47,9 +48,9 @@ export async function bevestigMetWachtwoord(wachtwoord: string): Promise<string 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email) return 'Je sessie is verlopen. Log opnieuw in.';
+  if (!user?.email) return tx('Je sessie is verlopen. Log opnieuw in.');
   const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: wachtwoord });
-  return error ? 'Dit wachtwoord klopt niet.' : null;
+  return error ? tx('Dit wachtwoord klopt niet.') : null;
 }
 
 /** Uniek per poging: een dubbele tik of netwerkretry geeft hetzelfde resultaat. */

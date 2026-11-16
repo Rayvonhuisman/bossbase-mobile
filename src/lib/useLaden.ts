@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
+import { tx } from '@/i18n';
 
 /**
  * Laden, verversen en pull-to-refresh — met drie toestanden in plaats van twee.
@@ -102,7 +103,7 @@ export function useLaden(
         // Een uitzondering ná een geslaagde query (mapping, sortering,
         // datumformattering) mag niet als "niets gevonden" eindigen.
         const melding =
-          e instanceof Error ? e.message : 'Er ging iets mis bij het verwerken van de gegevens.';
+          e instanceof Error ? e.message : tx('Er ging iets mis bij het verwerken van de gegevens.');
         if (__DEV__) console.log('[useLaden] uitzondering tijdens laden:', melding, e);
         foutHaak.current?.(melding);
       } finally {

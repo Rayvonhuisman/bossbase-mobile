@@ -35,6 +35,7 @@ import type { WriteResult } from '@/lib/writeResult';
 import { terugOfNaar } from '@/lib/navigatie';
 import type { WorkOrderWithCustomer } from '@/types/domain';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { tx } from '@/i18n';
 
 /**
  * Uren vastleggen — op een werkbon, of algemeen.
@@ -105,7 +106,7 @@ export default function NewTimeEntryScreen() {
     // alleen op je eigen bonnen. canBookHours filtert daarna precies.
     const assignedToUserId = magVoorAnderen ? null : (user?.id ?? null);
     const { data, error: e } = await listWorkOrders({ assignedToUserId });
-    if (e) setWoError('Werkbonnen konden niet worden geladen.');
+    if (e) setWoError(tx('Werkbonnen konden niet worden geladen.'));
     else setWorkOrders(data);
     if (magVoorAnderen) {
       const p = await listCompanyProfiles();
@@ -113,7 +114,10 @@ export default function NewTimeEntryScreen() {
         setCollegas(
           p.data.map((x) => ({
             id: x.id,
-            label: `${x.full_name ?? 'Medewerker'}${x.id === user?.id ? ' (ikzelf)' : ''}`,
+            label:
+              x.id === user?.id
+                ? tx('{naam} (ikzelf)', { naam: x.full_name ?? tx('Medewerker') })
+                : (x.full_name ?? tx('Medewerker')),
           })),
         );
       }
@@ -158,7 +162,7 @@ export default function NewTimeEntryScreen() {
     () =>
       boekbaar.map((w) => ({
         id: w.id,
-        label: [w.nummer, w.titel || 'Werkbon'].filter(Boolean).join(' · '),
+        label: [w.nummer, w.titel || tx('Werkbon')].filter(Boolean).join(' · '),
         sub: [w.customer?.name, w.gepland_op ? formatDagLabel(w.gepland_op) : null]
           .filter(Boolean)
           .join(' · '),
@@ -175,9 +179,9 @@ export default function NewTimeEntryScreen() {
   const berekendeUren = berekenUren(van, tot, pauzeMinuten);
   const tijdvakFout =
     van && tot && minutenVanTijd(tot) <= minutenVanTijd(van)
-      ? 'Eindtijd moet later zijn dan starttijd.'
+      ? tx('Eindtijd moet later zijn dan starttijd.')
       : van && tot && berekendeUren === null
-        ? 'Er blijft geen tijd over na aftrek van de pauze.'
+        ? tx('Er blijft geen tijd over na aftrek van de pauze.')
         : null;
   const urenUitTijd = berekendeUren !== null;
   const urenWaarde = urenUitTijd ? berekendeUren.toString().replace('.', ',') : uren;
@@ -185,11 +189,11 @@ export default function NewTimeEntryScreen() {
   const onSubmit = async () => {
     setError(null);
     if (soort === 'werkbon' && (!selectedWoId || !selectedWo)) {
-      setError('Kies een werkbon.');
+      setError(tx('Kies een werkbon.'));
       return;
     }
     if (!isGeldigeISODatum(datum)) {
-      setError('Kies een geldige datum.');
+      setError(tx('Kies een geldige datum.'));
       return;
     }
     if (tijdvakFout) {
@@ -198,19 +202,19 @@ export default function NewTimeEntryScreen() {
     }
     const aantal = urenUitTijd ? berekendeUren! : parseFloat(uren.replace(',', '.'));
     if (soort === 'overig' && kmWaarde === undefined) {
-      setError('Vul een geldig aantal kilometers in.');
+      setError(tx('Vul een geldig aantal kilometers in.'));
       return;
     }
     if (!Number.isFinite(aantal) || aantal <= 0) {
-      setError('Vul een geldig aantal uren in.');
+      setError(tx('Vul een geldig aantal uren in.'));
       return;
     }
     if (!user?.id) {
-      setError('Je sessie is nog niet geladen. Probeer het zo opnieuw.');
+      setError(tx('Je sessie is nog niet geladen. Probeer het zo opnieuw.'));
       return;
     }
     if (soort === 'overig' && !companyId) {
-      setError('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+      setError(tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
       return;
     }
 
@@ -253,14 +257,16 @@ export default function NewTimeEntryScreen() {
     toonResultaat(
       res,
       soort === 'werkbon'
-        ? `Uren geboekt op ${selectedWo?.nummer ?? 'de werkbon'}.`
-        : 'Uren geregistreerd.',
+        ? selectedWo?.nummer
+          ? tx('Uren geboekt op {nummer}.', { nummer: selectedWo.nummer })
+          : tx('Uren geboekt op de werkbon.')
+        : tx('Uren geregistreerd.'),
     );
     terugOfNaar(router, '/hours');
   };
 
   // Every state keeps the top bar, so the back affordance is never lost.
-  const topBar = <AppTopBar variant="detail" title="Uren toevoegen" onBack={() => terugOfNaar(router, '/hours')} />;
+  const topBar = <AppTopBar variant="detail" title={tx('Uren toevoegen')} onBack={() => terugOfNaar(router, '/hours')} />;
 
   if (loadingWo || !rechtenGeladen) {
     return (
@@ -268,7 +274,7 @@ export default function NewTimeEntryScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: t.bg }}>
           {topBar}
-          <LoadingScreen label="Uren laden..." />
+          <LoadingScreen label={tx('Uren laden...')} />
         </View>
       </>
     );
@@ -279,7 +285,7 @@ export default function NewTimeEntryScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: t.bg }}>
           {topBar}
-          <ErrorState title="Niet geladen" message={woError} onRetry={loadWo} />
+          <ErrorState title={tx('Niet geladen')} message={woError} onRetry={loadWo} />
         </View>
       </>
     );
@@ -292,8 +298,8 @@ export default function NewTimeEntryScreen() {
         <View style={{ flex: 1, backgroundColor: t.bg }}>
           {topBar}
           <ErrorState
-            title="Alleen-lezen"
-            message="Je account staat op alleen-lezen; er kunnen geen uren worden geboekt."
+            title={tx('Alleen-lezen')}
+            message={tx('Je account staat op alleen-lezen; er kunnen geen uren worden geboekt.')}
           />
         </View>
       </>
@@ -336,7 +342,7 @@ export default function NewTimeEntryScreen() {
                     ]}
                   >
                     <Text style={[styles.keuzeTekst, on && styles.keuzeTekstOn]}>
-                      {k === 'werkbon' ? 'Werkbon' : 'Werkdag'}
+                      {k === 'werkbon' ? tx('Werkbon') : tx('Werkdag')}
                     </Text>
                   </Pressable>
                 );
@@ -347,11 +353,11 @@ export default function NewTimeEntryScreen() {
               geenBoekbareBon ? (
                 <NoticeBanner
                   toon="waarschuwing"
-                  title="Geen werkbon beschikbaar"
+                  title={tx('Geen werkbon beschikbaar')}
                   message={
                     workOrders.length === 0
-                      ? 'Er zijn nog geen werkbonnen. Maak er eerst een aan, of kies "Werkdag" voor je werkdaguren.'
-                      : 'Er staat geen werkbon open waarop jij uren mag boeken. Vraag de planner om je op de klus te zetten, of kies "Werkdag".'
+                      ? tx('Er zijn nog geen werkbonnen. Maak er eerst een aan, of kies "Werkdag" voor je werkdaguren.')
+                      : tx('Er staat geen werkbon open waarop jij uren mag boeken. Vraag de planner om je op de klus te zetten, of kies "Werkdag".')
                   }
                 />
               ) : (
@@ -359,24 +365,24 @@ export default function NewTimeEntryScreen() {
                    met zoekveld. Daardoor staan datum, tijden en uren meteen in
                    beeld, ook bij honderd werkbonnen. */
                 <SelectField
-                  label="Werkbon *"
+                  label={tx('Werkbon *')}
                   value={selectedWoId}
                   options={werkbonOpties}
                   onChange={setSelectedWoId}
-                  placeholder="Kies een werkbon"
+                  placeholder={tx('Kies een werkbon')}
                   searchable
-                  hint="Zoek op nummer, titel of klant."
+                  hint={tx('Zoek op nummer, titel of klant.')}
                 />
               )
             ) : (
               <>
                 <NoticeBanner
                   toon="info"
-                  message="Werkdaguren: je hele werkdag, voor loon en verlof. Uren op een klus boek je op de werkbon."
+                  message={tx('Werkdaguren: je hele werkdag, voor loon en verlof. Uren op een klus boek je op de werkbon.')}
                 />
                 {magVoorAnderen && collegas.length > 1 ? (
                   <SelectField
-                    label="Medewerker"
+                    label={tx('Medewerker')}
                     value={voorWie ?? user?.id ?? null}
                     options={collegas}
                     onChange={setVoorWie}
@@ -386,23 +392,23 @@ export default function NewTimeEntryScreen() {
               </>
             )}
 
-            <DateField label="Datum *" value={datum} onChange={setDatum} />
+            <DateField label={tx('Datum *')} value={datum} onChange={setDatum} />
 
             <View style={styles.rij}>
               <View style={{ flex: 1 }}>
                 <TimeField
-                  label="Starttijd"
+                  label={tx('Starttijd')}
                   value={van}
                   onChange={(v) => {
                     const r = rondAfOpVijf(v);
                     setVan(r);
                     if (tot && minutenVanTijd(tot) <= minutenVanTijd(r)) setTot(null);
                   }}
-                  placeholder="Kies"
+                  placeholder={tx('Kies')}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <TimeField label="Eindtijd" value={tot} onChange={(v) => setTot(rondAfOpVijf(v))} placeholder="Kies" />
+                <TimeField label={tx('Eindtijd')} value={tot} onChange={(v) => setTot(rondAfOpVijf(v))} placeholder={tx('Kies')} />
               </View>
             </View>
 
@@ -413,15 +419,17 @@ export default function NewTimeEntryScreen() {
             <View style={styles.rij}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Uren *"
+                  label={tx('Uren *')}
                   value={urenWaarde}
                   onChangeText={setUren}
-                  placeholder="Bijv. 2,5"
+                  placeholder={tx('Bijv. 2,5')}
                   keyboardType="decimal-pad"
                   editable={!urenUitTijd}
                   hint={
                     urenUitTijd
-                      ? `≈ ${urenWaarde} uur${pauzeMinuten ? ` (${pauzeMinuten} min pauze eraf)` : ''}`
+                      ? pauzeMinuten
+                        ? tx('≈ {uren} uur ({pauze} min pauze eraf)', { uren: urenWaarde, pauze: pauzeMinuten })
+                        : tx('≈ {uren} uur', { uren: urenWaarde })
                       : undefined
                   }
                 />
@@ -429,27 +437,27 @@ export default function NewTimeEntryScreen() {
               {soort === 'overig' ? (
                 <View style={{ flex: 1 }}>
                   <FormField
-                    label="Gereden kilometers"
+                    label={tx('Gereden kilometers')}
                     value={km}
                     onChangeText={setKm}
-                    placeholder="Optioneel"
+                    placeholder={tx('Optioneel')}
                     keyboardType="decimal-pad"
-                    hint={kmWaarde === undefined ? 'Vul een getal van 0 of meer in.' : undefined}
+                    hint={kmWaarde === undefined ? tx('Vul een getal van 0 of meer in.') : undefined}
                   />
                 </View>
               ) : null}
             </View>
 
             <FormField
-              label="Notitie"
+              label={tx('Notitie')}
               value={notitie}
               onChangeText={setNotitie}
-              placeholder="Optionele omschrijving"
+              placeholder={tx('Optionele omschrijving')}
               multiline
             />
           </ScrollView>
           <FormFooter
-            label="Uren opslaan"
+            label={tx('Uren opslaan')}
             onPress={onSubmit}
             loading={saving}
             error={error}

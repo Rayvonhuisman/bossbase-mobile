@@ -7,6 +7,7 @@
  *
  * Geen imports: `tests/klantKleur.test.mjs` draait dit los in Node.
  */
+import { tx } from '@/i18n';
 
 export type KlantKleur = {
   id: string;
@@ -21,14 +22,14 @@ export type KlantKleur = {
 };
 
 export const KLANT_KLEUREN: readonly KlantKleur[] = [
-  { id: 'groen', label: 'Groen', bg: '#DCFCE7', fg: '#15803D', stip: '#22C55E', bgDonker: 'rgba(34,197,94,0.16)', fgDonker: '#4ADE80' },
-  { id: 'blauw', label: 'Blauw', bg: '#DBEAFE', fg: '#1D4ED8', stip: '#3B82F6', bgDonker: 'rgba(59,130,246,0.18)', fgDonker: '#93C5FD' },
-  { id: 'paars', label: 'Paars', bg: '#EDE9FE', fg: '#6D28D9', stip: '#8B5CF6', bgDonker: 'rgba(139,92,246,0.20)', fgDonker: '#C4B5FD' },
-  { id: 'oranje', label: 'Oranje', bg: '#FFEDD5', fg: '#C2410C', stip: '#F97316', bgDonker: 'rgba(249,115,22,0.18)', fgDonker: '#FDBA74' },
-  { id: 'teal', label: 'Teal', bg: '#CCFBF1', fg: '#0F766E', stip: '#14B8A6', bgDonker: 'rgba(20,184,166,0.18)', fgDonker: '#5EEAD4' },
-  { id: 'geel', label: 'Geel', bg: '#FEF3C7', fg: '#B45309', stip: '#EAB308', bgDonker: 'rgba(245,158,11,0.18)', fgDonker: '#FCD34D' },
-  { id: 'roze', label: 'Roze', bg: '#FCE7F3', fg: '#BE185D', stip: '#EC4899', bgDonker: 'rgba(236,72,153,0.18)', fgDonker: '#F9A8D4' },
-  { id: 'grijs', label: 'Grijs', bg: '#F1F5F9', fg: '#475569', stip: '#94A3B8', bgDonker: 'rgba(148,163,184,0.18)', fgDonker: '#CBD5E1' },
+  { id: 'groen', get label() { return tx('Groen'); }, bg: '#DCFCE7', fg: '#15803D', stip: '#22C55E', bgDonker: 'rgba(34,197,94,0.16)', fgDonker: '#4ADE80' },
+  { id: 'blauw', get label() { return tx('Blauw'); }, bg: '#DBEAFE', fg: '#1D4ED8', stip: '#3B82F6', bgDonker: 'rgba(59,130,246,0.18)', fgDonker: '#93C5FD' },
+  { id: 'paars', get label() { return tx('Paars'); }, bg: '#EDE9FE', fg: '#6D28D9', stip: '#8B5CF6', bgDonker: 'rgba(139,92,246,0.20)', fgDonker: '#C4B5FD' },
+  { id: 'oranje', get label() { return tx('Oranje'); }, bg: '#FFEDD5', fg: '#C2410C', stip: '#F97316', bgDonker: 'rgba(249,115,22,0.18)', fgDonker: '#FDBA74' },
+  { id: 'teal', get label() { return tx('Teal'); }, bg: '#CCFBF1', fg: '#0F766E', stip: '#14B8A6', bgDonker: 'rgba(20,184,166,0.18)', fgDonker: '#5EEAD4' },
+  { id: 'geel', get label() { return tx('Geel'); }, bg: '#FEF3C7', fg: '#B45309', stip: '#EAB308', bgDonker: 'rgba(245,158,11,0.18)', fgDonker: '#FCD34D' },
+  { id: 'roze', get label() { return tx('Roze'); }, bg: '#FCE7F3', fg: '#BE185D', stip: '#EC4899', bgDonker: 'rgba(236,72,153,0.18)', fgDonker: '#F9A8D4' },
+  { id: 'grijs', get label() { return tx('Grijs'); }, bg: '#F1F5F9', fg: '#475569', stip: '#94A3B8', bgDonker: 'rgba(148,163,184,0.18)', fgDonker: '#CBD5E1' },
 ];
 
 export type KlantVoorKleur = {

@@ -9,6 +9,7 @@ import { OPNIEUW_NA_SECONDEN, schoneCode, verificatieUitkomst } from '@/lib/regi
 import { verifieerCode, vraagVerificatiecodeAan } from '@/services/registratieService';
 import { Field, GhostLink, PrimaryButton, TopBar } from './_components';
 import { onb } from './_tokens';
+import { tx } from '@/i18n';
 
 /**
  * Stap 4 — de 6-cijferige code uit de mail. Gelijk aan EmailVerificationScreen
@@ -48,7 +49,7 @@ export default function VerifyScreen() {
 
   const submit = async () => {
     if (code.length !== 6) {
-      setError('Vul de 6-cijferige code in.');
+      setError(tx('Vul de 6-cijferige code in.'));
       return;
     }
     setLoading(true);
@@ -60,10 +61,10 @@ export default function VerifyScreen() {
         router.replace('/(onboarding)/success');
         return;
       }
-      setError(uitkomst.melding);
+      setError(tx(uitkomst.melding));
       if (uitkomst.codeLeegmaken) setCode('');
     } catch {
-      setError('Er ging iets mis. Probeer het opnieuw.');
+      setError(tx('Er ging iets mis. Probeer het opnieuw.'));
     } finally {
       setLoading(false);
     }
@@ -103,15 +104,18 @@ export default function VerifyScreen() {
           <View style={styles.iconCircle}>
             <MailCheck size={30} color={onb.greenDk} strokeWidth={2} />
           </View>
-          <Text style={styles.title}>Bevestig je e-mailadres</Text>
+          <Text style={styles.title}>{tx('Bevestig je e-mailadres')}</Text>
           <Text style={styles.sub}>
-            We hebben een 6-cijferige code gestuurd naar{' '}
-            {email ? <Text style={styles.email}>{email}</Text> : 'je e-mailadres'}.
+            {email
+              ? tx('We hebben een 6-cijferige code gestuurd naar {email}.')
+                  .split(/(\{email\})/)
+                  .map((deel, i) => (deel === '{email}' ? <Text key={i} style={styles.email}>{email}</Text> : deel))
+              : tx('We hebben een 6-cijferige code gestuurd naar je e-mailadres.')}
           </Text>
 
           <View style={styles.form}>
             <Field
-              label="Code"
+              label={tx('Code')}
               value={code}
               onChangeText={(v) => {
                 setCode(schoneCode(v));
@@ -134,7 +138,7 @@ export default function VerifyScreen() {
 
           <View style={styles.resendRow}>
             {countdown > 0 ? (
-              <Text style={styles.resendText}>Geen code ontvangen? Opnieuw versturen kan over {countdown}s</Text>
+              <Text style={styles.resendText}>{tx('Geen code ontvangen? Opnieuw versturen kan over {n}s', { n: countdown })}</Text>
             ) : (
               <Pressable
                 accessibilityRole="button"
@@ -143,15 +147,15 @@ export default function VerifyScreen() {
                 hitSlop={8}
                 style={({ pressed }) => [pressed && { opacity: 0.6 }]}
               >
-                <Text style={styles.resendLink}>{resendLoading ? 'Versturen…' : 'Code opnieuw versturen'}</Text>
+                <Text style={styles.resendLink}>{resendLoading ? tx('Versturen…') : tx('Code opnieuw versturen')}</Text>
               </Pressable>
             )}
           </View>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-          <PrimaryButton label="Verifiëren" onPress={submit} loading={loading} disabled={code.length !== 6} />
-          <GhostLink label="Terug naar inloggen" onPress={terugNaarInloggen} />
+          <PrimaryButton label={tx('Verifiëren')} onPress={submit} loading={loading} disabled={code.length !== 6} />
+          <GhostLink label={tx('Terug naar inloggen')} onPress={terugNaarInloggen} />
         </View>
       </KeyboardAvoidingView>
     </View>

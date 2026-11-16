@@ -7,9 +7,10 @@
  * Beter meteen bij het invoeren afvangen dan dagen later bij een sync.
  *
  * Alle drie zijn tolerant voor spaties, punten en streepjes, en accepteren een
- * lege waarde: de velden zijn optioneel. Puur, zonder imports, zodat het los te
- * testen is (`tests/relaties.test.mjs`).
+ * lege waarde: de velden zijn optioneel. Puur (alleen de vertaling als import),
+ * zodat het los te testen is (`tests/relaties.test.mjs`).
  */
+import { tx } from '@/i18n';
 
 const schoon = (v: unknown): string =>
   String(v ?? '')
@@ -32,10 +33,10 @@ export function valideerBtwNummer(waarde: string | null | undefined): string | n
   if (!v) return null;
   if (!v.startsWith('NL')) return null;
   if (!/^NL\d{9}B\d{2}$/.test(v)) {
-    return 'Een Nederlands btw-nummer ziet eruit als NL123456789B01.';
+    return tx('Een Nederlands btw-nummer ziet eruit als NL123456789B01.');
   }
   if (!elfproef(v.slice(2, 11), [9, 8, 7, 6, 5, 4, 3, 2, -1])) {
-    return 'Dit btw-nummer klopt niet — controleer de cijfers.';
+    return tx('Dit btw-nummer klopt niet — controleer de cijfers.');
   }
   return null;
 }
@@ -44,7 +45,7 @@ export function valideerBtwNummer(waarde: string | null | undefined): string | n
 export function valideerKvk(waarde: string | null | undefined): string | null {
   const v = schoon(waarde);
   if (!v) return null;
-  if (!/^\d{8}$/.test(v)) return 'Een KvK-nummer bestaat uit 8 cijfers.';
+  if (!/^\d{8}$/.test(v)) return tx('Een KvK-nummer bestaat uit 8 cijfers.');
   return null;
 }
 
@@ -62,17 +63,17 @@ export function valideerIban(waarde: string | null | undefined): string | null {
   const v = schoon(waarde);
   if (!v) return null;
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(v)) {
-    return 'Dit lijkt geen geldige IBAN — controleer het rekeningnummer.';
+    return tx('Dit lijkt geen geldige IBAN — controleer het rekeningnummer.');
   }
   if (v.startsWith('NL') && v.length !== 18) {
-    return 'Een Nederlandse IBAN bestaat uit 18 tekens.';
+    return tx('Een Nederlandse IBAN bestaat uit 18 tekens.');
   }
   const verplaatst = v.slice(4) + v.slice(0, 4);
   const numeriek = verplaatst.replace(/[A-Z]/g, (ch) => String(ch.charCodeAt(0) - 55));
   // In blokken rekenen: het getal is te groot voor Number.
   let rest = 0;
   for (const cijfer of numeriek) rest = (rest * 10 + Number(cijfer)) % 97;
-  if (rest !== 1) return 'Dit rekeningnummer klopt niet — controleer de IBAN.';
+  if (rest !== 1) return tx('Dit rekeningnummer klopt niet — controleer de IBAN.');
   return null;
 }
 
@@ -110,7 +111,7 @@ export function leesBetaaltermijn(v: string | null | undefined): { waarde: numbe
   if (!t) return { waarde: null, fout: null };
   const n = Number(t);
   if (!Number.isInteger(n) || n < 0 || n > 365) {
-    return { waarde: null, fout: 'Vul de betaaltermijn in als een aantal dagen (0 tot 365).' };
+    return { waarde: null, fout: tx('Vul de betaaltermijn in als een aantal dagen (0 tot 365).') };
   }
   return { waarde: n, fout: null };
 }

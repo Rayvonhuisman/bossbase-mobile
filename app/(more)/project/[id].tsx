@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { PermissionGate } from '@/components';
 import { ProjectDetailScherm } from '@/components/project/ProjectDetailScherm';
+import { tx } from '@/i18n';
 
 /**
  * Projectdetail (`/project/<id>`) — de projectkaart van het dashboard. Zelfde
@@ -10,7 +11,7 @@ import { ProjectDetailScherm } from '@/components/project/ProjectDetailScherm';
 export default function ProjectDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return (
-    <PermissionGate permission="projecten" label="Projecten">
+    <PermissionGate permission="projecten" label={tx('Projecten')}>
       <ProjectDetailScherm key={id} projectId={id} />
     </PermissionGate>
   );

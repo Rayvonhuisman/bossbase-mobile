@@ -25,7 +25,7 @@ test('voorkeur: opgeslagen licht/donker, anders zoals het apparaat', () => {
 test('één themabediening: in Instellingen › Mijn profiel, niet in de kop of het menu', () => {
   assert.doesNotMatch(lees('src/components/HeaderActions.tsx'), /ThemeToggle|colorMode/i);
   assert.doesNotMatch(lees('src/components/AppTopBar.tsx'), /ThemeToggle/);
-  assert.match(lees('src/components/instellingen/ProfielTab.tsx'), /<Kaart titel="Weergave"[\s\S]*THEMA_OPTIES/);
+  assert.match(lees('src/components/instellingen/ProfielTab.tsx'), /<Kaart titel=\{tx\('Weergave'\)\}[\s\S]*THEMA_OPTIES/);
   const menu = lees('app/(tabs)/menu.tsx');
   assert.doesNotMatch(menu, /Switch/);
   assert.doesNotMatch(menu, /toggleColorMode/);

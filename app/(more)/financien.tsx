@@ -42,6 +42,7 @@ import {
   type KpiPeriode,
 } from '@/lib/financienLogica';
 import { formatEURCent } from '@/lib/format';
+import { tx, txm } from '@/i18n';
 import { useLaden, type LaadBron } from '@/lib/useLaden';
 import { useOnthouden } from '@/lib/useOnthouden';
 import { terugOfNaar } from '@/lib/navigatie';
@@ -67,7 +68,7 @@ import { spacing, type ThemeColors } from '@/theme';
  */
 export default function FinancienScreen() {
   return (
-    <PermissionGate permission="bedrijfsfinancien" label="Financiën">
+    <PermissionGate permission="bedrijfsfinancien" label={tx('Financiën')}>
       <FinancienInhoud />
     </PermissionGate>
   );
@@ -162,20 +163,20 @@ function FinancienInhoud() {
   const rijen = useMemo(() => klantRijen(klanten, facturen, kostenPerKlant), [klanten, facturen, kostenPerKlant]);
   const totaal = useMemo(() => totaalRij(rijen), [rijen]);
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Financiën laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Financiën laden...')} />;
 
   const tegels = kpiTegels(
     kpi ?? { gefactureerd: 0, ontvangen: 0, openstaand: 0, teVerwachten: 0, kosten: 0 },
     periode,
   ).map((tg) => ({
     id: tg.id,
-    label: tg.label,
+    label: tx(tg.label),
     // Zonder cijfers (fout, of nog onderweg) een streep, nooit € 0,00.
     waarde: kpi ? formatEURCent(tg.bedrag) : '—',
-    uitleg: tg.uitleg,
+    uitleg: tg.uitleg ? tx(tg.uitleg) : tg.uitleg,
     toon: kpi ? tg.toon : undefined,
   }));
-  const modusLabel = GRAFIEK_MODI.find((m) => m.id === modus)?.label ?? '';
+  const modusLabel = tx(GRAFIEK_MODI.find((m) => m.id === modus)?.label ?? '');
   const kostenKlaar = kostenPerKlant !== null;
 
   return (
@@ -184,8 +185,8 @@ function FinancienInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Financiën"
-            subtitle="Financieel overzicht"
+            title={tx('Financiën')}
+            subtitle={tx('Financieel overzicht')}
             onBack={() => terugOfNaar(router, '/menu')}
           />
         }
@@ -195,7 +196,7 @@ function FinancienInhoud() {
         {/* Tijdvak van de tegels */}
         <View style={{ paddingTop: 12 }}>
           <AppFilterChips<KpiPeriode>
-            chips={KPI_PERIODES.map((p) => ({ id: p.id, label: p.label }))}
+            chips={KPI_PERIODES.map((p) => ({ id: p.id, label: tx(p.label) }))}
             active={periode}
             onChange={setPeriode}
           />
@@ -203,10 +204,10 @@ function FinancienInhoud() {
         {periode === 'aangepast' ? (
           <View style={styles.datums}>
             <View style={{ flex: 1 }}>
-              <DateField label="Van" value={van} onChange={setVan} maximum={tot} placeholder="Kies" />
+              <DateField label={tx('Van')} value={van} onChange={setVan} maximum={tot} placeholder={tx('Kies')} />
             </View>
             <View style={{ flex: 1 }}>
-              <DateField label="Tot en met" value={tot} onChange={setTot} minimum={van} placeholder="Kies" />
+              <DateField label={tx('Tot en met')} value={tot} onChange={setTot} minimum={van} placeholder={tx('Kies')} />
             </View>
           </View>
         ) : null}
@@ -215,15 +216,15 @@ function FinancienInhoud() {
           <View style={styles.meldingen}>
             <NoticeBanner
               toon="fout"
-              title="Financiën laden is niet gelukt"
-              message={`${kpiFout ?? laadFout} Tik om het opnieuw te proberen.`}
+              title={tx('Financiën laden is niet gelukt')}
+              message={tx('{fout} Tik om het opnieuw te proberen.', { fout: kpiFout ?? laadFout })}
               onPress={() => void opnieuw()}
             />
           </View>
         ) : null}
         {periode === 'aangepast' && !bereik ? (
           <View style={styles.meldingen}>
-            <NoticeBanner toon="info" message="Kies een begin- en einddatum om de cijfers van die periode te zien." />
+            <NoticeBanner toon="info" message={tx('Kies een begin- en einddatum om de cijfers van die periode te zien.')} />
           </View>
         ) : null}
 
@@ -237,15 +238,15 @@ function FinancienInhoud() {
         )}
 
         {/* Omzetgrafiek */}
-        <KaartBlok titel={`Omzetgrafiek — ${GRAFIEK_PERIODE_LABEL[grafiekPeriode]}`}>
+        <KaartBlok titel={tx('Omzetgrafiek — {periode}', { periode: tx(GRAFIEK_PERIODE_LABEL[grafiekPeriode]) })}>
           <View style={styles.grafiekKop}>
             <AppFilterChips<GrafiekPeriode>
-              chips={GRAFIEK_PERIODES.map((p) => ({ id: p.id, label: p.label }))}
+              chips={GRAFIEK_PERIODES.map((p) => ({ id: p.id, label: tx(p.label) }))}
               active={grafiekPeriode}
               onChange={setGrafiekPeriode}
             />
             <AppFilterChips<GrafiekModus>
-              chips={GRAFIEK_MODI.map((m) => ({ id: m.id, label: m.label }))}
+              chips={GRAFIEK_MODI.map((m) => ({ id: m.id, label: tx(m.label) }))}
               active={modus}
               onChange={setModus}
             />
@@ -256,14 +257,14 @@ function FinancienInhoud() {
         </KaartBlok>
 
         {/* Per klant / opdracht — cumulatief, alle periodes */}
-        <KaartBlok titel="Per klant / opdracht · alle periodes" aantal={rijen.length}>
+        <KaartBlok titel={tx('Per klant / opdracht · alle periodes')} aantal={rijen.length}>
           {kostenFout ? (
             <View style={{ padding: 12 }}>
               <NoticeBanner toon="fout" message={kostenFout} onPress={() => void opnieuw()} />
             </View>
           ) : null}
           {rijen.length === 0 ? (
-            <KaartLeeg tekst="Nog geen klantdata beschikbaar." />
+            <KaartLeeg tekst={tx('Nog geen klantdata beschikbaar.')} />
           ) : tablet ? (
             <KlantTabel
               rijen={rijen}
@@ -291,10 +292,9 @@ function FinancienInhoud() {
           )}
         </KaartBlok>
         <Text style={styles.voetnoot}>
-          Resultaat is de omzet exclusief btw min arbeid (uren × kostprijs per uur), materiaal (op inkoopprijs) en
-          inkopen. Uren zonder kostprijs per uur tellen niet mee in de arbeid.
-          {magKostprijs ? '' : ' Arbeid, materiaal en resultaat zijn afgeschermd: daarvoor is het recht Inkoop- en kostprijzen zien nodig.'}{' '}
-          De export naar Excel staat in het dashboard.
+          {tx('Resultaat is de omzet exclusief btw min arbeid (uren × kostprijs per uur), materiaal (op inkoopprijs) en inkopen. Uren zonder kostprijs per uur tellen niet mee in de arbeid.')}
+          {magKostprijs ? '' : ` ${tx('Arbeid, materiaal en resultaat zijn afgeschermd: daarvoor is het recht Inkoop- en kostprijzen zien nodig.')}`}{' '}
+          {tx('De export naar Excel staat in het dashboard.')}
         </Text>
       </AppScreen>
     </View>
@@ -310,7 +310,9 @@ const AFGESCHERMD = '—';
 
 /** "12,5 uur", met de toevoeging als een deel geen kostprijs per uur heeft. */
 const urenSub = (uren: number, zonder: number) =>
-  `${formatUrenAantal(uren)}${zonder > 0 ? ' · deels zonder kostprijs' : ''}`;
+  zonder > 0
+    ? tx('{uren} · deels zonder kostprijs', { uren: formatUrenAantal(uren) })
+    : formatUrenAantal(uren);
 
 /** Telefoon: één kaart per klant, met de kolommen van het dashboard als cijfers. */
 function KlantKaart({
@@ -344,31 +346,31 @@ function KlantKaart({
           ) : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.cijferLabel}>Gefactureerd</Text>
+          <Text style={styles.cijferLabel}>{tx('Gefactureerd')}</Text>
           <Text style={styles.klantBedrag}>{formatEURCent(r.total)}</Text>
         </View>
       </View>
       <View style={styles.cijfers}>
         <Cijfer
-          label="Arbeid"
+          label={tx('Arbeid')}
           waarde={k(magKostprijs ? formatEURCent(r.arbeid) : formatUrenAantal(r.uren))}
           sub={kostenKlaar && magKostprijs ? urenSub(r.uren, r.urenZonderKostprijs) : undefined}
           kleur={magKostprijs ? t.statusRejectFg : t.muted}
           styles={styles}
         />
-        <Cijfer label="Materiaal" waarde={kp(formatEURCent(r.materiaal))} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Inkopen" waarde={k(formatEURCent(r.inkopen))} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Betaald" waarde={formatEURCent(r.paid)} kleur={t.green700} styles={styles} />
+        <Cijfer label={tx('Materiaal')} waarde={kp(formatEURCent(r.materiaal))} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer label={tx('Inkopen')} waarde={k(formatEURCent(r.inkopen))} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer label={tx('Betaald')} waarde={formatEURCent(r.paid)} kleur={t.green700} styles={styles} />
         <Cijfer
-          label="Openstaand"
+          label={tx('Openstaand')}
           waarde={formatEURCent(r.openstaand)}
           kleur={r.openstaand > 0 ? t.statusWarnFg : t.muted}
           styles={styles}
         />
-        <Cijfer label="Marge" waarde={kp(`${r.margin}%`)} kleur={t.ink} styles={styles} />
+        <Cijfer label={tx('Marge')} waarde={kp(`${r.margin}%`)} kleur={t.ink} styles={styles} />
       </View>
       <View style={styles.winstRij}>
-        <Text style={styles.cijferLabel}>Resultaat</Text>
+        <Text style={styles.cijferLabel}>{tx('Resultaat')}</Text>
         <Text style={[styles.winst, { color: magKostprijs ? winstKleur(t, r.profit) : t.muted }]}>
           {kp(formatEURCent(r.profit))}
         </Text>
@@ -392,25 +394,25 @@ function TotaalKaart({
   return (
     <View style={[styles.klant, styles.rand, { backgroundColor: t.bgAlt }]}>
       <View style={styles.klantKop}>
-        <Text style={[styles.klantNaam, { flex: 1 }]}>Totaal</Text>
+        <Text style={[styles.klantNaam, { flex: 1 }]}>{tx('Totaal')}</Text>
         <Text style={styles.klantBedrag}>{formatEURCent(totaal.total)}</Text>
       </View>
       <View style={styles.cijfers}>
         <Cijfer
-          label="Arbeid"
+          label={tx('Arbeid')}
           waarde={magKostprijs ? formatEURCent(totaal.arbeid) : formatUrenAantal(totaal.uren)}
           sub={magKostprijs ? urenSub(totaal.uren, totaal.urenZonderKostprijs) : undefined}
           kleur={magKostprijs ? t.statusRejectFg : t.muted}
           styles={styles}
         />
-        <Cijfer label="Materiaal" waarde={kp(formatEURCent(totaal.materiaal))} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Inkopen" waarde={formatEURCent(totaal.inkopen)} kleur={t.statusRejectFg} styles={styles} />
-        <Cijfer label="Betaald" waarde={formatEURCent(totaal.paid)} kleur={t.green700} styles={styles} />
-        <Cijfer label="Openstaand" waarde={formatEURCent(totaal.openstaand)} kleur={t.ink} styles={styles} />
-        <Cijfer label="Marge" waarde={kp(`${totaal.margin}%`)} kleur={t.ink} styles={styles} />
+        <Cijfer label={tx('Materiaal')} waarde={kp(formatEURCent(totaal.materiaal))} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer label={tx('Inkopen')} waarde={formatEURCent(totaal.inkopen)} kleur={t.statusRejectFg} styles={styles} />
+        <Cijfer label={tx('Betaald')} waarde={formatEURCent(totaal.paid)} kleur={t.green700} styles={styles} />
+        <Cijfer label={tx('Openstaand')} waarde={formatEURCent(totaal.openstaand)} kleur={t.ink} styles={styles} />
+        <Cijfer label={tx('Marge')} waarde={kp(`${totaal.margin}%`)} kleur={t.ink} styles={styles} />
       </View>
       <View style={styles.winstRij}>
-        <Text style={styles.cijferLabel}>Resultaat</Text>
+        <Text style={styles.cijferLabel}>{tx('Resultaat')}</Text>
         <Text style={[styles.winst, { color: magKostprijs ? winstKleur(t, totaal.profit) : t.muted }]}>
           {kp(formatEURCent(totaal.profit))}
         </Text>
@@ -453,15 +455,15 @@ function Cijfer({
 // scrolt de tabel horizontaal, zoals in het dashboard.
 const KLANT_BREEDTE = 144;
 const KOLOMMEN: { id: string; label: string; breedte: number }[] = [
-  { id: 'klant', label: 'Klant', breedte: KLANT_BREEDTE },
-  { id: 'total', label: 'Gefactureerd', breedte: 100 },
-  { id: 'arbeid', label: 'Arbeid', breedte: 88 },
-  { id: 'materiaal', label: 'Materiaal', breedte: 88 },
-  { id: 'inkopen', label: 'Inkopen', breedte: 80 },
-  { id: 'paid', label: 'Betaald', breedte: 92 },
-  { id: 'openstaand', label: 'Openstaand', breedte: 88 },
-  { id: 'profit', label: 'Resultaat', breedte: 88 },
-  { id: 'margin', label: 'Marge', breedte: 52 },
+  { id: 'klant', label: txm('Klant'), breedte: KLANT_BREEDTE },
+  { id: 'total', label: txm('Gefactureerd'), breedte: 100 },
+  { id: 'arbeid', label: txm('Arbeid'), breedte: 88 },
+  { id: 'materiaal', label: txm('Materiaal'), breedte: 88 },
+  { id: 'inkopen', label: txm('Inkopen'), breedte: 80 },
+  { id: 'paid', label: txm('Betaald'), breedte: 92 },
+  { id: 'openstaand', label: txm('Openstaand'), breedte: 88 },
+  { id: 'profit', label: txm('Resultaat'), breedte: 88 },
+  { id: 'margin', label: txm('Marge'), breedte: 52 },
 ];
 
 /** iPad: de tabel van het dashboard, horizontaal te scrollen als hij niet past. */
@@ -516,7 +518,7 @@ function KlantTabel({
               style={[styles.kopCel, { width: c.breedte }, i === 0 && { textAlign: 'left' }]}
               numberOfLines={2}
             >
-              {c.label}
+              {tx(c.label)}
             </Text>
           ))}
         </View>
@@ -544,7 +546,7 @@ function KlantTabel({
         ))}
         {kostenKlaar ? (
           <View style={[styles.tabelRij, styles.rand, { backgroundColor: t.bgAlt }]}>
-            <Text style={[styles.klantNaam, { width: KLANT_BREEDTE }]}>Totaal</Text>
+            <Text style={[styles.klantNaam, { width: KLANT_BREEDTE }]}>{tx('Totaal')}</Text>
             {cel(1, formatEURCent(totaal.total), t.ink, true)}
             {arbeidCel(totaal.arbeid, totaal.uren, totaal.urenZonderKostprijs, true)}
             {cel(3, kp(formatEURCent(totaal.materiaal)), magKostprijs ? t.statusRejectFg : t.muted, true)}

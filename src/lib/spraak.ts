@@ -7,6 +7,7 @@
  * zegt waar de microfoon van het toetsenbord zit. Webversie: `spraak.web.ts`
  * (de spraakherkenning van de browser, zoals in het dashboard).
  */
+import { txm } from '@/i18n';
 export type SpraakStand = 'uit' | 'start' | 'luistert';
 export type Spraak = {
   ondersteund: boolean;
@@ -22,4 +23,4 @@ export function useSpraak(_opties: { setTekst: (f: (oud: string) => string) => v
   return { ondersteund: false, stand: 'uit', tussen: '', fout: null, start: () => {}, stop: () => {}, wisFout: () => {} };
 }
 
-export const DICTEER_HINT = 'Tik op de microfoon van je toetsenbord om in te spreken.';
+export const DICTEER_HINT = txm('Tik op de microfoon van je toetsenbord om in te spreken.');

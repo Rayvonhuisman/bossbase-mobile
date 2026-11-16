@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getUserId, withCompanyId } from '@/lib/sessionContext';
+import { tx } from '@/i18n';
 
 /**
  * Een regel op de tijdlijn van een klant (`klant_tijdlijn`), precies zoals
@@ -57,7 +58,7 @@ export async function listKlantTijdlijn(customerId: string): Promise<{ data: Tij
     .order('aangemaakt_op', { ascending: false });
   if (error) {
     console.warn('[klantTijdlijnService.listKlantTijdlijn]', error.message);
-    return { data: [], error: 'De tijdlijn kon niet worden geladen.' };
+    return { data: [], error: tx('De tijdlijn kon niet worden geladen.') };
   }
   return {
     data: ((data as (Omit<TijdlijnRegel, 'omschrijving'> & { omschrijving: string | null })[]) ?? []).map((r) => ({

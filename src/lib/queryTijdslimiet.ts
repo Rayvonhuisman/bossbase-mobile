@@ -16,6 +16,7 @@
  * De limiet is ruim (15 seconden): een trage 3G-verbinding moet het gewoon
  * halen. Hij is bedoeld tegen "nooit", niet tegen "traag".
  */
+import { tx } from '@/i18n';
 
 export const STANDAARD_TIJDSLIMIET_MS = 15000;
 
@@ -55,10 +56,10 @@ export async function metTijdslimiet<T extends { data: unknown; error: unknown }
     const fout: TijdslimietFout = {
       code: 'timeout',
       message: afgebroken
-        ? `Geen antwoord binnen ${Math.round(ms / 1000)} seconden. Controleer je verbinding.`
+        ? tx('Geen antwoord binnen {seconden} seconden. Controleer je verbinding.', { seconden: Math.round(ms / 1000) })
         : e instanceof Error
           ? e.message
-          : 'Onbekende netwerkfout.',
+          : tx('Onbekende netwerkfout.'),
       details: null,
       hint: null,
     };

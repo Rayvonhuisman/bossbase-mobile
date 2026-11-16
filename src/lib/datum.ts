@@ -16,14 +16,22 @@
  * componenten (`getFullYear`, `getMonth`, `getDate`) en nooit via `toISOString`.
  */
 
+import { locale } from '@/i18n';
+
 const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIJD = /^\d{2}:\d{2}(:\d{2})?$/;
 
-const NL_LANG = new Intl.DateTimeFormat('nl-NL', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
+let langLocale = '';
+let langFmt: Intl.DateTimeFormat | null = null;
+/** Lange datum in de taal van de app, gecachet per locale. */
+function NL_LANG(): Intl.DateTimeFormat {
+  const loc = locale();
+  if (!langFmt || loc !== langLocale) {
+    langLocale = loc;
+    langFmt = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  return langFmt;
+}
 
 export function isGeldigeISODatum(waarde: string | null | undefined): boolean {
   if (!waarde || !ISO_DATUM.test(waarde)) return false;
@@ -75,7 +83,7 @@ export function parseISOTijd(waarde: string | null | undefined): Date | null {
 /** `2026-09-12` → `12 september 2026`. Lege of ongeldige invoer → null. */
 export function nlDatum(waarde: string | null | undefined): string | null {
   const d = parseISODatum(waarde);
-  return d ? NL_LANG.format(d) : null;
+  return d ? NL_LANG().format(d) : null;
 }
 
 /** Vandaag als `YYYY-MM-DD`, in de lokale tijdzone. */

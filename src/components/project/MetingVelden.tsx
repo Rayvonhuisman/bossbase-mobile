@@ -13,6 +13,7 @@ import {
   type MetingForm,
   type Soort,
 } from '@/lib/metingen';
+import { tx, txm } from '@/i18n';
 
 /**
  * De velden van één meting, zoals `MetingVelden` in het dashboard
@@ -26,7 +27,14 @@ import {
  * De koppeling met Materialen (prijs voor de offerte) zit alleen in het
  * dashboard; de app laat die staan en toont hier geen prijzen.
  */
-const MAAT_LABEL: Record<string, string> = { breedte: 'Breedte', hoogte: 'Hoogte', diepte: 'Diepte' };
+const MAAT_LABEL: Record<string, string> = { breedte: txm('Breedte'), hoogte: txm('Hoogte'), diepte: txm('Diepte') };
+// De labels van SOORTEN komen uit de vendored dashboardcode; hier gemarkeerd voor vertaling.
+const SOORT_LABEL: Record<string, string> = {
+  oppervlak: txm('Oppervlak'),
+  lengte: txm('Lengte'),
+  stuks: txm('Stuks'),
+  inhoud: txm('Inhoud'),
+};
 
 type Sleutel = keyof MetingForm;
 
@@ -52,19 +60,22 @@ export function MetingVelden({
   return (
     <View style={s.kolom}>
       <Invoer
-        label="Naam"
+        label={tx('Naam')}
         value={m.naam}
         onChangeText={(v) => set('naam', v)}
-        placeholder="Raam woonkamer links"
+        placeholder={tx('Raam woonkamer links')}
         twijfel={twijfel('naam')}
         editable={!disabled}
         maxLength={120}
       />
 
       <View style={s.kolomKlein}>
-        <Text style={s.label}>Soort</Text>
+        <Text style={s.label}>{tx('Soort')}</Text>
         <Keuzes
-          opties={(SOORTEN as { value: Soort; label: string; eenheid: string }[]).map((x) => ({ id: x.value, label: `${x.label} (${x.eenheid})` }))}
+          opties={(SOORTEN as { value: Soort; label: string; eenheid: string }[]).map((x) => ({
+            id: x.value,
+            label: `${tx(SOORT_LABEL[x.value] ?? x.label)} (${x.eenheid === 'stuk' ? tx('stuk') : x.eenheid})`,
+          }))}
           waarde={m.soort}
           onKies={(v) => set('soort', v as Soort)}
           twijfel={twijfel('soort')}
@@ -75,7 +86,7 @@ export function MetingVelden({
       <View style={s.rij}>
         <View style={s.aantal}>
           <Invoer
-            label="Aantal"
+            label={tx('Aantal')}
             value={m.aantal}
             onChangeText={(v) => set('aantal', v.replace(/[^\d]/g, ''))}
             keyboardType="number-pad"
@@ -86,7 +97,7 @@ export function MetingVelden({
         {maten.map((k) => (
           <View key={k} style={s.maat}>
             <Invoer
-              label={m.soort === 'lengte' ? 'Lengte' : (MAAT_LABEL[k] ?? k)}
+              label={m.soort === 'lengte' ? tx('Lengte') : MAAT_LABEL[k] ? tx(MAAT_LABEL[k]) : k}
               value={m[k]}
               onChangeText={(v) => set(k, v.replace(/[^\d.,]/g, ''))}
               keyboardType="decimal-pad"
@@ -99,7 +110,7 @@ export function MetingVelden({
 
       {maten.length > 0 ? (
         <View style={s.eenheidRij}>
-          <Text style={s.label}>Eenheid</Text>
+          <Text style={s.label}>{tx('Eenheid')}</Text>
           <Keuzes
             opties={(MAAT_EENHEDEN as Eenheid[]).map((e) => ({ id: e, label: e }))}
             waarde={m.eenheid}
@@ -111,7 +122,7 @@ export function MetingVelden({
       ) : null}
 
       <Text style={[s.som, !som && { color: t.muted }]} accessibilityLiveRegion="polite">
-        {som || (maten.length ? 'Vul de maten in' : '')}
+        {som || (maten.length ? tx('Vul de maten in') : '')}
       </Text>
 
       {velden.map((v) => (
@@ -120,7 +131,7 @@ export function MetingVelden({
             label={v.label}
             value={m.extra?.[v.key] ?? ''}
             onChangeText={(x) => set('extra', { ...(m.extra || {}), [v.key]: x })}
-            placeholder={v.placeholder || (v.opties ? 'Kies of typ' : '')}
+            placeholder={v.placeholder || (v.opties ? tx('Kies of typ') : '')}
             editable={!disabled}
             maxLength={120}
           />
@@ -137,10 +148,11 @@ export function MetingVelden({
       ))}
 
       <Invoer
-        label="Opmerking"
+        label={tx('Opmerking')}
         value={m.opmerking}
         onChangeText={(v) => set('opmerking', v)}
-        placeholder="bijv. schuin kozijn, onder 2 mm kleiner"
+        placeholder={tx('bijv. schuin kozijn, onder 2 mm kleiner')}
+
         editable={!disabled}
         maxLength={300}
       />

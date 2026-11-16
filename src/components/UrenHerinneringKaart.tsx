@@ -7,10 +7,11 @@ import { useAuth, useTheme } from '@/providers';
 import { laadUrenHerinnering } from '@/services/urenHerinneringService';
 import type { OpenWerkdag } from '@/lib/urenHerinnering';
 import { dsShadow, type ThemeColors } from '@/theme';
+import { tx, locale } from '@/i18n';
 
-const DAG = new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 /** "Do 1 okt" — alleen de eerste letter groot. */
 const dagLabel = (iso: string) => {
+  const DAG = new Intl.DateTimeFormat(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   const t = DAG.format(new Date(`${iso}T12:00:00Z`)).replace('.', '');
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
@@ -79,11 +80,11 @@ export function UrenHerinneringKaart({ marge = 16 }: { marge?: number }) {
             <Clock size={18} color={t.statusWarnFg} strokeWidth={2.2} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.titel}>Vul je werkdag in</Text>
+            <Text style={styles.titel}>{tx('Vul je werkdag in')}</Text>
             <Text style={styles.sub}>
               {dagen.length === 1
-                ? 'Je stond ingepland, maar hebt nog geen werkdaguren geschreven.'
-                : `Je stond op ${dagen.length} dagen ingepland zonder werkdaguren.`}
+                ? tx('Je stond ingepland, maar hebt nog geen werkdaguren geschreven.')
+                : tx('Je stond op {n} dagen ingepland zonder werkdaguren.', { n: dagen.length })}
             </Text>
           </View>
         </View>
@@ -93,7 +94,7 @@ export function UrenHerinneringKaart({ marge = 16 }: { marge?: number }) {
             key={d.datum}
             onPress={() => invullen(d)}
             accessibilityRole="button"
-            accessibilityLabel={`Werkdag invullen voor ${dagLabel(d.datum)}`}
+            accessibilityLabel={tx('Werkdag invullen voor {dag}', { dag: dagLabel(d.datum) })}
             style={({ pressed }) => [styles.dag, pressed && { opacity: 0.8 }]}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -102,21 +103,22 @@ export function UrenHerinneringKaart({ marge = 16 }: { marge?: number }) {
                 {d.label}
               </Text>
             </View>
-            <Text style={styles.invullen}>Invullen ›</Text>
+            <Text style={styles.invullen}>{tx('Invullen ›')}</Text>
           </Pressable>
         ))}
         {dagen.length > TOON_MAX ? (
           <Pressable onPress={() => router.push('/(tabs)/hours')} accessibilityRole="link" style={styles.meer}>
-            <Text style={styles.invullen}>en nog {dagen.length - TOON_MAX} › naar Uren</Text>
+            <Text style={styles.invullen}>{tx('en nog {n} › naar Uren', { n: dagen.length - TOON_MAX })}</Text>
           </Pressable>
         ) : null}
 
         <Text style={styles.uitleg}>
-          Werkdaguren zijn je hele werkdag (voor loon en verlof). Werkbonuren zijn de tijd op een klus (voor
-          nacalculatie en factuur) en tellen hier niet mee.
+          {tx(
+            'Werkdaguren zijn je hele werkdag (voor loon en verlof). Werkbonuren zijn de tijd op een klus (voor nacalculatie en factuur) en tellen hier niet mee.',
+          )}
         </Text>
         <Pressable onPress={later} accessibilityRole="button" hitSlop={8} style={styles.laterKnop}>
-          <Text style={styles.laterTekst}>Later</Text>
+          <Text style={styles.laterTekst}>{tx('Later')}</Text>
         </Pressable>
       </View>
     </View>

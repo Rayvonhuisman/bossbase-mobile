@@ -12,6 +12,7 @@ import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { terugOfNaar } from '@/lib/navigatie';
 import { onb } from './_tokens';
+import { tx } from '@/i18n';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // StepDots
@@ -57,7 +58,7 @@ export function TopBar({
     <View style={styles.topBar}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Terug"
+        accessibilityLabel={tx('Terug')}
         onPress={() => terugOfNaar(router, '/')}
         hitSlop={8}
         style={[styles.backBtn, { opacity: showBack ? 1 : 0 }]}
@@ -102,7 +103,7 @@ export function PrimaryButton({
         pressed && !isDisabled && { opacity: 0.9 },
       ]}
     >
-      <Text style={styles.primaryBtnText}>{loading ? 'Bezig...' : label}</Text>
+      <Text style={styles.primaryBtnText}>{loading ? tx('Bezig...') : label}</Text>
       {!loading && trailing ? trailing : null}
     </Pressable>
   );
@@ -139,7 +140,7 @@ export function GreenButton({
         pressed && !isDisabled && { opacity: 0.9 },
       ]}
     >
-      <Text style={styles.greenBtnText}>{loading ? 'Bezig...' : label}</Text>
+      <Text style={styles.greenBtnText}>{loading ? tx('Bezig...') : label}</Text>
       {!loading && trailing ? trailing : null}
     </Pressable>
   );
@@ -200,7 +201,7 @@ export function Field({ label, hint, isPassword, error, ...props }: FieldProps) 
           style={styles.fieldInput}
         />
         {isPassword ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={show ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'} onPress={() => setShow((v) => !v)} hitSlop={6}>
+          <Pressable accessibilityRole="button" accessibilityLabel={show ? tx('Wachtwoord verbergen') : tx('Wachtwoord tonen')} onPress={() => setShow((v) => !v)} hitSlop={6}>
             {show ? (
               <EyeOff size={18} color={onb.muted} strokeWidth={2} />
             ) : (

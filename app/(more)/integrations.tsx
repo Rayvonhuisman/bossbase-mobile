@@ -5,6 +5,7 @@ import { AppScreen, AppTopBar, PermissionGate } from '@/components';
 import { useTheme } from '@/providers';
 import { IntegratiesOverzicht } from '@/components/instellingen/IntegratiesOverzicht';
 import { terugOfNaar } from '@/lib/navigatie';
+import { tx } from '@/i18n';
 
 /**
  * Integraties — dezelfde inhoud als de tab Integraties in Instellingen (in het
@@ -14,7 +15,7 @@ import { terugOfNaar } from '@/lib/navigatie';
  */
 export default function IntegrationsScreen() {
   return (
-    <PermissionGate permission="instellingen" label="Integraties">
+    <PermissionGate permission="instellingen" label={tx('Integraties')}>
       <IntegrationsInhoud />
     </PermissionGate>
   );
@@ -38,8 +39,8 @@ function IntegrationsInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Integraties"
-            subtitle="Boekhouding en betalingen"
+            title={tx('Integraties')}
+            subtitle={tx('Boekhouding en betalingen')}
             onBack={() => terugOfNaar(router, '/settings')}
           />
         }

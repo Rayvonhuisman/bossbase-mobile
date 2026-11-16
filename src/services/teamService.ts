@@ -8,6 +8,7 @@ import {
   type WriteStatus,
 } from '@/lib/writeResult';
 import { uitnodigingsMail } from '@/lib/teamRegels';
+import { tx } from '@/i18n';
 
 /**
  * Team — dezelfde twee bronnen als `teamService.js` in het dashboard.
@@ -139,12 +140,12 @@ export async function listCompanyProfiles(): Promise<{
 
   if (error) {
     console.warn('[teamService.listCompanyProfiles]', error.message);
-    return { data: [], error: 'Collega’s konden niet worden geladen.' };
+    return { data: [], error: tx('Collega’s konden niet worden geladen.') };
   }
   return {
     data: ((data as ProfileDb[]) ?? []).map((p) => ({
       id: p.id,
-      full_name: p.full_name ?? 'Naamloos',
+      full_name: p.full_name ?? tx('Naamloos'),
       role: p.role ?? 'medewerker',
       actief: p.actief !== false,
     })),
@@ -186,7 +187,7 @@ export async function listTeamMembers(): Promise<{
 
   if (profRes.error) {
     console.warn('[teamService.listTeamMembers] profiles', profRes.error.message);
-    return { data: [], error: 'Teamleden konden niet worden geladen.' };
+    return { data: [], error: tx('Teamleden konden niet worden geladen.') };
   }
 
   const adressen = new Map<string, string>();
@@ -253,18 +254,18 @@ export async function inviteTeamMember(
   input: InviteInput,
 ): Promise<WriteResult<TeamMemberRow & { mailVerstuurd: boolean; mailFout: string | null }>> {
   const email = input.email.trim().toLowerCase();
-  if (!email) return writeFout('validatie', 'Vul een e-mailadres in.');
-  if (!EMAIL_RE.test(email)) return writeFout('validatie', 'Dit e-mailadres klopt niet.');
-  if (!input.role) return writeFout('validatie', 'Kies een rol.');
+  if (!email) return writeFout('validatie', tx('Vul een e-mailadres in.'));
+  if (!EMAIL_RE.test(email)) return writeFout('validatie', tx('Dit e-mailadres klopt niet.'));
+  if (!input.role) return writeFout('validatie', tx('Kies een rol.'));
 
   const companyId = getCompanyId();
   if (!companyId) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const token = globalThis.crypto?.randomUUID?.();
   if (!token) {
-    return writeFout('onbekend', 'Uitnodigen lukt niet op dit toestel. Gebruik het dashboard.');
+    return writeFout('onbekend', tx('Uitnodigen lukt niet op dit toestel. Gebruik het dashboard.'));
   }
 
   const { data: co } = await supabase
@@ -287,7 +288,7 @@ export async function inviteTeamMember(
     invite_company_name: bedrijfsnaam,
   });
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   }
 
   const antwoord = await supabase.from('company_members').insert(payload).select(MEMBER_COLUMNS);
@@ -298,7 +299,7 @@ export async function inviteTeamMember(
   if (antwoord.error && isGebruikerslimiet(antwoord.error)) {
     return writeFout(
       'plan-limiet',
-      antwoord.error.message || 'Je pakket zit vol. Upgrade om meer gebruikers toe te voegen.',
+      antwoord.error.message || tx('Je pakket zit vol. Upgrade om meer gebruikers toe te voegen.'),
     );
   }
   const res = await schrijf<MemberDb>(
@@ -307,8 +308,7 @@ export async function inviteTeamMember(
       context: 'teamService.inviteTeamMember',
       bedrijfReadonly: isReadonly(),
       leegMelding:
-        'De uitnodiging is niet aangemaakt. Alleen een beheerder kan teamleden uitnodigen, ' +
-        'en je abonnement moet ruimte hebben voor een extra gebruiker.',
+        tx('De uitnodiging is niet aangemaakt. Alleen een beheerder kan teamleden uitnodigen, en je abonnement moet ruimte hebben voor een extra gebruiker.'),
     },
   );
   if (!res.ok) return res;
@@ -353,10 +353,10 @@ export async function inviteTeamMember(
         /* de rauwe melding is dan het beste wat we hebben */
       }
     } else if (!(data as { success?: boolean } | null)?.success) {
-      mailFout = (data as { error?: string } | null)?.error || 'Versturen mislukt';
+      mailFout = (data as { error?: string } | null)?.error || tx('Versturen mislukt');
     }
   } catch (e) {
-    mailFout = e instanceof Error ? e.message : 'onbekende fout';
+    mailFout = e instanceof Error ? e.message : tx('onbekende fout');
   }
 
   if (mailFout) {
@@ -395,12 +395,12 @@ export async function updateTeamMember(
   input: TeamlidWijziging,
 ): Promise<WriteStatus> {
   if (input.full_name !== undefined && input.full_name !== null && !input.full_name.trim()) {
-    return writeFout('validatie', 'Vul een naam in.');
+    return writeFout('validatie', tx('Vul een naam in.'));
   }
   if (input.hours_per_week != null) {
     const u = Number(input.hours_per_week);
     if (!Number.isFinite(u) || u < 0 || u > 60) {
-      return writeFout('validatie', 'Vul een aantal uren per week tussen 0 en 60 in.');
+      return writeFout('validatie', tx('Vul een aantal uren per week tussen 0 en 60 in.'));
     }
   }
 
@@ -410,7 +410,7 @@ export async function updateTeamMember(
     if (input.phone !== undefined) updates.phone = input.phone?.trim() || null;
     if (input.role !== undefined) updates.role = input.role;
     if (input.hours_per_week !== undefined) updates.hours_per_week = Number(input.hours_per_week ?? 0);
-    if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+    if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
     const res = await schrijf<MemberDb>(
       () => supabase.from('company_members').update(updates).eq('id', lid.id).select(MEMBER_COLUMNS),
       { context: 'teamService.updateTeamMember.uitnodiging', bedrijfReadonly: isReadonly() },
@@ -441,7 +441,7 @@ export async function deleteInvite(id: string): Promise<WriteStatus> {
       context: 'teamService.deleteInvite',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'niet-gevonden',
-      leegMelding: 'Deze uitnodiging bestaat niet meer, of je bent geen beheerder.',
+      leegMelding: tx('Deze uitnodiging bestaat niet meer, of je bent geen beheerder.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -465,8 +465,8 @@ async function teamActie(memberId: string, actie: TeamActie): Promise<WriteStatu
     return writeFout(
       'validatie',
       actie === 'delete'
-        ? 'Je kunt je eigen account niet verwijderen.'
-        : 'Je kunt jezelf niet deactiveren.',
+        ? tx('Je kunt je eigen account niet verwijderen.')
+        : tx('Je kunt jezelf niet deactiveren.'),
     );
   }
 
@@ -487,7 +487,7 @@ async function teamActie(memberId: string, actie: TeamActie): Promise<WriteStatu
     }
     const res = data as { success?: boolean; error?: string } | null;
     if (!res?.success) {
-      return writeFout('onbekend', res?.error || 'De actie is niet uitgevoerd.');
+      return writeFout('onbekend', res?.error || tx('De actie is niet uitgevoerd.'));
     }
     return { ok: true, data: null };
   } catch (e) {
@@ -511,7 +511,7 @@ export async function getUserPermissions(
     .eq('granted', true);
   if (error) {
     console.warn('[teamService.getUserPermissions]', error.message);
-    return { data: [], error: 'Rechten konden niet worden geladen.' };
+    return { data: [], error: tx('Rechten konden niet worden geladen.') };
   }
   return { data: ((data as { permission: string }[]) ?? []).map((r) => r.permission), error: null };
 }
@@ -530,8 +530,8 @@ export async function setUserPermissions(
   granted: readonly string[],
 ): Promise<WriteStatus> {
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
-  if (!userId) return writeFout('validatie', 'Dit teamlid heeft de uitnodiging nog niet geaccepteerd.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
+  if (!userId) return writeFout('validatie', tx('Dit teamlid heeft de uitnodiging nog niet geaccepteerd.'));
 
   const huidig = await getUserPermissions(userId);
   const teVerwijderen = huidig.data.filter((p) => !granted.includes(p));
@@ -554,8 +554,7 @@ export async function setUserPermissions(
         context: 'teamService.setUserPermissions.delete',
         bedrijfReadonly: isReadonly(),
         leegMelding:
-          'De rechten zijn niet aangepast. Rechten beheren is beheerderswerk en vraagt de ' +
-          'feature Rollen & rechten in je abonnement.',
+          tx('De rechten zijn niet aangepast. Rechten beheren is beheerderswerk en vraagt de feature Rollen & rechten in je abonnement.'),
       },
     );
     if (!res.ok) return res;
@@ -574,8 +573,7 @@ export async function setUserPermissions(
         context: 'teamService.setUserPermissions.insert',
         bedrijfReadonly: isReadonly(),
         leegMelding:
-          'De rechten zijn niet aangepast. Rechten beheren is beheerderswerk en vraagt de ' +
-          'feature Rollen & rechten in je abonnement.',
+          tx('De rechten zijn niet aangepast. Rechten beheren is beheerderswerk en vraagt de feature Rollen & rechten in je abonnement.'),
       },
     );
     if (!res.ok) return res;

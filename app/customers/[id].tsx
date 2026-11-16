@@ -119,6 +119,16 @@ import { alsTekst } from '@/lib/notitieTekst';
 import { BestandenBlok } from '@/components/BestandenBlok';
 import { KlantContractBlokken } from '@/components/KlantContractBlokken';
 import { klantTotalen, klantType, komendePlanRegels, lokaleDatumTijd, planRegels } from '@/lib/relaties';
+import { tx, txm, txn } from '@/i18n';
+
+/** Getoonde labels van de klanttypes; de waarde zelf gaat ongewijzigd naar de database. */
+const KLANT_TYPE_LABELS: Record<string, string> = {
+  Particulier: txm('Particulier'),
+  Zakelijk: txm('Zakelijk'),
+  VvE: txm('VvE'),
+  Aannemer: txm('Aannemer'),
+};
+const typeLabel = (v: string) => tx(KLANT_TYPE_LABELS[v] ?? v);
 
 /**
  * Klantkaart — de blokken van `CustomerPage` in het dashboard: planning,
@@ -169,11 +179,11 @@ function activiteitStatus(
   a: ActivityRow,
   vandaag: string,
 ): { tekst: string; toon: 'neutraal' | 'goed' | 'let-op' } {
-  if (a.completed) return { tekst: 'Gereed', toon: 'goed' };
+  if (a.completed) return { tekst: tx('Gereed'), toon: 'goed' };
   const d = lokaleDatumTijd(a.due_at)?.datum;
-  if (d && d < vandaag) return { tekst: 'Te laat', toon: 'let-op' };
-  if (d && d === vandaag) return { tekst: 'Vandaag', toon: 'neutraal' };
-  return { tekst: 'Open', toon: 'neutraal' };
+  if (d && d < vandaag) return { tekst: tx('Te laat'), toon: 'let-op' };
+  if (d && d === vandaag) return { tekst: tx('Vandaag'), toon: 'neutraal' };
+  return { tekst: tx('Open', undefined, 'status'), toon: 'neutraal' };
 }
 
 const bedragTekst = (v: number | string | null | undefined) =>
@@ -251,13 +261,13 @@ export default function CustomerDetailScreen() {
         ]);
 
       if (custResp.error || !custResp.data) {
-        setError(custResp.error ?? 'Klant niet gevonden.');
+        setError(custResp.error ?? tx('Klant niet gevonden.'));
         setCustomer(null);
         return;
       }
       // RLS filtert op company_id — extra defensive check:
       if (companyId && custResp.data.company_id !== companyId) {
-        setError('Deze klant hoort niet bij jouw bedrijf.');
+        setError(tx('Deze klant hoort niet bij jouw bedrijf.'));
         setCustomer(null);
         return;
       }
@@ -313,12 +323,12 @@ export default function CustomerDetailScreen() {
 
   const onCall = () => {
     if (!callPhone(customer?.phone)) {
-      Dialog.alert('Geen telefoonnummer', 'Voor deze klant is geen nummer bekend.');
+      Dialog.alert(tx('Geen telefoonnummer'), tx('Voor deze klant is geen nummer bekend.'));
     }
   };
   const onMail = () => {
     if (!sendMail(customer?.email)) {
-      Dialog.alert('Geen e-mailadres', 'Voor deze klant is geen e-mail bekend.');
+      Dialog.alert(tx('Geen e-mailadres'), tx('Voor deze klant is geen e-mail bekend.'));
     }
   };
   const onNavigate = () => {
@@ -326,7 +336,7 @@ export default function CustomerDetailScreen() {
       .filter(Boolean)
       .join(', ');
     if (!openMaps(addr)) {
-      Dialog.alert('Geen adres', 'Voor deze klant is geen adres bekend.');
+      Dialog.alert(tx('Geen adres'), tx('Voor deze klant is geen adres bekend.'));
     }
   };
 
@@ -335,8 +345,8 @@ export default function CustomerDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Klant" onBack={() => terugOfNaar(router, '/customers')} />
-          <LoadingScreen label="Klant laden..." />
+          <AppTopBar variant="detail" title={tx('Klant')} onBack={() => terugOfNaar(router, '/customers')} />
+          <LoadingScreen label={tx('Klant laden...')} />
         </View>
       </>
     );
@@ -346,10 +356,10 @@ export default function CustomerDetailScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <AppTopBar variant="detail" title="Klant" onBack={() => terugOfNaar(router, '/customers')} />
+          <AppTopBar variant="detail" title={tx('Klant')} onBack={() => terugOfNaar(router, '/customers')} />
           <ErrorState
-            title="Klant niet gevonden"
-            message={error ?? 'Deze klant bestaat niet of je hebt geen toegang.'}
+            title={tx('Klant niet gevonden')}
+            message={error ?? tx('Deze klant bestaat niet of je hebt geen toegang.')}
             onRetry={opnieuw}
           />
         </View>
@@ -387,10 +397,10 @@ export default function CustomerDetailScreen() {
 
   const planningToevoegen = () => {
     if (magWerkbonInplannen && magActiviteitMaken) {
-      Dialog.alert('Inplannen', 'Wat wil je inplannen voor deze klant?', [
-        { text: 'Annuleren', style: 'cancel' },
-        { text: 'Werkbon inplannen', onPress: nieuweWerkbon },
-        { text: 'Los item inplannen', onPress: nieuweActiviteit },
+      Dialog.alert(tx('Inplannen'), tx('Wat wil je inplannen voor deze klant?'), [
+        { text: tx('Annuleren'), style: 'cancel' },
+        { text: tx('Werkbon inplannen'), onPress: nieuweWerkbon },
+        { text: tx('Los item inplannen'), onPress: nieuweActiviteit },
       ]);
     } else if (magActiviteitMaken) {
       nieuweActiviteit();
@@ -493,7 +503,7 @@ export default function CustomerDetailScreen() {
           if (!m.error) setMails(m.data);
           if (!t.error) setTijdlijn(t.data);
         },
-        succesMelding: 'E-mail verstuurd',
+        succesMelding: tx('E-mail verstuurd'),
       },
     );
   };
@@ -507,30 +517,30 @@ export default function CustomerDetailScreen() {
   // ── Linkerkolom: gegevens, planning, notities ─────────────────────────────
   const linkerKolom = (
     <>
-      <KaartBlok titel="Gegevens">
-        <GegevensRij eerste label="Telefoon" waarde={customer.phone} onPress={onCall} />
-        <GegevensRij label="E-mail" waarde={customer.email} onPress={onMail} />
-        <GegevensRij label="Adres" waarde={fullAddress} onPress={onNavigate} />
+      <KaartBlok titel={tx('Gegevens')}>
+        <GegevensRij eerste label={tx('Telefoon')} waarde={customer.phone} onPress={onCall} />
+        <GegevensRij label={tx('E-mail')} waarde={customer.email} onPress={onMail} />
+        <GegevensRij label={tx('Adres')} waarde={fullAddress} onPress={onNavigate} />
         {customer.kvk_number ? <GegevensRij label="KvK" waarde={customer.kvk_number} /> : null}
-        {customer.btw_number ? <GegevensRij label="Btw" waarde={customer.btw_number} /> : null}
+        {customer.btw_number ? <GegevensRij label={tx('Btw')} waarde={customer.btw_number} /> : null}
         {customer.iban ? <GegevensRij label="IBAN" waarde={customer.iban} /> : null}
-        {customer.type ? <GegevensRij label="Type" waarde={customer.type} /> : null}
-        {customer.source ? <GegevensRij label="Bron" waarde={customer.source} /> : null}
+        {customer.type ? <GegevensRij label={tx('Type')} waarde={typeLabel(customer.type)} /> : null}
+        {customer.source ? <GegevensRij label={tx('Bron')} waarde={customer.source} /> : null}
         {customer.betaaltermijn_dagen != null ? (
-          <GegevensRij label="Betaaltermijn" waarde={`${customer.betaaltermijn_dagen} dagen`} />
+          <GegevensRij label={tx('Betaaltermijn')} waarde={txn('{n} dag', '{n} dagen', customer.betaaltermijn_dagen)} />
         ) : null}
       </KaartBlok>
 
       <KaartBlok
-        titel="Planning"
+        titel={tx('Planning')}
         aantal={regels.length}
         onToevoegen={magWerkbonInplannen || magActiviteitMaken ? planningToevoegen : undefined}
-        toevoegLabel="Inplannen voor deze klant"
-        actie={regels.length > 4 ? (allePlanning ? 'Minder' : `Alles (${regels.length})`) : undefined}
+        toevoegLabel={tx('Inplannen voor deze klant')}
+        actie={regels.length > 4 ? (allePlanning ? tx('Minder') : tx('Alles ({n})', { n: regels.length })) : undefined}
         onActie={() => setAllePlanning((v) => !v)}
       >
         {zichtbarePlanning.length === 0 ? (
-          <KaartLeeg tekst="Nog niets ingepland voor deze klant." />
+          <KaartLeeg tekst={tx('Nog niets ingepland voor deze klant.')} />
         ) : (
           zichtbarePlanning.map((r, i) => (
             <KaartRij
@@ -539,9 +549,9 @@ export default function CustomerDetailScreen() {
               gedimd={r.datum < vandaag}
               titel={r.titel}
               sub={[
-                r.datum === vandaag ? 'Vandaag' : formatDateNL(r.datum),
+                r.datum === vandaag ? tx('Vandaag') : formatDateNL(r.datum),
                 r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : null,
-                r.soort === 'werkbon' ? 'Werkbon' : 'Los item',
+                r.soort === 'werkbon' ? tx('Werkbon') : tx('Los item'),
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -556,27 +566,27 @@ export default function CustomerDetailScreen() {
           dashboard. Dashboard-HTML (met @-vermeldingen) wordt als tekst
           getoond; nieuwe notities gaan als veilige HTML terug. */}
       <KaartBlok
-        titel="Notities"
+        titel={tx('Notities')}
         aantal={notities.length}
         actie={
-          notities.length > 2 ? (alleNotities ? 'Minder' : `Alle notities (${notities.length})`) : undefined
+          notities.length > 2 ? (alleNotities ? tx('Minder') : tx('Alle notities ({n})', { n: notities.length })) : undefined
         }
         onActie={() => setAlleNotities((v) => !v)}
       >
         {magNotitie ? (
           <View style={styles.notitieInvoer}>
             <MentionInvoer
-              label="Nieuwe notitie"
+              label={tx('Nieuwe notitie')}
               value={nieuweNotitie}
               onChangeText={setNieuweNotitie}
               gekozen={gekozen}
               onGekozen={setGekozen}
               leden={medewerkers.map((m) => ({ id: m.id, full_name: m.label }))}
-              placeholder="Wat moet er bewaard blijven? Typ @ om iemand te taggen"
+              placeholder={tx('Wat moet er bewaard blijven? Typ @ om iemand te taggen')}
             />
             {notitieFout ? <Text style={styles.notitieFout}>{notitieFout}</Text> : null}
             <Button
-              label={notitieBezig ? 'Opslaan…' : 'Toevoegen'}
+              label={notitieBezig ? tx('Opslaan…') : tx('Toevoegen')}
               variant="secondary"
               loading={notitieBezig}
               disabled={!nieuweNotitie.trim() || notitieBezig}
@@ -585,7 +595,7 @@ export default function CustomerDetailScreen() {
           </View>
         ) : null}
         {notities.length === 0 ? (
-          <KaartLeeg tekst="Nog geen notities bij deze klant." />
+          <KaartLeeg tekst={tx('Nog geen notities bij deze klant.')} />
         ) : (
           zichtbareNotities.map((n, i) => (
             <KaartRij
@@ -600,15 +610,15 @@ export default function CustomerDetailScreen() {
 
       {/* E-mails — `sent_emails` van deze klant; het schrijfvak achter de "+". */}
       <KaartBlok
-        titel="E-mails"
+        titel={tx('E-mails')}
         aantal={mails.length}
         onToevoegen={() => void openMail()}
-        toevoegLabel="Nieuwe e-mail"
-        actie={mails.length > 5 ? (alleMails ? 'Minder' : `Alles (${mails.length})`) : undefined}
+        toevoegLabel={tx('Nieuwe e-mail')}
+        actie={mails.length > 5 ? (alleMails ? tx('Minder') : tx('Alles ({n})', { n: mails.length })) : undefined}
         onActie={() => setAlleMails((v) => !v)}
       >
         {mails.length === 0 ? (
-          <KaartLeeg tekst="Nog geen e-mails verstuurd aan deze klant." />
+          <KaartLeeg tekst={tx('Nog geen e-mails verstuurd aan deze klant.')} />
         ) : (
           zichtbareMails.map((m, i) => (
             <KaartRij
@@ -621,7 +631,7 @@ export default function CustomerDetailScreen() {
                   <Mail size={16} color={th.muted} strokeWidth={2} />
                 )
               }
-              titel={m.subject || '(geen onderwerp)'}
+              titel={m.subject || tx('(geen onderwerp)')}
               sub={verstuurdeMailSub(m)}
               onPress={() => setBekeken(m)}
             />
@@ -631,13 +641,13 @@ export default function CustomerDetailScreen() {
 
       {/* Tijdlijn — alle `klant_tijdlijn`-regels, nieuwste eerst. */}
       <KaartBlok
-        titel="Tijdlijn"
+        titel={tx('Tijdlijn')}
         aantal={tijdlijn.length}
-        actie={tijdlijn.length > 8 ? (alleTijdlijn ? 'Minder' : `Alles (${tijdlijn.length})`) : undefined}
+        actie={tijdlijn.length > 8 ? (alleTijdlijn ? tx('Minder') : tx('Alles ({n})', { n: tijdlijn.length })) : undefined}
         onActie={() => setAlleTijdlijn((v) => !v)}
       >
         {tijdlijn.length === 0 ? (
-          <KaartLeeg tekst="Nog geen activiteit gelogd" />
+          <KaartLeeg tekst={tx('Nog geen activiteit gelogd')} />
         ) : (
           zichtbareTijdlijn.map((r, i) => (
             <KaartRij
@@ -657,13 +667,13 @@ export default function CustomerDetailScreen() {
   const rechterKolom = (
     <>
       <KaartBlok
-        titel="Activiteiten"
+        titel={tx('Activiteiten')}
         aantal={activiteiten.length}
         onToevoegen={magActiviteitMaken ? nieuweActiviteit : undefined}
-        toevoegLabel="Nieuwe activiteit"
+        toevoegLabel={tx('Nieuwe activiteit')}
       >
         {activiteiten.length === 0 ? (
-          <KaartLeeg tekst="Geen activiteiten" />
+          <KaartLeeg tekst={tx('Geen activiteiten')} />
         ) : (
           activiteiten.slice(0, 8).map((a, i) => {
             const st = activiteitStatus(a, vandaag);
@@ -672,7 +682,7 @@ export default function CustomerDetailScreen() {
               <KaartRij
                 key={a.id}
                 eerste={i === 0}
-                titel={a.title || 'Activiteit'}
+                titel={a.title || tx('Activiteit')}
                 sub={[activiteitTypeLabel(a.type), a.due_at ? formatDateNL(a.due_at) : null, tijd]
                   .filter(Boolean)
                   .join(' · ')}
@@ -686,11 +696,11 @@ export default function CustomerDetailScreen() {
 
       {magOffertes ? (
         <KaartBlok
-          titel="Offertes"
+          titel={tx('Offertes')}
           aantal={offertes.length}
-          actie={offertes.length ? 'Alle offertes' : undefined}
+          actie={offertes.length ? tx('Alle offertes') : undefined}
           onActie={() => router.push('/offers')}
-          toevoegLabel="Nieuwe offerte"
+          toevoegLabel={tx('Nieuwe offerte')}
           onToevoegen={
             magOfferteMaken
               ? () => router.push({ pathname: '/offers', params: { nieuw: '1', klant: customer.id } })
@@ -698,19 +708,23 @@ export default function CustomerDetailScreen() {
           }
         >
           {offertes.length === 0 ? (
-            <KaartLeeg tekst="Nog geen offertes voor deze klant." />
+            <KaartLeeg tekst={tx('Nog geen offertes voor deze klant.')} />
           ) : (
             offertes.map((o, i) => (
               <KaartRij
                 key={o.id}
                 eerste={i === 0}
-                titel={o.nummer || 'Offerte'}
+                titel={o.nummer || tx('Offerte')}
                 sub={alsTekst(o.omschrijving) || formatDateNL(o.created_at)}
                 rechts={
                   <View style={styles.rechtsKolom}>
                     {magBedragen ? <Text style={styles.bedrag}>{bedragTekst(o.totaal_incl)}</Text> : null}
                     <KaartPil
-                      tekst={OFFERTE_STATUS[o.status ?? 'concept'] ?? o.status ?? 'Concept'}
+                      tekst={
+                        OFFERTE_STATUS[o.status ?? 'concept']
+                          ? tx(OFFERTE_STATUS[o.status ?? 'concept'] ?? '')
+                          : (o.status ?? tx('Concept'))
+                      }
                       toon={
                         o.status === 'geaccepteerd' ? 'goed' : o.status === 'afgewezen' ? 'let-op' : 'neutraal'
                       }
@@ -726,11 +740,11 @@ export default function CustomerDetailScreen() {
 
       {magFacturen ? (
         <KaartBlok
-          titel="Facturen"
+          titel={tx('Facturen')}
           aantal={facturen.length}
-          actie={facturen.length ? 'Alle facturen' : undefined}
+          actie={facturen.length ? tx('Alle facturen') : undefined}
           onActie={() => router.push('/invoices')}
-          toevoegLabel="Nieuwe factuur"
+          toevoegLabel={tx('Nieuwe factuur')}
           onToevoegen={
             magFactuurMaken
               ? () => router.push({ pathname: '/invoices', params: { nieuw: '1', klant: customer.id } })
@@ -738,19 +752,19 @@ export default function CustomerDetailScreen() {
           }
         >
           {facturen.length === 0 ? (
-            <KaartLeeg tekst="Nog geen facturen voor deze klant." />
+            <KaartLeeg tekst={tx('Nog geen facturen voor deze klant.')} />
           ) : (
             facturen.map((f, i) => (
               <KaartRij
                 key={f.id}
                 eerste={i === 0}
-                titel={f.nummer || 'Factuur'}
+                titel={f.nummer || tx('Factuur')}
                 sub={alsTekst(f.notities) || formatDateNL(f.factuurdatum ?? f.created_at)}
                 rechts={
                   <View style={styles.rechtsKolom}>
                     <Text style={styles.bedrag}>{bedragTekst(f.totaal_incl)}</Text>
                     <KaartPil
-                      tekst={f.is_credit ? 'Credit' : factuurStatusLabel(f.status)}
+                      tekst={f.is_credit ? tx('Credit') : factuurStatusLabel(f.status)}
                       toon={f.status === 'betaald' ? 'goed' : 'neutraal'}
                     />
                   </View>
@@ -764,11 +778,11 @@ export default function CustomerDetailScreen() {
 
       {magProjecten ? (
         <KaartBlok
-          titel="Projecten"
+          titel={tx('Projecten')}
           aantal={projecten.length}
-          actie={projecten.length ? 'Alle projecten' : undefined}
+          actie={projecten.length ? tx('Alle projecten') : undefined}
           onActie={() => router.push('/projects')}
-          toevoegLabel="Nieuw project"
+          toevoegLabel={tx('Nieuw project')}
           onToevoegen={
             magProjectMaken
               ? () => router.push({ pathname: '/projects', params: { nieuw: '1', klant: customer.id } })
@@ -776,16 +790,16 @@ export default function CustomerDetailScreen() {
           }
         >
           {projecten.length === 0 ? (
-            <KaartLeeg tekst="Nog geen projecten voor deze klant." />
+            <KaartLeeg tekst={tx('Nog geen projecten voor deze klant.')} />
           ) : (
             projecten.map((p, i) => (
               <KaartRij
                 key={p.id}
                 eerste={i === 0}
-                titel={p.name || 'Project'}
+                titel={p.name || tx('Project')}
                 sub={
                   magBedragen && p.project_value != null
-                    ? `Projectwaarde ${formatEUR(Number(p.project_value))}`
+                    ? tx('Projectwaarde {bedrag}', { bedrag: formatEUR(Number(p.project_value)) })
                     : null
                 }
                 rechts={<KaartPil tekst={projectStatusLabel(p.status)} />}
@@ -803,20 +817,20 @@ export default function CustomerDetailScreen() {
       <KlantContractBlokken klantId={customer.id} ververs={contractVervers} />
 
       <KaartBlok
-        titel="Werkbonnen"
+        titel={tx('Werkbonnen')}
         aantal={werkbonnen.length}
         onToevoegen={magWerkbonInplannen ? nieuweWerkbon : undefined}
-        toevoegLabel="Nieuwe werkbon"
+        toevoegLabel={tx('Nieuwe werkbon')}
       >
         {werkbonnenOpDatum.length === 0 ? (
-          <KaartLeeg tekst="Nog geen werkbonnen voor deze klant." />
+          <KaartLeeg tekst={tx('Nog geen werkbonnen voor deze klant.')} />
         ) : (
           werkbonnenOpDatum.map((w, i) => (
             <KaartRij
               key={w.id}
               eerste={i === 0}
-              titel={[w.nummer, w.titel].filter(Boolean).join(' · ') || 'Werkbon'}
-              sub={[w.gepland_op ? formatDateNL(w.gepland_op) : 'Niet gepland', alsTekst(w.omschrijving)]
+              titel={[w.nummer, w.titel].filter(Boolean).join(' · ') || tx('Werkbon')}
+              sub={[w.gepland_op ? formatDateNL(w.gepland_op) : tx('Niet gepland'), alsTekst(w.omschrijving)]
                 .filter(Boolean)
                 .join(' · ')}
               rechts={w.status ? <StatusBadge status={w.status as WorkOrderStatus} /> : undefined}
@@ -854,9 +868,9 @@ export default function CustomerDetailScreen() {
           <AppTopBar
             variant="detail"
             onBack={() => terugOfNaar(router, '/customers')}
-            eyebrow="Klant"
+            eyebrow={tx('Klant')}
             title={name}
-            subtitle={[customer.city, tag].filter(Boolean).join(' · ') || undefined}
+            subtitle={[customer.city, tag ? typeLabel(tag) : null].filter(Boolean).join(' · ') || undefined}
             rightAction={
               <BossKnop
                 klantId={customer.id}
@@ -864,7 +878,7 @@ export default function CustomerDetailScreen() {
                   rechtenGeladen && mag('klanten', 'wijzigen') ? (
                     <HeaderIconButton
                       icon={Pencil}
-                      label="Klant bewerken"
+                      label={tx('Klant bewerken')}
                       variant="plain"
                       onPress={() => {
                         setSaveError(null);
@@ -901,10 +915,10 @@ export default function CustomerDetailScreen() {
               </Text>
               <View style={styles.heroBadgeRow}>
                 <View style={styles.heroBadge}>
-                  <Text style={styles.heroBadgeText}>{tag}</Text>
+                  <Text style={styles.heroBadgeText}>{tag ? typeLabel(tag) : tag}</Text>
                 </View>
                 {customer.kvk_number ? (
-                  <Text style={styles.heroKvk}>KvK {customer.kvk_number}</Text>
+                  <Text style={styles.heroKvk}>{tx('KvK {nummer}', { nummer: customer.kvk_number })}</Text>
                 ) : null}
               </View>
             </View>
@@ -913,20 +927,20 @@ export default function CustomerDetailScreen() {
             <View style={styles.actionsRow}>
               <ActionBtn
                 icon={<Phone size={18} color={ds.greenInk} strokeWidth={2.4} />}
-                label="Bellen"
+                label={tx('Bellen')}
                 primary
                 disabled={!customer.phone}
                 onPress={onCall}
               />
               <ActionBtn
                 icon={<NavigationIcon size={18} color={th.ink} strokeWidth={2} />}
-                label="Route"
+                label={tx('Route')}
                 disabled={!customer.address && !customer.city}
                 onPress={onNavigate}
               />
               <ActionBtn
                 icon={<Mail size={18} color={th.ink} strokeWidth={2} />}
-                label="Mail"
+                label={tx('Mail')}
                 disabled={!customer.email}
                 onPress={onMail}
               />
@@ -937,13 +951,13 @@ export default function CustomerDetailScreen() {
             {magBedragen && magFacturen ? (
               <KaartCijfers
                 cijfers={[
-                  { label: 'Gefactureerd', waarde: formatEUR(totalen.gefactureerd) },
+                  { label: tx('Gefactureerd'), waarde: formatEUR(totalen.gefactureerd) },
                   {
-                    label: 'Betaald',
+                    label: tx('Betaald'),
                     waarde: formatEUR(totalen.betaald),
                     toon: totalen.betaald > 0 ? 'goed' : undefined,
                   },
-                  { label: 'Openstaand', waarde: formatEUR(totalen.openstaand) },
+                  { label: tx('Openstaand'), waarde: formatEUR(totalen.openstaand) },
                 ]}
               />
             ) : null}
@@ -964,7 +978,7 @@ export default function CustomerDetailScreen() {
 
         <FormSheet
           visible={concept !== null}
-          title="Klant bewerken"
+          title={tx('Klant bewerken')}
           subtitle={customer.name ?? undefined}
           error={saveError}
           saving={saving}
@@ -1008,46 +1022,47 @@ export default function CustomerDetailScreen() {
           destructive={
             mag('klanten', 'verwijderen')
               ? {
-                  label: 'Klant verwijderen',
+                  label: tx('Klant verwijderen'),
                   onPress: () =>
                     bevestigVerwijderen(
-                      'Klant',
+                      tx('Klant'),
                       () => {
                         if (!id) return;
                         save(() => deleteCustomer(id), {
                           onSuccess: (_data, extra) => {
                             setConcept(null);
                             if (typeof extra?.waarschuwing === 'string') {
-                              Dialog.alert('Let op', extra.waarschuwing);
+                              Dialog.alert(tx('Let op'), extra.waarschuwing);
                             }
                             terugOfNaar(router, '/customers');
                           },
                         });
                       },
-                      'Aanvragen, activiteiten, notities en de tijdlijn van deze klant worden mee ' +
-                        'verwijderd. Werkbonnen, offertes, facturen en projecten blijven bestaan zonder klant.',
+                      tx(
+                        'Aanvragen, activiteiten, notities en de tijdlijn van deze klant worden mee verwijderd. Werkbonnen, offertes, facturen en projecten blijven bestaan zonder klant.',
+                      ),
                     ),
                 }
               : undefined
           }
         >
           <FormField
-            label="Naam"
+            label={tx('Naam')}
             value={concept?.name ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, name: v } : c))}
-            placeholder="Bedrijfs- of klantnaam"
+            placeholder={tx('Bedrijfs- of klantnaam')}
           />
           <FormField
-            label="E-mail"
+            label={tx('E-mail')}
             value={concept?.email ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, email: v } : c))}
-            placeholder="naam@bedrijf.nl"
+            placeholder={tx('naam@bedrijf.nl')}
             autoCapitalize="none"
             keyboardType="email-address"
             autoCorrect={false}
           />
           <FormField
-            label="Telefoon"
+            label={tx('Telefoon')}
             value={concept?.phone ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, phone: v } : c))}
             placeholder="06 12 34 56 78"
@@ -1057,15 +1072,15 @@ export default function CustomerDetailScreen() {
             onSelect={(v) => setConcept((c) => (c ? { ...c, ...v } : c))}
           />
           <FormField
-            label="Adres"
+            label={tx('Adres')}
             value={concept?.address ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, address: v } : c))}
-            placeholder="Straat en huisnummer"
+            placeholder={tx('Straat en huisnummer')}
           />
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}>
               <FormField
-                label="Postcode"
+                label={tx('Postcode')}
                 value={concept?.postcode ?? ''}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, postcode: v } : c))}
                 placeholder="1234 AB"
@@ -1074,17 +1089,17 @@ export default function CustomerDetailScreen() {
             </View>
             <View style={{ flex: 1.4 }}>
               <FormField
-                label="Plaats"
+                label={tx('Plaats')}
                 value={concept?.city ?? ''}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, city: v } : c))}
-                placeholder="Plaats"
+                placeholder={tx('Plaats')}
               />
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}>
               <FormField
-                label="KvK"
+                label={tx('KvK')}
                 value={concept?.kvk ?? ''}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, kvk: v } : c))}
                 placeholder="12345678"
@@ -1093,7 +1108,7 @@ export default function CustomerDetailScreen() {
             </View>
             <View style={{ flex: 1.3 }}>
               <FormField
-                label="Btw-nummer"
+                label={tx('Btw-nummer')}
                 value={concept?.btw ?? ''}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, btw: v } : c))}
                 placeholder="NL123456789B01"
@@ -1110,39 +1125,39 @@ export default function CustomerDetailScreen() {
             autoCorrect={false}
           />
           <SelectField
-            label="Type"
+            label={tx('Type')}
             value={concept?.type ?? null}
-            options={KLANT_TYPES.map((k) => ({ id: k, label: k }))}
+            options={KLANT_TYPES.map((k) => ({ id: k, label: typeLabel(k) }))}
             onChange={(v) => setConcept((c) => (c ? { ...c, type: v } : c))}
             allowEmpty
-            emptyLabel="Geen type"
+            emptyLabel={tx('Geen type')}
           />
           <FormField
-            label="Bron"
+            label={tx('Bron')}
             value={concept?.source ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, source: v } : c))}
-            placeholder="Website, aanbeveling, …"
+            placeholder={tx('Website, aanbeveling, …')}
           />
           <FormField
-            label="Betaaltermijn (dagen)"
+            label={tx('Betaaltermijn (dagen)')}
             value={concept?.betaaltermijn ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, betaaltermijn: v } : c))}
             keyboardType="number-pad"
-            placeholder="Standaard uit Instellingen"
-            hint="Leeg = de standaard betaaltermijn uit Instellingen."
+            placeholder={tx('Standaard uit Instellingen')}
+            hint={tx('Leeg = de standaard betaaltermijn uit Instellingen.')}
           />
           <FormField
-            label="Notities"
+            label={tx('Notities')}
             value={concept?.notes ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, notes: v } : c))}
-            placeholder="Optioneel"
+            placeholder={tx('Optioneel')}
             multiline
           />
         </FormSheet>
 
         <DocumentMailSheet
           visible={mailConcept !== null}
-          titel="Nieuw bericht"
+          titel={tx('Nieuw bericht')}
           nummer={name}
           laden={mailLaden}
           concept={mailConcept ?? { aan: '', onderwerp: '', tekst: '' }}
@@ -1150,13 +1165,13 @@ export default function CustomerDetailScreen() {
           kop={
             sjablonen.length ? (
               <SelectField
-                label="Sjabloon"
+                label={tx('Sjabloon')}
                 value={sjabloonId}
                 options={sjablonen.map((x) => ({ id: x.id, label: x.naam }))}
                 onChange={kiesSjabloon}
-                placeholder="Schrijf zelf een bericht"
+                placeholder={tx('Schrijf zelf een bericht')}
                 allowEmpty
-                emptyLabel="Schrijf zelf een bericht"
+                emptyLabel={tx('Schrijf zelf een bericht')}
               />
             ) : null
           }
@@ -1169,18 +1184,18 @@ export default function CustomerDetailScreen() {
 
         <FormSheet
           visible={bekeken !== null}
-          title={bekeken?.subject || 'E-mail'}
+          title={bekeken?.subject || tx('E-mail')}
           subtitle={bekeken ? verstuurdeMailSub(bekeken) : undefined}
-          submitLabel="Sluiten"
+          submitLabel={tx('Sluiten')}
           onSubmit={() => setBekeken(null)}
           onClose={() => setBekeken(null)}
         >
           {bekeken?.body_html ? (
             <MailVoorbeeld html={bekeken.body_html} hoogte={460} />
           ) : (
-            <Text style={styles.mailLeeg}>Inhoud niet beschikbaar voor oudere e-mails</Text>
+            <Text style={styles.mailLeeg}>{tx('Inhoud niet beschikbaar voor oudere e-mails')}</Text>
           )}
-          {bekeken?.to_email ? <Text style={styles.mailAan}>Aan: {bekeken.to_email}</Text> : null}
+          {bekeken?.to_email ? <Text style={styles.mailAan}>{tx('Aan: {adres}', { adres: bekeken.to_email })}</Text> : null}
         </FormSheet>
       </View>
     </>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Camera, Check, FileUp } from 'lucide-react-native';
@@ -33,6 +33,7 @@ import {
   leesPrijslijstUit,
 } from '@/services/materiaalService';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
+import { tx, txn } from '@/i18n';
 
 /**
  * Materialen importeren (`MaterialenImporteren` in het dashboard): een
@@ -126,28 +127,28 @@ export function MaterialenImporteren({
   const lees = async (naam: string, mime: string | null, bytes: Uint8Array, alVoorbereid = false) => {
     setFout(null);
     const soort = soortVanBestand(bytes, naam, mime);
-    if (!soort) return setFout('Dit soort bestand kan niet worden ingelezen. Gebruik CSV, PDF of een foto (JPG of PNG).');
+    if (!soort) return setFout(tx('Dit soort bestand kan niet worden ingelezen. Gebruik CSV, PDF of een foto (JPG of PNG).'));
     if (soort === 'xlsx' || soort === 'xls') {
       return setFout(
-        'Een Excel-bestand kan de app niet inlezen. Sla het in Excel op als CSV en kies dat bestand, of importeer het op het dashboard.',
+        tx('Een Excel-bestand kan de app niet inlezen. Sla het in Excel op als CSV en kies dat bestand, of importeer het op het dashboard.'),
       );
     }
     if (soort === 'heic') {
-      return setFout('Een HEIC-foto kan niet worden ingelezen. Maak een schermafbeelding of kies "Foto maken".');
+      return setFout(tx('Een HEIC-foto kan niet worden ingelezen. Maak een schermafbeelding of kies "Foto maken".'));
     }
-    if (soort === 'csv' && bytes.byteLength > MAX_TABEL) return setFout('Dit bestand is groter dan 25 MB.');
+    if (soort === 'csv' && bytes.byteLength > MAX_TABEL) return setFout(tx('Dit bestand is groter dan 25 MB.'));
     if ((soort === 'pdf' || soort === 'foto') && !magUitlezen) {
-      return setFout('Een PDF of foto laten uitlezen zit in Groei en Team. Een CSV importeren kan in elk pakket.');
+      return setFout(tx('Een PDF of foto laten uitlezen zit in Groei en Team. Een CSV importeren kan in elk pakket.'));
     }
     if (soort === 'pdf' && bytes.byteLength > MAX_PDF) {
-      return setFout('Deze PDF is groter dan 10 MB. Splits hem, of vraag de leverancier om de prijslijst als CSV.');
+      return setFout(tx('Deze PDF is groter dan 10 MB. Splits hem, of vraag de leverancier om de prijslijst als CSV.'));
     }
     setBestandNaam(naam);
     setStap('lezen');
     try {
       if (soort === 'csv') {
         const r = leesCsv(csvTekstUitBytes(bytes));
-        if (r.length < 2) throw new Error('Er staan geen regels in dit bestand.');
+        if (r.length < 2) throw new Error(tx('Er staan geen regels in dit bestand.'));
         const kop = vindKop(r);
         setRijen(r);
         setKopIndex(kop?.kopIndex ?? 0);
@@ -165,10 +166,10 @@ export function MaterialenImporteren({
           const f = await bereidFotoVoor({ uri: '', file: new File([kopie], naam, { type: mime || 'image/jpeg' }) } as unknown as ImagePickerAsset);
           if (f.ok) data = new Uint8Array(f.bytes);
         }
-        if (soort === 'foto' && data.byteLength > MAX_FOTO) throw new Error('Deze foto is te groot (maximaal 5 MB).');
+        if (soort === 'foto' && data.byteLength > MAX_FOTO) throw new Error(tx('Deze foto is te groot (maximaal 5 MB).'));
         const res = await leesPrijslijstUit(bytesNaarBase64(data), naam);
         if (res.error) throw new Error(res.error);
-        if (!res.regels.length) throw new Error(res.melding || 'Er zijn geen artikelen met prijzen gevonden in dit document.');
+        if (!res.regels.length) throw new Error(res.melding || tx('Er zijn geen artikelen met prijzen gevonden in dit document.'));
         setRijen(null);
         setAiRegels(
           res.regels.map((r) => ({
@@ -192,13 +193,13 @@ export function MaterialenImporteren({
             })
           : null;
         if (gevonden) setLeverancierId((huidig) => huidig ?? gevonden.id);
-        else if (res.leverancier) m = [m, `Leverancier op het document: ${res.leverancier}.`].filter(Boolean).join(' ');
+        else if (res.leverancier) m = [m, tx('Leverancier op het document: {naam}.', { naam: res.leverancier })].filter(Boolean).join(' ');
         setMelding(m);
       }
       resetControle();
       setStap('controle');
     } catch (e) {
-      setFout(e instanceof Error ? e.message : 'Inlezen mislukt.');
+      setFout(e instanceof Error ? e.message : tx('Inlezen mislukt.'));
       setStap('kies');
     }
   };
@@ -211,17 +212,17 @@ export function MaterialenImporteren({
       const buf = await b.lees();
       await lees(b.naam, b.mime, new Uint8Array(buf));
     } catch {
-      setFout('Het bestand kon niet worden gelezen.');
+      setFout(tx('Het bestand kon niet worden gelezen.'));
       setStap('kies');
     }
   };
 
   const kiesFoto = async () => {
     if (!magUitlezen) {
-      setFout('Een foto laten uitlezen zit in Groei en Team. Een CSV importeren kan in elk pakket.');
+      setFout(tx('Een foto laten uitlezen zit in Groei en Team. Een CSV importeren kan in elk pakket.'));
       return;
     }
-    const bron = await kiesFotoBron('Prijslijst fotograferen');
+    const bron = await kiesFotoBron(tx('Prijslijst fotograferen'));
     if (!bron) return;
     const foto = await maakOfKiesFoto(bron);
     if (!foto) return;
@@ -281,7 +282,7 @@ export function MaterialenImporteren({
 
   const opslaan = async () => {
     if (stap !== 'controle') return;
-    if (!leverancierId) return setFout('Kies een leverancier voor deze regels.');
+    if (!leverancierId) return setFout(tx('Kies een leverancier voor deze regels.'));
     if (!gekozen.length || importBlok) return;
     setFout(null);
     setStap('opslaan');
@@ -321,33 +322,35 @@ export function MaterialenImporteren({
   const kolomOpties = rijen
     ? [...Array(Math.max(0, ...rijen.slice(0, 50).map((r) => r.length))).keys()].map((i) => ({
         id: String(i),
-        label: String(rijen[kopIndex]?.[i] ?? '').trim() || `Kolom ${i + 1}`,
+        label: String(rijen[kopIndex]?.[i] ?? '').trim() || tx('Kolom {n}', { n: i + 1 }),
       }))
     : [];
 
   return (
     <FormSheet
       visible
-      title="Materialen importeren"
+      title={tx('Materialen importeren')}
       subtitle={
         stap === 'kies'
-          ? 'Lees een prijslijst of offerte van je leverancier in één keer in.'
+          ? tx('Lees een prijslijst of offerte van je leverancier in één keer in.')
           : stap === 'lezen'
-            ? `${bestandNaam} lezen…`
+            ? tx('{bestand} lezen…', { bestand: bestandNaam })
             : stap === 'klaar'
-              ? 'Klaar.'
-              : `${bestandNaam}: controleer de regels. Er wordt pas iets opgeslagen als je op Importeren drukt.`
+              ? tx('Klaar.')
+              : tx('{bestand}: controleer de regels. Er wordt pas iets opgeslagen als je op Importeren drukt.', { bestand: bestandNaam })
       }
       error={stap === 'kies' ? null : fout}
       saving={bezig}
       submitLabel={
         stap === 'klaar'
-          ? 'Sluiten'
+          ? tx('Sluiten')
           : stap === 'opslaan'
-            ? `Opslaan… ${voortgang ? `${voortgang.klaar} van ${voortgang.totaal}` : ''}`
+            ? voortgang
+              ? tx('Opslaan… {klaar} van {totaal}', { klaar: voortgang.klaar, totaal: voortgang.totaal })
+              : tx('Opslaan…')
             : stap === 'controle'
-              ? `Importeren (${gekozen.length})`
-              : 'Kies eerst een bestand'
+              ? tx('Importeren ({n})', { n: gekozen.length })
+              : tx('Kies eerst een bestand')
       }
       submitDisabled={
         stap === 'klaar' ? false : stap !== 'controle' || !gekozen.length || importBlok || !leverancierId
@@ -364,8 +367,8 @@ export function MaterialenImporteren({
           >
             <FileUp size={22} color={ds.green700} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.kiesTitel}>Bestand kiezen</Text>
-              <Text style={styles.hint}>CSV, PDF of een foto (JPG of PNG)</Text>
+              <Text style={styles.kiesTitel}>{tx('Bestand kiezen')}</Text>
+              <Text style={styles.hint}>{tx('CSV, PDF of een foto (JPG of PNG)')}</Text>
             </View>
           </Pressable>
           {Platform.OS !== 'web' ? (
@@ -376,25 +379,31 @@ export function MaterialenImporteren({
             >
               <Camera size={22} color={ds.green700} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.kiesTitel}>Foto maken of kiezen</Text>
-                <Text style={styles.hint}>Van een prijslijst of leveranciersofferte</Text>
+                <Text style={styles.kiesTitel}>{tx('Foto maken of kiezen')}</Text>
+                <Text style={styles.hint}>{tx('Van een prijslijst of leveranciersofferte')}</Text>
               </View>
             </Pressable>
           ) : null}
           {fout ? <NoticeBanner toon="fout" message={fout} /> : null}
           <View style={{ gap: spacing.sm }}>
             <Text style={styles.tekst}>
-              <Text style={styles.vet}>CSV</Text> lees je direct in. De kolommen (naam, artikelnummer, eenheid,
-              prijzen, btw) worden herkend aan de kop; klopt het niet, dan pas je het aan. Een Excel-bestand sla je
-              eerst op als CSV, of je importeert het op het dashboard.
+              {metOnderdelen(
+                tx(
+                  '{csv} lees je direct in. De kolommen (naam, artikelnummer, eenheid, prijzen, btw) worden herkend aan de kop; klopt het niet, dan pas je het aan. Een Excel-bestand sla je eerst op als CSV, of je importeert het op het dashboard.',
+                ),
+                { csv: <Text style={styles.vet}>CSV</Text> },
+              )}
             </Text>
             <Text style={styles.tekst}>
-              <Text style={styles.vet}>PDF of foto</Text> van een prijslijst of offerte leest Boss uit (Groei en
-              Team). Dat duurt meestal 10 tot 40 seconden. Van een PDF worden de eerste 5 pagina&apos;s gelezen.
+              {metOnderdelen(
+                tx(
+                  "{pdfOfFoto} van een prijslijst of offerte leest Boss uit (Groei en Team). Dat duurt meestal 10 tot 40 seconden. Van een PDF worden de eerste 5 pagina's gelezen.",
+                ),
+                { pdfOfFoto: <Text style={styles.vet}>{tx('PDF of foto')}</Text> },
+              )}
             </Text>
             <Text style={styles.tekst}>
-              Materialen die je al hebt (zelfde artikelnummer, anders dezelfde naam) krijgen de nieuwe prijzen. Er
-              komen geen dubbele bij.
+              {tx('Materialen die je al hebt (zelfde artikelnummer, anders dezelfde naam) krijgen de nieuwe prijzen. Er komen geen dubbele bij.')}
             </Text>
           </View>
         </View>
@@ -403,7 +412,7 @@ export function MaterialenImporteren({
       {stap === 'lezen' ? (
         <View style={styles.laden}>
           <ActivityIndicator color={ds.green700} />
-          <Text style={styles.hint}>Bezig met lezen…</Text>
+          <Text style={styles.hint}>{tx('Bezig met lezen…')}</Text>
         </View>
       ) : null}
 
@@ -413,22 +422,22 @@ export function MaterialenImporteren({
           {bestaandFout ? (
             <NoticeBanner
               toon="fout"
-              message={`${bestaandFout} Zonder die lijst kan BossBase dubbele materialen niet herkennen, dus importeren kan nu niet. Sluit dit venster en probeer het opnieuw.`}
+              message={tx('{fout} Zonder die lijst kan BossBase dubbele materialen niet herkennen, dus importeren kan nu niet. Sluit dit venster en probeer het opnieuw.', { fout: bestaandFout })}
             />
           ) : null}
 
           <SelectField
-            label="Leverancier voor alle regels *"
+            label={tx('Leverancier voor alle regels *')}
             value={leverancierId}
             options={levOpties}
             onChange={setLeverancierId}
-            placeholder="Kies een leverancier"
+            placeholder={tx('Kies een leverancier')}
             disabled={bezig}
-            hint={levOpties.length === 0 ? 'Nog geen leveranciers. Voeg er eerst een toe bij Leveranciers.' : undefined}
+            hint={levOpties.length === 0 ? tx('Nog geen leveranciers. Voeg er eerst een toe bij Leveranciers.') : undefined}
           />
 
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>BTW als het bestand niets zegt</Text>
+            <Text style={styles.label}>{tx('BTW als het bestand niets zegt')}</Text>
             <View style={styles.chipRij}>
               {[21, 9, 0].map((p) => (
                 <Pressable
@@ -448,25 +457,25 @@ export function MaterialenImporteren({
           {zonderVerkoop ? (
             <View style={styles.opslag}>
               <View style={styles.opslagRij}>
-                <Text style={[styles.tekst, { flex: 1 }]}>Verkoopprijs berekenen waar die ontbreekt</Text>
+                <Text style={[styles.tekst, { flex: 1 }]}>{tx('Verkoopprijs berekenen waar die ontbreekt')}</Text>
                 <Switch
                   value={opslagAan}
                   onValueChange={setOpslagAan}
                   trackColor={{ true: ds.green, false: t.line }}
-                  accessibilityLabel="Verkoopprijs berekenen waar die ontbreekt"
+                  accessibilityLabel={tx('Verkoopprijs berekenen waar die ontbreekt')}
                 />
               </View>
               <View style={styles.opslagRij}>
-                <Text style={styles.hint}>inkoopprijs +</Text>
+                <Text style={styles.hint}>{tx('inkoopprijs +')}</Text>
                 <TextInput
                   value={opslagPct}
                   onChangeText={setOpslagPct}
                   editable={opslagAan}
                   keyboardType="decimal-pad"
-                  accessibilityLabel="Opslag in procenten"
+                  accessibilityLabel={tx('Opslag in procenten')}
                   style={[styles.veld, styles.pctVeld, !opslagAan && { opacity: 0.5 }]}
                 />
-                <Text style={styles.hint}>% opslag</Text>
+                <Text style={styles.hint}>{tx('% opslag')}</Text>
               </View>
             </View>
           ) : null}
@@ -480,17 +489,17 @@ export function MaterialenImporteren({
                 aria-expanded={toonKolommen}
                 style={styles.kolomKop}
               >
-                <Text style={styles.kiesTitel}>Kolommen</Text>
-                <Text style={styles.link}>{toonKolommen ? 'Verbergen' : 'Aanpassen'}</Text>
+                <Text style={styles.kiesTitel}>{tx('Kolommen')}</Text>
+                <Text style={styles.link}>{toonKolommen ? tx('Verbergen') : tx('Aanpassen')}</Text>
               </Pressable>
               {toonKolommen ? (
                 <View style={{ gap: spacing.sm }}>
                   <SelectField
-                    label="Kopregel"
+                    label={tx('Kopregel')}
                     value={String(kopIndex)}
                     options={rijen.slice(0, 15).map((r, i) => ({
                       id: String(i),
-                      label: `Rij ${i + 1}: ${r.filter((c) => c !== '').slice(0, 3).join(' · ').slice(0, 40)}`,
+                      label: tx('Rij {n}: {inhoud}', { n: i + 1, inhoud: r.filter((c) => c !== '').slice(0, 3).join(' · ').slice(0, 40) }),
                     }))}
                     onChange={(v) => {
                       setKopIndex(Number(v ?? 0));
@@ -500,16 +509,16 @@ export function MaterialenImporteren({
                   {VELDEN.map((v) => (
                     <SelectField
                       key={v.key}
-                      label={`${v.label}${v.key === 'naam' ? ' *' : ''}`}
+                      label={`${tx(v.label)}${v.key === 'naam' ? ' *' : ''}`}
                       value={map[v.key] != null ? String(map[v.key]) : null}
                       options={kolomOpties}
                       onChange={(w) => zetMap(v.key, w)}
                       allowEmpty
-                      emptyLabel="Niet in bestand"
-                      placeholder="Niet in bestand"
+                      emptyLabel={tx('Niet in bestand')}
+                      placeholder={tx('Niet in bestand')}
                     />
                   ))}
-                  {map.naam === undefined ? <Text style={styles.let}>Kies welke kolom de naam bevat.</Text> : null}
+                  {map.naam === undefined ? <Text style={styles.let}>{tx('Kies welke kolom de naam bevat.')}</Text> : null}
                 </View>
               ) : null}
             </View>
@@ -517,13 +526,15 @@ export function MaterialenImporteren({
 
           <View style={styles.samenvatting}>
             <Text style={styles.tekst}>
-              <Text style={styles.vet}>{aantalNieuw}</Text> nieuw · <Text style={styles.vet}>{aantalBij}</Text>{' '}
-              bijwerken
+              {metOnderdelen(tx('{nieuw} nieuw · {bij} bijwerken'), {
+                nieuw: <Text style={styles.vet}>{aantalNieuw}</Text>,
+                bij: <Text style={styles.vet}>{aantalBij}</Text>,
+              })}
             </Text>
             <Text style={styles.hint}>
-              {regels.length} {regels.length === 1 ? 'regel' : 'regels'} in het bestand
-              {basis.length > MAX_REGELS ? ` (de eerste ${MAX_REGELS})` : ''}
-              {bestaande === null ? ' · bestaande materialen laden…' : ''}
+              {txn('{n} regel in het bestand', '{n} regels in het bestand', regels.length)}
+              {basis.length > MAX_REGELS ? ` ${tx('(de eerste {n})', { n: MAX_REGELS })}` : ''}
+              {bestaande === null ? ` · ${tx('bestaande materialen laden…')}` : ''}
             </Text>
           </View>
 
@@ -536,18 +547,20 @@ export function MaterialenImporteren({
               style={styles.regelRij}
             >
               <Vink aan={alleAan} styles={styles} />
-              <Text style={styles.tekst}>Alles selecteren</Text>
+              <Text style={styles.tekst}>{tx('Alles selecteren')}</Text>
             </Pressable>
           ) : (
             <Text style={styles.hint}>
-              Geen regels gevonden.{rijen ? ' Kies onder Kolommen de kopregel en de kolom met de naam.' : ''}
+              {rijen
+                ? tx('Geen regels gevonden. Kies onder Kolommen de kopregel en de kolom met de naam.')
+                : tx('Geen regels gevonden.')}
             </Text>
           )}
 
           <View style={{ gap: spacing.sm }}>
             {regels.slice(0, zichtbaar).map((r) => {
               const bij = Boolean(r.bestaand);
-              const status = r.dubbel ? 'Dubbel in bestand' : r.ongewijzigd ? 'Ongewijzigd' : bij ? 'Bijwerken' : 'Nieuw';
+              const status = r.dubbel ? tx('Dubbel in bestand') : r.ongewijzigd ? tx('Ongewijzigd') : bij ? tx('Bijwerken') : tx('Nieuw');
               const statusStijl = r.dubbel || r.ongewijzigd ? styles.statusGrijs : bij ? styles.statusBlauw : styles.statusGroen;
               return (
                 <View key={r.sleutel} style={[styles.regel, !r.aan && { opacity: 0.6 }, r.twijfel && styles.regelTwijfel]}>
@@ -558,7 +571,7 @@ export function MaterialenImporteren({
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: r.aan }}
                       aria-checked={r.aan}
-                      accessibilityLabel={`${r.naam} importeren`}
+                      accessibilityLabel={tx('{naam} importeren', { naam: r.naam })}
                       hitSlop={8}
                     >
                       <Vink aan={r.aan} styles={styles} />
@@ -566,7 +579,7 @@ export function MaterialenImporteren({
                     <Pressable
                       onPress={() => setOpen((o) => (o === r.sleutel ? null : r.sleutel))}
                       accessibilityRole="button"
-                      accessibilityLabel={`Prijzen van ${r.naam} aanpassen`}
+                      accessibilityLabel={tx('Prijzen van {naam} aanpassen', { naam: r.naam })}
                       style={{ flex: 1, minWidth: 0, gap: 2 }}
                     >
                       <Text style={styles.naam} numberOfLines={2}>
@@ -576,11 +589,12 @@ export function MaterialenImporteren({
                         {[r.artikelnummer || r.bestaand?.artikelnummer, r.eenheid, `${r.btwPct}%`].filter(Boolean).join(' · ')}
                       </Text>
                       <Text style={styles.tekst}>
-                        Inkoop {r.inkoopprijs != null ? formatEURCent(r.inkoopprijs) : '—'}
-                        {bij && r.bestaand!.inkoopprijs != null ? ` (was ${formatEURCent(r.bestaand!.inkoopprijs)})` : ''}
-                        {' · '}Verkoop {r.verkoopprijs != null ? formatEURCent(r.verkoopprijs) : '—'}
-                        {r.berekend ? ' (berekend)' : ''}
-                        {bij && r.bestaand!.verkoopprijs != null ? ` (was ${formatEURCent(r.bestaand!.verkoopprijs)})` : ''}
+                        {tx('Inkoop {bedrag}', { bedrag: r.inkoopprijs != null ? formatEURCent(r.inkoopprijs) : '—' })}
+                        {bij && r.bestaand!.inkoopprijs != null ? ` ${tx('(was {bedrag})', { bedrag: formatEURCent(r.bestaand!.inkoopprijs) })}` : ''}
+                        {' · '}
+                        {tx('Verkoop {bedrag}', { bedrag: r.verkoopprijs != null ? formatEURCent(r.verkoopprijs) : '—' })}
+                        {r.berekend ? ` ${tx('(berekend)')}` : ''}
+                        {bij && r.bestaand!.verkoopprijs != null ? ` ${tx('(was {bedrag})', { bedrag: formatEURCent(r.bestaand!.verkoopprijs) })}` : ''}
                       </Text>
                       {r.twijfel && r.twijfelReden ? <Text style={styles.let}>{r.twijfelReden}</Text> : null}
                     </Pressable>
@@ -591,14 +605,16 @@ export function MaterialenImporteren({
                   {open === r.sleutel ? (
                     <View style={styles.prijsVelden}>
                       <BedragVeld
-                        label="Inkoop"
+                        label={tx('Inkoop')}
+                        voluit={tx('Inkoopprijs')}
                         waarde={r.inkoopprijs}
                         onChange={(n) => pasAan(r.sleutel, 'inkoopprijs', n)}
                         styles={styles}
                         t={t}
                       />
                       <BedragVeld
-                        label="Verkoop"
+                        label={tx('Verkoop')}
+                        voluit={tx('Verkoopprijs')}
                         waarde={r.verkoopprijs}
                         onChange={(n) => pasAan(r.sleutel, 'verkoopprijs', n)}
                         styles={styles}
@@ -611,7 +627,7 @@ export function MaterialenImporteren({
             })}
             {regels.length > zichtbaar ? (
               <Pressable onPress={() => setZichtbaar((z) => z + PER_KEER)} accessibilityRole="button" style={styles.meer}>
-                <Text style={styles.link}>Meer tonen ({regels.length - zichtbaar})</Text>
+                <Text style={styles.link}>{tx('Meer tonen ({n})', { n: regels.length - zichtbaar })}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -629,7 +645,7 @@ export function MaterialenImporteren({
             accessibilityRole="button"
             style={styles.meer}
           >
-            <Text style={styles.link}>Ander bestand</Text>
+            <Text style={styles.link}>{tx('Ander bestand')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -637,17 +653,27 @@ export function MaterialenImporteren({
       {stap === 'klaar' && uitkomst ? (
         <View style={{ gap: spacing.sm }}>
           <Text style={styles.tekst}>
-            <Text style={styles.vet}>{uitkomst.nieuw}</Text>{' '}
-            {uitkomst.nieuw === 1 ? 'materiaal toegevoegd' : 'materialen toegevoegd'}
+            {metOnderdelen(txn('{aantal} materiaal toegevoegd', '{aantal} materialen toegevoegd', uitkomst.nieuw), {
+              aantal: <Text style={styles.vet}>{uitkomst.nieuw}</Text>,
+            })}
           </Text>
           <Text style={styles.tekst}>
-            <Text style={styles.vet}>{uitkomst.bijgewerkt}</Text>{' '}
-            {uitkomst.bijgewerkt === 1 ? 'materiaal bijgewerkt' : 'materialen bijgewerkt'}
+            {metOnderdelen(txn('{aantal} materiaal bijgewerkt', '{aantal} materialen bijgewerkt', uitkomst.bijgewerkt), {
+              aantal: <Text style={styles.vet}>{uitkomst.bijgewerkt}</Text>,
+            })}
           </Text>
         </View>
       ) : null}
     </FormSheet>
   );
+}
+
+/** Zet onderdelen (vette tekst) op de plek van {plaatshouders} in een vertaalde zin. */
+function metOnderdelen(zin: string, onderdelen: Record<string, ReactNode>): ReactNode[] {
+  return zin.split(/(\{\w+\})/).map((stuk, i) => {
+    const naam = /^\{(\w+)\}$/.exec(stuk)?.[1];
+    return naam !== undefined && naam in onderdelen ? <Fragment key={i}>{onderdelen[naam]}</Fragment> : stuk;
+  });
 }
 
 function Vink({ aan, styles }: { aan: boolean; styles: ReturnType<typeof makeStyles> }) {
@@ -657,12 +683,15 @@ function Vink({ aan, styles }: { aan: boolean; styles: ReturnType<typeof makeSty
 /** Bedrag invoeren; leeg mag, komma mag. Pas bij verlaten verwerkt. */
 function BedragVeld({
   label,
+  voluit,
   waarde,
   onChange,
   styles,
   t,
 }: {
   label: string;
+  /** Voluit voor de schermlezer, bijv. "Inkoopprijs". */
+  voluit: string;
   waarde: number | null;
   onChange: (n: number | null) => void;
   styles: ReturnType<typeof makeStyles>;
@@ -688,7 +717,7 @@ function BedragVeld({
         keyboardType="decimal-pad"
         placeholder="0,00"
         placeholderTextColor={t.muted2}
-        accessibilityLabel={`${label}prijs`}
+        accessibilityLabel={voluit}
         style={styles.veld}
       />
     </View>

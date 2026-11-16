@@ -1,4 +1,5 @@
 import { Linking } from 'react-native';
+import { tx } from '@/i18n';
 import { Dialog } from './dialog';
 
 /**
@@ -18,6 +19,6 @@ export async function openDashboard(pagina: string, tab?: string): Promise<void>
   try {
     await Linking.openURL(url);
   } catch {
-    Dialog.alert('Kon niet openen', `Ga in je browser naar ${url.replace('https://', '')}.`);
+    Dialog.alert(tx('Kon niet openen'), tx('Ga in je browser naar {adres}.', { adres: url.replace('https://', '') }));
   }
 }

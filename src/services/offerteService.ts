@@ -13,6 +13,7 @@ import {
 import { logTijdlijn, tijdlijnBedrag } from './klantTijdlijnService';
 import { nieuweId as uuid, type BtwRegime, type Herkomst } from '@/lib/regels';
 import type { OfferteOpslagGroep, OfferteOpslagRegel, GroepRij } from '@/lib/boss/offerteRegels';
+import { tx } from '@/i18n';
 
 /**
  * Offertes (`offertes`) en offerteregels (`offerte_items`).
@@ -26,15 +27,17 @@ import type { OfferteOpslagGroep, OfferteOpslagRegel, GroepRij } from '@/lib/bos
  */
 
 export const OFFERTE_STATUS: Record<string, string> = {
-  concept: 'Concept',
-  verzonden: 'Verzonden',
-  geaccepteerd: 'Geaccepteerd',
-  afgewezen: 'Afgewezen',
+  get concept() { return tx('Concept'); },
+  get verzonden() { return tx('Verzonden'); },
+  get geaccepteerd() { return tx('Geaccepteerd'); },
+  get afgewezen() { return tx('Afgewezen'); },
 };
 
-export const OFFERTE_STATUS_OPTIES = Object.entries(OFFERTE_STATUS).map(([id, label]) => ({
+export const OFFERTE_STATUS_OPTIES = Object.keys(OFFERTE_STATUS).map((id) => ({
   id,
-  label,
+  get label() {
+    return OFFERTE_STATUS[id] ?? id;
+  },
 }));
 
 const OFFERTE_COLUMNS = `
@@ -134,7 +137,7 @@ export async function listOffertes(
 
   if (error) {
     console.warn('[offerteService.listOffertes]', error.message);
-    return { data: [], error: 'Offertes konden niet worden geladen.' };
+    return { data: [], error: tx('Offertes konden niet worden geladen.') };
   }
   return { data: (data as unknown as OfferteRow[]) ?? [], error: null };
 }
@@ -192,7 +195,7 @@ export async function getOfferteDetail(
     .maybeSingle();
   if (error) {
     console.warn('[offerteService.getOfferteDetail]', error.message);
-    return { data: null, error: 'De offerte kon niet worden geladen.' };
+    return { data: null, error: tx('De offerte kon niet worden geladen.') };
   }
   return { data: (data as unknown as OfferteDetail | null) ?? null, error: null };
 }
@@ -217,13 +220,13 @@ export async function getOndertekendeOffertePdfUrl(
     } catch {
       /* geen json */
     }
-    return { url: null, melding: melding ?? 'De ondertekende PDF kon niet worden opgehaald.' };
+    return { url: null, melding: melding ?? tx('De ondertekende PDF kon niet worden opgehaald.') };
   }
   const res = data as { url?: string; error?: string } | null;
   if (!res?.url) {
     return {
       url: null,
-      melding: res?.error ?? 'Er is geen ondertekende PDF bewaard bij deze offerte.',
+      melding: res?.error ?? tx('Er is geen ondertekende PDF bewaard bij deze offerte.'),
     };
   }
   return { url: res.url, melding: null };
@@ -239,7 +242,7 @@ export async function getOfferteItems(
     .order('volgorde', { ascending: true });
   if (error) {
     console.warn('[offerteService.getOfferteItems]', error.message);
-    return { data: [], error: 'Offerteregels konden niet worden geladen.' };
+    return { data: [], error: tx('Offerteregels konden niet worden geladen.') };
   }
   return { data: (data as unknown as OfferteItem[]) ?? [], error: null };
 }
@@ -269,7 +272,7 @@ export async function volgendOfferteNummer(): Promise<
   );
   if (error) {
     console.warn('[offerteService.volgendOfferteNummer]', error.message);
-    return { ok: false, melding: 'Het offertenummer kon niet worden bepaald. Probeer het opnieuw.' };
+    return { ok: false, melding: tx('Het offertenummer kon niet worden bepaald. Probeer het opnieuw.') };
   }
   const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
   return { ok: true, nummer: volgendNummer(nummers, 'offerte') };
@@ -384,22 +387,18 @@ export type OfferteInput = {
 
 function valideerOfferte(input: Partial<OfferteInput>): string | null {
   if (input.geldig_tot && !isGeldigeDatum(input.geldig_tot)) {
-    return 'Vul een geldige datum in (JJJJ-MM-DD).';
+    return tx('Vul een geldige datum in (JJJJ-MM-DD).');
   }
-  for (const [veld, label] of [
-    ['arbeidsuren', 'arbeidsuren'],
-    ['uurtarief', 'uurtarief'],
-    ['materiaalkosten', 'materiaalkosten'],
-    ['reiskosten', 'reiskosten'],
-  ] as const) {
-    const v = input[veld];
-    if (v !== undefined && (!Number.isFinite(v) || v < 0)) return `Vul een geldig ${label} in.`;
-  }
+  const ongeldig = (v: number | undefined) => v !== undefined && (!Number.isFinite(v) || v < 0);
+  if (ongeldig(input.arbeidsuren)) return tx('Vul een geldig aantal arbeidsuren in.');
+  if (ongeldig(input.uurtarief)) return tx('Vul een geldig uurtarief in.');
+  if (ongeldig(input.materiaalkosten)) return tx('Vul een geldig bedrag voor materiaalkosten in.');
+  if (ongeldig(input.reiskosten)) return tx('Vul een geldig bedrag voor reiskosten in.');
   if (
     input.btw_pct !== undefined &&
     (!Number.isFinite(input.btw_pct) || input.btw_pct < 0 || input.btw_pct > 100)
   ) {
-    return 'Vul een geldig btw-percentage in.';
+    return tx('Vul een geldig btw-percentage in.');
   }
   return null;
 }
@@ -437,7 +436,7 @@ export async function createOfferte(input: OfferteInput): Promise<WriteResult<Of
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const res = await schrijf<OfferteRow>(
@@ -446,8 +445,7 @@ export async function createOfferte(input: OfferteInput): Promise<WriteResult<Of
       context: 'offerteService.createOfferte',
       bedrijfReadonly: isReadonly(),
       leegMelding:
-        'De offerte is niet opgeslagen. Je hebt het recht Offertes nodig, en je abonnement ' +
-        'moet ruimte hebben voor een nieuwe offerte.',
+        tx('De offerte is niet opgeslagen. Je hebt het recht Offertes nodig, en je abonnement moet ruimte hebben voor een nieuwe offerte.'),
     },
   );
   if (!res.ok) return res;
@@ -492,7 +490,7 @@ export async function updateOfferte(
   const fout = valideerOfferte(input);
   if (fout) return writeFout('validatie', fout);
   if (input.status && !(input.status in OFFERTE_STATUS)) {
-    return writeFout('validatie', 'Onbekende offertestatus.');
+    return writeFout('validatie', tx('Onbekende offertestatus.'));
   }
 
   const inhoudsVelden: (keyof OfferteInput)[] = [
@@ -521,8 +519,7 @@ export async function updateOfferte(
     if (inhoudLigtVast(huidig)) {
       return writeFout(
         'op-slot',
-        'Deze offerte is verstuurd of ondertekend en kan niet meer inhoudelijk wijzigen. ' +
-          'De status aanpassen kan wel.',
+        tx('Deze offerte is verstuurd of ondertekend en kan niet meer inhoudelijk wijzigen. De status aanpassen kan wel.'),
       );
     }
   }
@@ -549,14 +546,14 @@ export async function updateOfferte(
     if (input[k] !== undefined) updates[k] = Number(input[k]);
   }
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   const res = await schrijf<OfferteRow>(
     () => supabase.from('offertes').update(updates).eq('id', id).select(OFFERTE_COLUMNS),
     {
       context: 'offerteService.updateOfferte',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'Er is niets gewijzigd. Je hebt het recht Offertes nodig.',
+      leegMelding: tx('Er is niets gewijzigd. Je hebt het recht Offertes nodig.'),
     },
   );
   if (res.ok && input.status) logStatusOpTijdlijn(res.data, input.status);
@@ -584,7 +581,7 @@ export async function deleteOfferte(id: string): Promise<WriteStatus> {
     .maybeSingle();
   const huidig = cur as { status: string | null; signed_at: string | null } | null;
   if (huidig && !magOfferteVerwijderen(huidig)) {
-    return writeFout('op-slot', 'Een ondertekende of geaccepteerde offerte kun je niet verwijderen.');
+    return writeFout('op-slot', tx('Een ondertekende of geaccepteerde offerte kun je niet verwijderen.'));
   }
   const res = await schrijf<{ id: string }>(
     () => supabase.from('offertes').delete().eq('id', id).select('id'),
@@ -592,7 +589,7 @@ export async function deleteOfferte(id: string): Promise<WriteStatus> {
       context: 'offerteService.deleteOfferte',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De offerte is niet verwijderd. Je hebt het recht Offertes nodig.',
+      leegMelding: tx('De offerte is niet verwijderd. Je hebt het recht Offertes nodig.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -622,9 +619,9 @@ export type OfferteItemInput = {
  * twee betekenen géén btw op de regel, ongeacht het percentage.
  */
 export const BTW_REGIMES = [
-  { id: 'normaal', label: 'Normaal (btw)' },
-  { id: 'verlegd', label: 'Btw verlegd' },
-  { id: 'vrijgesteld', label: 'Vrijgesteld' },
+  { id: 'normaal', get label() { return tx('Normaal (btw)'); } },
+  { id: 'verlegd', get label() { return tx('Btw verlegd'); } },
+  { id: 'vrijgesteld', get label() { return tx('Vrijgesteld'); } },
 ] as const;
 
 /** Regime afleiden uit het percentage, voor regels van vóór de regime-migratie. */
@@ -635,13 +632,13 @@ export function regimeVanPct(pct: number | null | undefined): string {
 export async function createOfferteItem(
   input: OfferteItemInput,
 ): Promise<WriteResult<OfferteItem>> {
-  if (!input.offerte_id) return writeFout('validatie', 'Er is geen offerte gekozen.');
-  if (!input.omschrijving.trim()) return writeFout('validatie', 'Vul een omschrijving in.');
+  if (!input.offerte_id) return writeFout('validatie', tx('Er is geen offerte gekozen.'));
+  if (!input.omschrijving.trim()) return writeFout('validatie', tx('Vul een omschrijving in.'));
   if (!Number.isFinite(input.aantal) || input.aantal <= 0) {
-    return writeFout('validatie', 'Vul een geldig aantal in.');
+    return writeFout('validatie', tx('Vul een geldig aantal in.'));
   }
   if (!Number.isFinite(input.prijs_per) || input.prijs_per < 0) {
-    return writeFout('validatie', 'Vul een geldige prijs in.');
+    return writeFout('validatie', tx('Vul een geldige prijs in.'));
   }
 
   const btwRegime = input.btw_regime || regimeVanPct(input.btw_pct ?? 21);
@@ -660,14 +657,14 @@ export async function createOfferteItem(
   };
 
   const payload = withCompanyId(basis);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   return schrijf<OfferteItem>(
     () => supabase.from('offerte_items').insert(payload).select(ITEM_COLUMNS),
     {
       context: 'offerteService.createOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De regel is niet opgeslagen. Je hebt het recht Offertes nodig.',
+      leegMelding: tx('De regel is niet opgeslagen. Je hebt het recht Offertes nodig.'),
     },
   );
 }
@@ -678,7 +675,7 @@ export async function updateOfferteItem(
 ): Promise<WriteResult<OfferteItem>> {
   const updates: Record<string, unknown> = {};
   if (input.omschrijving !== undefined) {
-    if (!input.omschrijving.trim()) return writeFout('validatie', 'Vul een omschrijving in.');
+    if (!input.omschrijving.trim()) return writeFout('validatie', tx('Vul een omschrijving in.'));
     updates.omschrijving = input.omschrijving.trim();
   }
   if (input.eenheid !== undefined) updates.eenheid = input.eenheid?.trim() || null;
@@ -698,21 +695,21 @@ export async function updateOfferteItem(
     const huidig = (cur ?? {}) as { aantal?: number; prijs_per?: number };
     const aantal = input.aantal ?? Number(huidig.aantal ?? 1);
     const prijs = input.prijs_per ?? Number(huidig.prijs_per ?? 0);
-    if (!Number.isFinite(aantal) || aantal <= 0) return writeFout('validatie', 'Vul een geldig aantal in.');
-    if (!Number.isFinite(prijs) || prijs < 0) return writeFout('validatie', 'Vul een geldige prijs in.');
+    if (!Number.isFinite(aantal) || aantal <= 0) return writeFout('validatie', tx('Vul een geldig aantal in.'));
+    if (!Number.isFinite(prijs) || prijs < 0) return writeFout('validatie', tx('Vul een geldige prijs in.'));
     updates.aantal = aantal;
     updates.prijs_per = prijs;
     updates.subtotaal = berekenRegelSubtotaal(aantal, prijs);
   }
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<OfferteItem>(
     () => supabase.from('offerte_items').update(updates).eq('id', id).select(ITEM_COLUMNS),
     {
       context: 'offerteService.updateOfferteItem',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De regel is niet gewijzigd. Je hebt het recht Offertes nodig.',
+      leegMelding: tx('De regel is niet gewijzigd. Je hebt het recht Offertes nodig.'),
     },
   );
 }
@@ -724,7 +721,7 @@ export async function deleteOfferteItem(id: string): Promise<WriteStatus> {
       context: 'offerteService.deleteOfferteItem',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De regel is niet verwijderd. Je hebt het recht Offertes nodig.',
+      leegMelding: tx('De regel is niet verwijderd. Je hebt het recht Offertes nodig.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -770,7 +767,7 @@ export async function volgendOfferteVersieNummer(
   const { data, error } = await supabase.from('offertes').select('nummer').ilike('nummer', `${basis}%`);
   if (error) {
     console.warn('[offerteService.volgendOfferteVersieNummer]', error.message);
-    return { ok: false, melding: 'Het versienummer kon niet worden bepaald. Probeer het opnieuw.' };
+    return { ok: false, melding: tx('Het versienummer kon niet worden bepaald. Probeer het opnieuw.') };
   }
   const nummers = ((data as { nummer: string | null }[]) ?? []).map((r) => r.nummer);
   return { ok: true, nummer: volgendVersieNummer(nummer, nummers) };
@@ -818,7 +815,7 @@ export async function kopieerOfferte(
   { customerId, alsVersie }: { customerId: string | null; alsVersie: boolean },
 ): Promise<WriteResult<OfferteRow>> {
   const { data: bronRij, error } = await supabase.from('offertes').select('*').eq('id', bronId).maybeSingle();
-  if (error) return writeFout('onbekend', 'De offerte kon niet worden geladen.');
+  if (error) return writeFout('onbekend', tx('De offerte kon niet worden geladen.'));
   const bron = bronRij as (OfferteRow & Record<string, unknown>) | null;
   if (!bron) return writeFout('niet-gevonden');
   const items = await getOfferteItems(bronId);
@@ -942,7 +939,7 @@ export async function stuurGetekendePdfNa(
       body: { soort: 'offerte', id: offerteId },
     });
     if (error) {
-      let melding = 'De ontbrekende PDF kon niet worden nagestuurd.';
+      let melding = tx('De ontbrekende PDF kon niet worden nagestuurd.');
       try {
         const b = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.();
         if (b?.error) melding = b.error;
@@ -955,7 +952,7 @@ export async function stuurGetekendePdfNa(
     if (res?.error) return { ok: false, melding: res.error };
     return { ok: true, nagezonden: res?.nagezonden === true };
   } catch {
-    return { ok: false, melding: 'De ontbrekende PDF kon niet worden nagestuurd.' };
+    return { ok: false, melding: tx('De ontbrekende PDF kon niet worden nagestuurd.') };
   }
 }
 
@@ -970,7 +967,7 @@ export async function getOfferteGroepen(offerteId: string): Promise<{ data: Groe
     .order('volgorde', { ascending: true });
   if (error) {
     console.warn('[offerteService.getOfferteGroepen]', error.message);
-    return { data: [], error: 'De groepen van de offerte konden niet worden geladen.' };
+    return { data: [], error: tx('De groepen van de offerte konden niet worden geladen.') };
   }
   return { data: (data as unknown as GroepRij[]) ?? [], error: null };
 }
@@ -1006,7 +1003,7 @@ export async function slaOfferteOp(input: {
   /** Vast nummer voor een nieuwe offerte (een kopie als versie); anders het volgende. */
   nummer?: string | null;
 }): Promise<WriteResult<OfferteRow>> {
-  if (input.regels.length === 0) return writeFout('validatie', 'Voeg minimaal één regel toe.');
+  if (input.regels.length === 0) return writeFout('validatie', tx('Voeg minimaal één regel toe.'));
   if (isReadonly()) return writeFout('readonly');
 
   let nummer: string | null = null;
@@ -1048,7 +1045,7 @@ export async function slaOfferteOp(input: {
     // De functie geeft zelf leesbare meldingen bij een tussentijdse wijziging,
     // een vastliggende offerte of ongeldige regels.
     if (error.hint === 'gewijzigd' || error.code === '40001') {
-      return writeFout('conflict', error.message || 'Deze offerte is intussen gewijzigd. Open hem opnieuw.');
+      return writeFout('conflict', error.message || tx('Deze offerte is intussen gewijzigd. Open hem opnieuw.'));
     }
     if (error.code === '22023' || error.code === 'P0002' || error.code === '23503') {
       return writeFout('validatie', error.message);
@@ -1056,9 +1053,9 @@ export async function slaOfferteOp(input: {
     return classificeerFout(error, 'offerteService.slaOfferteOp', isReadonly());
   }
   const id = (data as { id?: string } | null)?.id ?? input.id;
-  if (!id) return writeFout('onbekend', 'De offerte is opgeslagen, maar kon niet worden teruggelezen.');
+  if (!id) return writeFout('onbekend', tx('De offerte is opgeslagen, maar kon niet worden teruggelezen.'));
   const { data: rij, error: leesFout } = await supabase.from('offertes').select(OFFERTE_COLUMNS).eq('id', id).maybeSingle();
-  if (leesFout || !rij) return writeFout('onbekend', 'De offerte is opgeslagen, maar kon niet worden teruggelezen. Ververs het scherm.');
+  if (leesFout || !rij) return writeFout('onbekend', tx('De offerte is opgeslagen, maar kon niet worden teruggelezen. Ververs het scherm.'));
   const opgeslagen = rij as unknown as OfferteRow;
 
   // Op de tijdlijn van de klant, zoals het dashboard.

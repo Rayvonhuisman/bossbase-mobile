@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/sessionContext';
+import { tx } from '@/i18n';
 
 /**
  * Integraties: alleen de STATUS van de koppelingen, uit veilige bronnen.
@@ -107,7 +108,7 @@ export async function getIntegratieStand(): Promise<IntegratieStand> {
   let boekhouding: KoppelStatus[] = [];
   if (accRes.error) {
     if (__DEV__) console.log('[integrationService] get_accounting_status', accRes.error.message);
-    fouten.push('De boekhoudkoppeling kon niet worden opgehaald.');
+    fouten.push(tx('De boekhoudkoppeling kon niet worden opgehaald.'));
   } else {
     const rijen = Array.isArray(accRes.data) ? (accRes.data as AccountingStatusRow[]) : [];
     boekhouding = BOEKHOUD_PROVIDERS.map((p) => {
@@ -120,10 +121,10 @@ export async function getIntegratieStand(): Promise<IntegratieStand> {
         environmentId: rij?.afas_environment_id ?? '',
         lastSyncedAt: rij?.last_synced_at ?? null,
         reden: connected
-          ? 'De server bevestigt deze koppeling.'
+          ? tx('De server bevestigt deze koppeling.')
           : p.id === 'afas' && rij?.connected
-            ? 'Geen AFAS-omgeving bekend, dus er valt niets aan te roepen.'
-            : 'Er is geen koppeling voor dit bedrijf.',
+            ? tx('Geen AFAS-omgeving bekend, dus er valt niets aan te roepen.')
+            : tx('Er is geen koppeling voor dit bedrijf.'),
       };
     });
   }
@@ -131,7 +132,7 @@ export async function getIntegratieStand(): Promise<IntegratieStand> {
   let stripe: IntegratieStand['stripe'] = null;
   if (stripeRes.error) {
     if (__DEV__) console.log('[integrationService] stripe_connections', stripeRes.error.message);
-    fouten.push('De Stripe-koppeling kon niet worden opgehaald.');
+    fouten.push(tx('De Stripe-koppeling kon niet worden opgehaald.'));
   } else {
     const rij = stripeRes.data as {
       stripe_account_id: string | null;

@@ -10,8 +10,11 @@
  * Werkt op datumtekst (`YYYY-MM-DD`) en rekent op 12:00 lokale tijd, zodat
  * een zomer-/wintertijdwissel nooit een dag laat verspringen.
  *
- * Geen runtime-imports: dit bestand draait ook rechtstreeks in de Node-tests.
+ * Alleen vertaling en kalendernamen als runtime-import: dit bestand draait ook
+ * in de Node-tests.
  */
+import { tx } from '@/i18n';
+import { dagNaam, hoofdletter, maandNaam } from './kalenderNamen';
 
 /** Minimale vorm van een urenregel (zie `UrenRegel` in types/domain). */
 export type UrenRegelBasis = {
@@ -22,7 +25,6 @@ export type UrenRegelBasis = {
   bron: 'werkdag' | 'werkbon';
 };
 
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const naarDate = (iso: string) => new Date(`${iso}T12:00:00`);
 const naarIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -71,12 +73,11 @@ export function isoWeek(iso: string): number {
 
 const kort = (iso: string) => {
   const d = naarDate(iso);
-  return `${d.getDate()} ${MAAND_KORT[d.getMonth()]}`;
+  return tx('{dag} {maand}', { dag: d.getDate(), maand: maandNaam(d.getMonth(), 'kort') });
 };
 
 export type UrenPeriode = 'week' | 'maand';
 
-const MAAND_LANG = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
 
 /** De laatste dag van de maand waarin `iso` valt. */
 export function laatsteVanMaand(iso: string): string {
@@ -100,13 +101,12 @@ export function dagenTussenIso(van: string, tot: string): string[] {
 /** "Oktober 2026" */
 export function maandLabel(iso: string): string {
   const d = naarDate(iso);
-  const m = MAAND_LANG[d.getMonth()] ?? '';
-  return `${m.charAt(0).toUpperCase()}${m.slice(1)} ${d.getFullYear()}`;
+  return tx('{maand} {jaar}', { maand: hoofdletter(maandNaam(d.getMonth())), jaar: d.getFullYear() });
 }
 
 /** "Week 41 · 5 okt – 11 okt" */
 export function weekLabel(maandag: string): string {
-  return `Week ${isoWeek(maandag)} · ${kort(maandag)} – ${kort(plusDagen(maandag, 6))}`;
+  return tx('Week {week} · {van} – {tot}', { week: isoWeek(maandag), van: kort(maandag), tot: kort(plusDagen(maandag, 6)) });
 }
 
 export type UrenFilter = 'alles' | 'werkdag' | 'werkbon' | 'open';
@@ -178,11 +178,14 @@ export function groepeerPerDag<R extends UrenRegelBasis>(regels: R[]): UrenDagGr
 
 /** "Vandaag", "Gisteren" of de weekdag met datum. */
 export function dagKop(iso: string, vandaag: string): string {
-  if (iso === vandaag) return 'Vandaag';
-  if (iso === plusDagen(vandaag, -1)) return 'Gisteren';
+  if (iso === vandaag) return tx('Vandaag');
+  if (iso === plusDagen(vandaag, -1)) return tx('Gisteren');
   const d = naarDate(iso);
-  const dag = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'][d.getDay()]!;
-  return `${dag.charAt(0).toUpperCase()}${dag.slice(1)} ${d.getDate()} ${MAAND_KORT[d.getMonth()]}`;
+  return tx('{weekdag} {dag} {maand}', {
+    weekdag: hoofdletter(dagNaam(d.getDay())),
+    dag: d.getDate(),
+    maand: maandNaam(d.getMonth(), 'kort'),
+  });
 }
 
 /** Pauzeknoppen uit het dashboard; daarnaast "anders" (vrij getal). */

@@ -10,6 +10,7 @@ import { spacing, type ThemeColors } from '@/theme';
 import { tijdVan, type BewaardConcept } from '@/lib/boss/werkruimteConcept';
 import { BossAvatar } from '../BossChat';
 import { Button } from '../Button';
+import { tx } from '@/i18n';
 
 export function BossIngang({
   soort, vorig, gebruikt, sub, onOpen, onVerder, onOpnieuw,
@@ -29,24 +30,26 @@ export function BossIngang({
       {vorig ? (
         <View style={s.herstel} accessibilityRole="alert">
           <Text style={s.herstelTekst}>
-            Je was om {tijdVan(vorig.bewaardOp)} met Boss aan deze {soort} bezig. Het gesprek en het concept staan nog klaar.
+            {soort === 'offerte'
+              ? tx('Je was om {tijd} met Boss aan deze offerte bezig. Het gesprek en het concept staan nog klaar.', { tijd: tijdVan(vorig.bewaardOp) })
+              : tx('Je was om {tijd} met Boss aan deze factuur bezig. Het gesprek en het concept staan nog klaar.', { tijd: tijdVan(vorig.bewaardOp) })}
           </Text>
           <View style={s.rij}>
-            <Button label="Verder gaan" onPress={onVerder} style={{ flex: 1 }} />
-            <Button label="Opnieuw beginnen" variant="secondary" onPress={onOpnieuw} style={{ flex: 1 }} />
+            <Button label={tx('Verder gaan')} onPress={onVerder} style={{ flex: 1 }} />
+            <Button label={tx('Opnieuw beginnen')} variant="secondary" onPress={onOpnieuw} style={{ flex: 1 }} />
           </View>
         </View>
       ) : null}
       <Pressable
         onPress={vorig ? onVerder : onOpen}
         accessibilityRole="button"
-        accessibilityHint="Opent de werkruimte met het document en het gesprek met Boss"
+        accessibilityHint={tx('Opent de werkruimte met het document en het gesprek met Boss')}
         style={({ pressed }) => [s.knop, pressed && { opacity: 0.85 }]}
       >
         <BossAvatar size={36} />
         <View style={{ flex: 1 }}>
-          <Text style={s.titel}>Maak met Boss</Text>
-          <Text style={s.sub}>{gebruikt || vorig ? 'Je gesprek is bewaard' : sub}</Text>
+          <Text style={s.titel}>{tx('Maak met Boss')}</Text>
+          <Text style={s.sub}>{gebruikt || vorig ? tx('Je gesprek is bewaard') : sub}</Text>
         </View>
       </Pressable>
     </View>

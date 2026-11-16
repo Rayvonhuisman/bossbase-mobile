@@ -50,6 +50,7 @@ import { useSave } from '@/lib/useSave';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { tx } from '@/i18n';
 
 /**
  * Team — gelijk aan `TeamPage.jsx` van het dashboard.
@@ -70,7 +71,7 @@ import { terugOfNaar } from '@/lib/navigatie';
 
 export default function TeamScreen() {
   return (
-    <PermissionGate permission="team" label="Team">
+    <PermissionGate permission="team" label={tx('Team')}>
       <TeamScreenInhoud />
     </PermissionGate>
   );
@@ -130,15 +131,17 @@ function TeamScreenInhoud() {
   const tellingen = teamTellingen(items);
   const limiet = planStatus?.limits?.gebruikers;
   const planStand =
-    limiet && limiet.max != null ? `${limiet.gebruikt} / ${limiet.max} gebruikers` : undefined;
+    limiet && limiet.max != null
+      ? tx('{gebruikt} / {max} gebruikers', { gebruikt: limiet.gebruikt, max: limiet.max })
+      : undefined;
 
   // ── Uitnodigen ──────────────────────────────────────────────────────────
   const openUitnodiging = () => {
     if (!magUitnodigen) {
       Dialog.alert(
-        'Uitnodigen niet mogelijk',
+        tx('Uitnodigen niet mogelijk'),
         waaromNiet('team', 'maken') ??
-          'Je abonnement heeft geen ruimte voor een extra gebruiker. Pas je abonnement aan op het dashboard.',
+          tx('Je abonnement heeft geen ruimte voor een extra gebruiker. Pas je abonnement aan op het dashboard.'),
       );
       return;
     }
@@ -164,9 +167,9 @@ function TeamScreenInhoud() {
           setUitnodiging(null);
           if (uitkomst?.mailVerstuurd === false) {
             Dialog.alert(
-              'Teamlid toegevoegd maar e-mail niet verstuurd',
+              tx('Teamlid toegevoegd maar e-mail niet verstuurd'),
               uitkomst.mailFout ??
-                'De uitnodiging is geldig, maar de e-mail kon niet worden verzonden.',
+                tx('De uitnodiging is geldig, maar de e-mail kon niet worden verzonden.'),
             );
           }
           await herlaad();
@@ -208,16 +211,16 @@ function TeamScreenInhoud() {
           setBewerk(null);
           await herlaad();
         },
-        succesMelding: 'Teamlid bijgewerkt',
+        succesMelding: tx('Teamlid bijgewerkt'),
       },
     );
   };
 
   const uitnodigingIntrekken = (lid: TeamMemberRow) => {
-    Dialog.alert('Teamlid verwijderen?', 'De openstaande uitnodiging vervalt.', [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Teamlid verwijderen?'), tx('De openstaande uitnodiging vervalt.'), [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: () =>
           save(() => deleteInvite(lid.id), {
@@ -225,7 +228,7 @@ function TeamScreenInhoud() {
               setBewerk(null);
               await herlaad();
             },
-            succesMelding: 'Teamlid verwijderd',
+            succesMelding: tx('Teamlid verwijderd'),
           }),
       },
     ]);
@@ -233,16 +236,16 @@ function TeamScreenInhoud() {
 
   const wisselActief = (lid: TeamMemberRow) => {
     const naarInactief = lid.status === 'actief';
-    const wie = lid.full_name || lid.email || 'Dit teamlid';
+    const wie = lid.full_name || lid.email || tx('Dit teamlid');
     Dialog.alert(
-      naarInactief ? 'Teamlid deactiveren?' : 'Teamlid activeren?',
+      naarInactief ? tx('Teamlid deactiveren?') : tx('Teamlid activeren?'),
       naarInactief
-        ? `${wie} kan daarna niet meer inloggen. Zijn werk blijft bewaard.`
-        : `${wie} kan daarna weer inloggen.`,
+        ? tx('{wie} kan daarna niet meer inloggen. Zijn werk blijft bewaard.', { wie })
+        : tx('{wie} kan daarna weer inloggen.', { wie }),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: naarInactief ? 'Deactiveren' : 'Activeren',
+          text: naarInactief ? tx('Deactiveren') : tx('Activeren'),
           style: naarInactief ? 'destructive' : 'default',
           onPress: () =>
             save(() => (naarInactief ? deactivateTeamMember(lid.id) : activateTeamMember(lid.id)), {
@@ -250,7 +253,7 @@ function TeamScreenInhoud() {
                 setBewerk(null);
                 await herlaad();
               },
-              succesMelding: naarInactief ? 'Teamlid gedeactiveerd' : 'Teamlid geactiveerd',
+              succesMelding: naarInactief ? tx('Teamlid gedeactiveerd') : tx('Teamlid geactiveerd'),
             }),
         },
       ],
@@ -263,12 +266,12 @@ function TeamScreenInhoud() {
       return;
     }
     Dialog.alert(
-      'Teamlid verwijderen?',
-      'Het account en de sessies worden verwijderd. Geboekte uren en werkbonnen blijven bestaan.',
+      tx('Teamlid verwijderen?'),
+      tx('Het account en de sessies worden verwijderd. Geboekte uren en werkbonnen blijven bestaan.'),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Verwijderen',
+          text: tx('Verwijderen'),
           style: 'destructive',
           onPress: () =>
             save(() => deleteTeamMember(lid.id), {
@@ -276,7 +279,7 @@ function TeamScreenInhoud() {
                 setBewerk(null);
                 await herlaad();
               },
-              succesMelding: 'Teamlid verwijderd',
+              succesMelding: tx('Teamlid verwijderd'),
             }),
         },
       ],
@@ -287,9 +290,9 @@ function TeamScreenInhoud() {
   const openRechten = async (lid: TeamMemberRow) => {
     if (!magRechten) {
       Dialog.alert(
-        'Rollen & rechten',
+        tx('Rollen & rechten'),
         waaromNiet('team', 'rechtenWijzigen') ??
-          'Rollen & rechten zit niet in je abonnement. Dat zit in Groei en Team.',
+          tx('Rollen & rechten zit niet in je abonnement. Dat zit in Groei en Team.'),
       );
       return;
     }
@@ -312,9 +315,9 @@ function TeamScreenInhoud() {
 
   const zetRecht = (sleutel: string, aan: boolean, waarschuw?: boolean) => {
     if (aan && waarschuw) {
-      Dialog.alert('Brede inzage', BREDE_INZAGE_WAARSCHUWING, [
-        { text: 'Annuleren', style: 'cancel' },
-        { text: 'Aanzetten', onPress: () => setRechten((r) => ({ ...r, [sleutel]: true })) },
+      Dialog.alert(tx('Brede inzage'), tx(BREDE_INZAGE_WAARSCHUWING), [
+        { text: tx('Annuleren'), style: 'cancel' },
+        { text: tx('Aanzetten'), onPress: () => setRechten((r) => ({ ...r, [sleutel]: true })) },
       ]);
       return;
     }
@@ -329,9 +332,9 @@ function TeamScreenInhoud() {
         return volgende;
       });
     if (aan && groep.subs.some((s) => s.waarschuw && !rechten[s.key])) {
-      Dialog.alert('Brede inzage', BREDE_INZAGE_WAARSCHUWING, [
-        { text: 'Annuleren', style: 'cancel' },
-        { text: 'Aanzetten', onPress: pas },
+      Dialog.alert(tx('Brede inzage'), tx(BREDE_INZAGE_WAARSCHUWING), [
+        { text: tx('Annuleren'), style: 'cancel' },
+        { text: tx('Aanzetten'), onPress: pas },
       ]);
       return;
     }
@@ -356,20 +359,20 @@ function TeamScreenInhoud() {
         setRechtenVoor(null);
         await herlaad();
       },
-      succesMelding: 'Rechten opgeslagen',
+      succesMelding: tx('Rechten opgeslagen'),
     });
   };
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Team laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Team laden...')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Team" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Team')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -413,19 +416,19 @@ function TeamScreenInhoud() {
             : { bg: t.statusDraftBg, fg: t.statusDraftFg };
     return (
       <View style={[styles.pil, { backgroundColor: kleur.bg }]}>
-        <Text style={[styles.pilTekst, { color: kleur.fg }]}>{s.label}</Text>
+        <Text style={[styles.pilTekst, { color: kleur.fg }]}>{tx(s.label)}</Text>
       </View>
     );
   };
 
   const ondertitel = (lid: TeamMemberRow) => {
-    const delen = [rolLabel(lid.role)];
-    if (isEigenaar(lid, eigenaarId)) delen.push('Eigenaar');
+    const delen = [tx(rolLabel(lid.role))];
+    if (isEigenaar(lid, eigenaarId)) delen.push(tx('Eigenaar'));
     if (lid.email) delen.push(lid.email);
-    if (lid.hours_per_week > 0) delen.push(`${lid.hours_per_week}u/week`);
-    if (lid.profile_id && lid.profile_id === eigenId) delen.push('Jij');
+    if (lid.hours_per_week > 0) delen.push(tx('{uren}u/week', { uren: lid.hours_per_week }));
+    if (lid.profile_id && lid.profile_id === eigenId) delen.push(tx('Jij'));
     if (lid.invite_email_failed_at && lid.invite_email_error) {
-      delen.push(`Mail: ${lid.invite_email_error}`);
+      delen.push(tx('Mail: {fout}', { fout: lid.invite_email_error }));
     }
     return delen.join(' · ');
   };
@@ -438,12 +441,12 @@ function TeamScreenInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Team"
-            subtitle={planStand ?? 'Teamleden en uitnodigingen'}
+            title={tx('Team')}
+            subtitle={planStand ?? tx('Teamleden en uitnodigingen')}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               isAdmin ? (
-                <HeaderIconButton icon={UserPlus} label="Teamlid uitnodigen" onPress={openUitnodiging} />
+                <HeaderIconButton icon={UserPlus} label={tx('Teamlid uitnodigen')} onPress={openUitnodiging} />
               ) : undefined
             }
           />
@@ -452,31 +455,31 @@ function TeamScreenInhoud() {
         onRefresh={onRefresh}
       >
         <View style={styles.kpiRij}>
-          <AppKpiCard label="Totaal" value={String(tellingen.totaal)} />
-          <AppKpiCard label="Actief" value={String(tellingen.actief)} />
-          <AppKpiCard label="Uitgenodigd" value={String(tellingen.uitgenodigd)} />
+          <AppKpiCard label={tx('Totaal')} value={String(tellingen.totaal)} />
+          <AppKpiCard label={tx('Actief')} value={String(tellingen.actief)} />
+          <AppKpiCard label={tx('Uitgenodigd')} value={String(tellingen.uitgenodigd)} />
         </View>
 
         {items.length === 0 ? (
           <EmptyState
             icon={<UsersRound size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Nog geen teamleden"
+            title={tx('Nog geen teamleden')}
             message={
               isAdmin
-                ? 'Nodig je eerste teamlid uit via de knop rechtsboven.'
-                : 'Er zijn nog geen teamleden.'
+                ? tx('Nodig je eerste teamlid uit via de knop rechtsboven.')
+                : tx('Er zijn nog geen teamleden.')
             }
           />
         ) : (
           <>
-            <AppSection title="Teamleden" count={items.length} variant="eyebrow" />
+            <AppSection title={tx('Teamleden')} count={items.length} variant="eyebrow" />
             <AppListGroup>
               {items.map((lid, i) => (
                 <AppListItem
                   key={lid.id}
                   first={i === 0}
                   leading={avatar(lid)}
-                  title={lid.full_name || 'Geen naam'}
+                  title={lid.full_name || tx('Geen naam')}
                   subtitle={ondertitel(lid)}
                   trailing={statusPil(lid)}
                   onPress={isAdmin ? () => openBewerken(lid) : undefined}
@@ -485,8 +488,8 @@ function TeamScreenInhoud() {
             </AppListGroup>
             <Text style={styles.voetnoot}>
               {isAdmin
-                ? 'Tik op een teamlid om naam, rol en uren te wijzigen, rechten in te stellen, of hem te (de)activeren of verwijderen.'
-                : 'Teamleden uitnodigen, rechten instellen en verwijderen doet een beheerder.'}
+                ? tx('Tik op een teamlid om naam, rol en uren te wijzigen, rechten in te stellen, of hem te (de)activeren of verwijderen.')
+                : tx('Teamleden uitnodigen, rechten instellen en verwijderen doet een beheerder.')}
             </Text>
           </>
         )}
@@ -495,107 +498,107 @@ function TeamScreenInhoud() {
       {/* Uitnodigen — velden zoals InviteModal in het dashboard */}
       <FormSheet
         visible={uitnodiging !== null}
-        title="Teamlid uitnodigen"
-        subtitle="De uitnodiging is 48 uur geldig"
+        title={tx('Teamlid uitnodigen')}
+        subtitle={tx('De uitnodiging is 48 uur geldig')}
         error={saveError}
         saving={saving}
-        submitLabel="Uitnodiging versturen"
+        submitLabel={tx('Uitnodiging versturen')}
         submitDisabled={!uitnodiging?.email.trim()}
         onSubmit={uitnodigingVersturen}
         onClose={() => setUitnodiging(null)}
       >
         <FormField
-          label="E-mailadres *"
+          label={tx('E-mailadres *')}
           value={uitnodiging?.email ?? ''}
           onChangeText={(v) => setUitnodiging((c) => (c ? { ...c, email: v } : c))}
-          placeholder="collega@bedrijf.nl"
+          placeholder={tx('collega@bedrijf.nl')}
           autoCapitalize="none"
           keyboardType="email-address"
           autoCorrect={false}
           autoFocus
         />
         <FormField
-          label="Volledige naam"
+          label={tx('Volledige naam')}
           value={uitnodiging?.naam ?? ''}
           onChangeText={(v) => setUitnodiging((c) => (c ? { ...c, naam: v } : c))}
-          placeholder="Voor- en achternaam"
+          placeholder={tx('Voor- en achternaam')}
         />
         <FormField
-          label="Telefoonnummer"
+          label={tx('Telefoonnummer')}
           value={uitnodiging?.telefoon ?? ''}
           onChangeText={(v) => setUitnodiging((c) => (c ? { ...c, telefoon: v } : c))}
           placeholder="06 12 34 56 78"
           keyboardType="phone-pad"
         />
         <Keuze
-          label="Rol"
+          label={tx('Rol')}
           opties={rolOpties('medewerker')}
           waarde={uitnodiging?.rol ?? 'medewerker'}
           onKies={(v) => setUitnodiging((c) => (c ? { ...c, rol: v } : c))}
           styles={styles}
         />
         <FormField
-          label="Uren per week"
+          label={tx('Uren per week')}
           value={uitnodiging?.urenPerWeek ?? ''}
           onChangeText={(v) => setUitnodiging((c) => (c ? { ...c, urenPerWeek: v } : c))}
           placeholder="40"
           keyboardType="decimal-pad"
-          hint="0 tot 60"
+          hint={tx('0 tot 60')}
         />
       </FormSheet>
 
       {/* Bewerken + beheeracties */}
       <FormSheet
         visible={bewerk !== null}
-        title="Teamlid bewerken"
+        title={tx('Teamlid bewerken')}
         subtitle={bewerk?.lid.email || undefined}
         error={saveError}
         saving={saving}
-        submitLabel="Opslaan"
+        submitLabel={tx('Opslaan')}
         onSubmit={bewerkingOpslaan}
         onClose={() => setBewerk(null)}
         destructive={
           bewerk && bewerkStand?.soort === 'acties' && !bewerkStand.geblokkeerd
-            ? { label: 'Teamlid verwijderen', onPress: () => teamlidVerwijderen(bewerk.lid) }
+            ? { label: tx('Teamlid verwijderen'), onPress: () => teamlidVerwijderen(bewerk.lid) }
             : undefined
         }
       >
         <FormField
-          label="Volledige naam"
+          label={tx('Volledige naam')}
           value={bewerk?.naam ?? ''}
           onChangeText={(v) => setBewerk((c) => (c ? { ...c, naam: v } : c))}
-          placeholder="Voor- en achternaam"
+          placeholder={tx('Voor- en achternaam')}
         />
         <FormField
-          label="Telefoonnummer"
+          label={tx('Telefoonnummer')}
           value={bewerk?.telefoon ?? ''}
           onChangeText={(v) => setBewerk((c) => (c ? { ...c, telefoon: v } : c))}
-          placeholder={bewerk?.lid.isUitnodiging ? '06 12 34 56 78' : 'Leeg laten = ongewijzigd'}
+          placeholder={bewerk?.lid.isUitnodiging ? '06 12 34 56 78' : tx('Leeg laten = ongewijzigd')}
           keyboardType="phone-pad"
         />
         <Keuze
-          label="Rol"
+          label={tx('Rol')}
           opties={rolOpties(bewerk?.lid.role)}
           waarde={bewerk?.rol ?? 'medewerker'}
           onKies={(v) => setBewerk((c) => (c ? { ...c, rol: v } : c))}
           uitgeschakeld={bewerkRol?.vergrendeld}
-          hint={bewerkRol?.vergrendeld ? bewerkRol.reden : undefined}
+          hint={bewerkRol?.vergrendeld && bewerkRol.reden ? tx(bewerkRol.reden) : undefined}
           styles={styles}
         />
         <FormField
-          label="Uren per week"
+          label={tx('Uren per week')}
           value={bewerk?.urenPerWeek ?? ''}
           onChangeText={(v) => setBewerk((c) => (c ? { ...c, urenPerWeek: v } : c))}
-          placeholder={bewerk?.lid.isUitnodiging ? '40' : 'Leeg laten = ongewijzigd'}
+          placeholder={bewerk?.lid.isUitnodiging ? '40' : tx('Leeg laten = ongewijzigd')}
           keyboardType="decimal-pad"
         />
 
         {bewerk ? (
           <View style={styles.beheerBlok}>
-            <Text style={styles.label}>Toegang</Text>
+            <Text style={styles.label}>{tx('Toegang')}</Text>
             {bewerk.lid.role !== 'admin' ? (
               <Button
-                label="Rechten instellen"
+                label={tx('Rechten instellen')}
                 variant="secondary"
                 disabled={saving}
                 style={!magRechten ? styles.halfZichtbaar : undefined}
@@ -603,19 +606,19 @@ function TeamScreenInhoud() {
               />
             ) : null}
             {bewerkStand?.soort === 'jij' ? (
-              <Text style={styles.hint}>Dit ben jij. Jezelf deactiveren of verwijderen kan niet.</Text>
+              <Text style={styles.hint}>{tx('Dit ben jij. Jezelf deactiveren of verwijderen kan niet.')}</Text>
             ) : bewerkStand?.soort === 'beschermd' ? (
-              <Text style={styles.hint}>Beschermd. {bewerkStand.geblokkeerd}</Text>
+              <Text style={styles.hint}>{tx('Beschermd. {reden}', { reden: bewerkStand.geblokkeerd ? tx(bewerkStand.geblokkeerd) : '' })}</Text>
             ) : bewerk.lid.isUitnodiging ? null : (
               <>
                 <Button
-                  label={bewerk.lid.status === 'actief' ? 'Deactiveren' : 'Activeren'}
+                  label={bewerk.lid.status === 'actief' ? tx('Deactiveren') : tx('Activeren')}
                   variant="secondary"
                   disabled={saving || Boolean(bewerkStand?.geblokkeerd)}
                   onPress={() => wisselActief(bewerk.lid)}
                 />
                 {bewerkStand?.geblokkeerd ? (
-                  <Text style={styles.hint}>{bewerkStand.geblokkeerd}</Text>
+                  <Text style={styles.hint}>{tx(bewerkStand.geblokkeerd)}</Text>
                 ) : null}
               </>
             )}
@@ -626,33 +629,32 @@ function TeamScreenInhoud() {
       {/* Rechten per teamlid — zoals PermissionsModal */}
       <FormSheet
         visible={rechtenVoor !== null}
-        title="Rechten instellen"
+        title={tx('Rechten instellen')}
         subtitle={rechtenVoor?.full_name || rechtenVoor?.email}
         error={rechtenFout}
         saving={rechtenBezig}
-        submitLabel="Opslaan"
+        submitLabel={tx('Opslaan')}
         submitDisabled={!rechtenVoor?.profile_id || rechtenLaden}
         onSubmit={rechtenOpslaan}
         onClose={() => setRechtenVoor(null)}
       >
         {!rechtenVoor?.profile_id ? (
           <Text style={styles.waarschuwing}>
-            Dit teamlid heeft de uitnodiging nog niet geaccepteerd. Rechten kunnen worden ingesteld
-            zodra ze zijn ingelogd.
+            {tx('Dit teamlid heeft de uitnodiging nog niet geaccepteerd. Rechten kunnen worden ingesteld zodra ze zijn ingelogd.')}
           </Text>
         ) : null}
         <View style={styles.allesRij}>
           <View style={{ flex: 1 }}>
-            <Button label="Alles aan" variant="secondary" disabled={rechtenBezig} onPress={() => allesZetten(true)} />
+            <Button label={tx('Alles aan')} variant="secondary" disabled={rechtenBezig} onPress={() => allesZetten(true)} />
           </View>
           <View style={{ flex: 1 }}>
-            <Button label="Alles uit" variant="secondary" disabled={rechtenBezig} onPress={() => allesZetten(false)} />
+            <Button label={tx('Alles uit')} variant="secondary" disabled={rechtenBezig} onPress={() => allesZetten(false)} />
           </View>
         </View>
         {RECHTENSETS.map((set) => (
           <Button
             key={set.key}
-            label={set.label}
+            label={tx(set.label)}
             variant="secondary"
             disabled={rechtenBezig}
             onPress={() => setZetten(set)}
@@ -666,28 +668,29 @@ function TeamScreenInhoud() {
             <View key={groep.key} style={{ gap: spacing.sm }}>
               <View style={styles.groepKop}>
                 <Text style={[styles.groepTitel, { flex: 1 }]}>
-                  {groep.label}
-                  {deels ? ` · ${aan} van ${groep.subs.length}` : ''}
+                  {deels
+                    ? tx('{groep} · {aan} van {totaal}', { groep: tx(groep.label), aan, totaal: groep.subs.length })
+                    : tx(groep.label)}
                 </Text>
                 <Switch
                   value={alles}
                   onValueChange={(v) => zetGroep(groep, v)}
                   disabled={rechtenBezig || rechtenLaden}
-                  accessibilityLabel={`Alle rechten in ${groep.label}`}
+                  accessibilityLabel={tx('Alle rechten in {groep}', { groep: tx(groep.label) })}
                 />
               </View>
               {groep.subs.map((sub) => (
                 <View key={sub.key} style={styles.rechtRij}>
                   <View style={styles.rechtBoven}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rechtTitel}>{sub.label}</Text>
-                      <Text style={styles.rechtUitleg}>{sub.kort}</Text>
+                      <Text style={styles.rechtTitel}>{tx(sub.label)}</Text>
+                      <Text style={styles.rechtUitleg}>{tx(sub.kort)}</Text>
                     </View>
                     {RECHT_UITLEG[sub.key] ? (
                       <Pressable
                         onPress={() => setUitlegOpen((o) => (o === sub.key ? null : sub.key))}
                         accessibilityRole="button"
-                        accessibilityLabel={`Uitleg bij ${sub.label}`}
+                        accessibilityLabel={tx('Uitleg bij {recht}', { recht: tx(sub.label) })}
                         style={styles.infoKnop}
                       >
                         <Info size={16} color={t.muted} />
@@ -697,11 +700,11 @@ function TeamScreenInhoud() {
                       value={rechten[sub.key] === true}
                       onValueChange={(v) => zetRecht(sub.key, v, sub.waarschuw)}
                       disabled={rechtenBezig || rechtenLaden}
-                      accessibilityLabel={sub.label}
+                      accessibilityLabel={tx(sub.label)}
                     />
                   </View>
                   {uitlegOpen === sub.key ? (
-                    <Text style={styles.rechtLang}>{RECHT_UITLEG[sub.key]}</Text>
+                    <Text style={styles.rechtLang}>{tx(RECHT_UITLEG[sub.key] ?? '')}</Text>
                   ) : null}
                 </View>
               ))}
@@ -746,7 +749,7 @@ function Keuze({
               aria-pressed={actief}
               style={[styles.chip, actief && styles.chipActief, uitgeschakeld && styles.halfZichtbaar]}
             >
-              <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{o.label}</Text>
+              <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>{tx(o.label)}</Text>
             </Pressable>
           );
         })}

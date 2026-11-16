@@ -15,9 +15,17 @@ import {
 } from '@/lib/registratie';
 import { Field, GreenButton, TopBar } from './_components';
 import { onb } from './_tokens';
+import { tx, txm } from '@/i18n';
 
 const GOED = '#15A34A';
 const FOUT = '#C81E1E';
+
+// Links in de akkoordzin; de zin zelf staat in één tx() met {plaatshouders}.
+const JURIDISCHE_LINKS: Record<string, { label: string; url: string }> = {
+  voorwaarden: { label: txm('algemene voorwaarden'), url: JURIDISCH.voorwaarden },
+  verwerkersovereenkomst: { label: txm('verwerkersovereenkomst'), url: JURIDISCH.verwerkersovereenkomst },
+  privacyverklaring: { label: txm('privacyverklaring'), url: JURIDISCH.privacy },
+};
 
 function openLink(url: string) {
   Linking.openURL(url).catch(() => {});
@@ -111,8 +119,8 @@ export default function AccountScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.headerBlock}>
-          <Text style={styles.title}>Maak je account aan</Text>
-          <Text style={styles.sub}>Hiermee log je in op al je apparaten.</Text>
+          <Text style={styles.title}>{tx('Maak je account aan')}</Text>
+          <Text style={styles.sub}>{tx('Hiermee log je in op al je apparaten.')}</Text>
         </View>
 
         <ScrollView
@@ -122,7 +130,7 @@ export default function AccountScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Field
-            label="Volledige naam"
+            label={tx('Volledige naam')}
             value={fullName}
             onChangeText={(v) => {
               setFullName(v);
@@ -131,11 +139,11 @@ export default function AccountScreen() {
             placeholder="Marco Veldhuis"
             autoCapitalize="words"
             autoComplete="name"
-            error={fouten.fullName}
+            error={fouten.fullName && tx(fouten.fullName)}
             editable={!submitting}
           />
           <Field
-            label="E-mailadres"
+            label={tx('E-mailadres')}
             value={email}
             onChangeText={(v) => {
               setEmail(v);
@@ -146,22 +154,22 @@ export default function AccountScreen() {
             autoCorrect={false}
             autoComplete="email"
             keyboardType="email-address"
-            error={fouten.email}
+            error={fouten.email && tx(fouten.email)}
             editable={!submitting}
           />
           <View>
             <Field
-              label="Wachtwoord"
+              label={tx('Wachtwoord')}
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
                 wis('password');
               }}
-              placeholder="Min. 8 tekens"
+              placeholder={tx('Min. 8 tekens')}
               isPassword
               autoComplete="password-new"
               textContentType="newPassword"
-              error={fouten.password}
+              error={fouten.password && tx(fouten.password)}
               editable={!submitting}
             />
             {password ? (
@@ -175,7 +183,7 @@ export default function AccountScreen() {
                       ) : (
                         <Circle size={9} color={onb.faint} strokeWidth={2.4} />
                       )}
-                      <Text style={[styles.eisText, { color: ok ? GOED : onb.faint }]}>{r.label}</Text>
+                      <Text style={[styles.eisText, { color: ok ? GOED : onb.faint }]}>{tx(r.label)}</Text>
                     </View>
                   );
                 })}
@@ -184,17 +192,17 @@ export default function AccountScreen() {
           </View>
           <View>
             <Field
-              label="Herhaal wachtwoord"
+              label={tx('Herhaal wachtwoord')}
               value={password2}
               onChangeText={(v) => {
                 setPassword2(v);
                 wis('password2');
               }}
-              placeholder="Nogmaals je wachtwoord"
+              placeholder={tx('Nogmaals je wachtwoord')}
               isPassword
               autoComplete="password-new"
               textContentType="newPassword"
-              error={fouten.password2}
+              error={fouten.password2 && tx(fouten.password2)}
               editable={!submitting}
             />
             {password2 && !fouten.password2 ? (
@@ -205,7 +213,7 @@ export default function AccountScreen() {
                   <X size={12} color={FOUT} strokeWidth={3} />
                 )}
                 <Text style={[styles.eisText, { color: password === password2 ? GOED : FOUT }]}>
-                  {password === password2 ? 'Wachtwoorden komen overeen' : 'Wachtwoorden komen niet overeen'}
+                  {password === password2 ? tx('Wachtwoorden komen overeen') : tx('Wachtwoorden komen niet overeen')}
                 </Text>
               </View>
             ) : null}
@@ -213,32 +221,28 @@ export default function AccountScreen() {
 
           {errorMsg ? (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{errorMsg}</Text>
+              <Text style={styles.errorText}>{tx(errorMsg)}</Text>
             </View>
           ) : null}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-          <GreenButton label="Account aanmaken" onPress={onSubmit} loading={submitting} />
+          <GreenButton label={tx('Account aanmaken')} onPress={onSubmit} loading={submitting} />
           {/* Zelfde tekst en links als het dashboard, onder de verzendknop. */}
           <Text style={styles.termsText}>
-            Door een account aan te maken ga je akkoord met de{' '}
-            <Text accessibilityRole="link" style={styles.termsLink} onPress={() => openLink(JURIDISCH.voorwaarden)}>
-              algemene voorwaarden
-            </Text>{' '}
-            en de{' '}
-            <Text
-              accessibilityRole="link"
-              style={styles.termsLink}
-              onPress={() => openLink(JURIDISCH.verwerkersovereenkomst)}
-            >
-              verwerkersovereenkomst
-            </Text>
-            . In de{' '}
-            <Text accessibilityRole="link" style={styles.termsLink} onPress={() => openLink(JURIDISCH.privacy)}>
-              privacyverklaring
-            </Text>{' '}
-            lees je hoe we met je gegevens omgaan.
+            {tx(
+              'Door een account aan te maken ga je akkoord met de {voorwaarden} en de {verwerkersovereenkomst}. In de {privacyverklaring} lees je hoe we met je gegevens omgaan.',
+            )
+              .split(/(\{\w+\})/)
+              .map((deel, i) => {
+                const link = JURIDISCHE_LINKS[deel.slice(1, -1)];
+                if (!link) return deel;
+                return (
+                  <Text key={i} accessibilityRole="link" style={styles.termsLink} onPress={() => openLink(link.url)}>
+                    {tx(link.label)}
+                  </Text>
+                );
+              })}
           </Text>
         </View>
       </KeyboardAvoidingView>

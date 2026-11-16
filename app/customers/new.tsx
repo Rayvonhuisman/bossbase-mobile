@@ -14,6 +14,15 @@ import { useAuth, useTheme } from '@/providers';
 import { createCustomer, KLANT_TYPES } from '@/services/customerService';
 import { spacing, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { tx, txm } from '@/i18n';
+
+/** Getoonde labels van de klanttypes; de waarde zelf gaat ongewijzigd naar de database. */
+const KLANT_TYPE_LABELS: Record<string, string> = {
+  Particulier: txm('Particulier'),
+  Zakelijk: txm('Zakelijk'),
+  VvE: txm('VvE'),
+  Aannemer: txm('Aannemer'),
+};
 
 /**
  * Quick-capture form for a new customer. Saves to the same Supabase `customers`
@@ -26,7 +35,7 @@ import { leesbreedte } from '@/lib/schermklasseRegels';
  */
 export default function NewCustomerScreen() {
   return (
-    <PermissionGate permission="klanten_bewerken" label="Nieuwe klant">
+    <PermissionGate permission="klanten_bewerken" label={tx('Nieuwe klant')}>
       <NewCustomerInhoud />
     </PermissionGate>
   );
@@ -57,16 +66,16 @@ function NewCustomerInhoud() {
   const onSubmit = async () => {
     setError(null);
     if (!name.trim()) {
-      setError('Naam is verplicht.');
+      setError(tx('Naam is verplicht.'));
       return;
     }
     // Zelfde e-mailcontrole als `NewCustomerModal` in het dashboard.
     if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError('Ongeldig e-mailadres.');
+      setError(tx('Ongeldig e-mailadres.'));
       return;
     }
     if (!companyId) {
-      setError('Je sessie is nog niet geladen. Probeer het zo opnieuw.');
+      setError(tx('Je sessie is nog niet geladen. Probeer het zo opnieuw.'));
       return;
     }
     setSaving(true);
@@ -90,7 +99,7 @@ function NewCustomerInhoud() {
       setError(saveError);
       return;
     }
-    Dialog.alert('Klant opgeslagen', `${name.trim()} is toegevoegd.`);
+    Dialog.alert(tx('Klant opgeslagen'), tx('{naam} is toegevoegd.', { naam: name.trim() }));
     terugOfNaar(router, '/customers');
   };
 
@@ -99,7 +108,7 @@ function NewCustomerInhoud() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppTopBar variant="detail" title="Nieuwe klant" onBack={() => terugOfNaar(router, '/customers')} />
+        <AppTopBar variant="detail" title={tx('Nieuwe klant')} onBack={() => terugOfNaar(router, '/customers')} />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -110,24 +119,24 @@ function NewCustomerInhoud() {
             showsVerticalScrollIndicator={false}
           >
             <FormField
-              label="Naam *"
+              label={tx('Naam *')}
               value={name}
               onChangeText={setName}
-              placeholder="Bedrijfs- of klantnaam"
+              placeholder={tx('Bedrijfs- of klantnaam')}
               autoCapitalize="words"
               returnKeyType="next"
             />
             <FormField
-              label="E-mail"
+              label={tx('E-mail')}
               value={email}
               onChangeText={setEmail}
-              placeholder="naam@bedrijf.nl"
+              placeholder={tx('naam@bedrijf.nl')}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
             <FormField
-              label="Telefoon"
+              label={tx('Telefoon')}
               value={phone}
               onChangeText={setPhone}
               placeholder="06 12 34 56 78"
@@ -141,15 +150,15 @@ function NewCustomerInhoud() {
               }}
             />
             <FormField
-              label="Adres"
+              label={tx('Adres')}
               value={address}
               onChangeText={setAddress}
-              placeholder="Straat en huisnummer"
+              placeholder={tx('Straat en huisnummer')}
             />
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Postcode"
+                  label={tx('Postcode')}
                   value={postcode}
                   onChangeText={setPostcode}
                   placeholder="1234 AB"
@@ -157,21 +166,21 @@ function NewCustomerInhoud() {
                 />
               </View>
               <View style={{ flex: 2 }}>
-                <FormField label="Plaats" value={city} onChangeText={setCity} placeholder="Plaats" />
+                <FormField label={tx('Plaats')} value={city} onChangeText={setCity} placeholder={tx('Plaats')} />
               </View>
             </View>
             <FormField
-              label="KvK-nummer"
+              label={tx('KvK-nummer')}
               value={kvk}
               onChangeText={setKvk}
-              placeholder="Optioneel"
+              placeholder={tx('Optioneel')}
               keyboardType="number-pad"
             />
             <FormField
-              label="Btw-nummer"
+              label={tx('Btw-nummer')}
               value={btw}
               onChangeText={setBtw}
-              placeholder="Optioneel, bijv. NL123456789B01"
+              placeholder={tx('Optioneel, bijv. NL123456789B01')}
               autoCapitalize="characters"
               autoCorrect={false}
             />
@@ -179,35 +188,35 @@ function NewCustomerInhoud() {
               label="IBAN"
               value={iban}
               onChangeText={setIban}
-              placeholder="Optioneel"
+              placeholder={tx('Optioneel')}
               autoCapitalize="characters"
               autoCorrect={false}
             />
             <SelectField
-              label="Type"
+              label={tx('Type')}
               value={klantType}
-              options={KLANT_TYPES.map((k) => ({ id: k, label: k }))}
+              options={KLANT_TYPES.map((k) => ({ id: k, label: tx(KLANT_TYPE_LABELS[k] ?? k) }))}
               onChange={setKlantType}
               allowEmpty
-              emptyLabel="Geen type"
+              emptyLabel={tx('Geen type')}
             />
             <FormField
-              label="Bron"
+              label={tx('Bron')}
               value={bron}
               onChangeText={setBron}
-              placeholder="Website, aanbeveling, …"
+              placeholder={tx('Website, aanbeveling, …')}
             />
             <FormField
-              label="Notities"
+              label={tx('Notities')}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Optioneel"
+              placeholder={tx('Optioneel')}
               multiline
             />
 
           </ScrollView>
           <FormFooter
-            label="Klant opslaan"
+            label={tx('Klant opslaan')}
             onPress={onSubmit}
             loading={saving}
             error={error}

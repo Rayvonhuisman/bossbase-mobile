@@ -47,6 +47,7 @@ import {
   type OpslagStand,
 } from '@/services/bestandenService';
 import { type ThemeColors } from '@/theme';
+import { tx, txn, locale } from '@/i18n';
 
 /**
  * Bestanden: het blok op de klantkaart en de projectkaart, zoals in het
@@ -63,15 +64,15 @@ import { type ThemeColors } from '@/theme';
 
 const ZICHTBAAR = 8;
 
-type Doel = { sleutel: string; label: string; klantId?: string; projectId?: string };
+type Doel = { sleutel: string; label: string; klantId?: string; projectId?: string; projectNaam?: string };
 type Regel = { sleutel: string; bestand: KandidaatBestand; naam: string; omschrijving: string };
 
 const fmtDatum = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  d ? new Date(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 const fmtGrootte = (n: number | null) => {
   if (!n) return '';
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} kB`;
-  return `${(n / 1024 / 1024).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} MB`;
+  return `${(n / 1024 / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} MB`;
 };
 let teller = 0;
 const nieuweSleutel = () => `r${Date.now()}-${teller++}`;
@@ -114,7 +115,7 @@ export function BestandenBlok({
       setFout(null);
     } catch (e) {
       if (__DEV__) console.warn('[bestanden] laden mislukt', e);
-      setFout('De bestanden konden niet worden geladen.');
+      setFout(tx('De bestanden konden niet worden geladen.'));
     } finally {
       setLaden(false);
     }
@@ -133,7 +134,7 @@ export function BestandenBlok({
       .then((l) => actief && (setBestanden(l), setFout(null)))
       .catch((e) => {
         if (__DEV__) console.warn('[bestanden] laden mislukt', e);
-        if (actief) setFout('De bestanden konden niet worden geladen.');
+        if (actief) setFout(tx('De bestanden konden niet worden geladen.'));
       })
       .finally(() => actief && setLaden(false));
     getOpslagStand()
@@ -150,11 +151,14 @@ export function BestandenBlok({
   useEffect(() => {
     let actief = true;
     const kandidaten: Doel[] = projectId
-      ? [{ sleutel: `p:${projectId}`, label: 'Dit project', projectId }]
+      ? [{ sleutel: `p:${projectId}`, label: tx('Dit project'), projectId }]
       : klantId
         ? [
-            { sleutel: `k:${klantId}`, label: 'De klant zelf', klantId },
-            ...projecten.map((p) => ({ sleutel: `p:${p.id}`, label: `Project: ${p.name || 'Project'}`, projectId: p.id })),
+            { sleutel: `k:${klantId}`, label: tx('De klant zelf'), klantId },
+            ...projecten.map((p) => {
+              const projectNaam = p.name || tx('Project');
+              return { sleutel: `p:${p.id}`, label: tx('Project: {naam}', { naam: projectNaam }), projectId: p.id, projectNaam };
+            }),
           ]
         : [];
     Promise.all(kandidaten.map((d) => magBestandenToevoegen(d))).then((mag) => {
@@ -178,7 +182,7 @@ export function BestandenBlok({
       else goed.push(b);
     }
     if (goed.length > BESTAND_MAX_PER_KEER) {
-      toon(`Maximaal ${BESTAND_MAX_PER_KEER} bestanden tegelijk. De eerste ${BESTAND_MAX_PER_KEER} staan klaar.`, 'waarschuwing');
+      toon(tx('Maximaal {n} bestanden tegelijk. De eerste {n} staan klaar.', { n: BESTAND_MAX_PER_KEER }), 'waarschuwing');
     }
     if (!goed.length) return;
     setUploadFout(null);
@@ -204,10 +208,10 @@ export function BestandenBlok({
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!vraag.granted) {
           Dialog.alert(
-            'Geen toestemming',
+            tx('Geen toestemming'),
             bron === 'camera'
-              ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-              : "Geef BossBase toegang tot je foto's om er een te kiezen.",
+              ? tx('Geef BossBase toegang tot de camera om een foto te maken.')
+              : tx("Geef BossBase toegang tot je foto's om er een te kiezen."),
           );
           return;
         }
@@ -241,7 +245,7 @@ export function BestandenBlok({
       }
       klaarzetten(gekozen);
     } catch {
-      Dialog.alert('Foto niet gelezen', 'Er ging iets mis bij het kiezen van de foto.');
+      Dialog.alert(tx('Foto niet gelezen'), tx('Er ging iets mis bij het kiezen van de foto.'));
     }
   };
 
@@ -263,7 +267,7 @@ export function BestandenBlok({
     // Vol? Dan meteen zeggen, voordat iemand iets kiest of namen invult.
     const stand = await laadOpslag();
     if (stand?.vol) {
-      Dialog.alert('Opslag vol', OPSLAG_VOL_TEKST);
+      Dialog.alert(tx('Opslag vol'), tx(OPSLAG_VOL_TEKST));
       return;
     }
     setBronKiezen(true);
@@ -297,7 +301,7 @@ export function BestandenBlok({
           omschrijving: r.omschrijving,
         });
       } catch {
-        res = { ok: false as const, soort: 'onbekend' as const, melding: `${r.bestand.naam}: het bestand kon niet worden gelezen.` };
+        res = { ok: false as const, soort: 'onbekend' as const, melding: tx('{naam}: het bestand kon niet worden gelezen.', { naam: r.bestand.naam }) };
       }
       if (res.ok) gelukt++;
       else {
@@ -309,14 +313,14 @@ export function BestandenBlok({
     }
     setBezig(null);
     if (gelukt) {
-      toon(gelukt === 1 ? 'Bestand toegevoegd' : `${gelukt} bestanden toegevoegd`, 'succes');
+      toon(txn('Bestand toegevoegd', '{n} bestanden toegevoegd', gelukt), 'succes');
       laad();
       laadOpslag();
     }
     // Wat mislukte blijft staan, zodat je het opnieuw kunt proberen.
     if (mislukt.length) {
       setRegels(mislukt);
-      setUploadFout(vol ? OPSLAG_VOL_TEKST : melding);
+      setUploadFout(vol ? tx(OPSLAG_VOL_TEKST) : melding);
     } else setRegels(null);
   };
 
@@ -331,7 +335,7 @@ export function BestandenBlok({
       setBewerkFout(res.melding);
       return;
     }
-    toon('Opgeslagen', 'succes');
+    toon(tx('Opgeslagen'), 'succes');
     setBewerk(null);
     laad();
   };
@@ -345,7 +349,7 @@ export function BestandenBlok({
       }
       setBestanden((l) => l.filter((x) => x.sleutel !== b.sleutel));
       setBewerk(null);
-      toon('Bestand verwijderd', 'succes');
+      toon(tx('Bestand verwijderd'), 'succes');
       laadOpslag();
     });
   };
@@ -370,7 +374,7 @@ export function BestandenBlok({
   const getoond = allesTonen ? gefilterd : gefilterd.slice(0, ZICHTBAAR);
   const chips = useMemo(
     () => [
-      { id: 'alle' as const, label: 'Alles' },
+      { id: 'alle' as const, label: tx('Alles') },
       ...BESTAND_SOORTEN.filter((s) => aantalPerSoort[s.id]).map((s) => ({ ...s, count: aantalPerSoort[s.id] })),
     ],
     [aantalPerSoort],
@@ -388,8 +392,8 @@ export function BestandenBlok({
       {magToevoegen && opslag && (opslag.vol || (opslag.max && opslag.deel >= OPSLAG_WAARSCHUWING)) ? (
         <Text style={[styles.opslag, { color: opslag.vol ? t.statusRejectFg : t.statusWarnFg }]}>
           {opslag.vol
-            ? `Je opslag is vol (${fmtOpslag(opslag.gebruikt)} van ${fmtOpslag(opslag.max ?? 0)}). Nieuwe bestanden toevoegen lukt pas weer met meer ruimte: verwijder bestanden of kies een groter pakket.`
-            : `Je gebruikt ${Math.round(opslag.deel * 100)}% van je opslag (${fmtOpslag(opslag.gebruikt)} van ${fmtOpslag(opslag.max ?? 0)}).`}
+            ? tx('Je opslag is vol ({gebruikt} van {max}). Nieuwe bestanden toevoegen lukt pas weer met meer ruimte: verwijder bestanden of kies een groter pakket.', { gebruikt: fmtOpslag(opslag.gebruikt), max: fmtOpslag(opslag.max ?? 0) })
+            : tx('Je gebruikt {pct}% van je opslag ({gebruikt} van {max}).', { pct: Math.round(opslag.deel * 100), gebruikt: fmtOpslag(opslag.gebruikt), max: fmtOpslag(opslag.max ?? 0) })}
         </Text>
       ) : null}
 
@@ -401,7 +405,7 @@ export function BestandenBlok({
               setZoek(v);
               setAllesTonen(false);
             }}
-            placeholder="Zoek op naam, omschrijving of project"
+            placeholder={tx('Zoek op naam, omschrijving of project')}
           />
           {chips.length > 2 ? (
             <View style={styles.chips}>
@@ -419,12 +423,12 @@ export function BestandenBlok({
       ) : null}
 
       {laden ? (
-        <Text style={styles.klein}>Laden…</Text>
+        <Text style={styles.klein}>{tx('Laden…')}</Text>
       ) : fout ? (
         <View style={styles.foutRij}>
           <Text style={styles.klein}>{fout}</Text>
           <KleineKnop
-            label="Opnieuw proberen"
+            label={tx('Opnieuw proberen')}
             onPress={() => {
               setLaden(true);
               laad();
@@ -435,12 +439,12 @@ export function BestandenBlok({
         <KaartLeeg
           tekst={
             magToevoegen
-              ? 'Nog geen bestanden. Voeg een foto, tekening, contract of garantiebewijs toe met de plus.'
-              : 'Nog geen bestanden.'
+              ? tx('Nog geen bestanden. Voeg een foto, tekening, contract of garantiebewijs toe met de plus.')
+              : tx('Nog geen bestanden.')
           }
         />
       ) : gefilterd.length === 0 ? (
-        <Text style={styles.klein}>Geen bestanden gevonden.</Text>
+        <Text style={styles.klein}>{tx('Geen bestanden gevonden.')}</Text>
       ) : (
         <View>
           {getoond.map((b, i) => (
@@ -466,7 +470,7 @@ export function BestandenBlok({
                       setBewerk({ bestand: b, naam: b.naam, omschrijving: b.omschrijving });
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`${b.naam} wijzigen`}
+                    accessibilityLabel={tx('{naam} wijzigen', { naam: b.naam })}
                     hitSlop={8}
                     style={({ pressed }) => [styles.rijKnop, pressed && { opacity: 0.6 }]}
                   >
@@ -478,7 +482,7 @@ export function BestandenBlok({
           ))}
           {gefilterd.length > ZICHTBAAR ? (
             <Pressable onPress={() => setAllesTonen((v) => !v)} accessibilityRole="button" hitSlop={6} style={styles.meer}>
-              <Text style={styles.meerTekst}>{allesTonen ? 'Minder tonen' : `Alle ${gefilterd.length} tonen`}</Text>
+              <Text style={styles.meerTekst}>{allesTonen ? tx('Minder tonen') : tx('Alle {n} tonen', { n: gefilterd.length })}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -490,28 +494,28 @@ export function BestandenBlok({
     <>
       {klantId && !projectId ? (
         <KaartBlok
-          titel="Bestanden"
+          titel={tx('Bestanden')}
           aantal={bestanden.length}
           onToevoegen={magToevoegen ? toevoegen : undefined}
-          toevoegLabel="Bestand toevoegen"
+          toevoegLabel={tx('Bestand toevoegen')}
         >
           {inhoud}
         </KaartBlok>
       ) : (
-        <Blok titel="Bestanden" actie={magToevoegen ? <KleineKnop label="Bestand" icon="plus" onPress={toevoegen} /> : undefined}>
+        <Blok titel={tx('Bestanden')} actie={magToevoegen ? <KleineKnop label={tx('Bestand')} icon="plus" onPress={toevoegen} /> : undefined}>
           {inhoud}
         </Blok>
       )}
 
       {/* Waar komt het bestand vandaan? Drie bronnen, ook op Android (een
           systeemdialoog daar heeft maximaal drie knoppen, inclusief Annuleren). */}
-      <Paneel open={bronKiezen} titel="Bestand toevoegen" subtitel={BESTAND_TYPES_UITLEG} onSluit={() => setBronKiezen(false)}>
+      <Paneel open={bronKiezen} titel={tx('Bestand toevoegen')} subtitel={tx(BESTAND_TYPES_UITLEG)} onSluit={() => setBronKiezen(false)}>
         <View style={styles.bronnen}>
           {(
             [
-              { id: 'camera', label: 'Camera', sub: 'Maak een foto', Icoon: Camera },
-              { id: 'bibliotheek', label: 'Fotobibliotheek', sub: "Kies een of meer foto's", Icoon: Images },
-              { id: 'bestanden', label: 'Bestanden', sub: 'PDF, Word, Excel, tekening …', Icoon: FolderOpen },
+              { id: 'camera', label: tx('Camera'), sub: tx('Maak een foto'), Icoon: Camera },
+              { id: 'bibliotheek', label: tx('Fotobibliotheek'), sub: tx("Kies een of meer foto's"), Icoon: Images },
+              { id: 'bestanden', label: tx('Bestanden'), sub: tx('PDF, Word, Excel, tekening …'), Icoon: FolderOpen },
             ] as const
           ).map(({ id, label, sub, Icoon }) => (
             <Pressable
@@ -535,18 +539,18 @@ export function BestandenBlok({
 
       <FormSheet
         visible={regels !== null}
-        title={regels && regels.length > 1 ? `${regels.length} bestanden toevoegen` : 'Bestand toevoegen'}
-        subtitle={BESTAND_TYPES_UITLEG}
+        title={regels && regels.length > 1 ? tx('{n} bestanden toevoegen', { n: regels.length }) : tx('Bestand toevoegen')}
+        subtitle={tx(BESTAND_TYPES_UITLEG)}
         error={uploadFout}
         saving={!!bezig}
-        submitLabel={bezig ? `Uploaden… ${bezig.klaar} van ${bezig.totaal}` : 'Toevoegen'}
+        submitLabel={bezig ? tx('Uploaden… {klaar} van {totaal}', { klaar: bezig.klaar, totaal: bezig.totaal }) : tx('Toevoegen')}
         submitDisabled={!regels?.length || !doel || regels.some((r) => !r.naam.trim())}
         onSubmit={uploaden}
         onClose={() => setRegels(null)}
       >
         {doelen.length > 1 ? (
           <SelectField
-            label="Hoort bij"
+            label={tx('Hoort bij')}
             value={doel}
             options={doelen.map((d) => ({ id: d.sleutel, label: d.label }))}
             onChange={(id) => setDoel(id)}
@@ -555,7 +559,7 @@ export function BestandenBlok({
         ) : doelen.length === 1 && !projectId && doelen[0]?.projectId ? (
           // Op de klantkaart mag niet iedereen bij de klant zelf uploaden; staat
           // er maar één keuze over, zeg dan waar het bestand terechtkomt.
-          <Text style={styles.klein}>Hoort bij {doelen[0]?.label.replace(/^Project: /, 'het project ')}</Text>
+          <Text style={styles.klein}>{tx('Hoort bij het project {naam}', { naam: doelen[0]?.projectNaam ?? '' })}</Text>
         ) : null}
         {regels?.map((r) => (
           <View key={r.sleutel} style={styles.regel}>
@@ -567,7 +571,7 @@ export function BestandenBlok({
                 <Pressable
                   onPress={() => setRegels((rs) => rs?.filter((x) => x.sleutel !== r.sleutel) ?? null)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${r.bestand.naam} niet toevoegen`}
+                  accessibilityLabel={tx('{naam} niet toevoegen', { naam: r.bestand.naam })}
                   hitSlop={8}
                 >
                   <Trash2 size={16} color={t.statusRejectFg} />
@@ -575,17 +579,17 @@ export function BestandenBlok({
               ) : null}
             </View>
             <FormField
-              label="Naam"
+              label={tx('Naam')}
               value={r.naam}
               maxLength={200}
               onChangeText={(v) => zetRegel(r.sleutel, 'naam', v)}
               editable={!bezig}
             />
             <FormField
-              label="Omschrijving"
+              label={tx('Omschrijving')}
               value={r.omschrijving}
               maxLength={2000}
-              placeholder="bijv. garantie tot 2031, getekend contract"
+              placeholder={tx('bijv. garantie tot 2031, getekend contract')}
               onChangeText={(v) => zetRegel(r.sleutel, 'omschrijving', v)}
               editable={!bezig}
             />
@@ -596,25 +600,25 @@ export function BestandenBlok({
 
       <FormSheet
         visible={bewerk !== null}
-        title="Bestand wijzigen"
+        title={tx('Bestand wijzigen')}
         subtitle={bewerk?.bestand.naam}
         error={bewerkFout}
         saving={bewerkBezig}
         submitDisabled={!bewerk?.naam.trim()}
         onSubmit={opslaan}
         onClose={() => setBewerk(null)}
-        destructive={bewerk ? { label: 'Verwijderen', onPress: () => verwijder(bewerk.bestand) } : undefined}
+        destructive={bewerk ? { label: tx('Verwijderen'), onPress: () => verwijder(bewerk.bestand) } : undefined}
       >
         {bewerk ? (
           <>
             <FormField
-              label="Naam"
+              label={tx('Naam')}
               value={bewerk.naam}
               maxLength={200}
               onChangeText={(v) => setBewerk({ ...bewerk, naam: v })}
             />
             <FormField
-              label="Omschrijving"
+              label={tx('Omschrijving')}
               value={bewerk.omschrijving}
               maxLength={2000}
               multiline

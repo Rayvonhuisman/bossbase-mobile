@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { haalInStukken } from '@/lib/inStukken';
 import { naarInkoop, naarKostBron, type Inkoop, type KostBron } from '@/lib/werkbonKosten';
+import { tx } from '@/i18n';
 
 /**
  * Kosten op een werkbon — getWerkbonKostenBron (kostenOverzichtService.js)
@@ -51,7 +52,7 @@ export async function createWerkbonInkoop(
   input: InkoopInvoer,
 ): Promise<{ data: Inkoop | null; error: string | null }> {
   const naam = (input.naam || '').trim();
-  if (!naam) return { data: null, error: 'Omschrijving is verplicht' };
+  if (!naam) return { data: null, error: tx('Omschrijving is verplicht') };
   const { data, error } = await supabase
     .from('project_kosten')
     .insert({
@@ -93,13 +94,13 @@ export async function updateInkoop(
 export async function deleteInkoop(id: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase.from('project_kosten').delete().eq('id', id).select('id');
   if (error) return { error: foutTekst(error.message) };
-  if (!((data as { id: string }[]) ?? []).length) return { error: 'Niet verwijderd — je hebt hier geen rechten voor.' };
+  if (!((data as { id: string }[]) ?? []).length) return { error: tx('Niet verwijderd — je hebt hier geen rechten voor.') };
   return { error: null };
 }
 
 function foutTekst(m?: string | null): string {
-  if (!m) return 'Niet opgeslagen — je hebt hier geen rechten voor.';
-  if (/row-level security|permission denied/i.test(m)) return 'Je hebt geen rechten voor deze actie.';
-  if (/schema cache|does not exist/i.test(m)) return 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.';
-  return 'Opslaan mislukt. Probeer het opnieuw.';
+  if (!m) return tx('Niet opgeslagen — je hebt hier geen rechten voor.');
+  if (/row-level security|permission denied/i.test(m)) return tx('Je hebt geen rechten voor deze actie.');
+  if (/schema cache|does not exist/i.test(m)) return tx('Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.');
+  return tx('Opslaan mislukt. Probeer het opnieuw.');
 }

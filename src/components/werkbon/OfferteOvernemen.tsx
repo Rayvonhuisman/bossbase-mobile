@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { FormSheet } from '@/components/FormSheet';
+import { tx, txn } from '@/i18n';
 import { useTheme } from '@/providers';
 import { offerteLabel, type OfferteBron } from '@/lib/werkbonUitOfferte';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
@@ -61,11 +62,11 @@ export function OfferteOvernemen({
   return (
     <FormSheet
       visible
-      title="Overnemen uit offerte"
-      subtitle="Kies welke offerteregels een taak op deze werkbon worden."
+      title={tx('Overnemen uit offerte')}
+      subtitle={tx('Kies welke offerteregels een taak op deze werkbon worden.')}
       error={fout}
       saving={bezig}
-      submitLabel={nieuw.length ? `${nieuw.length === 1 ? '1 taak' : `${nieuw.length} taken`} overnemen` : 'Niets gekozen'}
+      submitLabel={nieuw.length ? txn('{n} taak overnemen', '{n} taken overnemen', nieuw.length) : tx('Niets gekozen')}
       submitDisabled={bezig || !nieuw.length}
       onSubmit={overnemen}
       onClose={onSluit}
@@ -96,7 +97,7 @@ export function OfferteOvernemen({
       ) : null}
 
       {offerte && offerte.taken.length === 0 ? (
-        <Text style={styles.hint}>Deze offerte heeft geen regels die een taak kunnen worden.</Text>
+        <Text style={styles.hint}>{tx('Deze offerte heeft geen regels die een taak kunnen worden.')}</Text>
       ) : null}
 
       {offerte && offerte.taken.length > 0 ? (
@@ -120,8 +121,8 @@ export function OfferteOvernemen({
                 </View>
                 <Text style={styles.rijTekst}>
                   {x.omschrijving}
-                  {x.alAanwezig ? <Text style={styles.hint}> · staat er al</Text> : null}
-                  {!x.alAanwezig && x.soort === 'uren' ? <Text style={styles.hint}> · arbeid</Text> : null}
+                  {x.alAanwezig ? <Text style={styles.hint}> · {tx('staat er al')}</Text> : null}
+                  {!x.alAanwezig && x.soort === 'uren' ? <Text style={styles.hint}> · {tx('arbeid')}</Text> : null}
                 </Text>
               </Pressable>
             );
@@ -131,9 +132,11 @@ export function OfferteOvernemen({
 
       {offerte && offerte.materialen.length > 0 ? (
         <Text style={styles.hint}>
-          {offerte.materialen.length === 1 ? '1 materiaal' : `${offerte.materialen.length} materialen`} uit deze
-          offerte {offerte.materialen.length === 1 ? 'staat' : 'staan'} klaar bij Materialen. Voeg ze daar toe als ze
-          gebruikt zijn: materiaal op de werkbon telt meteen als werkelijke kosten.
+          {txn(
+            '{n} materiaal uit deze offerte staat klaar bij Materialen. Voeg het daar toe als het gebruikt is: materiaal op de werkbon telt meteen als werkelijke kosten.',
+            '{n} materialen uit deze offerte staan klaar bij Materialen. Voeg ze daar toe als ze gebruikt zijn: materiaal op de werkbon telt meteen als werkelijke kosten.',
+            offerte.materialen.length,
+          )}
         </Text>
       ) : null}
     </FormSheet>

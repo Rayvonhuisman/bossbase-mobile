@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { tx } from '@/i18n';
 import { esc, mailButton, mailTemplate } from './mail/mailTemplate';
 
 /**
@@ -40,7 +41,7 @@ type Bijlage = { filename: string; content: string };
 
 /** De echte melding staat in de response body, niet in error.message. */
 async function functieFout(error: { message?: string; context?: unknown }): Promise<string> {
-  let melding = error.message || 'Er ging iets mis';
+  let melding = error.message || tx('Er ging iets mis');
   try {
     const b = await (error.context as { json?: () => Promise<{ error?: string }> } | undefined)?.json?.();
     if (b?.error) melding = b.error;
@@ -85,7 +86,7 @@ export async function verstuurMail(
   const { data, error } = await client.functions.invoke('send-email', { body });
   if (error) throw new VersturenFout(await functieFout(error));
   if (!(data as { success?: boolean } | null)?.success) {
-    throw new VersturenFout((data as { error?: string } | null)?.error || 'Versturen mislukt');
+    throw new VersturenFout((data as { error?: string } | null)?.error || tx('Versturen mislukt'));
   }
 }
 
@@ -134,7 +135,7 @@ export async function signWerkbon(
   const { data, error } = await client.functions.invoke('sign-werkbon', { body });
   if (error) throw new VersturenFout(await functieFout(error));
   const d = data as (SignResultaat & { error?: string }) | { success?: false; error?: string } | null;
-  if (!d?.success) throw new VersturenFout(d?.error || 'Ondertekenen mislukt');
+  if (!d?.success) throw new VersturenFout(d?.error || tx('Ondertekenen mislukt'));
   return d as SignResultaat;
 }
 
@@ -142,8 +143,8 @@ export async function signWerkbon(
 export function signMelding(res: Pick<SignResultaat, 'warnings'> | null | undefined): { ok: boolean; tekst: string } {
   const w = Array.isArray(res?.warnings) ? res!.warnings! : [];
   return w.length
-    ? { ok: false, tekst: `Ondertekend en afgerond, maar: ${w.join(' · ')}` }
-    : { ok: true, tekst: 'Ondertekend en afgerond. De klant heeft de bon per mail gekregen.' };
+    ? { ok: false, tekst: tx('Ondertekend en afgerond, maar: {waarschuwingen}', { waarschuwingen: w.join(' · ') }) }
+    : { ok: true, tekst: tx('Ondertekend en afgerond. De klant heeft de bon per mail gekregen.') };
 }
 
 // ── Per mail ter ondertekening ────────────────────────────────────────────
@@ -202,11 +203,11 @@ export async function verstuurTerOndertekening(
   },
 ): Promise<{ email: string; link: string }> {
   const adres = String(email || '').trim();
-  if (!adres) throw new VersturenFout('Vul een e-mailadres in');
-  if (!EMAIL_RE.test(adres)) throw new VersturenFout('Dat is geen geldig e-mailadres');
+  if (!adres) throw new VersturenFout(tx('Vul een e-mailadres in'));
+  if (!EMAIL_RE.test(adres)) throw new VersturenFout(tx('Dat is geen geldig e-mailadres'));
   const link = werkbonSignUrl(werkbon.sign_token);
   if (!link) {
-    throw new VersturenFout('Deze werkbon heeft nog geen ondertekenlink. Herlaad de pagina en probeer het opnieuw.');
+    throw new VersturenFout(tx('Deze werkbon heeft nog geen ondertekenlink. Herlaad de pagina en probeer het opnieuw.'));
   }
 
   let bijlage: Bijlage | null = null;
@@ -324,11 +325,11 @@ export async function verstuurWaarschuwing<T>(
   },
 ): Promise<{ email: string; notitie: T }> {
   const adres = String(email || '').trim();
-  if (!adres) throw new VersturenFout('Vul een e-mailadres in');
-  if (!EMAIL_RE.test(adres)) throw new VersturenFout('Dat is geen geldig e-mailadres');
+  if (!adres) throw new VersturenFout(tx('Vul een e-mailadres in'));
+  if (!EMAIL_RE.test(adres)) throw new VersturenFout(tx('Dat is geen geldig e-mailadres'));
   const wat = String(constatering || '').trim();
   const gev = String(gevolg || '').trim();
-  if (!wat) throw new VersturenFout('Beschrijf wat je hebt geconstateerd');
+  if (!wat) throw new VersturenFout(tx('Beschrijf wat je hebt geconstateerd'));
 
   const { onderwerp, html } = waarschuwingMail({ werkbon, constatering: wat, gevolg: gev, customer, company });
   await verstuurMail(client, companyId, { to: adres, subject: onderwerp, html, werkbonId: werkbon.id });
@@ -356,7 +357,7 @@ export async function verstuurWaarschuwing<T>(
     .select(kolommen)
     .single();
   if (error || !data) {
-    throw new VersturenFout('De mail is verstuurd, maar het vastleggen lukte niet. Probeer het opnieuw of meld het.');
+    throw new VersturenFout(tx('De mail is verstuurd, maar het vastleggen lukte niet. Probeer het opnieuw of meld het.'));
   }
   return { email: adres, notitie: data as T };
 }

@@ -6,6 +6,7 @@ import { vraagWachtwoordResetAan } from '@/services/wachtwoordService';
 import { useAuth, useOnboarding, useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { leesbreedte } from '@/lib/schermklasseRegels';
+import { tx } from '@/i18n';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -25,7 +26,7 @@ export default function LoginScreen() {
     setErrorMessage(null);
     const adres = email.trim();
     if (!/^\S+@\S+\.\S+$/.test(adres)) {
-      setErrorMessage('Vul een geldig e-mailadres in.');
+      setErrorMessage(tx('Vul een geldig e-mailadres in.'));
       return;
     }
     setResetBezig(true);
@@ -45,7 +46,7 @@ export default function LoginScreen() {
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      setErrorMessage('Vul je e-mail en wachtwoord in.');
+      setErrorMessage(tx('Vul je e-mail en wachtwoord in.'));
       return;
     }
 
@@ -65,25 +66,25 @@ export default function LoginScreen() {
         <AnimatedScreen style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>
-              {vergeten === 'sent' ? 'Check je e-mail' : vergeten ? 'Wachtwoord vergeten' : 'BossBase'}
+              {vergeten === 'sent' ? tx('Check je e-mail') : vergeten ? tx('Wachtwoord vergeten') : 'BossBase'}
             </Text>
             <Text style={styles.subtitle}>
               {vergeten === 'sent'
-                ? `Als ${email.trim()} bij ons bekend is, hebben we daar een resetlink naartoe gestuurd. Open de link in de mail om je wachtwoord opnieuw in te stellen, en log daarna hier in.`
+                ? tx('Als {email} bij ons bekend is, hebben we daar een resetlink naartoe gestuurd. Open de link in de mail om je wachtwoord opnieuw in te stellen, en log daarna hier in.', { email: email.trim() })
                 : vergeten
-                  ? 'Vul je e-mailadres in en we sturen je een resetlink.'
-                  : 'Log in om verder te gaan'}
+                  ? tx('Vul je e-mailadres in en we sturen je een resetlink.')
+                  : tx('Log in om verder te gaan')}
             </Text>
           </View>
 
           {vergeten === 'sent' ? (
             <View style={styles.form}>
-              <Button label="Terug naar inloggen" onPress={terugNaarInloggen} />
+              <Button label={tx('Terug naar inloggen')} onPress={terugNaarInloggen} />
             </View>
           ) : vergeten === 'form' ? (
             <View style={styles.form}>
               <View>
-                <Text style={styles.label}>E-mail</Text>
+                <Text style={styles.label}>{tx('E-mail')}</Text>
                 <TextInput
                   style={styles.input}
                   value={email}
@@ -95,7 +96,7 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   autoComplete="email"
                   keyboardType="email-address"
-                  placeholder="jij@bedrijf.nl"
+                  placeholder={tx('jij@bedrijf.nl')}
                   placeholderTextColor={t.muted2}
                   editable={!resetBezig}
                   autoFocus
@@ -105,18 +106,18 @@ export default function LoginScreen() {
               </View>
               {errorMessage ? (
                 <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{errorMessage}</Text>
+                  <Text style={styles.errorText}>{tx(errorMessage)}</Text>
                 </View>
               ) : null}
-              <Button label="Stuur resetlink" onPress={stuurReset} loading={resetBezig} />
+              <Button label={tx('Stuur resetlink')} onPress={stuurReset} loading={resetBezig} />
               <Pressable onPress={terugNaarInloggen} accessibilityRole="button" hitSlop={8} style={styles.terug}>
-                <Text style={styles.vergetenTekst}>Terug naar inloggen</Text>
+                <Text style={styles.vergetenTekst}>{tx('Terug naar inloggen')}</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.form}>
               <View>
-                <Text style={styles.label}>E-mail</Text>
+                <Text style={styles.label}>{tx('E-mail')}</Text>
                 <TextInput
                   style={styles.input}
                   value={email}
@@ -128,7 +129,7 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   autoComplete="email"
                   keyboardType="email-address"
-                  placeholder="jij@bedrijf.nl"
+                  placeholder={tx('jij@bedrijf.nl')}
                   placeholderTextColor={t.muted2}
                   editable={!loading}
                   returnKeyType="next"
@@ -136,7 +137,7 @@ export default function LoginScreen() {
               </View>
 
               <View>
-                <Text style={styles.label}>Wachtwoord</Text>
+                <Text style={styles.label}>{tx('Wachtwoord')}</Text>
                 <TextInput
                   style={styles.input}
                   value={password}
@@ -161,17 +162,17 @@ export default function LoginScreen() {
                   hitSlop={8}
                   style={styles.vergeten}
                 >
-                  <Text style={styles.vergetenTekst}>Wachtwoord vergeten?</Text>
+                  <Text style={styles.vergetenTekst}>{tx('Wachtwoord vergeten?')}</Text>
                 </Pressable>
               </View>
 
               {errorMessage ? (
                 <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{errorMessage}</Text>
+                  <Text style={styles.errorText}>{tx(errorMessage)}</Text>
                 </View>
               ) : null}
 
-              <Button label="Inloggen" onPress={onSubmit} loading={loading} />
+              <Button label={tx('Inloggen')} onPress={onSubmit} loading={loading} />
             </View>
           )}
 

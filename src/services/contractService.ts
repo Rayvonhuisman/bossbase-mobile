@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { describeError } from '@/lib/errors';
 import { metTijdslimiet } from '@/lib/queryTijdslimiet';
+import { tx, txn } from '@/i18n';
 
 /**
  * Onderhoudscontracten met SLA, de app-kant (09-11-2026). De app beheert geen
@@ -19,20 +20,20 @@ import { metTijdslimiet } from '@/lib/queryTijdslimiet';
 export type ContractStatus = 'concept' | 'ter_ondertekening' | 'actief' | 'opgezegd' | 'afgelopen';
 
 export const CONTRACT_STATUS_LABEL: Record<string, string> = {
-  concept: 'Concept',
-  ter_ondertekening: 'Ter ondertekening',
-  actief: 'Actief',
-  opgezegd: 'Opgezegd',
-  afgelopen: 'Afgelopen',
+  get concept() { return tx('Concept'); },
+  get ter_ondertekening() { return tx('Ter ondertekening'); },
+  get actief() { return tx('Actief'); },
+  get opgezegd() { return tx('Opgezegd'); },
+  get afgelopen() { return tx('Afgelopen'); },
 };
 
 export const FACTUUR_RITME_LABEL: Record<string, string> = {
-  maand: 'per maand',
-  kwartaal: 'per kwartaal',
-  halfjaar: 'per halfjaar',
-  jaar: 'per jaar',
+  get maand() { return tx('per maand'); },
+  get kwartaal() { return tx('per kwartaal'); },
+  get halfjaar() { return tx('per halfjaar'); },
+  get jaar() { return tx('per jaar'); },
   // Na elke afgeronde contractwerkbon een conceptfactuur (dashboard-migratie 20261113200000).
-  beurt: 'per beurt (na elke afgeronde beurt)',
+  get beurt() { return tx('per beurt (na elke afgeronde beurt)'); },
 };
 
 export type Installatie = {
@@ -283,7 +284,7 @@ export async function createInstallatie(
   invoer: InstallatieInvoer,
 ): Promise<{ data: Installatie | null; error: string | null }> {
   const soort = leegNaarNull(invoer.soort);
-  if (!soort) return { data: null, error: 'Vul in wat voor installatie het is (bijvoorbeeld cv-ketel).' };
+  if (!soort) return { data: null, error: tx('Vul in wat voor installatie het is (bijvoorbeeld cv-ketel).') };
   const { data, error } = await supabase
     .from('installaties')
     .insert({
@@ -298,14 +299,14 @@ export async function createInstallatie(
     .select(INSTALLATIE_KOLOMMEN);
   if (error) return { data: null, error: describeError(error, 'installaties.create') };
   const rij = (data as Installatie[] | null)?.[0];
-  if (!rij) return { data: null, error: 'De installatie is niet opgeslagen: je hebt daar geen rechten voor.' };
+  if (!rij) return { data: null, error: tx('De installatie is niet opgeslagen: je hebt daar geen rechten voor.') };
   return { data: rij, error: null };
 }
 
 /** "Cv-ketel · Remeha Calenta 25c" — soort, merk en type in één regel. */
 export function installatieNaam(i: Pick<Installatie, 'soort' | 'merk' | 'type'> | null | undefined): string {
   if (!i) return '';
-  const soort = i.soort ? i.soort.charAt(0).toUpperCase() + i.soort.slice(1) : 'Installatie';
+  const soort = i.soort ? i.soort.charAt(0).toUpperCase() + i.soort.slice(1) : tx('Installatie');
   const merkType = [i.merk, i.type].filter(Boolean).join(' ');
   return merkType ? `${soort} · ${merkType}` : soort;
 }
@@ -313,12 +314,8 @@ export function installatieNaam(i: Pick<Installatie, 'soort' | 'merk' | 'type'> 
 /** "elke 6 weken", "elk jaar", "elke 3 maanden". */
 export function intervalLabel(aantal: number | null | undefined, eenheid: string | null | undefined): string {
   if (!aantal || !eenheid) return '';
-  const enkel: Record<string, [string, string]> = {
-    week: ['elke week', 'weken'],
-    maand: ['elke maand', 'maanden'],
-    jaar: ['elk jaar', 'jaar'],
-  };
-  const w = enkel[eenheid];
-  if (!w) return '';
-  return aantal === 1 ? w[0] : `elke ${aantal} ${w[1]}`;
+  if (eenheid === 'week') return txn('elke week', 'elke {n} weken', aantal);
+  if (eenheid === 'maand') return txn('elke maand', 'elke {n} maanden', aantal);
+  if (eenheid === 'jaar') return txn('elk jaar', 'elke {n} jaar', aantal);
+  return '';
 }

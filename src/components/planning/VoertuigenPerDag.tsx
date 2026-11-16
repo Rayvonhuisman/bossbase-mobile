@@ -21,6 +21,7 @@ import {
   type WerkbonDag,
 } from '@/lib/werkbonLogica';
 import { ds, spacing, type ThemeColors } from '@/theme';
+import { tx, txn } from '@/i18n';
 
 /**
  * Voertuigen op een werkbon, per dag — WerkbonVoertuigenBlok van het
@@ -96,7 +97,7 @@ export function VoertuigenPerDag({
     standaard,
     ploegIds,
     voertuigen: gekozen,
-    naamVan: (id) => namen[id] || 'Medewerker',
+    naamVan: (id) => namen[id] || tx('Medewerker'),
   };
   const anderenVoorDubbel = useMemo(
     () => anderen.map((w) => ({ ...w, werkbon_dagen: w.dagen as unknown as WerkbonDag[] })),
@@ -162,12 +163,12 @@ export function VoertuigenPerDag({
 
   return (
     <View style={styles.blok}>
-      <Text style={styles.kop}>Voertuigen</Text>
+      <Text style={styles.kop}>{tx('Voertuigen')}</Text>
       {alle.length === 0 ? (
-        <Text style={styles.uitleg}>Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.</Text>
+        <Text style={styles.uitleg}>{tx('Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.')}</Text>
       ) : (
         <>
-          <Text style={styles.uitleg}>Meerdere mogelijk. Per voertuig kies je de dagen, de tijd en wie er meerijdt.</Text>
+          <Text style={styles.uitleg}>{tx('Meerdere mogelijk. Per voertuig kies je de dagen, de tijd en wie er meerijdt.')}</Text>
           <View style={styles.chipRij}>
             {alle.map((v) => {
               const aan = ids.includes(v.id);
@@ -184,7 +185,7 @@ export function VoertuigenPerDag({
                   <View style={[styles.dot, { backgroundColor: v.kleur || ds.green }]} />
                   <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>
                     {v.naam}
-                    {v.zitplaatsen ? ` · ${v.zitplaatsen} plek${v.zitplaatsen === 1 ? '' : 'ken'}` : ''}
+                    {v.zitplaatsen ? ` · ${txn('{n} plek', '{n} plekken', v.zitplaatsen)}` : ''}
                   </Text>
                 </Pressable>
               );
@@ -194,7 +195,7 @@ export function VoertuigenPerDag({
       )}
 
       {gekozen.length > 0 && datums.length === 0 ? (
-        <Text style={styles.uitleg}>Kies eerst de dagen hierboven; daarna plan je per dag een voertuig in.</Text>
+        <Text style={styles.uitleg}>{tx('Kies eerst de dagen hierboven; daarna plan je per dag een voertuig in.')}</Text>
       ) : null}
 
       {gekozen.map((v) => {
@@ -217,7 +218,7 @@ export function VoertuigenPerDag({
               vid: v.id,
               starttijd: vt.starttijd,
               eindtijd: vt.eindtijd,
-            }).map((c) => `Staat ook op ${c.titel} (${c.starttijd}–${c.eindtijd}).`),
+            }).map((c) => tx('Staat ook op {titel} ({start}–{eind}).', { titel: c.titel, start: c.starttijd, eind: c.eindtijd })),
           ];
           return eigen.map((tekst) => `${korteDatum(d)}: ${tekst}`);
         });
@@ -237,12 +238,12 @@ export function VoertuigenPerDag({
               </Text>
               <Text style={styles.kaartMeta} numberOfLines={1}>
                 {[
-                  v.zitplaatsen ? `${v.zitplaatsen} ${v.zitplaatsen === 1 ? 'plek' : 'plekken'}` : null,
+                  v.zitplaatsen ? txn('{n} plek', '{n} plekken', v.zitplaatsen) : null,
                   datums.length === 0
                     ? null
                     : dagenMee.length === datums.length
-                      ? 'alle dagen'
-                      : `${dagenMee.length} van ${datums.length} dagen`,
+                      ? tx('alle dagen')
+                      : txn('{mee} van {n} dag', '{mee} van {n} dagen', datums.length, { mee: dagenMee.length }),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -274,7 +275,7 @@ export function VoertuigenPerDag({
                           accessibilityRole="checkbox"
                           accessibilityState={{ checked: aan, disabled }}
                           aria-checked={aan}
-                          accessibilityLabel={`${v.naam} rijdt mee op ${korteDatum(d)}`}
+                          accessibilityLabel={tx('{voertuig} rijdt mee op {datum}', { voertuig: v.naam, datum: korteDatum(d) })}
                           style={[styles.chip, aan ? styles.chipAan : styles.chipUit]}
                         >
                           <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{korteDatum(d)}</Text>
@@ -289,7 +290,7 @@ export function VoertuigenPerDag({
                             </Text>
                           </>
                         ) : (
-                          <Text style={styles.uitleg}>rijdt niet mee</Text>
+                          <Text style={styles.uitleg}>{tx('rijdt niet mee')}</Text>
                         )}
                       </View>
 
@@ -301,7 +302,7 @@ export function VoertuigenPerDag({
                               disabled={disabled}
                               onPress={() => koppel(d, m.id, null)}
                               accessibilityRole="button"
-                              accessibilityLabel={`${m.naam} uit ${v.naam}`}
+                              accessibilityLabel={tx('{naam} uit {voertuig}', { naam: m.naam, voertuig: v.naam })}
                               style={[styles.chip, styles.chipAan]}
                             >
                               <Text style={[styles.chipTekst, { color: t.green700 }]}>{m.naam}</Text>
@@ -318,7 +319,7 @@ export function VoertuigenPerDag({
                             style={styles.link}
                           >
                             <UserPlus size={14} color={ds.green700} />
-                            <Text style={styles.linkTekst}>Wie rijdt mee</Text>
+                            <Text style={styles.linkTekst}>{tx('Wie rijdt mee')}</Text>
                           </Pressable>
                           <Pressable
                             disabled={disabled}
@@ -327,7 +328,7 @@ export function VoertuigenPerDag({
                             style={styles.link}
                           >
                             {eigenTijd ? <RotateCcw size={14} color={ds.green700} /> : <Clock size={14} color={ds.green700} />}
-                            <Text style={styles.linkTekst}>{eigenTijd ? 'Tijd van de dag' : 'Eigen tijd'}</Text>
+                            <Text style={styles.linkTekst}>{eigenTijd ? tx('Tijd van de dag') : tx('Eigen tijd')}</Text>
                           </Pressable>
                         </View>
                       ) : null}
@@ -335,19 +336,19 @@ export function VoertuigenPerDag({
                       {tijdHier ? (
                         <View style={styles.sub}>
                           <Text style={styles.subKop}>
-                            Eigen tijd voor {v.naam} · {korteDatum(d)}
+                            {tx('Eigen tijd voor {voertuig} · {datum}', { voertuig: v.naam, datum: korteDatum(d) })}
                           </Text>
                           <View style={styles.tijdRij}>
                             <View style={{ flex: 1 }}>
                               <TimeField
-                                label="Begin"
+                                label={tx('Begin')}
                                 value={p.voertuigTijden?.[d]?.[v.id]?.starttijd || null}
                                 onChange={(w) => zetTijd(d, v.id, { starttijd: w })}
                               />
                             </View>
                             <View style={{ flex: 1 }}>
                               <TimeField
-                                label="Eind"
+                                label={tx('Eind')}
                                 value={p.voertuigTijden?.[d]?.[v.id]?.eindtijd || null}
                                 onChange={(w) => zetTijd(d, v.id, { eindtijd: w })}
                               />
@@ -362,10 +363,10 @@ export function VoertuigenPerDag({
                               accessibilityRole="button"
                               style={styles.link}
                             >
-                              <Text style={styles.linkTekst}>Zelfde tijd als de dag</Text>
+                              <Text style={styles.linkTekst}>{tx('Zelfde tijd als de dag')}</Text>
                             </Pressable>
                             <Pressable onPress={() => setTijdOpen(null)} accessibilityRole="button" style={styles.link}>
-                              <Text style={styles.linkTekst}>Klaar</Text>
+                              <Text style={styles.linkTekst}>{tx('Klaar')}</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -373,8 +374,8 @@ export function VoertuigenPerDag({
 
                       {kiesHier ? (
                         <View style={styles.sub}>
-                          <Text style={styles.subKop}>Wie rijdt mee · {korteDatum(d)}</Text>
-                          {kandidaten.length === 0 ? <Text style={styles.uitleg}>Niemand werkt op deze dag.</Text> : null}
+                          <Text style={styles.subKop}>{tx('Wie rijdt mee · {datum}', { datum: korteDatum(d) })}</Text>
+                          {kandidaten.length === 0 ? <Text style={styles.uitleg}>{tx('Niemand werkt op deze dag.')}</Text> : null}
                           {kandidaten.map((m) => {
                             const zitHier = koppeling[m.id] === v.id;
                             const andere = koppeling[m.id] && !zitHier ? gekozen.find((x) => x.id === koppeling[m.id]) : null;
@@ -391,11 +392,11 @@ export function VoertuigenPerDag({
                               >
                                 <Text style={[styles.chipTekst, zitHier && { color: t.green700 }]}>{m.naam}</Text>
                                 {zitHier ? (
-                                  <Text style={styles.uitleg}>rijdt mee — tik om eruit te halen</Text>
+                                  <Text style={styles.uitleg}>{tx('rijdt mee — tik om eruit te halen')}</Text>
                                 ) : reden ? (
                                   <Text style={[styles.uitleg, { color: t.statusWarnFg }]}>{reden}</Text>
                                 ) : andere ? (
-                                  <Text style={styles.uitleg}>zit nu in {andere.naam}</Text>
+                                  <Text style={styles.uitleg}>{tx('zit nu in {voertuig}', { voertuig: andere.naam })}</Text>
                                 ) : null}
                               </Pressable>
                             );
@@ -403,7 +404,7 @@ export function VoertuigenPerDag({
                           <View style={styles.subKnoppen}>
                             <View />
                             <Pressable onPress={() => setKiesOpen(null)} accessibilityRole="button" style={styles.link}>
-                              <Text style={styles.linkTekst}>Klaar</Text>
+                              <Text style={styles.linkTekst}>{tx('Klaar')}</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -428,7 +429,7 @@ export function VoertuigenPerDag({
       })}
 
       {gekozen.length === 0 && alle.length > 0 ? (
-        <Text style={styles.uitleg}>Nog geen voertuig gekozen voor deze klus.</Text>
+        <Text style={styles.uitleg}>{tx('Nog geen voertuig gekozen voor deze klus.')}</Text>
       ) : null}
     </View>
   );

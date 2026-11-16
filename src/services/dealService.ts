@@ -4,6 +4,7 @@ import { haalInStukken } from '@/lib/inStukken';
 import { lokaleDatum } from '@/lib/nlTijd';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { VervolgActiviteit } from '@/lib/pipelineLogica';
+import { tx } from '@/i18n';
 
 /**
  * Pipeline: `deals` + `pipeline_stages` — dezelfde tabellen als het dashboard.
@@ -68,13 +69,13 @@ export type PipelineStage = {
 
 /** De prioriteiten zoals het dashboard ze kent. 'med' is de standaard. */
 export const DEAL_PRIORITEITEN: { id: DealPriority; label: string }[] = [
-  { id: 'high', label: 'Hoog' },
-  { id: 'med', label: 'Normaal' },
-  { id: 'low', label: 'Laag' },
+  { id: 'high', get label() { return tx('Hoog'); } },
+  { id: 'med', get label() { return tx('Normaal'); } },
+  { id: 'low', get label() { return tx('Laag'); } },
 ];
 
 export function prioriteitLabel(p: string | null | undefined): string {
-  return DEAL_PRIORITEITEN.find((x) => x.id === p)?.label ?? 'Normaal';
+  return DEAL_PRIORITEITEN.find((x) => x.id === p)?.label ?? tx('Normaal');
 }
 
 export async function listPipelineStages(): Promise<{
@@ -88,7 +89,7 @@ export async function listPipelineStages(): Promise<{
 
   if (error) {
     console.warn('[dealService.listPipelineStages]', error.message);
-    return { data: [], error: 'Pipeline-fasen konden niet worden geladen.' };
+    return { data: [], error: tx('Pipeline-fasen konden niet worden geladen.') };
   }
   return { data: (data as unknown as PipelineStage[]) ?? [], error: null };
 }
@@ -106,7 +107,7 @@ export async function listDeals(): Promise<{ data: DealRow[]; error: string | nu
 
   if (error) {
     console.warn('[dealService.listDeals]', error.message);
-    return { data: [], error: 'Aanvragen konden niet worden geladen.' };
+    return { data: [], error: tx('Aanvragen konden niet worden geladen.') };
   }
   return { data: (data as unknown as DealRow[]) ?? [], error: null };
 }
@@ -115,7 +116,7 @@ export async function getDeal(id: string): Promise<{ data: DealRow | null; error
   const { data, error } = await supabase.from('deals').select(DEAL_COLUMNS).eq('id', id).maybeSingle();
   if (error) {
     console.warn('[dealService.getDeal]', error.message);
-    return { data: null, error: 'Aanvraag kon niet worden geladen.' };
+    return { data: null, error: tx('Aanvraag kon niet worden geladen.') };
   }
   return { data: (data as unknown as DealRow | null) ?? null, error: null };
 }
@@ -135,14 +136,14 @@ export type DealInput = {
 
 function valideerDeal(input: Partial<DealInput>, nieuw: boolean): string | null {
   if ((nieuw || input.title !== undefined) && !input.title?.trim()) {
-    return 'Titel is verplicht.';
+    return tx('Titel is verplicht.');
   }
   if (
     input.expected_revenue !== undefined &&
     input.expected_revenue !== null &&
     (!Number.isFinite(input.expected_revenue) || input.expected_revenue < 0)
   ) {
-    return 'Vul een geldig bedrag in.';
+    return tx('Vul een geldig bedrag in.');
   }
   return null;
 }
@@ -198,14 +199,14 @@ export async function createDeal(input: DealInput): Promise<WriteResult<DealRow>
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const res = await schrijf<DealRow>(() => supabase.from('deals').insert(payload).select(DEAL_COLUMNS), {
     context: 'dealService.createDeal',
     bedrijfReadonly: isReadonly(),
     leegMelding:
-      'De aanvraag is niet opgeslagen. Je hebt het recht Verkooppijplijn nodig om aanvragen aan te maken.',
+      tx('De aanvraag is niet opgeslagen. Je hebt het recht Verkooppijplijn nodig om aanvragen aan te maken.'),
   });
   if (res.ok) {
     void logTijdlijn(res.data.customer_id, 'deal_aangemaakt', `Aanvraag aangemaakt: ${res.data.title ?? ''}`, {
@@ -237,7 +238,7 @@ export async function updateDeal(
     updates.assigned_to = ids[0] ?? null;
   }
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<DealRow>(
     () => supabase.from('deals').update(updates).eq('id', id).select(DEAL_COLUMNS),
@@ -250,7 +251,7 @@ export async function updateDealStage(
   id: string,
   stageId: string,
 ): Promise<WriteResult<DealRow>> {
-  if (!isUuid(stageId)) return writeFout('validatie', 'Onbekende fase.');
+  if (!isUuid(stageId)) return writeFout('validatie', tx('Onbekende fase.'));
   const res = await schrijf<DealRow>(
     () => supabase.from('deals').update({ stage_id: stageId }).eq('id', id).select(DEAL_COLUMNS),
     { context: 'dealService.updateDealStage', bedrijfReadonly: isReadonly() },
@@ -291,9 +292,9 @@ export async function markDealLost(
   reden: string | null,
   toelichting?: string | null,
 ): Promise<WriteResult<DealRow>> {
-  if (!isUuid(stageId)) return writeFout('validatie', 'Geen "Verloren"-fase gevonden in de pipeline.');
+  if (!isUuid(stageId)) return writeFout('validatie', tx('Geen "Verloren"-fase gevonden in de pipeline.'));
   const lost_reason = reden?.trim() || null;
-  if (!lost_reason) return writeFout('validatie', 'Kies een reden.');
+  if (!lost_reason) return writeFout('validatie', tx('Kies een reden.'));
   const res = await schrijf<DealRow>(
     () =>
       supabase
@@ -318,7 +319,7 @@ export async function markDealLost(
 
 /** Verloren deal terughalen: status expliciet 'open', anders blijft de trigger op 'lost'. */
 export async function heropenVerlorenDeal(id: string, stageId: string): Promise<WriteResult<DealRow>> {
-  if (!isUuid(stageId)) return writeFout('validatie', 'Onbekende fase.');
+  if (!isUuid(stageId)) return writeFout('validatie', tx('Onbekende fase.'));
   const res = await schrijf<DealRow>(
     () =>
       supabase
@@ -347,7 +348,7 @@ export async function deleteDeal(id: string): Promise<WriteStatus> {
       context: 'dealService.deleteDeal',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Alleen een beheerder kan een aanvraag verwijderen.',
+      leegMelding: tx('Alleen een beheerder kan een aanvraag verwijderen.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -432,7 +433,7 @@ export async function listDealActiviteiten(
     .limit(50);
   if (error) {
     console.warn('[dealService.listDealActiviteiten]', error.message);
-    return { data: [], error: 'Activiteiten konden niet worden geladen.' };
+    return { data: [], error: tx('Activiteiten konden niet worden geladen.') };
   }
   return { data: (data as unknown as DealActiviteit[]) ?? [], error: null };
 }

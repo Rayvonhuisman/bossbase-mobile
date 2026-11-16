@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { HeaderActions, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { tx } from '@/i18n';
 
 export default function CustomersStackLayout() {
   const { status, session } = useAuth();
@@ -24,11 +25,11 @@ export default function CustomersStackLayout() {
         headerRight: () => <HeaderActions iconSize={32} />,
       }}
     >
-      <Stack.Screen name="[id]" options={{ title: 'Klant' }} />
-      <Stack.Screen name="new" options={{ title: 'Nieuwe klant' }} />
-      <Stack.Screen name="leverancier/[id]" options={{ title: 'Leverancier' }} />
-      <Stack.Screen name="leverancier/new" options={{ title: 'Nieuwe leverancier' }} />
-      <Stack.Screen name="contract/[id]" options={{ title: 'Contract' }} />
+      <Stack.Screen name="[id]" options={{ title: tx('Klant') }} />
+      <Stack.Screen name="new" options={{ title: tx('Nieuwe klant') }} />
+      <Stack.Screen name="leverancier/[id]" options={{ title: tx('Leverancier') }} />
+      <Stack.Screen name="leverancier/new" options={{ title: tx('Nieuwe leverancier') }} />
+      <Stack.Screen name="contract/[id]" options={{ title: tx('Contract') }} />
     </Stack>
   );
 }

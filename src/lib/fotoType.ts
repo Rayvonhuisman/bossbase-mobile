@@ -9,6 +9,7 @@
  * Alles anders (SVG met script erin, HEIC dat geen browser opent, PDF, een
  * hernoemd .exe) wordt geweigerd vóórdat het de opslag bereikt.
  */
+import { tx } from '@/i18n';
 
 export type FotoType = {
   contentType: 'image/jpeg' | 'image/png' | 'image/webp';
@@ -48,18 +49,18 @@ export type VoorbereideFoto =
 
 export const FOTO_ONBEKEND_TYPE = {
   ok: false as const,
-  titel: 'Dit bestand kan niet',
-  tekst: 'Kies een foto in JPG-, PNG- of WebP-formaat.',
+  get titel() { return tx('Dit bestand kan niet'); },
+  get tekst() { return tx('Kies een foto in JPG-, PNG- of WebP-formaat.'); },
 };
 
 export const FOTO_TE_GROOT = {
   ok: false as const,
-  titel: 'Foto te groot',
-  tekst: 'Deze foto is groter dan 10 MB. Kies een kleinere foto.',
+  get titel() { return tx('Foto te groot'); },
+  get tekst() { return tx('Deze foto is groter dan 10 MB. Kies een kleinere foto.'); },
 };
 
 export const FOTO_NIET_GELEZEN = {
   ok: false as const,
-  titel: 'Foto niet gelezen',
-  tekst: 'Probeer het opnieuw of kies een andere foto.',
+  get titel() { return tx('Foto niet gelezen'); },
+  get tekst() { return tx('Probeer het opnieuw of kies een andere foto.'); },
 };

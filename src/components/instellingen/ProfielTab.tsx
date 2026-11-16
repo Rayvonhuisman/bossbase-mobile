@@ -20,8 +20,9 @@ import { spacing } from '@/theme';
 import { AccountVerwijderen } from './AccountVerwijderen';
 import { Gegeven, Kaart, Keuze, stijlVoorInstellingen } from './Bouwstenen';
 import { kiesAfbeelding } from './kiesAfbeelding';
+import { tx, txm } from '@/i18n';
 
-const ROL: Record<string, string> = { admin: 'Admin', planner: 'Planner', medewerker: 'Medewerker' };
+const ROL: Record<string, string> = { admin: txm('Admin'), planner: txm('Planner'), medewerker: txm('Medewerker') };
 
 /**
  * Mijn profiel — voor iedereen, zoals de tab `profiel` in het dashboard:
@@ -60,20 +61,20 @@ export function ProfielTab() {
           extensie: foto.extensie,
           vorigeUrl: profile.avatar_url,
         }),
-      { onSuccess: () => refreshProfile(), succesMelding: 'Profielfoto opgeslagen' },
+      { onSuccess: () => refreshProfile(), succesMelding: tx('Profielfoto opgeslagen') },
     );
   };
 
   const fotoVerwijderen = () =>
-    Dialog.alert('Profielfoto verwijderen?', undefined, [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Profielfoto verwijderen?'), undefined, [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: () =>
           save(() => verwijderEigenAvatar(profile?.avatar_url ?? null), {
             onSuccess: () => refreshProfile(),
-            succesMelding: 'Profielfoto verwijderd',
+            succesMelding: tx('Profielfoto verwijderd'),
           }),
       },
     ]);
@@ -84,7 +85,7 @@ export function ProfielTab() {
         await refreshProfile();
         setNaam(null);
       },
-      succesMelding: 'Naam opgeslagen',
+      succesMelding: tx('Naam opgeslagen'),
     });
 
   const wwKanOpslaan =
@@ -94,13 +95,13 @@ export function ProfielTab() {
     if (!ww || !wwKanOpslaan) return;
     saveWw(() => wijzigWachtwoordMetHuidig(ww.huidig, ww.nieuw), {
       onSuccess: () => setWw(null),
-      succesMelding: 'Wachtwoord gewijzigd',
+      succesMelding: tx('Wachtwoord gewijzigd'),
     });
   };
 
   return (
     <>
-      <Kaart titel="Mijn profiel" sub="Beheer je naam, profielfoto en wachtwoord">
+      <Kaart titel={tx('Mijn profiel')} sub={tx('Beheer je naam, profielfoto en wachtwoord')}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           {profile?.avatar_url ? (
             <Image
@@ -126,7 +127,7 @@ export function ProfielTab() {
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.lijstTitel} numberOfLines={1}>
-              {profile?.full_name || 'Geen naam ingesteld'}
+              {profile?.full_name || tx('Geen naam ingesteld')}
             </Text>
             <Text style={s.lijstSub} numberOfLines={1}>
               {user?.email ?? ''}
@@ -134,35 +135,35 @@ export function ProfielTab() {
           </View>
         </View>
         <View style={s.knoppen}>
-          <Button label="Foto kiezen" variant="secondary" disabled={saving} onPress={fotoKiezen} />
+          <Button label={tx('Foto kiezen')} variant="secondary" disabled={saving} onPress={fotoKiezen} />
           {profile?.avatar_url ? (
-            <Button label="Foto verwijderen" variant="ghost" disabled={saving} onPress={fotoVerwijderen} />
+            <Button label={tx('Foto verwijderen')} variant="ghost" disabled={saving} onPress={fotoVerwijderen} />
           ) : null}
         </View>
-        <Text style={s.hint}>JPG, PNG of WEBP, maximaal 5 MB.</Text>
+        <Text style={s.hint}>{tx('JPG, PNG of WEBP, maximaal 5 MB.')}</Text>
       </Kaart>
 
-      <Kaart titel="Persoonsgegevens">
-        <FormField label="Naam" value={naam} onChangeText={setNaam} placeholder="Voor- en achternaam" />
+      <Kaart titel={tx('Persoonsgegevens')}>
+        <FormField label={tx('Naam')} value={naam} onChangeText={setNaam} placeholder={tx('Voor- en achternaam')} />
         {naamGewijzigd ? (
-          <Button label="Naam opslaan" loading={saving} disabled={saving || !naam.trim()} onPress={naamOpslaan} />
+          <Button label={tx('Naam opslaan')} loading={saving} disabled={saving || !naam.trim()} onPress={naamOpslaan} />
         ) : null}
-        <Gegeven label="E-mailadres" waarde={user?.email ?? ''} />
-        <Text style={s.hint}>Je e-mailadres kan niet worden gewijzigd.</Text>
-        <Gegeven label="Rol" waarde={ROL[role ?? ''] ?? 'Medewerker'} />
+        <Gegeven label={tx('E-mailadres')} waarde={user?.email ?? ''} />
+        <Text style={s.hint}>{tx('Je e-mailadres kan niet worden gewijzigd.')}</Text>
+        <Gegeven label={tx('Rol')} waarde={tx(ROL[role ?? ''] ?? txm('Medewerker'))} />
       </Kaart>
 
-      <Kaart titel="Weergave" sub="Geldt alleen op dit apparaat">
+      <Kaart titel={tx('Weergave')} sub={tx('Geldt alleen op dit apparaat')}>
         <Keuze
-          opties={THEMA_OPTIES}
+          opties={THEMA_OPTIES.map((o) => ({ ...o, label: tx(o.label) }))}
           waarde={voorkeur}
           onKies={(id) => setVoorkeur(id as ThemaVoorkeur)}
         />
       </Kaart>
 
-      <Kaart titel="Wachtwoord">
+      <Kaart titel={tx('Wachtwoord')}>
         <Button
-          label="Wachtwoord wijzigen"
+          label={tx('Wachtwoord wijzigen')}
           variant="secondary"
           onPress={() => setWw({ huidig: '', nieuw: '', herhaal: '' })}
         />
@@ -172,17 +173,17 @@ export function ProfielTab() {
 
       <FormSheet
         visible={ww !== null}
-        title="Wachtwoord wijzigen"
+        title={tx('Wachtwoord wijzigen')}
         subtitle={user?.email ?? undefined}
         error={wwFout}
         saving={wwBezig}
-        submitLabel="Wachtwoord opslaan"
+        submitLabel={tx('Wachtwoord opslaan')}
         submitDisabled={!wwKanOpslaan}
         onSubmit={wwOpslaan}
         onClose={() => setWw(null)}
       >
         <FormField
-          label="Huidig wachtwoord"
+          label={tx('Huidig wachtwoord')}
           value={ww?.huidig ?? ''}
           onChangeText={(v) => setWw((w) => (w ? { ...w, huidig: v } : w))}
           secureTextEntry
@@ -191,7 +192,7 @@ export function ProfielTab() {
           autoFocus
         />
         <FormField
-          label="Nieuw wachtwoord"
+          label={tx('Nieuw wachtwoord')}
           value={ww?.nieuw ?? ''}
           onChangeText={(v) => setWw((w) => (w ? { ...w, nieuw: v } : w))}
           secureTextEntry
@@ -210,7 +211,7 @@ export function ProfielTab() {
           })}
         </View>
         <FormField
-          label="Herhaal nieuw wachtwoord"
+          label={tx('Herhaal nieuw wachtwoord')}
           value={ww?.herhaal ?? ''}
           onChangeText={(v) => setWw((w) => (w ? { ...w, herhaal: v } : w))}
           secureTextEntry
@@ -218,7 +219,7 @@ export function ProfielTab() {
           autoComplete="new-password"
         />
         {ww?.herhaal && ww.herhaal !== ww.nieuw ? (
-          <Text style={[s.hint, { color: t.statusRejectFg }]}>De wachtwoorden komen niet overeen.</Text>
+          <Text style={[s.hint, { color: t.statusRejectFg }]}>{tx('De wachtwoorden komen niet overeen.')}</Text>
         ) : null}
       </FormSheet>
 

@@ -6,6 +6,7 @@ import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/wr
 import { PROJECT_STATUS, projectStatusLabel, type FactuurBedrag } from '@/lib/projectLogica';
 import { idBatches, PROJECT_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
 import { kostprijsVanUurRij, UUR_KOSTPRIJS } from '@/lib/projectKostenLogica';
+import { tx } from '@/i18n';
 
 export { PROJECT_STATUS, projectStatusLabel };
 
@@ -103,7 +104,7 @@ export async function metProjectBedragen<T extends { id: string }>(
     const { data, error } = await supabase.rpc('bb_projectbedragen', { p_ids: ids });
     if (error) {
       console.warn('[projectService.metProjectBedragen]', error.message);
-      return { data: vulBedragen(rijen, [], PROJECT_BEDRAG_VELDEN), error: 'Projectbedragen konden niet worden geladen.' };
+      return { data: vulBedragen(rijen, [], PROJECT_BEDRAG_VELDEN), error: tx('Projectbedragen konden niet worden geladen.') };
     }
     bedragen.push(...((data as { id: string }[] | null) ?? []));
   }
@@ -133,7 +134,7 @@ export async function listProjects(): Promise<{ data: ProjectRow[]; error: strin
 
   if (error) {
     console.warn('[projectService.listProjects]', error.message);
-    return { data: [], error: 'Projecten konden niet worden geladen.' };
+    return { data: [], error: tx('Projecten konden niet worden geladen.') };
   }
   return metProjectBedragen((data as unknown as RuweProject[]) ?? []);
 }
@@ -144,7 +145,7 @@ export async function getProject(
   const { data, error } = await leesProjecten((k) => supabase.from('projects').select(k).eq('id', id).maybeSingle());
   if (error) {
     console.warn('[projectService.getProject]', error.message);
-    return { data: null, error: 'Project kon niet worden geladen.' };
+    return { data: null, error: tx('Project kon niet worden geladen.') };
   }
   if (!data) return { data: null, error: null };
   const res = await metProjectBedragen([data as unknown as RuweProject]);
@@ -160,7 +161,7 @@ export async function getProjectByDeal(
   );
   if (error) {
     console.warn('[projectService.getProjectByDeal]', error.message);
-    return { data: null, error: 'Project kon niet worden geladen.' };
+    return { data: null, error: tx('Project kon niet worden geladen.') };
   }
   const eerste = ((data as unknown as RuweProject[]) ?? [])[0];
   if (!eerste) return { data: null, error: null };
@@ -186,27 +187,16 @@ export type ProjectInput = {
 
 function valideerProject(input: Partial<ProjectInput>, nieuw: boolean): string | null {
   if ((nieuw || input.name !== undefined) && !input.name?.trim()) {
-    return 'Projectnaam is verplicht.';
+    return tx('Projectnaam is verplicht.');
   }
-  for (const [veld, label] of [
-    ['start_date', 'startdatum'],
-    ['deadline', 'einddatum'],
-  ] as const) {
-    const v = input[veld];
-    if (v && !isGeldigeDatum(v)) return `Vul een geldige ${label} in (JJJJ-MM-DD).`;
-  }
+  if (input.start_date && !isGeldigeDatum(input.start_date)) return tx('Vul een geldige startdatum in (JJJJ-MM-DD).');
+  if (input.deadline && !isGeldigeDatum(input.deadline)) return tx('Vul een geldige einddatum in (JJJJ-MM-DD).');
   if (input.start_date && input.deadline && input.deadline < input.start_date) {
-    return 'De einddatum ligt vóór de startdatum.';
+    return tx('De einddatum ligt vóór de startdatum.');
   }
-  for (const [veld, label] of [
-    ['project_value', 'projectwaarde'],
-    ['quoted_hours', 'begrote uren'],
-  ] as const) {
-    const v = input[veld];
-    if (v !== undefined && v !== null && (!Number.isFinite(v) || v < 0)) {
-      return `Vul een geldige ${label} in.`;
-    }
-  }
+  const ongeldig = (v: number | null | undefined) => v !== undefined && v !== null && (!Number.isFinite(v) || v < 0);
+  if (ongeldig(input.project_value)) return tx('Vul een geldige projectwaarde in.');
+  if (ongeldig(input.quoted_hours)) return tx('Vul een geldig aantal begrote uren in.');
   return null;
 }
 
@@ -267,7 +257,7 @@ export async function createProject(
 
   const payload = withCompanyId(basis);
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   return schrijfMetBedragen(
@@ -277,8 +267,7 @@ export async function createProject(
         context: 'projectService.createProject',
         bedrijfReadonly: isReadonly(),
         leegMelding:
-          'Het project is niet opgeslagen. Je hebt het recht Projecten bewerken nodig om ' +
-          'projecten aan te maken.',
+          tx('Het project is niet opgeslagen. Je hebt het recht Projecten bewerken nodig om projecten aan te maken.'),
       },
     ),
   );
@@ -292,7 +281,7 @@ export async function updateProject(
   if (fout) return writeFout('validatie', fout);
 
   const updates = mapProject(input);
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijfMetBedragen(
     await schrijf<ProjectRow>(
@@ -301,8 +290,7 @@ export async function updateProject(
         context: 'projectService.updateProject',
         bedrijfReadonly: isReadonly(),
         leegMelding:
-          'Er is niets gewijzigd. Je hebt het recht Projecten bewerken nodig, of het project ' +
-          'bestaat niet meer.',
+          tx('Er is niets gewijzigd. Je hebt het recht Projecten bewerken nodig, of het project bestaat niet meer.'),
       },
     ),
   );
@@ -315,7 +303,7 @@ export async function deleteProject(id: string): Promise<WriteStatus> {
       context: 'projectService.deleteProject',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Alleen een beheerder kan een project verwijderen.',
+      leegMelding: tx('Alleen een beheerder kan een project verwijderen.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -541,7 +529,7 @@ export async function listKoppelbareOffertes(
   });
   if (error) {
     console.warn('[projectService.listKoppelbareOffertes]', error.message);
-    return { data: [], error: 'Offertes konden niet worden geladen.' };
+    return { data: [], error: tx('Offertes konden niet worden geladen.') };
   }
   return { data: (data as unknown as ProjectOfferte[]) ?? [], error: null };
 }
@@ -589,8 +577,8 @@ export async function uploadProjectFoto(input: {
   extensie: string;
 }): Promise<WriteResult<ProjectFoto>> {
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
-  if (isReadonly()) return writeFout('readonly', 'Je account staat op alleen-lezen.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
+  if (isReadonly()) return writeFout('readonly', tx('Je account staat op alleen-lezen.'));
   const naam = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const pad = `${companyId}/${input.projectId}/${naam}.${input.extensie}`;
 
@@ -599,7 +587,7 @@ export async function uploadProjectFoto(input: {
     .upload(pad, input.bytes, { contentType: input.contentType, upsert: false });
   if (uploadFout) {
     console.warn('[projectService.uploadProjectFoto]', uploadFout.message);
-    return writeFout('geen-rechten', 'De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.');
+    return writeFout('geen-rechten', tx('De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.'));
   }
 
   const res = await schrijf<{ id: string; url: string }>(
@@ -611,7 +599,7 @@ export async function uploadProjectFoto(input: {
     {
       context: 'projectService.uploadProjectFoto',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.',
+      leegMelding: tx('De foto is niet opgeslagen. Je hebt het recht Projecten bewerken nodig.'),
     },
   );
   if (!res.ok) {
@@ -634,7 +622,7 @@ export async function deleteProjectFoto(foto: Pick<ProjectFoto, 'id' | 'pad'>): 
       context: 'projectService.deleteProjectFoto',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De foto is niet verwijderd. Je hebt het recht Projecten bewerken nodig.',
+      leegMelding: tx('De foto is niet verwijderd. Je hebt het recht Projecten bewerken nodig.'),
     },
   );
   if (!res.ok) return res;
@@ -677,14 +665,14 @@ export async function getAanvraagBron(dealId: string): Promise<AanvraagBron | nu
     eigen_velden?: { naam?: string; waarde?: unknown }[] | null;
   };
   const vast: [string, string, unknown][] = [
-    ['naam', 'Naam', r.name],
-    ['email', 'E-mailadres', r.email],
-    ['telefoon', 'Telefoonnummer', r.phone],
-    ['adres', 'Adres', r.address],
-    ['postcode', 'Postcode', r.postcode],
-    ['plaats', 'Plaats', r.city],
-    ['gewensteDatum', 'Gewenste datum', r.gewenste_datum],
-    ['omschrijving', 'Omschrijving', r.message],
+    ['naam', tx('Naam'), r.name],
+    ['email', tx('E-mailadres'), r.email],
+    ['telefoon', tx('Telefoonnummer'), r.phone],
+    ['adres', tx('Adres'), r.address],
+    ['postcode', tx('Postcode'), r.postcode],
+    ['plaats', tx('Plaats'), r.city],
+    ['gewensteDatum', tx('Gewenste datum'), r.gewenste_datum],
+    ['omschrijving', tx('Omschrijving'), r.message],
   ];
   const velden: AanvraagVeld[] = vast
     .filter(([, , w]) => w != null && String(w).trim() !== '')
@@ -733,7 +721,7 @@ export async function listProjectNotes(
     .order('created_at', { ascending: false });
   if (error) {
     console.warn('[projectService.listProjectNotes]', error.message);
-    return { data: [], error: 'Projectnotities konden niet worden geladen.' };
+    return { data: [], error: tx('Projectnotities konden niet worden geladen.') };
   }
   return { data: (data as unknown as ProjectNote[]) ?? [], error: null };
 }
@@ -743,14 +731,14 @@ export async function addProjectNote(
   note: string,
 ): Promise<WriteResult<ProjectNote>> {
   const tekst = note.trim();
-  if (!tekst) return writeFout('validatie', 'Notitie mag niet leeg zijn.');
+  if (!tekst) return writeFout('validatie', tx('Notitie mag niet leeg zijn.'));
 
   const basis: Record<string, unknown> = { project_id: projectId, note: tekst };
   const eigen = getUserId();
   if (eigen) basis.created_by = eigen;
 
   const payload = withCompanyId(basis);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   return schrijf<ProjectNote>(
     () => supabase.from('project_notes').insert(payload).select(NOTE_COLUMNS),
@@ -765,7 +753,7 @@ export async function deleteProjectNote(id: string): Promise<WriteStatus> {
       context: 'projectService.deleteProjectNote',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Je kunt alleen je eigen projectnotities verwijderen.',
+      leegMelding: tx('Je kunt alleen je eigen projectnotities verwijderen.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;

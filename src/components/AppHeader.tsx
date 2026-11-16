@@ -4,6 +4,7 @@ import { ChevronLeft, Plus } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { ds, type ThemeColors } from '@/theme';
 import { HeaderActions } from './HeaderActions';
+import { tx } from '@/i18n';
 
 type Action = {
   /** Optional explicit icon. If omitted, a `+` is used for the primary slot. */
@@ -69,7 +70,7 @@ export function AppHeader({
         <Pressable
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Terug"
+          accessibilityLabel={tx('Terug')}
           hitSlop={8}
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
         >

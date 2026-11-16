@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ErrorState } from './ErrorState';
+import { tx } from '@/i18n';
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -36,10 +37,10 @@ export class ScreenErrorBoundary extends Component<Props, State> {
       return (
         <View style={styles.fallback}>
           <ErrorState
-            title="Er ging iets mis"
-            message="Er ging iets mis bij het laden van deze pagina."
+            title={tx('Er ging iets mis')}
+            message={tx('Er ging iets mis bij het laden van deze pagina.')}
             onRetry={this.reset}
-            retryLabel="Opnieuw proberen"
+            retryLabel={tx('Opnieuw proberen')}
           />
         </View>
       );

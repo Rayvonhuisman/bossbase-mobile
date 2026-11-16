@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { VerifieerAntwoord } from '@/lib/registratie';
+import { tx } from '@/i18n';
 
 /**
  * De Edge Functions van de registratie — dezelfde als het dashboard
@@ -10,7 +11,7 @@ import type { VerifieerAntwoord } from '@/lib/registratie';
 /** Legt het akkoord met voorwaarden en verwerkersovereenkomst vast (versie, tijdstip en IP bepaalt de server). */
 export async function legAkkoordVast(): Promise<void> {
   const { data, error } = await supabase.functions.invoke('akkoord-vastleggen');
-  if (error || !data?.success) throw error || new Error('Akkoord vastleggen mislukt');
+  if (error || !data?.success) throw error || new Error(tx('Akkoord vastleggen mislukt'));
 }
 
 /** Vraagt een (nieuwe) 6-cijferige code aan. De server throttlet stil (60 s, 3 per 10 min) en geeft dan toch success. */
@@ -34,7 +35,7 @@ export async function verifieerCode(code: string): Promise<VerifieerAntwoord> {
     } catch {
       // geen JSON in het antwoord
     }
-    return parsed || { success: false, error: error.message || 'Verifiëren mislukt' };
+    return parsed || { success: false, error: error.message || tx('Verifiëren mislukt') };
   }
   return data as VerifieerAntwoord;
 }

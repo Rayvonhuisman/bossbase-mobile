@@ -108,6 +108,7 @@ import {
   TotalenBlok,
 } from '@/components/DocumentOnderdelen';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { tx, txn } from '@/i18n';
 import { OfferteCalculatie } from '@/components/OfferteCalculatie';
 import { alsVeld, calculatieVoorOpslag, getalUit } from '@/lib/offerteCalculatie';
 
@@ -139,7 +140,7 @@ import { alsVeld, calculatieVoorOpslag, getalUit } from '@/lib/offerteCalculatie
 
 export default function OffersScreen() {
   return (
-    <PermissionGate permission="offertes" label="Offertes">
+    <PermissionGate permission="offertes" label={tx('Offertes')}>
       <OffersScreenInhoud />
     </PermissionGate>
   );
@@ -198,18 +199,18 @@ function subtitleFor(o: OfferteRow): string {
   const delen: string[] = [];
   if (o.customer?.name) delen.push(o.customer.name);
   if (o.omschrijving) delen.push(alsTekst(o.omschrijving));
-  if (o.geldig_tot) delen.push(`Geldig t/m ${formatDateNL(o.geldig_tot)}`);
-  return delen.join(' · ') || 'Offerte';
+  if (o.geldig_tot) delen.push(tx('Geldig t/m {datum}', { datum: formatDateNL(o.geldig_tot) }));
+  return delen.join(' · ') || tx('Offerte');
 }
 
 function regelMeta(r: OfferteItem, standaardPct: number): string {
   const aantal = String(r.aantal).replace('.', ',');
   const btw =
     r.btw_regime === 'verlegd'
-      ? 'btw verlegd'
+      ? tx('btw verlegd')
       : r.btw_regime === 'vrijgesteld'
-        ? 'geen btw'
-        : `${Number(r.btw_pct ?? standaardPct)}% btw`;
+        ? tx('geen btw')
+        : tx('{pct}% btw', { pct: Number(r.btw_pct ?? standaardPct) });
   return `${aantal}${r.eenheid ? ` ${r.eenheid}` : ''} × ${formatEURCent(r.prijs_per)} · ${btw}`;
 }
 
@@ -362,7 +363,7 @@ function OffersScreenInhoud() {
       setKlantRijen(klantRes.data as Customer[]);
       setKlanten(
         klantRes.data
-          .map((k) => ({ id: k.id, label: k.name ?? 'Klant' }))
+          .map((k) => ({ id: k.id, label: k.name ?? tx('Klant') }))
           .sort((a, b) => a.label.localeCompare(b.label, 'nl')),
       );
     }
@@ -381,7 +382,7 @@ function OffersScreenInhoud() {
     // formulier werken met de vaste regeltypes en zonder deal.
     if (!eenheidRes.error) setEenheden(eenheidRes.data);
     if (!dealRes.error) {
-      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? 'Aanvraag' })));
+      setDeals(dealRes.data.map((d) => ({ id: d.id, label: d.title ?? tx('Aanvraag') })));
     }
   }, []);
 
@@ -441,7 +442,7 @@ function OffersScreenInhoud() {
     setPdfDoc({
       soort: 'offerte',
       id: o.id,
-      titel: `${o.signed_at ? 'Getekende offerte' : 'Offerte'} ${o.nummer ?? ''}`.trim(),
+      titel: (o.signed_at ? tx('Getekende offerte {nummer}', { nummer: o.nummer ?? '' }) : tx('Offerte {nummer}', { nummer: o.nummer ?? '' })).trim(),
       opgeslagenEerst: Boolean(o.signed_at),
     });
 
@@ -449,9 +450,8 @@ function OffersScreenInhoud() {
   const limietBereikt = () => {
     if (binnenLimiet(planStatus?.limits, 'offertes')) return false;
     Dialog.alert(
-      'Offertelimiet bereikt',
-      'Je offertelimiet voor deze periode is bereikt. Een nieuwe versie van een bestaande offerte kan nog wel. ' +
-        'Je abonnement bekijk je bij Instellingen → Abonnement.',
+      tx('Offertelimiet bereikt'),
+      tx('Je offertelimiet voor deze periode is bereikt. Een nieuwe versie van een bestaande offerte kan nog wel. Je abonnement bekijk je bij Instellingen → Abonnement.'),
     );
     return true;
   };
@@ -650,7 +650,7 @@ function OffersScreenInhoud() {
     const bewaarCalculatie = async (offerteId: string) => {
       if (!calcKan) return;
       const r = await slaOfferteCalculatieOp(offerteId, getalUit(c.kostprijsPerUur), calculatieVoorOpslag(c.regels, idVan));
-      if (!r.ok) Dialog.alert('Calculatie niet opgeslagen', `De offerte is opgeslagen, maar de calculatie niet: ${r.melding}`);
+      if (!r.ok) Dialog.alert(tx('Calculatie niet opgeslagen'), tx('De offerte is opgeslagen, maar de calculatie niet: {melding}', { melding: r.melding }));
     };
     const kop = {
       customer_id: c.customerId,
@@ -686,7 +686,7 @@ function OffersScreenInhoud() {
         if (c.volledigVast) {
           // Getekend of geaccepteerd: alleen de interne calculatie nog.
           if (!calcKan || !c.bron) {
-            return writeFout('op-slot', 'Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.');
+            return writeFout('op-slot', tx('Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast.'));
           }
           const r = await slaOfferteCalculatieOp(c.id, getalUit(c.kostprijsPerUur), calculatieVoorOpslag(c.regels));
           return r.ok ? { ok: true, data: c.bron } : r;
@@ -745,12 +745,12 @@ function OffersScreenInhoud() {
           if (enVersturen) void openMail(opgeslagen);
         },
         succesMelding: c.volledigVast
-          ? 'Calculatie opgeslagen'
+          ? tx('Calculatie opgeslagen')
           : c.herzien
-            ? 'Nieuwe versie aangemaakt'
+            ? tx('Nieuwe versie aangemaakt')
             : c.id
-              ? 'Offerte opgeslagen'
-              : 'Offerte aangemaakt',
+              ? tx('Offerte opgeslagen')
+              : tx('Offerte aangemaakt'),
       },
     );
   };
@@ -758,13 +758,13 @@ function OffersScreenInhoud() {
   const verwijderen = () => {
     if (!concept?.id) return;
     const id = concept.id;
-    bevestigVerwijderen('Offerte', () => {
+    bevestigVerwijderen(tx('Offerte'), () => {
       save(() => deleteOfferte(id), {
         onSuccess: async () => {
           setConcept(null);
           await herlaad();
         },
-        succesMelding: 'Offerte verwijderd',
+        succesMelding: tx('Offerte verwijderd'),
       });
     });
   };
@@ -775,7 +775,7 @@ function OffersScreenInhoud() {
     const aan = m.concept.aan.trim();
     saveMail(
       async (): Promise<WriteResult<null>> => {
-        if (!aan) return writeFout('validatie', 'E-mailadres is verplicht.');
+        if (!aan) return writeFout('validatie', tx('E-mailadres is verplicht.'));
         // De PDF als bijlage; mislukt die, dan gaat de mail zonder, zoals in
         // het dashboard.
         let bijlagen: { filename: string; content: string }[] = [];
@@ -817,7 +817,7 @@ function OffersScreenInhoud() {
         });
         if (!status.ok) {
           // De mail is weg; alleen het bijwerken van de offerte lukte niet.
-          return writeFout('onbekend', `De e-mail is verstuurd, maar de offerte is niet bijgewerkt: ${status.melding}`);
+          return writeFout('onbekend', tx('De e-mail is verstuurd, maar de offerte is niet bijgewerkt: {melding}', { melding: status.melding }));
         }
         return { ok: true, data: null };
       },
@@ -826,7 +826,7 @@ function OffersScreenInhoud() {
           setMail(null);
           await herlaad();
         },
-        succesMelding: 'E-mail verstuurd',
+        succesMelding: tx('E-mail verstuurd'),
       },
     );
   };
@@ -841,9 +841,9 @@ function OffersScreenInhoud() {
     const alsVersie = k.modus === 'zelfde';
     saveKopie(
       async () => {
-        if (!alsVersie && !k.klantId) return writeFout('validatie', 'Kies een klant.');
+        if (!alsVersie && !k.klantId) return writeFout('validatie', tx('Kies een klant.'));
         if (!alsVersie && !binnenLimiet(planStatus?.limits, 'offertes')) {
-          return writeFout('plan-limiet', 'Je offertelimiet voor deze periode is bereikt.');
+          return writeFout('plan-limiet', tx('Je offertelimiet voor deze periode is bereikt.'));
         }
         return kopieerOfferte(k.offerte.id, {
           customerId: alsVersie ? k.offerte.customer_id : k.klantId,
@@ -856,7 +856,9 @@ function OffersScreenInhoud() {
           setKopie(null);
           toonResultaat(
             { ok: true, data: null },
-            alsVersie ? `Nieuwe versie ${nieuw.nummer} aangemaakt` : `Offerte ${nieuw.nummer} aangemaakt`,
+            alsVersie
+              ? tx('Nieuwe versie {nummer} aangemaakt', { nummer: nieuw.nummer })
+              : tx('Offerte {nummer} aangemaakt', { nummer: nieuw.nummer }),
           );
           await herlaad();
           // Zoals het dashboard: meteen de kopie openen om aan te passen.
@@ -877,23 +879,28 @@ function OffersScreenInhoud() {
     // Al gefactureerd: eerst vragen of er echt nog een factuur bij moet.
     const al = factuurPerOfferte.get(o.id);
     if (!al?.length) return naarFactuur();
-    const welke = al.length === 1 ? `factuur ${al[0]}` : `${al.length} facturen (${al.join(', ')})`;
-    Dialog.alert('Al gefactureerd', `Van deze offerte is al ${welke} gemaakt. Wil je nog een factuur maken?`, [
-      { text: 'Annuleren', style: 'cancel' },
-      { text: 'Nog een factuur maken', onPress: naarFactuur },
+    const vraag = txn(
+      'Van deze offerte is al factuur {nummers} gemaakt. Wil je nog een factuur maken?',
+      'Van deze offerte zijn al {n} facturen gemaakt ({nummers}). Wil je nog een factuur maken?',
+      al.length,
+      { nummers: al.join(', ') },
+    );
+    Dialog.alert(tx('Al gefactureerd'), vraag, [
+      { text: tx('Annuleren'), style: 'cancel' },
+      { text: tx('Nog een factuur maken'), onPress: naarFactuur },
     ]);
   };
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Offertes laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Offertes laden...')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Offertes" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Offertes')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -941,12 +948,12 @@ function OffersScreenInhoud() {
   const detailHerzien = detail ? offerteHerzienbaar(detail) : false;
   const bewerkLabel =
     detail?.status === 'concept'
-      ? 'Bewerken'
+      ? tx('Bewerken')
       : detailHerzien
-        ? 'Herzien (nieuwe versie)'
+        ? tx('Herzien (nieuwe versie)')
         : detailVast
-          ? 'Calculatie'
-          : 'Status wijzigen';
+          ? tx('Calculatie')
+          : tx('Status wijzigen');
   const pdfOntbreekt = Boolean(detailData?.signed_at && !detailData.signed_pdf_url);
 
   const conceptBewerkbaar = concept ? !concept.id || concept.status === 'concept' || concept.herzien : false;
@@ -990,12 +997,12 @@ function OffersScreenInhoud() {
   const conceptTotalen = berekenTotalen(concept?.regels ?? []);
   const aandachtspunten: Aandachtspunt[] = concept
     ? ([
-        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
-        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'offerteregels', veld: 'regels' } : null,
+        !concept.customerId ? { tekst: tx('een klant'), veld: 'klant' } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: tx('offerteregels'), veld: 'regels' } : null,
         (() => {
           const mist = concept.regels.filter((r) => ontbreektIn(r).length);
           const n = mist.length;
-          return n ? { tekst: `hoeveelheid of prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: `regel:${mist[0]!.sleutel}` } : null;
+          return n ? { tekst: txn('hoeveelheid of prijs bij {n} regel', 'hoeveelheid of prijs bij {n} regels', n), veld: `regel:${mist[0]!.sleutel}` } : null;
         })(),
       ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
     : [];
@@ -1004,49 +1011,49 @@ function OffersScreenInhoud() {
     <>
           <WerkruimteVeld naam="klant">
           <SelectField
-            label="Klant"
+            label={tx('Klant')}
             value={concept?.customerId ?? null}
             options={klanten}
             onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
             allowEmpty
-            emptyLabel="Geen klant"
-            placeholder="Geen klant"
+            emptyLabel={tx('Geen klant')}
+            placeholder={tx('Geen klant')}
             disabled={!conceptBewerkbaar}
           />
           </WerkruimteVeld>
           {deals.length > 0 && !concept?.herzien ? (
             <SelectField
-              label="Aanvraag"
+              label={tx('Aanvraag')}
               value={concept?.dealId ?? null}
               options={deals}
               onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
               allowEmpty
-              emptyLabel="Geen aanvraag"
-              placeholder="Geen aanvraag"
+              emptyLabel={tx('Geen aanvraag')}
+              placeholder={tx('Geen aanvraag')}
               disabled={!conceptBewerkbaar}
             />
           ) : null}
           <FormField
-            label="Omschrijving"
+            label={tx('Omschrijving')}
             value={concept?.omschrijving ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, omschrijving: v } : c))}
-            placeholder="Waar gaat de offerte over?"
+            placeholder={tx('Waar gaat de offerte over?')}
             editable={conceptBewerkbaar}
           />
           <View style={styles.rij}>
             <View style={{ flex: 1.4 }}>
               <DateField
-                label="Geldig tot"
+                label={tx('Geldig tot')}
                 value={concept?.geldigTot || null}
                 onChange={(v) => setConcept((c) => (c ? { ...c, geldigTot: v } : c))}
-                placeholder="Kies"
+                placeholder={tx('Kies')}
                 disabled={!conceptBewerkbaar}
               />
             </View>
             {!concept?.herzien ? (
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Btw %"
+                  label={tx('Btw %')}
                   value={concept?.btwPct ?? ''}
                   onChangeText={(v) => setConcept((c) => (c ? { ...c, btwPct: v } : c))}
                   placeholder="21"
@@ -1065,14 +1072,14 @@ function OffersScreenInhoud() {
               toon="waarschuwing"
               message={
                 waaromNiet('offerteRegels', 'maken') ??
-                'Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.'
+                tx('Je mag geen offerteregels toevoegen. Vraag een beheerder om het recht Offertes.')
               }
             />
           ) : null}
 
           {concept && conceptBewerkbaar && magRegels ? (
             concept.regelsLaden ? (
-              <Text style={styles.uitleg}>Regels laden…</Text>
+              <Text style={styles.uitleg}>{tx('Regels laden…')}</Text>
             ) : (
               <WerkruimteVeld naam="regels">
                 <RegelEditor
@@ -1095,7 +1102,7 @@ function OffersScreenInhoud() {
 
           {concept && !conceptBewerkbaar && concept.bron ? (
             <Text style={styles.uitleg}>
-              {`Totaal ${formatEURCent(Number(concept.bron.totaal_incl ?? 0))} incl. btw.`}
+              {tx('Totaal {bedrag} incl. btw.', { bedrag: formatEURCent(Number(concept.bron.totaal_incl ?? 0)) })}
             </Text>
           ) : null}
 
@@ -1116,10 +1123,10 @@ function OffersScreenInhoud() {
           ) : null}
 
           <FormField
-            label="Opmerking voor de klant"
+            label={tx('Opmerking voor de klant')}
             value={concept?.notes ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, notes: v } : c))}
-            placeholder="Staat op de offerte die de klant ontvangt"
+            placeholder={tx('Staat op de offerte die de klant ontvangt')}
             multiline
             editable={conceptBewerkbaar}
           />
@@ -1136,12 +1143,12 @@ function OffersScreenInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Offertes"
-            subtitle={`${items.length} ${items.length === 1 ? 'offerte' : 'offertes'}`}
+            title={tx('Offertes')}
+            subtitle={txn('{n} offerte', '{n} offertes', items.length)}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe offerte" onPress={() => openNieuw()} />
+                <HeaderIconButton icon={Plus} label={tx('Nieuwe offerte')} onPress={() => openNieuw()} />
               ) : undefined
             }
           />
@@ -1152,12 +1159,12 @@ function OffersScreenInhoud() {
         <TegelRaster
           breed={breed}
           tegels={[
-            { id: 'totaal', label: 'Totaal offertes', waarde: String(kpis.totaal) },
-            { id: 'concept', label: 'Concept', waarde: String(kpis.concept) },
-            { id: 'verzonden', label: 'Verzonden', waarde: String(kpis.verzonden) },
+            { id: 'totaal', label: tx('Totaal offertes'), waarde: String(kpis.totaal) },
+            { id: 'concept', label: tx('Concept'), waarde: String(kpis.concept) },
+            { id: 'verzonden', label: tx('Verzonden'), waarde: String(kpis.verzonden) },
             {
               id: 'geaccepteerd',
-              label: 'Geaccepteerd',
+              label: tx('Geaccepteerd'),
               waarde: String(kpis.geaccepteerd),
               uitleg: formatEUR(kpis.geaccepteerdBedrag),
               toon: 'goed',
@@ -1166,11 +1173,11 @@ function OffersScreenInhoud() {
         />
 
         <View style={styles.zoekRij}>
-          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek offerte..." />
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder={tx('Zoek offerte...')} />
         </View>
         <View style={{ paddingTop: 12 }}>
           <AppFilterChips
-            chips={OFFERTE_FILTERS.map((f) => ({ id: f.id, label: f.label, count: tellingen[f.id] }))}
+            chips={OFFERTE_FILTERS.map((f) => ({ id: f.id, label: tx(f.label), count: tellingen[f.id] }))}
             active={filter}
             onChange={setFilter}
           />
@@ -1179,23 +1186,23 @@ function OffersScreenInhoud() {
         {items.length === 0 ? (
           <EmptyState
             icon={<FileText size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen offertes"
+            title={tx('Geen offertes')}
             message={
               magMaken
-                ? 'Maak met de plusknop je eerste offerte.'
-                : (waaromNiet('offertes', 'maken') ?? 'Er zijn nog geen offertes.')
+                ? tx('Maak met de plusknop je eerste offerte.')
+                : (waaromNiet('offertes', 'maken') ?? tx('Er zijn nog geen offertes.'))
             }
           />
         ) : zichtbaar.length === 0 ? (
           <EmptyState
             icon={<FileText size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen offertes gevonden"
-            message="Geen offertes die passen bij je zoekopdracht of filter."
+            title={tx('Geen offertes gevonden')}
+            message={tx('Geen offertes die passen bij je zoekopdracht of filter.')}
           />
         ) : (
           <>
             <AppSection
-              title={filter === 'alle' ? 'Alle offertes' : (OFFERTE_FILTERS.find((f) => f.id === filter)?.label ?? '')}
+              title={filter === 'alle' ? tx('Alle offertes') : tx(OFFERTE_FILTERS.find((f) => f.id === filter)?.label ?? '')}
               count={zichtbaar.length}
               variant="eyebrow"
             />
@@ -1207,13 +1214,13 @@ function OffersScreenInhoud() {
                     key={o.id}
                     first={i === 0}
                     icon={inhoudLigtVast(o) ? Lock : FileText}
-                    title={`${o.nummer ?? 'Offerte'}`}
+                    title={`${o.nummer ?? tx('Offerte')}`}
                     subtitle={subtitleFor(o)}
                     onPress={() => void openDetail(o)}
                     trailing={
                       <View style={styles.trailing}>
                         <Text style={styles.bedrag}>{formatEURCent(Number(o.totaal_incl ?? 0))}</Text>
-                        <DocumentStatusBadge toon={st.toon} label={st.label} />
+                        <DocumentStatusBadge toon={st.toon} label={tx(st.label)} />
                       </View>
                     }
                   />
@@ -1227,7 +1234,7 @@ function OffersScreenInhoud() {
       {/* Offerte bekijken */}
       <Paneel
         open={detail !== null}
-        titel={detail?.nummer ?? 'Offerte'}
+        titel={detail?.nummer ?? tx('Offerte')}
         subtitel={detail?.customer?.name ?? undefined}
         onSluit={() => setDetail(null)}
         voet={
@@ -1236,14 +1243,14 @@ function OffersScreenInhoud() {
               {/* Eén primaire actie die de status volgt, zoals het dashboard. */}
               {isGeaccepteerd && magWijzigen && magFactuurMaken ? (
                 <Button
-                  label={factuurPerOfferte.has(detail.id) ? 'Gefactureerd' : 'Maak factuur'}
+                  label={factuurPerOfferte.has(detail.id) ? tx('Gefactureerd') : tx('Maak factuur')}
                   onPress={() => maakFactuur(detail)}
                   style={styles.knop}
                 />
               ) : null}
               {magWijzigen ? (
                 <Button
-                  label="Verstuur per mail"
+                  label={tx('Verstuur per mail')}
                   variant={isGeaccepteerd && magFactuurMaken ? 'secondary' : 'primary'}
                   onPress={() => {
                     const o = detail;
@@ -1253,7 +1260,7 @@ function OffersScreenInhoud() {
                   style={styles.knop}
                 />
               ) : null}
-              <Button label="Bekijken" variant="secondary" onPress={() => bekijkPdf(detail)} style={styles.knop} />
+              <Button label={tx('Bekijken')} variant="secondary" onPress={() => bekijkPdf(detail)} style={styles.knop} />
               {magWijzigen && (!detailVast || magCalculatie) ? (
                 <Button
                   label={bewerkLabel}
@@ -1268,7 +1275,7 @@ function OffersScreenInhoud() {
               ) : null}
               {magMaken ? (
                 <Button
-                  label="Kopiëren"
+                  label={tx('Kopiëren')}
                   variant="ghost"
                   onPress={() => {
                     const o = detail;
@@ -1287,39 +1294,41 @@ function OffersScreenInhoud() {
           <ScrollView contentContainerStyle={styles.detailInhoud} keyboardShouldPersistTaps="handled">
             {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
             <View>
-              <DetailRij label="Klant" waarde={detail.customer?.name ?? 'Geen klant'} />
+              <DetailRij label={tx('Klant')} waarde={detail.customer?.name ?? tx('Geen klant')} />
               <DetailRij
-                label="Status"
-                waarde={<DocumentStatusBadge toon={detailStatus.toon} label={detailStatus.label} />}
+                label={tx('Status')}
+                waarde={<DocumentStatusBadge toon={detailStatus.toon} label={tx(detailStatus.label)} />}
               />
               {detail.omschrijving ? (
-                <DetailRij label="Omschrijving" waarde={alsTekst(detail.omschrijving)} />
+                <DetailRij label={tx('Omschrijving')} waarde={alsTekst(detail.omschrijving)} />
               ) : null}
-              <DetailRij label="Geldig tot" waarde={detail.geldig_tot ? formatDateNL(detail.geldig_tot) : '—'} />
-              <DetailRij label="Aangemaakt" waarde={formatDateNL(detail.created_at)} />
+              <DetailRij label={tx('Geldig tot')} waarde={detail.geldig_tot ? formatDateNL(detail.geldig_tot) : '—'} />
+              <DetailRij label={tx('Aangemaakt')} waarde={formatDateNL(detail.created_at)} />
               {detail.verzonden_op ? (
-                <DetailRij label="Verzonden" waarde={formatDateNL(detail.verzonden_op)} />
+                <DetailRij label={tx('Verzonden')} waarde={formatDateNL(detail.verzonden_op)} />
               ) : null}
               {detailData?.sent_to_email ? (
-                <DetailRij label="Verstuurd naar" waarde={detailData.sent_to_email} />
+                <DetailRij label={tx('Verstuurd naar')} waarde={detailData.sent_to_email} />
               ) : null}
               {detail.geaccepteerd_op ? (
-                <DetailRij label="Geaccepteerd" waarde={formatDateNL(detail.geaccepteerd_op)} />
+                <DetailRij label={tx('Geaccepteerd')} waarde={formatDateNL(detail.geaccepteerd_op)} />
               ) : null}
             </View>
 
             {detail.vervangen_op ? (
               <NoticeBanner
                 toon="info"
-                message={`Deze offerte is vervangen door een nieuwere versie${
-                  detail.vervangen_door_nummer ? ` (${detail.vervangen_door_nummer})` : ''
-                }. De ondertekenlink van deze versie werkt niet meer.`}
+                message={
+                  detail.vervangen_door_nummer
+                    ? tx('Deze offerte is vervangen door een nieuwere versie ({nummer}). De ondertekenlink van deze versie werkt niet meer.', { nummer: detail.vervangen_door_nummer })
+                    : tx('Deze offerte is vervangen door een nieuwere versie. De ondertekenlink van deze versie werkt niet meer.')
+                }
               />
             ) : null}
 
             <RegelLijst
               laden={detailLaden}
-              leegTekst="Deze offerte heeft geen regels."
+              leegTekst={tx('Deze offerte heeft geen regels.')}
               regels={detailRegels.map((r) => ({
                 id: r.id,
                 omschrijving: r.omschrijving,
@@ -1331,7 +1340,7 @@ function OffersScreenInhoud() {
 
             {detail.notes ? (
               <View style={{ gap: spacing.xs }}>
-                <Text style={styles.label}>Opmerking voor de klant</Text>
+                <Text style={styles.label}>{tx('Opmerking voor de klant')}</Text>
                 <Text style={styles.uitleg}>{alsTekst(detail.notes)}</Text>
               </View>
             ) : null}
@@ -1344,19 +1353,23 @@ function OffersScreenInhoud() {
                 ]}
               >
                 <Text style={[styles.getekendTekst, { color: pdfOntbreekt ? t.statusWarnFg : t.statusApproveFg }]}>
-                  {pdfOntbreekt ? 'Getekend, PDF ontbreekt' : 'Ondertekend'}
-                  {detailData?.signed_by_name ? ` door ${detailData.signed_by_name}` : ''} op{' '}
-                  {formatDateNL(detail.signed_at)}
+                  {detailData?.signed_by_name
+                    ? pdfOntbreekt
+                      ? tx('Getekend, PDF ontbreekt door {naam} op {datum}', { naam: detailData.signed_by_name, datum: formatDateNL(detail.signed_at) })
+                      : tx('Ondertekend door {naam} op {datum}', { naam: detailData.signed_by_name, datum: formatDateNL(detail.signed_at) })
+                    : pdfOntbreekt
+                      ? tx('Getekend, PDF ontbreekt op {datum}', { datum: formatDateNL(detail.signed_at) })
+                      : tx('Ondertekend op {datum}', { datum: formatDateNL(detail.signed_at) })}
                 </Text>
                 {pdfOntbreekt ? (
                   <Text style={[styles.uitleg, { color: t.statusWarnFg }]}>
                     {herstel === 'bezig'
-                      ? 'Het getekende bestand wordt alsnog gemaakt…'
+                      ? tx('Het getekende bestand wordt alsnog gemaakt…')
                       : herstel === 'klaar'
-                        ? 'Gelukt — het bestand is opgeslagen en als bijlage nagestuurd. Ververs om hem te openen.'
+                        ? tx('Gelukt — het bestand is opgeslagen en als bijlage nagestuurd. Ververs om hem te openen.')
                         : herstel === 'fout'
-                          ? 'Het bestand kon niet alsnog gemaakt worden. Open de offerte opnieuw om het nog eens te proberen.'
-                          : 'De handtekening is vastgelegd; alleen het PDF-bestand ontbreekt.'}
+                          ? tx('Het bestand kon niet alsnog gemaakt worden. Open de offerte opnieuw om het nog eens te proberen.')
+                          : tx('De handtekening is vastgelegd; alleen het PDF-bestand ontbreekt.')}
                   </Text>
                 ) : null}
               </View>
@@ -1370,11 +1383,11 @@ function OffersScreenInhoud() {
       {/* Offerte aanmaken / bewerken / herzien */}
       <FormSheet
         visible={concept !== null && !wrOpen}
-        title={concept?.id ? (concept.herzien ? 'Offerte herzien' : 'Offerte bewerken') : 'Nieuwe offerte'}
-        subtitle={concept?.id ? (concept.bron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
+        title={concept?.id ? (concept.herzien ? tx('Offerte herzien') : tx('Offerte bewerken')) : tx('Nieuwe offerte')}
+        subtitle={concept?.id ? (concept.bron?.nummer ?? undefined) : tx('Het nummer wordt automatisch toegekend')}
         error={saveError}
         saving={saving}
-        submitLabel={concept?.herzien ? 'Nieuwe versie opslaan' : alleenCalculatie ? 'Calculatie opslaan' : 'Opslaan'}
+        submitLabel={concept?.herzien ? tx('Nieuwe versie opslaan') : alleenCalculatie ? tx('Calculatie opslaan') : tx('Opslaan')}
         submitDisabled={
           !concept ||
           (concept.volledigVast && !alleenCalculatie) ||
@@ -1391,31 +1404,32 @@ function OffersScreenInhoud() {
             terugOfNaar(router, `/project/${naar.projectId}`);
           }
         }}
-        destructive={conceptMagWeg ? { label: 'Offerte verwijderen', onPress: verwijderen } : undefined}
+        destructive={conceptMagWeg ? { label: tx('Offerte verwijderen'), onPress: verwijderen } : undefined}
       >
         {concept?.herzien ? (
           <NoticeBanner
             toon="info"
-            message="Deze offerte is al verstuurd. Bij opslaan maak je automatisch een nieuwe versie aan; de vorige versie blijft bewaard en de oude ondertekenlink vervalt."
+            message={tx('Deze offerte is al verstuurd. Bij opslaan maak je automatisch een nieuwe versie aan; de vorige versie blijft bewaard en de oude ondertekenlink vervalt.')}
           />
         ) : concept?.volledigVast ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast. Een nieuwe offerte
-              maken kan via Kopiëren.{alleenCalculatie ? ' De interne calculatie kun je nog bijwerken.' : ''}
+              {alleenCalculatie
+                ? tx('Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast. Een nieuwe offerte maken kan via Kopiëren. De interne calculatie kun je nog bijwerken.')
+                : tx('Deze offerte is ondertekend of geaccepteerd en ligt helemaal vast. Een nieuwe offerte maken kan via Kopiëren.')}
             </Text>
           </View>
         ) : concept?.alleenStatus ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              De inhoud van deze offerte ligt vast; alleen de status kun je nog aanpassen.
+              {tx('De inhoud van deze offerte ligt vast; alleen de status kun je nog aanpassen.')}
             </Text>
           </View>
         ) : null}
 
         {concept?.id ? (
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>Status</Text>
+            <Text style={styles.label}>{tx('Status')}</Text>
             <View style={styles.chipRij}>
               {OFFERTE_STATUS_OPTIES.map((s) => {
                 const actief = concept.status === s.id;
@@ -1431,7 +1445,7 @@ function OffersScreenInhoud() {
                     style={[styles.chip, actief && styles.chipActief, uit && { opacity: 0.55 }]}
                   >
                     <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>
-                      {s.label}
+                      {tx(s.label)}
                     </Text>
                   </Pressable>
                 );
@@ -1445,7 +1459,7 @@ function OffersScreenInhoud() {
             soort="offerte"
             vorig={vorigConcept}
             gebruikt={bossGebruikt}
-            sub="Inspreken, foto of eerdere offerte"
+            sub={tx('Inspreken, foto of eerdere offerte')}
             onOpen={bossOpenen}
             onVerder={bossVerder}
             onOpnieuw={() => { wisConcept(concept!.bossSleutel); setVorigConcept(null); }}
@@ -1457,7 +1471,7 @@ function OffersScreenInhoud() {
             iets op te slaan valt. */}
         {concept && conceptBewerkbaar && magWijzigen ? (
           <Button
-            label={concept.herzien ? 'Nieuwe versie opslaan en versturen' : 'Opslaan en versturen'}
+            label={concept.herzien ? tx('Nieuwe versie opslaan en versturen') : tx('Opslaan en versturen')}
             variant="secondary"
             disabled={
               saving ||
@@ -1473,11 +1487,11 @@ function OffersScreenInhoud() {
       {concept && bossGebruikt && wrOpen ? (
         <Werkruimte
           open={wrOpen}
-          titel={concept.id ? (concept.herzien ? 'Offerte herzien' : 'Offerte aanpassen') : 'Offerte opstellen'}
+          titel={concept.id ? (concept.herzien ? tx('Offerte herzien') : tx('Offerte aanpassen')) : tx('Offerte opstellen')}
           nummer={concept.bron?.nummer ?? null}
           status={concept.herzien
-            ? { label: 'Verstuurd · opslaan maakt een nieuwe versie', toon: 'versie' }
-            : concept.id ? { label: 'Concept', toon: 'concept' } : { label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
+            ? { label: tx('Verstuurd · opslaan maakt een nieuwe versie'), toon: 'versie' }
+            : concept.id ? { label: tx('Concept'), toon: 'concept' } : { label: tx('Nieuw · nog niet opgeslagen'), toon: 'concept' }}
           bossBezig={bossStand.bezig}
           bossWacht={bossStand.wacht}
           onTerug={() => { if (!bossStand.bezig) setWrOpen(false); }}
@@ -1522,9 +1536,9 @@ function OffersScreenInhoud() {
           acties={
             <>
               {magWijzigen ? (
-                <Button label="Opslaan en versturen" variant="secondary" disabled={saving || !kanOpslaan} onPress={() => opslaan(true)} style={{ flex: 1 }} />
+                <Button label={tx('Opslaan en versturen')} variant="secondary" disabled={saving || !kanOpslaan} onPress={() => opslaan(true)} style={{ flex: 1 }} />
               ) : null}
-              <Button label={concept.herzien ? 'Nieuwe versie opslaan' : 'Opslaan als concept'} loading={saving} disabled={saving || !kanOpslaan} onPress={() => opslaan(false)} style={{ flex: 1 }} />
+              <Button label={concept.herzien ? tx('Nieuwe versie opslaan') : tx('Opslaan als concept')} loading={saving} disabled={saving || !kanOpslaan} onPress={() => opslaan(false)} style={{ flex: 1 }} />
             </>
           }
         />
@@ -1533,7 +1547,7 @@ function OffersScreenInhoud() {
       {/* Versturen per mail */}
       <DocumentMailSheet
         visible={mail !== null}
-        titel="Offerte versturen per e-mail"
+        titel={tx('Offerte versturen per e-mail')}
         nummer={mail?.offerte.nummer}
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
@@ -1541,9 +1555,9 @@ function OffersScreenInhoud() {
         boss={mail ? { functie: 'boss-offerte', documentId: mail.offerte.id, klantId: mail.offerte.customer_id ?? null, kanOndertekenen: mail.kanOndertekenen } : null}
         melding={
           mail && mail.kanOndertekenen
-            ? `Ondertekeningslink: ${ondertekenLink(APP_URL, mail.signToken)}. In de mail staat {{link}} als knop "Offerte bekijken & ondertekenen". De offerte gaat als PDF mee.`
+            ? tx('Ondertekeningslink: {url}. In de mail staat {link} als knop "Offerte bekijken & ondertekenen". De offerte gaat als PDF mee.', { url: ondertekenLink(APP_URL, mail.signToken), link: '{{link}}' })
             : mail
-              ? 'De offerte gaat als PDF mee. Digitaal ondertekenen zit niet in je abonnement, dus er gaat geen ondertekenlink mee.'
+              ? tx('De offerte gaat als PDF mee. Digitaal ondertekenen zit niet in je abonnement, dus er gaat geen ondertekenlink mee.')
               : null
         }
         kop={
@@ -1551,7 +1565,7 @@ function OffersScreenInhoud() {
           mail && !mail.laden && mail.bedrijf && !String(mail.bedrijf.iban || '').trim() ? (
             <NoticeBanner
               toon="waarschuwing"
-              message="Let op: het IBAN van je bedrijf ontbreekt. De offerte kun je gewoon versturen, maar een factuur pas als het IBAN is ingevuld (Instellingen › Bedrijfsprofiel)."
+              message={tx('Let op: het IBAN van je bedrijf ontbreekt. De offerte kun je gewoon versturen, maar een factuur pas als het IBAN is ingevuld (Instellingen › Bedrijfsprofiel).')}
             />
           ) : null
         }
@@ -1564,49 +1578,48 @@ function OffersScreenInhoud() {
       {/* Kopiëren */}
       <FormSheet
         visible={kopie !== null}
-        title="Offerte kopiëren"
+        title={tx('Offerte kopiëren')}
         subtitle={kopie?.offerte.nummer ?? undefined}
         error={kopieFout}
         saving={kopieBezig}
-        submitLabel={kopieBezig ? 'Kopiëren…' : 'Kopiëren'}
+        submitLabel={kopieBezig ? tx('Kopiëren…') : tx('Kopiëren')}
         submitDisabled={!kopie || (kopie.modus === 'ander' && (!kopie.klantId || kopieAnderGeblokkeerd))}
         onSubmit={kopieren}
         onClose={() => setKopie(null)}
       >
         <Text style={styles.uitleg}>
-          De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna
-          aanpassen en versturen.
+          {tx('De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna aanpassen en versturen.')}
         </Text>
         <Keuze
-          label="Voor welke klant?"
+          label={tx('Voor welke klant?')}
           opties={[
             {
               id: 'zelfde',
-              label: `Zelfde klant — nieuwe versie (${kopie?.offerte.customer?.name ?? 'deze klant'})`,
+              label: tx('Zelfde klant — nieuwe versie ({klant})', { klant: kopie?.offerte.customer?.name ?? tx('deze klant') }),
             },
-            { id: 'ander', label: 'Andere klant — nieuwe offerte' },
+            { id: 'ander', label: tx('Andere klant — nieuwe offerte') },
           ]}
           waarde={kopie?.modus ?? 'zelfde'}
           onKies={(id) => setKopie((k) => (k ? { ...k, modus: id as KopieStand['modus'] } : k))}
           hint={
             kopie?.modus === 'ander'
-              ? 'Krijgt een nieuw offertenummer en telt mee voor je offertelimiet.'
-              : 'Krijgt het volgende versienummer en telt niet opnieuw mee voor je limiet.'
+              ? tx('Krijgt een nieuw offertenummer en telt mee voor je offertelimiet.')
+              : tx('Krijgt het volgende versienummer en telt niet opnieuw mee voor je limiet.')
           }
         />
         {kopie?.modus === 'ander' ? (
           <SelectField
-            label="Klant"
+            label={tx('Klant')}
             value={kopie.klantId}
             options={klanten}
             onChange={(id) => setKopie((k) => (k ? { ...k, klantId: id } : k))}
-            placeholder="Selecteer klant"
+            placeholder={tx('Selecteer klant')}
           />
         ) : null}
         {kopieAnderGeblokkeerd ? (
           <NoticeBanner
             toon="waarschuwing"
-            message="Je offertelimiet voor deze periode is bereikt. Een nieuwe versie voor dezelfde klant kan nog wel — die telt niet opnieuw mee."
+            message={tx('Je offertelimiet voor deze periode is bereikt. Een nieuwe versie voor dezelfde klant kan nog wel — die telt niet opnieuw mee.')}
           />
         ) : null}
       </FormSheet>

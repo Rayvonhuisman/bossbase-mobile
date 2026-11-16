@@ -10,6 +10,7 @@
  *
  * Alles hier is puur (geen React, geen database): tests/bossOfferte.test.mjs.
  */
+import { tx } from '@/i18n';
 import {
   nieuweId,
   nummerNaarVeld,
@@ -312,7 +313,7 @@ export function pasVoorstelToe(
     if (b.ref) {
       const j = regels.findIndex((r) => r.id === b.ref);
       if (j < 0) {
-        overgeslagen.push(`${b.omschrijving}: deze regel is intussen verwijderd.`);
+        overgeslagen.push(tx('{regel}: deze regel is intussen verwijderd.', { regel: b.omschrijving }));
         return;
       }
       const oud = regels[j]!;
@@ -322,15 +323,15 @@ export function pasVoorstelToe(
       const nieuw: Regel = { ...oud };
       const veranderd = { omschrijving: false, aantal: false, prijs: false };
       if (b.omschrijving !== oud.omschrijving) {
-        if (zelf('omschrijving')) overgeslagen.push(`${oud.omschrijving}: je had de omschrijving intussen zelf aangepast.`);
+        if (zelf('omschrijving')) overgeslagen.push(tx('{regel}: je had de omschrijving intussen zelf aangepast.', { regel: oud.omschrijving }));
         else { nieuw.omschrijving = b.omschrijving; veranderd.omschrijving = true; }
       }
       if (getal(oud.aantal) !== (b.aantal ?? null)) {
-        if (zelf('aantal')) overgeslagen.push(`${oud.omschrijving}: je had de hoeveelheid intussen zelf aangepast.`);
+        if (zelf('aantal')) overgeslagen.push(tx('{regel}: je had de hoeveelheid intussen zelf aangepast.', { regel: oud.omschrijving }));
         else { nieuw.aantal = veld(b.aantal); veranderd.aantal = true; }
       }
       if (getal(oud.prijs) !== (b.eenheidsprijs ?? null)) {
-        if (zelf('prijs')) overgeslagen.push(`${oud.omschrijving}: je had de prijs intussen zelf aangepast.`);
+        if (zelf('prijs')) overgeslagen.push(tx('{regel}: je had de prijs intussen zelf aangepast.', { regel: oud.omschrijving }));
         else { nieuw.prijs = veld(b.eenheidsprijs); veranderd.prijs = true; }
       }
       nieuw.type = b.type || oud.type;

@@ -24,6 +24,7 @@ import {
 } from '@/lib/metingen';
 import { createMeting, vertelMetingen } from '@/services/metingService';
 import { MetingVelden } from './MetingVelden';
+import { tx, txn } from '@/i18n';
 
 /**
  * "Vertel het Boss" in de app: een schilder loopt door een huis en vertelt wat
@@ -101,7 +102,7 @@ export function VertelHetBoss({
     if (!tekst || bezig || luistert) return;
     const dubbel = alVerwerkt(stukken, tekst, bewerk);
     if (dubbel) {
-      setBericht({ tekst: `Dit stuk is al verwerkt (stuk ${dubbel}).`, fout: true });
+      setBericht({ tekst: tx('Dit stuk is al verwerkt (stuk {nr}).', { nr: dubbel }), fout: true });
       return;
     }
     const id = bewerk ?? nieuweSleutel();
@@ -110,7 +111,7 @@ export function VertelHetBoss({
     const antwoord = await vertelMetingen(projectId, tekst, bestaandeVoor(nu.current, id));
     setBezig(false);
     if (!antwoord.ok) {
-      setBericht({ tekst: `${antwoord.melding} Je tekst staat er nog.`, fout: true });
+      setBericht({ tekst: tx('{melding} Je tekst staat er nog.', { melding: antwoord.melding }), fout: true });
       return;
     }
     const uit = stukVerwerkt({
@@ -171,7 +172,11 @@ export function VertelHetBoss({
     for (const [i, r] of regels.entries()) {
       const res = await createMeting(projectId, r, { volgorde: volgordeVanaf + i });
       if (!res.ok) {
-        setOpslaanFout(`${res.melding}${nieuw.length ? ` (${nieuw.length} wel opgeslagen)` : ''}`);
+        setOpslaanFout(
+          nieuw.length
+            ? tx('{melding} ({n} wel opgeslagen)', { melding: res.melding, n: nieuw.length })
+            : res.melding,
+        );
         break;
       }
       nieuw.push(res.data);
@@ -188,11 +193,13 @@ export function VertelHetBoss({
     if (luistert) spraak.stop();
     if (!regels.length && !tekst) return onSluit();
     Dialog.alert(
-      regels.length ? `${regels.length === 1 ? '1 meting' : `${regels.length} metingen`} niet opslaan?` : 'Tekst niet verwerken?',
-      'Wat je hebt verteld is dan weg.',
+      regels.length
+        ? txn('{n} meting niet opslaan?', '{n} metingen niet opslaan?', regels.length)
+        : tx('Tekst niet verwerken?'),
+      tx('Wat je hebt verteld is dan weg.'),
       [
-        { text: 'Terug', style: 'cancel' },
-        { text: regels.length ? 'Niet opslaan' : 'Weggooien', style: 'destructive', onPress: onSluit },
+        { text: tx('Terug'), style: 'cancel' },
+        { text: regels.length ? tx('Niet opslaan') : tx('Weggooien'), style: 'destructive', onPress: onSluit },
       ],
     );
   };
@@ -208,7 +215,7 @@ export function VertelHetBoss({
         <View style={s.luister} accessibilityLiveRegion="polite">
           <View style={s.stip} />
           <Text style={s.luisterTekst}>
-            {spraak.stand === 'start' ? 'Microfoon starten…' : 'Boss luistert… tik op stop als je klaar bent'}
+            {spraak.stand === 'start' ? tx('Microfoon starten…') : tx('Boss luistert… tik op stop als je klaar bent')}
           </Text>
         </View>
       ) : null}
@@ -234,7 +241,7 @@ export function VertelHetBoss({
       {bewerk ? (
         <View style={s.bewerkRij}>
           <Text style={[s.meldingTekst, { flex: 1 }]}>
-            Stuk {stukken.findIndex((x) => x.id === bewerk) + 1} aanpassen
+            {tx('Stuk {nr} aanpassen', { nr: stukken.findIndex((x) => x.id === bewerk) + 1 })}
           </Text>
           <Pressable
             onPress={() => {
@@ -244,7 +251,7 @@ export function VertelHetBoss({
             hitSlop={10}
             accessibilityRole="button"
           >
-            <Text style={s.link}>Annuleren</Text>
+            <Text style={s.link}>{tx('Annuleren')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -256,11 +263,11 @@ export function VertelHetBoss({
         editable={!bezig}
         placeholder={
           spraak.ondersteund
-            ? 'Tik op de microfoon en vertel wat je meet, of typ'
-            : 'Typ wat je meet, of spreek in met de microfoon van je toetsenbord'
+            ? tx('Tik op de microfoon en vertel wat je meet, of typ')
+            : tx('Typ wat je meet, of spreek in met de microfoon van je toetsenbord')
         }
         placeholderTextColor={t.muted2}
-        accessibilityLabel="Wat je gemeten hebt"
+        accessibilityLabel={tx('Wat je gemeten hebt')}
         style={[s.invoer, toetsenbordOpen && s.invoerKlein]}
         testID="meting-boss-tekst"
       />
@@ -270,7 +277,7 @@ export function VertelHetBoss({
             onPress={mic}
             disabled={bezig}
             accessibilityRole="button"
-            accessibilityLabel={luistert ? 'Inspreken stoppen' : 'Inspreken'}
+            accessibilityLabel={luistert ? tx('Inspreken stoppen') : tx('Inspreken')}
             accessibilityState={{ disabled: bezig, selected: luistert }}
             testID="meting-boss-mic"
             style={({ pressed }) => [s.mic, luistert && s.micAan, bezig && { opacity: 0.45 }, pressed && { opacity: 0.8 }]}
@@ -289,7 +296,13 @@ export function VertelHetBoss({
           >
             {bezig ? <ActivityIndicator color={ds.greenInk} /> : null}
             <Text style={s.grootTekst}>
-              {bezig ? 'Boss verwerkt…' : bewerk ? 'Opnieuw verwerken' : stukken.length ? 'Ook verwerken' : 'Verwerken'}
+              {bezig
+                ? tx('Boss verwerkt…')
+                : bewerk
+                  ? tx('Opnieuw verwerken')
+                  : stukken.length
+                    ? tx('Ook verwerken')
+                    : tx('Verwerken')}
             </Text>
           </Pressable>
         ) : (
@@ -303,7 +316,7 @@ export function VertelHetBoss({
           >
             {opslaanBezig ? <ActivityIndicator color={ds.greenInk} /> : null}
             <Text style={s.grootTekst}>
-              {opslaanBezig ? 'Opslaan…' : regels.length === 1 ? '1 meting opslaan' : `${regels.length} metingen opslaan`}
+              {opslaanBezig ? tx('Opslaan…') : txn('{n} meting opslaan', '{n} metingen opslaan', regels.length)}
             </Text>
           </Pressable>
         )}
@@ -315,8 +328,12 @@ export function VertelHetBoss({
   return (
     <Paneel
       open={open}
-      titel="Vertel het Boss"
-      subtitel={regels.length ? `${regels.length === 1 ? '1 meting' : `${regels.length} metingen`} · nog niets opgeslagen` : 'Inspreken of typen, in één keer of per ruimte'}
+      titel={tx('Vertel het Boss')}
+      subtitel={
+        regels.length
+          ? txn('{n} meting · nog niets opgeslagen', '{n} metingen · nog niets opgeslagen', regels.length)
+          : tx('Inspreken of typen, in één keer of per ruimte')
+      }
       onSluit={sluit}
       voet={voet}
     >
@@ -324,18 +341,19 @@ export function VertelHetBoss({
         {stukken.length === 0 ? (
           <View style={s.uitleg}>
             <Text style={s.uitlegTekst}>
-              Vertel wat je meet, bijvoorbeeld: “woonkamer 5 meter 20 bij 4 meter 10, plafond 2,60 hoog, twee ramen van 1,20 bij
-              1,40”. Dat mag in één verhaal of per ruimte: elk stuk komt erbij.
+              {tx(
+                'Vertel wat je meet, bijvoorbeeld: “woonkamer 5 meter 20 bij 4 meter 10, plafond 2,60 hoog, twee ramen van 1,20 bij 1,40”. Dat mag in één verhaal of per ruimte: elk stuk komt erbij.',
+              )}
             </Text>
             <Text style={s.uitlegTekst}>
-              Boss zet het in een lijst. Je kijkt alles na, en pas als je op opslaan tikt komen de metingen bij het project.
+              {tx('Boss zet het in een lijst. Je kijkt alles na, en pas als je op opslaan tikt komen de metingen bij het project.')}
             </Text>
             {!spraak.ondersteund ? (
               <View style={s.hint}>
                 <Mic size={14} color={t.green700} />
                 <Text style={[s.meldingTekst, { color: t.ink2, flex: 1 }]}>
-                  {DICTEER_HINT}
-                  {Platform.OS === 'web' ? ' Inspreken in de app zelf werkt in Chrome en Safari.' : ''}
+                  {tx(DICTEER_HINT)}
+                  {Platform.OS === 'web' ? ` ${tx('Inspreken in de app zelf werkt in Chrome en Safari.')}` : ''}
                 </Text>
               </View>
             ) : null}
@@ -344,7 +362,7 @@ export function VertelHetBoss({
           <View style={s.stukken}>
             {stukken.map((st, i) => (
               <View key={st.id} style={[s.stuk, bewerk === st.id && s.stukBewerk]}>
-                <Text style={s.stukNr}>Stuk {i + 1}</Text>
+                <Text style={s.stukNr}>{tx('Stuk {nr}', { nr: i + 1 })}</Text>
                 <Text style={s.stukTekst} numberOfLines={2}>
                   {st.tekst}
                 </Text>
@@ -354,7 +372,7 @@ export function VertelHetBoss({
                   disabled={bezig}
                   hitSlop={6}
                   accessibilityRole="button"
-                  accessibilityLabel={`Stuk ${i + 1} aanpassen en opnieuw verwerken`}
+                  accessibilityLabel={tx('Stuk {nr} aanpassen en opnieuw verwerken', { nr: i + 1 })}
                   style={s.rondKlein}
                 >
                   <Pencil size={16} color={t.ink2} />
@@ -364,7 +382,7 @@ export function VertelHetBoss({
                   disabled={bezig}
                   hitSlop={6}
                   accessibilityRole="button"
-                  accessibilityLabel={`Stuk ${i + 1} en zijn metingen weghalen`}
+                  accessibilityLabel={tx('Stuk {nr} en zijn metingen weghalen', { nr: i + 1 })}
                   style={s.rondKlein}
                 >
                   <Trash2 size={16} color={t.statusRejectFg} />
@@ -376,13 +394,16 @@ export function VertelHetBoss({
 
         {regels.length > 0 ? (
           <View style={s.controle}>
-            <Text style={s.kop}>Nakijken</Text>
+            <Text style={s.kop}>{tx('Nakijken')}</Text>
             {nogNakijken > 0 ? (
               <View style={s.waarschuwing}>
                 <AlertTriangle size={15} color={t.statusWarnFg} />
                 <Text style={[s.meldingTekst, { color: t.statusWarnFg, flex: 1 }]}>
-                  {nogNakijken === 1 ? '1 meting moet je nakijken' : `${nogNakijken} metingen moet je nakijken`} voordat je kunt
-                  opslaan. Tik op Klopt, of pas hem aan.
+                  {txn(
+                    '{n} meting moet je nakijken voordat je kunt opslaan. Tik op Klopt, of pas hem aan.',
+                    '{n} metingen moet je nakijken voordat je kunt opslaan. Tik op Klopt, of pas ze aan.',
+                    nogNakijken,
+                  )}
                 </Text>
               </View>
             ) : null}
@@ -396,23 +417,27 @@ export function VertelHetBoss({
                       onPress={() => setUitgeklapt(open ? null : r.sleutel)}
                       accessibilityRole="button"
                       accessibilityState={{ expanded: open }}
-                      accessibilityLabel={`${r.naam || `Meting ${i + 1}`}, ${som || 'maat ontbreekt'}. ${open ? 'Inklappen' : 'Aanpassen'}`}
+                      accessibilityLabel={tx('{naam}, {maat}. {actie}', {
+                        naam: r.naam || tx('Meting {nr}', { nr: i + 1 }),
+                        maat: som || tx('maat ontbreekt'),
+                        actie: open ? tx('Inklappen') : tx('Aanpassen'),
+                      })}
                       style={s.regelTik}
                     >
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={s.regelNaam} numberOfLines={2}>
-                          {r.naam || 'Zonder naam'}
+                          {r.naam || tx('Zonder naam')}
                         </Text>
-                        <Text style={[s.regelSom, !som && { color: t.statusWarnFg }]}>{som || 'Maat ontbreekt'}</Text>
+                        <Text style={[s.regelSom, !som && { color: t.statusWarnFg }]}>{som || tx('Maat ontbreekt')}</Text>
                         {!r.nagekeken && r.twijfelReden ? <Text style={s.twijfelTekst}>{r.twijfelReden}</Text> : null}
-                        {r.nagekeken && r.twijfel ? <Text style={[s.klein, { color: t.statusApproveFg }]}>Nagekeken</Text> : null}
+                        {r.nagekeken && r.twijfel ? <Text style={[s.klein, { color: t.statusApproveFg }]}>{tx('Nagekeken')}</Text> : null}
                       </View>
                       {open ? <ChevronUp size={18} color={t.muted} /> : <ChevronDown size={18} color={t.muted} />}
                     </Pressable>
                     <Pressable
                       onPress={() => setRegels((rs) => rs.filter((x) => x.sleutel !== r.sleutel))}
                       accessibilityRole="button"
-                      accessibilityLabel={`${r.naam || 'Meting'} weglaten`}
+                      accessibilityLabel={tx('{naam} weglaten', { naam: r.naam || tx('Meting') })}
                       hitSlop={6}
                       style={s.rondKlein}
                     >
@@ -423,11 +448,12 @@ export function VertelHetBoss({
                     <Pressable
                       onPress={() => zet(r.sleutel, { nagekeken: true })}
                       accessibilityRole="button"
-                      accessibilityLabel={`${r.naam || 'Meting'} klopt`}
+                      accessibilityLabel={tx('{naam} klopt', { naam: r.naam || tx('Meting') })}
                       style={({ pressed }) => [s.klopt, pressed && { opacity: 0.8 }]}
                     >
                       <Check size={16} color={ds.greenInk} />
-                      <Text style={s.kloptTekst}>Klopt</Text>
+                      <Text style={s.kloptTekst}>{tx('Klopt')}</Text>
+
                     </Pressable>
                   ) : null}
                   {open ? (

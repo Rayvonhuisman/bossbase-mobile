@@ -10,8 +10,11 @@
  *   mét `werkbon_materiaal_id`) plus de inkopen op een werkbon (`project_kosten`
  *   met `werkbon_id`). Geen boeking; telt alleen in de nacalculatie van een project.
  *
- * Bewust zonder imports: de tests draaien dit bestand rechtstreeks in Node.
+ * Bewust zonder zware imports (alleen vertaling en kalendernamen): de tests
+ * draaien dit bestand in Node.
  */
+import { tx } from '@/i18n';
+import { hoofdletter, maandNaam } from './kalenderNamen';
 
 const rond2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -127,10 +130,10 @@ export function alleenGeboekt<T extends Pick<KostenRij, 'werkbonMateriaalId'>>(k
 // ── Groepen (de tegels) ────────────────────────────────────────────────────
 
 export const KOSTEN_GROEPEN = [
-  { id: 'materiaal', label: 'Materiaalkosten', categorieen: ['materiaal'] },
-  { id: 'arbeid', label: 'Arbeidskosten', categorieen: ['arbeid', 'arbeidskosten', 'uren'] },
-  { id: 'reiskosten', label: 'Reiskosten', categorieen: ['reiskosten', 'reis', 'brandstof', 'km'] },
-  { id: 'overig', label: 'Overige kosten', categorieen: [] as string[] },
+  { id: 'materiaal', get label() { return tx('Materiaalkosten'); }, categorieen: ['materiaal'] },
+  { id: 'arbeid', get label() { return tx('Arbeidskosten'); }, categorieen: ['arbeid', 'arbeidskosten', 'uren'] },
+  { id: 'reiskosten', get label() { return tx('Reiskosten'); }, categorieen: ['reiskosten', 'reis', 'brandstof', 'km'] },
+  { id: 'overig', get label() { return tx('Overige kosten'); }, categorieen: [] as string[] },
 ] as const;
 export type KostenGroep = (typeof KOSTEN_GROEPEN)[number]['id'];
 
@@ -204,15 +207,15 @@ export function bouwKostenPagina({
     weergave === 'materiaal'
       ? {
           id: 'totaal',
-          label: 'Kosten op werkbonnen',
+          label: tx('Kosten op werkbonnen'),
           bedrag: totaal,
-          uitleg: 'Geen boeking · telt in de nacalculatie van een project',
+          uitleg: tx('Geen boeking · telt in de nacalculatie van een project'),
         }
-      : { id: 'totaal', label: 'Geboekte kosten', bedrag: totaal, uitleg: 'Wat naar de boekhouding gaat' },
-    { id: 'materiaal', label: 'Materiaalkosten', bedrag: groepen.materiaal },
-    ...(groepen.arbeid > 0 ? [{ id: 'arbeid', label: 'Arbeidskosten', bedrag: groepen.arbeid }] : []),
-    { id: 'reiskosten', label: 'Reiskosten', bedrag: groepen.reiskosten },
-    { id: 'overig', label: 'Overige kosten', bedrag: groepen.overig },
+      : { id: 'totaal', label: tx('Geboekte kosten'), bedrag: totaal, uitleg: tx('Wat naar de boekhouding gaat') },
+    { id: 'materiaal', label: tx('Materiaalkosten'), bedrag: groepen.materiaal },
+    ...(groepen.arbeid > 0 ? [{ id: 'arbeid', label: tx('Arbeidskosten'), bedrag: groepen.arbeid }] : []),
+    { id: 'reiskosten', label: tx('Reiskosten'), bedrag: groepen.reiskosten },
+    { id: 'overig', label: tx('Overige kosten'), bedrag: groepen.overig },
   ];
 
   const zonderLeverancier = kosten.filter((k) => !k.leverancierId && !isWerkbonMateriaal(k)).length;
@@ -223,9 +226,15 @@ export function bouwKostenPagina({
 
 /** Lege-staat-tekst zoals het dashboard hem formuleert. */
 export function legeKostenTekst(weergave: KostenWeergave, periodeLabel: string, metFilter: boolean) {
-  return `${weergave === 'materiaal' ? 'Geen kosten op werkbonnen' : 'Geen kosten'} in ${periodeLabel}${
-    metFilter ? ' bij dit filter' : ''
-  }.`;
+  const periode = periodeLabel;
+  if (weergave === 'materiaal') {
+    return metFilter
+      ? tx('Geen kosten op werkbonnen in {periode} bij dit filter.', { periode })
+      : tx('Geen kosten op werkbonnen in {periode}.', { periode });
+  }
+  return metFilter
+    ? tx('Geen kosten in {periode} bij dit filter.', { periode })
+    : tx('Geen kosten in {periode}.', { periode });
 }
 
 // ── Categorie en bron ──────────────────────────────────────────────────────
@@ -233,12 +242,12 @@ export function legeKostenTekst(weergave: KostenWeergave, periodeLabel: string, 
 export type CategorieToon = 'blue' | 'green' | 'orange' | 'purple' | 'gray';
 
 const CATEGORIE_META: Record<string, { label: string; toon: CategorieToon }> = {
-  materiaal: { label: 'Materiaal', toon: 'blue' },
-  arbeid: { label: 'Arbeid', toon: 'green' },
-  reiskosten: { label: 'Reiskosten', toon: 'orange' },
-  inkoopfactuur: { label: 'Inkoopfactuur', toon: 'purple' },
-  'algemene kosten': { label: 'Algemene kosten', toon: 'gray' },
-  overig: { label: 'Overig', toon: 'gray' },
+  materiaal: { get label() { return tx('Materiaal'); }, toon: 'blue' },
+  arbeid: { get label() { return tx('Arbeid'); }, toon: 'green' },
+  reiskosten: { get label() { return tx('Reiskosten'); }, toon: 'orange' },
+  inkoopfactuur: { get label() { return tx('Inkoopfactuur'); }, toon: 'purple' },
+  'algemene kosten': { get label() { return tx('Algemene kosten'); }, toon: 'gray' },
+  overig: { get label() { return tx('Overig'); }, toon: 'gray' },
 };
 
 /** `costCategoryMeta` uit het dashboard: nette naam + kleur, onbekend = grijs. */
@@ -248,7 +257,7 @@ export function categorieMeta(cat: string | null | undefined): { label: string; 
     .toLowerCase();
   const meta = CATEGORIE_META[key];
   if (meta) return meta;
-  const label = cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Overig';
+  const label = cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : tx('Overig');
   return { label, toon: 'gray' };
 }
 
@@ -279,18 +288,14 @@ export function calcBtw(bedrag: number, pct: number, mode: 'excl' | 'incl' = 'ex
 // ── Periode ────────────────────────────────────────────────────────────────
 
 export const PERIODE_TYPES = [
-  { id: 'week', label: 'Week' },
-  { id: 'maand', label: 'Maand' },
-  { id: 'kwartaal', label: 'Kwartaal' },
-  { id: 'jaar', label: 'Jaar' },
+  { id: 'week', get label() { return tx('Week'); } },
+  { id: 'maand', get label() { return tx('Maand'); } },
+  { id: 'kwartaal', get label() { return tx('Kwartaal'); } },
+  { id: 'jaar', get label() { return tx('Jaar'); } },
 ] as const;
 export type PeriodeType = (typeof PERIODE_TYPES)[number]['id'];
 
-const MAANDEN = [
-  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
-  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
-];
-const MAANDEN_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const kortMaand = (i: number) => maandNaam(i, 'kort');
 
 /** Datum als 'YYYY-MM-DD' in de lokale tijdzone (geen UTC-verschuiving). */
 export function isoLokaal(d: Date): string {
@@ -327,9 +332,9 @@ export function periodeRange(
     const { week, jaar } = isoWeekNummer(start);
     const bereik =
       start.getMonth() === eind.getMonth()
-        ? `${start.getDate()}–${eind.getDate()} ${MAANDEN_KORT[eind.getMonth()]}`
-        : `${start.getDate()} ${MAANDEN_KORT[start.getMonth()]} – ${eind.getDate()} ${MAANDEN_KORT[eind.getMonth()]}`;
-    return { start: isoLokaal(start), eind: isoLokaal(eind), label: `Week ${week} · ${bereik} ${jaar}` };
+        ? `${start.getDate()}–${eind.getDate()} ${kortMaand(eind.getMonth())}`
+        : `${start.getDate()} ${kortMaand(start.getMonth())} – ${eind.getDate()} ${kortMaand(eind.getMonth())}`;
+    return { start: isoLokaal(start), eind: isoLokaal(eind), label: tx('Week {week} · {bereik} {jaar}', { week, bereik, jaar }) };
   }
 
   if (type === 'kwartaal') {
@@ -339,7 +344,7 @@ export function periodeRange(
     return {
       start: isoLokaal(start),
       eind: isoLokaal(eind),
-      label: `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`,
+      label: tx('Q{kwartaal} {jaar}', { kwartaal: Math.floor(start.getMonth() / 3) + 1, jaar: start.getFullYear() }),
     };
   }
 
@@ -351,10 +356,10 @@ export function periodeRange(
 
   const start = new Date(j, m + offset, 1);
   const eind = new Date(j, m + offset + 1, 0);
-  const naam = MAANDEN[start.getMonth()] ?? '';
+  const naam = maandNaam(start.getMonth());
   return {
     start: isoLokaal(start),
     eind: isoLokaal(eind),
-    label: `${naam.charAt(0).toUpperCase()}${naam.slice(1)} ${start.getFullYear()}`,
+    label: tx('{maand} {jaar}', { maand: hoofdletter(naam), jaar: start.getFullYear() }),
   };
 }

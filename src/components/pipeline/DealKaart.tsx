@@ -6,6 +6,7 @@ import { formatEUR } from '@/lib/format';
 import { dealWaarde } from '@/lib/pipelineLogica';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import type { DealRow } from '@/services/dealService';
+import { tx } from '@/i18n';
 
 /**
  * Een pipelinekaart, met dezelfde inhoud als `.pc` in het dashboard: oranje
@@ -35,13 +36,15 @@ export function DealKaart({
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"
-        accessibilityLabel={`${deal.customer?.name ?? 'Klant'}, ${deal.title ?? 'aanvraag'} openen`}
+        accessibilityLabel={deal.title
+          ? tx('{klant}, {titel} openen', { klant: deal.customer?.name ?? tx('Klant'), titel: deal.title })
+          : tx('{klant}, aanvraag openen', { klant: deal.customer?.name ?? tx('Klant') })}
         style={({ pressed }) => [styles.kaart, pressed && { opacity: 0.9 }]}
       >
         <View style={styles.kop}>
-          {geenVervolg ? <View style={styles.stip} accessibilityLabel="Geen vervolgactiviteit gepland" /> : null}
+          {geenVervolg ? <View style={styles.stip} accessibilityLabel={tx('Geen vervolgactiviteit gepland')} /> : null}
           <Text style={styles.klant} numberOfLines={1}>
-            {deal.customer?.name || 'Klant'}
+            {deal.customer?.name || tx('Klant')}
           </Text>
           {/* Ruimte voor het menu, dat er los bovenop ligt. */}
           {onMenu ? <View style={styles.menu} /> : null}
@@ -67,7 +70,7 @@ export function DealKaart({
             {prio ? (
               <View style={[styles.prio, prio === 'Hoog' ? styles.prioHoog : styles.prioLaag]}>
                 <Text style={[styles.prioTekst, { color: prio === 'Hoog' ? t.statusRejectFg : t.statusDraftFg }]}>
-                  {prio}
+                  {prio === 'Hoog' ? tx('Hoog') : tx('Laag')}
                 </Text>
               </View>
             ) : null}
@@ -79,7 +82,7 @@ export function DealKaart({
           onPress={onMenu}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Meer acties"
+          accessibilityLabel={tx('Meer acties')}
           style={({ pressed }) => [styles.menu, styles.menuLos, pressed && { opacity: 0.6 }]}
         >
           <MoreVertical size={18} color={t.muted} />

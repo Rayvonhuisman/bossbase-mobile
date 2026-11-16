@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useHulp } from '@/providers/HulpProvider';
 import { BossAvatar } from '../BossChat';
+import { tx } from '@/i18n';
 
 /**
  * Boss openen vanaf het klant- of projectscherm, met die klant of dat project
@@ -18,13 +19,12 @@ export function BossKnop({
   naast?: ReactNode;
 }) {
   const { openBoss } = useHulp();
-  const wat = projectId ? 'dit project' : 'deze klant';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Pressable
         onPress={() => openBoss(projectId ? { project_id: projectId } : klantId ? { klant_id: klantId } : null)}
         accessibilityRole="button"
-        accessibilityLabel={`Boss: iets vastleggen voor ${wat}`}
+        accessibilityLabel={projectId ? tx('Boss: iets vastleggen voor dit project') : tx('Boss: iets vastleggen voor deze klant')}
         testID="boss-ingang"
         hitSlop={6}
         style={({ pressed }) => [pressed && { opacity: 0.7 }]}

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { leesMeerwerkInvoer, naarMeerwerkPrijs, type MeerwerkPrijs } from '@/lib/meerwerkPrijs';
+import { tx } from '@/i18n';
 
 /**
  * Bedrag en uren bij meerwerk — getMeerwerkPrijzen / zetMeerwerkPrijs uit
@@ -50,6 +51,6 @@ export async function zetMeerwerkPrijs(
     )
     .select(VELDEN)
     .single();
-  if (error || !data) return { data: null, error: error?.message ?? 'Opslaan mislukt.' };
+  if (error || !data) return { data: null, error: error?.message ?? tx('Opslaan mislukt.') };
   return { data: naarMeerwerkPrijs(data as Record<string, unknown>), error: null };
 }

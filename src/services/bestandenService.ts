@@ -11,6 +11,7 @@ import {
   veiligeNaam,
   type GekozenBestand,
 } from '@/lib/bestandRegels';
+import { locale, tx, txm } from '@/i18n';
 
 export {
   BESTAND_MAX,
@@ -42,23 +43,23 @@ export {
 export type BestandSoort = 'offerte' | 'factuur' | 'werkbon' | 'foto' | 'bon' | 'meting' | 'eigen';
 
 export const BESTAND_SOORTEN: { id: BestandSoort; label: string }[] = [
-  { id: 'offerte', label: 'Offertes' },
-  { id: 'factuur', label: 'Facturen' },
-  { id: 'werkbon', label: 'Werkbonnen' },
-  { id: 'foto', label: "Foto's" },
-  { id: 'bon', label: 'Bonnen' },
-  { id: 'meting', label: 'Metingen' },
-  { id: 'eigen', label: 'Eigen bestanden' },
+  { id: 'offerte', get label() { return tx('Offertes'); } },
+  { id: 'factuur', get label() { return tx('Facturen'); } },
+  { id: 'werkbon', get label() { return tx('Werkbonnen'); } },
+  { id: 'foto', get label() { return tx("Foto's"); } },
+  { id: 'bon', get label() { return tx('Bonnen'); } },
+  { id: 'meting', get label() { return tx('Metingen'); } },
+  { id: 'eigen', get label() { return tx('Eigen bestanden'); } },
 ];
 
 export const SOORT_LABEL: Record<BestandSoort, string> = {
-  offerte: 'Offerte',
-  factuur: 'Factuur',
-  werkbon: 'Werkbon',
-  foto: 'Foto',
-  bon: 'Bon',
-  meting: 'Meting',
-  eigen: 'Eigen bestand',
+  get offerte() { return tx('Offerte'); },
+  get factuur() { return tx('Factuur'); },
+  get werkbon() { return tx('Werkbon'); },
+  get foto() { return tx('Foto'); },
+  get bon() { return tx('Bon'); },
+  get meting() { return tx('Meting'); },
+  get eigen() { return tx('Eigen bestand'); },
 };
 
 export type Bestand = {
@@ -162,7 +163,7 @@ function nieuweId(): string {
 // tegen als de opslag vol is; hier komt de begrijpelijke melding vandaan.
 export const OPSLAG_WAARSCHUWING = 0.8;
 export const OPSLAG_VOL_TEKST =
-  'Je opslag is vol. Verwijder bestanden die je niet meer nodig hebt, of kies een groter pakket voor meer opslag.';
+  txm('Je opslag is vol. Verwijder bestanden die je niet meer nodig hebt, of kies een groter pakket voor meer opslag.');
 
 export type OpslagStand = { gebruikt: number; max: number | null; vol: boolean; deel: number };
 
@@ -178,13 +179,13 @@ export async function getOpslagStand(): Promise<OpslagStand | null> {
 /** "1,2 GB", "350 MB", "12 kB". */
 export function fmtOpslag(bytes: number): string {
   const b = Number(bytes || 0);
-  if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} GB`;
-  if (b >= 1024 ** 2) return `${Math.round(b / 1024 ** 2).toLocaleString('nl-NL')} MB`;
+  if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB`;
+  if (b >= 1024 ** 2) return `${Math.round(b / 1024 ** 2).toLocaleString(locale())} MB`;
   if (b > 0) return `${Math.max(1, Math.round(b / 1024))} kB`;
   return '0 MB';
 }
 
-const opslagVol = () => writeFout('plan-limiet', OPSLAG_VOL_TEKST, 'opslag_vol');
+const opslagVol = () => writeFout('plan-limiet', tx(OPSLAG_VOL_TEKST), 'opslag_vol');
 export const isOpslagVol = (r: WriteStatus | WriteResult<unknown>) => !r.ok && r.technisch === 'opslag_vol';
 
 // ── Schrijven ───────────────────────────────────────────────────────────────
@@ -203,7 +204,7 @@ export async function uploadBestand(input: {
   const fout = bestandFout({ naam: bestand.naam, mime: bestand.mime, grootte: bestand.bytes.byteLength });
   if (fout) return writeFout('validatie', fout);
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   if (isReadonly()) return writeFout('readonly');
   const id = nieuweId();
   const mime = bestandType(bestand) as string;
@@ -226,7 +227,7 @@ export async function uploadBestand(input: {
     if ((error as { hint?: string }).hint === 'opslag_vol') return opslagVol();
     return classificeerFout(error, 'bestandenService.uploadBestand', isReadonly());
   }
-  if (!data?.length) return writeFout('geen-rechten', 'Je mag hier geen bestanden toevoegen.');
+  if (!data?.length) return writeFout('geen-rechten', tx('Je mag hier geen bestanden toevoegen.'));
 
   const { error: opslagFout } = await supabase.storage
     .from('bestanden')
@@ -237,7 +238,7 @@ export async function uploadBestand(input: {
     const stand = await getOpslagStand().catch(() => null);
     if (stand?.vol) return opslagVol();
     if (__DEV__) console.warn('[bestandenService.uploadBestand]', opslagFout.message);
-    return writeFout('onbekend', 'Het bestand is niet opgeslagen. Probeer het opnieuw.', opslagFout.message);
+    return writeFout('onbekend', tx('Het bestand is niet opgeslagen. Probeer het opnieuw.'), opslagFout.message);
   }
   return { ok: true, data: id };
 }
@@ -257,7 +258,7 @@ export async function updateBestand(id: string, wijziging: { naam: string; omsch
     {
       context: 'bestandenService.updateBestand',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'Je mag dit bestand niet wijzigen.',
+      leegMelding: tx('Je mag dit bestand niet wijzigen.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -269,11 +270,11 @@ export async function updateBestand(id: string, wijziging: { naam: string; omsch
  */
 export async function verwijderBestand(b: Bestand): Promise<WriteStatus> {
   if (!b.eigen || !b.pad) {
-    return writeFout('op-slot', 'Dit bestand hoort bij een offerte, factuur of werkbon en blijft daar bewaard.');
+    return writeFout('op-slot', tx('Dit bestand hoort bij een offerte, factuur of werkbon en blijft daar bewaard.'));
   }
   const { data: weg, error } = await supabase.storage.from('bestanden').remove([b.pad]);
   if (error) return classificeerFout({ message: error.message }, 'bestandenService.verwijderBestand', isReadonly());
-  if (!weg?.length) return writeFout('geen-rechten', 'Je mag dit bestand niet verwijderen.');
+  if (!weg?.length) return writeFout('geen-rechten', tx('Je mag dit bestand niet verwijderen.'));
   const res = await schrijf<{ id: string }>(
     () => supabase.from('bestanden').delete().eq('id', b.bronId).select('id'),
     { context: 'bestandenService.verwijderBestand', bedrijfReadonly: isReadonly() },
@@ -287,11 +288,11 @@ export async function verwijderBestand(b: Bestand): Promise<WriteStatus> {
 export type GeladenBestand = { base64: string; bestandsnaam: string; mime: string };
 
 export class BestandFout extends Error {}
-const NIET_TE_OPENEN = 'Dit bestand is niet (meer) te openen.';
+const NIET_TE_OPENEN = txm('Dit bestand is niet (meer) te openen.');
 
 async function base64Van(url: string): Promise<string> {
   const antwoord = await fetch(url);
-  if (!antwoord.ok) throw new BestandFout(NIET_TE_OPENEN);
+  if (!antwoord.ok) throw new BestandFout(tx(NIET_TE_OPENEN));
   return bytesNaarBase64(new Uint8Array(await antwoord.arrayBuffer()));
 }
 
@@ -323,9 +324,9 @@ export async function haalBestand(b: Bestand): Promise<GeladenBestand> {
       throw e;
     }
   }
-  if (!b.bucket || !b.pad) throw new BestandFout(NIET_TE_OPENEN);
+  if (!b.bucket || !b.pad) throw new BestandFout(tx(NIET_TE_OPENEN));
   const { data, error } = await supabase.storage.from(b.bucket).createSignedUrl(b.pad, 600);
-  if (error || !data?.signedUrl) throw new BestandFout(NIET_TE_OPENEN);
+  if (error || !data?.signedUrl) throw new BestandFout(tx(NIET_TE_OPENEN));
   return {
     base64: await base64Van(data.signedUrl),
     bestandsnaam: downloadNaam(b),

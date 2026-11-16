@@ -27,6 +27,7 @@ import { plusMinuten } from '@/lib/datum';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
 import { bevestigVerwijderen, useSave } from '@/lib/useSave';
 import { spacing, typography, radius, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 export type ActivityConcept = {
   /** null = nieuw. */
@@ -270,7 +271,7 @@ export function ActivityFormSheet({
             datum: afspraakDatum(vorm.date),
             tijd: vorm.time || '',
           }).then(({ resultaat, aan }) => {
-            if (resultaat === false) toon(`De afspraakbevestiging aan ${aan} is niet verstuurd.`, 'fout');
+            if (resultaat === false) toon(tx('De afspraakbevestiging aan {aan} is niet verstuurd.', { aan }), 'fout');
           });
         }
         onClose();
@@ -282,7 +283,7 @@ export function ActivityFormSheet({
   const verwijderen = () => {
     if (!vorm?.id) return;
     const id = vorm.id;
-    bevestigVerwijderen('Activiteit', () => {
+    bevestigVerwijderen(tx('Activiteit'), () => {
       save(() => deleteActivity(id), {
         onSuccess: async () => {
           onClose();
@@ -295,7 +296,7 @@ export function ActivityFormSheet({
   return (
     <FormSheet
       visible={vorm !== null}
-      title={vorm?.id ? (alleenLezen ? 'Activiteit' : 'Activiteit bewerken') : 'Nieuwe activiteit'}
+      title={vorm?.id ? (alleenLezen ? tx('Activiteit') : tx('Activiteit bewerken')) : tx('Nieuwe activiteit')}
       error={error}
       saving={saving}
       submitDisabled={!vorm?.title.trim()}
@@ -303,22 +304,22 @@ export function ActivityFormSheet({
       onClose={onClose}
       destructive={
         vorm?.id && magBewerken && mag('activiteiten', 'verwijderen')
-          ? { label: 'Activiteit verwijderen', onPress: verwijderen }
+          ? { label: tx('Activiteit verwijderen'), onPress: verwijderen }
           : undefined
       }
     >
       <FormField
-        label="Titel"
+        label={tx('Titel')}
         value={vorm?.title ?? ''}
         onChangeText={(v) => zetVeld('title', v)}
-        placeholder="Bijv. Klant bellen over offerte"
+        placeholder={tx('Bijv. Klant bellen over offerte')}
         autoFocus={!vorm?.id}
         editable={!alleenLezen}
       />
 
       {toonType ? (
         <View style={{ gap: spacing.xs }}>
-          <Text style={styles.label}>Soort</Text>
+          <Text style={styles.label}>{tx('Soort')}</Text>
           <View style={styles.chipRij}>
             {ACTIVITEIT_TYPES.map((soort) => {
               const actief = vorm?.type === soort;
@@ -345,7 +346,7 @@ export function ActivityFormSheet({
       <View style={styles.rij}>
         <View style={{ flex: 1.4 }}>
           <DateField
-            label="Datum"
+            label={tx('Datum')}
             value={vorm?.date || null}
             onChange={(v) => zetVeld('date', v)}
             disabled={alleenLezen}
@@ -353,7 +354,7 @@ export function ActivityFormSheet({
         </View>
         <View style={{ flex: 1 }}>
           <TimeField
-            label="Van"
+            label={tx('Van')}
             value={vorm?.time || null}
             onChange={(v) =>
               setVorm((c) => (c ? { ...c, time: v, endTime: eindHandmatig ? c.endTime : plusMinuten(v, 15) } : c))
@@ -364,7 +365,7 @@ export function ActivityFormSheet({
         </View>
         <View style={{ flex: 1 }}>
           <TimeField
-            label="Tot"
+            label={tx('Tot')}
             value={vorm?.endTime || null}
             onChange={(v) => {
               setEindHandmatig(true);
@@ -377,46 +378,46 @@ export function ActivityFormSheet({
       </View>
 
       <SelectField
-        label="Klant"
+        label={tx('Klant')}
         value={vorm?.customerId ?? null}
         options={klanten}
         onChange={(id) => zetVeld('customerId', id)}
         disabled={alleenLezen}
         searchable
         allowEmpty
-        emptyLabel="Geen klant"
-        placeholder="Geen klant"
+        emptyLabel={tx('Geen klant')}
+        placeholder={tx('Geen klant')}
       />
 
       {projecten.length ? (
         <SelectField
-          label="Project"
+          label={tx('Project')}
           value={vorm?.dealId ?? null}
           options={projecten.filter((p) => !vorm?.customerId || !p.customerId || p.customerId === vorm.customerId)}
           onChange={(id) => zetVeld('dealId', id)}
           disabled={alleenLezen}
           searchable
           allowEmpty
-          emptyLabel="Geen project"
-          placeholder="Geen project"
+          emptyLabel={tx('Geen project')}
+          placeholder={tx('Geen project')}
         />
       ) : null}
 
       <LedenKeuze
-        label="Toegewezen aan"
+        label={tx('Toegewezen aan')}
         leden={medewerkers.map((m) => ({ id: m.id, full_name: m.label }))}
         waarde={vorm?.assigneeIds ?? []}
         onChange={(ids) => zetVeld('assigneeIds', ids)}
         disabled={alleenLezen}
       />
       {!vorm?.id && !vorm?.assigneeIds.length ? (
-        <Text style={styles.schakelUitleg}>Zonder keuze komt de activiteit op jouw naam.</Text>
+        <Text style={styles.schakelUitleg}>{tx('Zonder keuze komt de activiteit op jouw naam.')}</Text>
       ) : null}
       {!alleenLezen && (vorm?.assigneeIds ?? []).some((id) => id !== user?.id && !(concept?.assigneeIds ?? []).includes(id)) ? (
         <View style={styles.schakelRij}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.schakelTitel}>Ook per e-mail laten weten</Text>
-            <Text style={styles.schakelUitleg}>Nieuwe toegewezenen krijgen naast de melding in de app een mail.</Text>
+            <Text style={styles.schakelTitel}>{tx('Ook per e-mail laten weten')}</Text>
+            <Text style={styles.schakelUitleg}>{tx('Nieuwe toegewezenen krijgen naast de melding in de app een mail.')}</Text>
           </View>
           <Switch value={stuurMail} onValueChange={setStuurMail} />
         </View>
@@ -438,22 +439,22 @@ export function ActivityFormSheet({
         </>
       ) : (
         <MentionInvoer
-          label="Notities"
+          label={tx('Notities')}
           value={vorm?.notes ?? ''}
           onChangeText={(v) => zetVeld('notes', v)}
           gekozen={getagd}
           onGekozen={setGetagd}
           leden={leden}
-          placeholder="Optioneel. Typ @ om iemand te taggen"
+          placeholder={tx('Optioneel. Typ @ om iemand te taggen')}
         />
       )}
 
       {vorm ? (
         <View style={styles.schakelRij}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.schakelTitel}>Afgerond</Text>
+            <Text style={styles.schakelTitel}>{tx('Afgerond')}</Text>
             <Text style={styles.schakelUitleg}>
-              Afgeronde activiteiten staan onder Afgerond in Activiteiten.
+              {tx('Afgeronde activiteiten staan onder Afgerond in Activiteiten.')}
             </Text>
           </View>
           <Switch

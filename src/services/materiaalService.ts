@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { metTijdslimiet } from '@/lib/queryTijdslimiet';
 import { haalInStukken } from '@/lib/inStukken';
+import { tx, txn } from '@/i18n';
 
 /**
  * Materialenbibliotheek — tabel `materialen`, met de inkoopprijs apart in
@@ -68,12 +69,12 @@ function naarMateriaal(r: Rij): Materiaal {
 
 function fout(where: string, error: { code?: string; message?: string }): string {
   if (__DEV__) console.log(`[materiaalService.${where}]`, error.code, error.message);
-  if (error.code === 'timeout') return error.message ?? 'Geen antwoord van de server.';
+  if (error.code === 'timeout') return error.message ?? tx('Geen antwoord van de server.');
   if (error.code === '42501' || /row-level security|permission denied/i.test(error.message ?? '')) {
-    return 'Je hebt geen rechten voor deze actie.';
+    return tx('Je hebt geen rechten voor deze actie.');
   }
-  if (/readonly|alleen-lezen/i.test(error.message ?? '')) return error.message ?? 'Je account staat op alleen-lezen.';
-  return where === 'list' ? 'Materialen laden is mislukt.' : 'Opslaan is mislukt. Probeer het opnieuw.';
+  if (/readonly|alleen-lezen/i.test(error.message ?? '')) return error.message ?? tx('Je account staat op alleen-lezen.');
+  return where === 'list' ? tx('Materialen laden is mislukt.') : tx('Opslaan is mislukt. Probeer het opnieuw.');
 }
 
 export async function listMaterialen(
@@ -120,14 +121,14 @@ export async function createMateriaal(
   f: MateriaalForm,
 ): Promise<{ data: Materiaal | null; error: string | null }> {
   const payload = naarPayload(f);
-  if (!payload.naam) return { data: null, error: 'Naam is verplicht' };
+  if (!payload.naam) return { data: null, error: tx('Naam is verplicht') };
   const { data, error } = await supabase
     .from('materialen')
     .insert({ ...payload, company_id: companyId })
     .select('id');
   if (error) return { data: null, error: fout('create', error) };
   const id = (data as { id: string }[] | null)?.[0]?.id;
-  if (!id) return { data: null, error: 'Het materiaal is niet opgeslagen — je hebt hier geen rechten voor.' };
+  if (!id) return { data: null, error: tx('Het materiaal is niet opgeslagen — je hebt hier geen rechten voor.') };
   const inkoopFout = await bewaarInkoop(id, f);
   return { data: await getMateriaal(id), error: inkoopFout };
 }
@@ -137,11 +138,11 @@ export async function updateMateriaal(
   f: MateriaalForm,
 ): Promise<{ data: Materiaal | null; error: string | null }> {
   const payload = naarPayload(f);
-  if (!payload.naam) return { data: null, error: 'Naam is verplicht' };
+  if (!payload.naam) return { data: null, error: tx('Naam is verplicht') };
   const { data, error } = await supabase.from('materialen').update(payload).eq('id', id).select('id');
   if (error) return { data: null, error: fout('update', error) };
   if (!((data as { id: string }[] | null) ?? []).length) {
-    return { data: null, error: 'Het materiaal is niet bijgewerkt — je hebt hier geen rechten voor.' };
+    return { data: null, error: tx('Het materiaal is niet bijgewerkt — je hebt hier geen rechten voor.') };
   }
   const inkoopFout = await bewaarInkoop(id, f);
   return { data: await getMateriaal(id), error: inkoopFout };
@@ -152,7 +153,7 @@ export async function deleteMateriaal(id: string): Promise<{ error: string | nul
   const { data, error } = await supabase.from('materialen').delete().eq('id', id).select('id');
   if (error) return { error: fout('delete', error) };
   if (!((data as { id: string }[] | null) ?? []).length) {
-    return { error: 'Het materiaal is niet verwijderd — je hebt hier geen rechten voor.' };
+    return { error: tx('Het materiaal is niet verwijderd — je hebt hier geen rechten voor.') };
   }
   return { error: null };
 }
@@ -166,7 +167,7 @@ export async function listLeveranciers(): Promise<{
     .from('leveranciers')
     .select('id, naam, actief')
     .order('naam', { ascending: true });
-  if (error) return { data: [], error: 'Leveranciers konden niet worden geladen.' };
+  if (error) return { data: [], error: tx('Leveranciers konden niet worden geladen.') };
   return {
     data: ((data as { id: string; naam: string | null; actief: boolean | null }[]) ?? []).map((l) => ({
       id: l.id,
@@ -191,7 +192,7 @@ export async function alleMaterialenVoorImport(): Promise<{ data: Materiaal[]; e
       error: { code?: string; message?: string } | null;
     }>,
   );
-  if (error) return { data: [], error: 'De bestaande materialen konden niet worden geladen.' };
+  if (error) return { data: [], error: tx('De bestaande materialen konden niet worden geladen.') };
   return { data: data.map(naarMateriaal), error: null };
 }
 
@@ -234,7 +235,9 @@ export async function importeerMaterialen(
       const klaar = totaal.nieuw + totaal.bijgewerkt;
       return {
         ...totaal,
-        error: `${error.message || 'Opslaan mislukt'}${klaar ? ` (${klaar} regels waren al opgeslagen)` : ''}`,
+        error: klaar
+          ? txn('{fout} ({n} regel was al opgeslagen)', '{fout} ({n} regels waren al opgeslagen)', klaar, { fout: error.message || tx('Opslaan mislukt') })
+          : error.message || tx('Opslaan mislukt'),
       };
     }
     const d = data as { nieuw?: number; bijgewerkt?: number } | null;
@@ -270,7 +273,7 @@ export async function leesPrijslijstUit(
 }> {
   const { data, error } = await supabase.functions.invoke('materialen-uitlezen', { body: { bestand: base64, naam } });
   if (error) {
-    let tekst = 'Het uitlezen lukte niet. Probeer het zo nog eens.';
+    let tekst = tx('Het uitlezen lukte niet. Probeer het zo nog eens.');
     try {
       const j = await (error as { context?: { json?: () => Promise<{ error?: string }> } })?.context?.json?.();
       if (j?.error) tekst = j.error;
@@ -280,7 +283,7 @@ export async function leesPrijslijstUit(
     return { regels: [], leverancier: '', melding: '', error: tekst };
   }
   const d = data as { success?: boolean; error?: string; regels?: unknown[]; leverancier?: string; melding?: string } | null;
-  if (!d?.success) return { regels: [], leverancier: '', melding: '', error: d?.error || 'Het uitlezen lukte niet.' };
+  if (!d?.success) return { regels: [], leverancier: '', melding: '', error: d?.error || tx('Het uitlezen lukte niet.') };
   return {
     regels: (d.regels as never[]) || [],
     leverancier: d.leverancier || '',

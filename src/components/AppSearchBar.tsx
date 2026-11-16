@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search, X } from 'lucide-react-native';
 import { type ThemeColors } from '@/theme';
 import { useTheme } from '@/providers';
+import { tx } from '@/i18n';
 
 type Props = {
   value?: string;
@@ -23,12 +24,12 @@ export function AppSearchBar({ value = '', onChange, placeholder, asButton, onPr
     return (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={placeholder ?? 'Zoeken'}
+        accessibilityLabel={placeholder ?? tx('Zoeken')}
         onPress={onPress}
         style={({ pressed }) => [styles.bar, pressed && { opacity: 0.85 }]}
       >
         <Search size={18} color={t.muted} strokeWidth={2} />
-        <Text style={styles.placeholder}>{placeholder ?? 'Zoek…'}</Text>
+        <Text style={styles.placeholder}>{placeholder ?? tx('Zoek…')}</Text>
       </Pressable>
     );
   }
@@ -38,7 +39,7 @@ export function AppSearchBar({ value = '', onChange, placeholder, asButton, onPr
       <TextInput
         value={value}
         onChangeText={onChange}
-        placeholder={placeholder ?? 'Zoek…'}
+        placeholder={placeholder ?? tx('Zoek…')}
         placeholderTextColor={t.muted}
         style={styles.input}
         autoCapitalize="none"
@@ -47,7 +48,7 @@ export function AppSearchBar({ value = '', onChange, placeholder, asButton, onPr
         clearButtonMode="never"
       />
       {value.length > 0 && onChange ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Zoekopdracht wissen" hitSlop={6} onPress={() => onChange('')}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tx('Zoekopdracht wissen')} hitSlop={6} onPress={() => onChange('')}>
           <X size={16} color={t.muted2} strokeWidth={2} />
         </Pressable>
       ) : null}

@@ -8,6 +8,7 @@ import { FormSheet } from './FormSheet';
 import { NoticeBanner } from './NoticeBanner';
 import { useTheme } from '@/providers';
 import { spacing } from '@/theme';
+import { tx } from '@/i18n';
 
 export type MailConcept = { aan: string; onderwerp: string; tekst: string };
 
@@ -76,30 +77,30 @@ export function DocumentMailSheet({
       subtitle={nummer ?? undefined}
       error={error}
       saving={saving}
-      submitLabel={saving ? 'Versturen...' : 'Versturen'}
+      submitLabel={saving ? tx('Versturen...') : tx('Versturen')}
       submitDisabled={laden || !concept.aan.trim() || (vereistOnderwerp && !concept.onderwerp.trim())}
       onSubmit={onVerstuur}
       onClose={() => { setHulpOpen(false); onSluit(); }}
     >
       {laden ? (
         <View style={{ paddingVertical: spacing.xl }}>
-          <ActivityIndicator color={t.green600} accessibilityLabel="Sjabloon laden" />
+          <ActivityIndicator color={t.green600} accessibilityLabel={tx('Sjabloon laden')} />
         </View>
       ) : (
         <>
           {melding ? <NoticeBanner toon="info" message={melding} /> : null}
           {kop}
           <FormField
-            label="Aan"
+            label={tx('Aan')}
             value={concept.aan}
             onChangeText={(aan) => onWijzig({ ...concept, aan })}
-            placeholder="emailadres@klant.nl"
+            placeholder={tx('emailadres@klant.nl')}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
           />
           <FormField
-            label="Onderwerp"
+            label={tx('Onderwerp')}
             value={concept.onderwerp}
             onChangeText={(onderwerp) => onWijzig({ ...concept, onderwerp })}
           />
@@ -108,7 +109,7 @@ export function DocumentMailSheet({
             <Pressable
               onPress={() => setHulpOpen(true)}
               accessibilityRole="button"
-              accessibilityHint="Boss schrijft een voorstel; je verstuurt zelf"
+              accessibilityHint={tx('Boss schrijft een voorstel; je verstuurt zelf')}
               style={({ pressed }) => ({
                 flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 40,
                 paddingHorizontal: 14, borderRadius: 999, backgroundColor: pressed ? t.green100 : t.green50,
@@ -116,7 +117,7 @@ export function DocumentMailSheet({
               })}
             >
               <Sparkles size={15} color={t.green700} />
-              <Text style={{ fontSize: 14, fontWeight: '600', color: t.green700 }}>Help met schrijven</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: t.green700 }}>{tx('Help met schrijven')}</Text>
             </Pressable>
             {selectieTekst.length > 12 && selectie ? (
               <Pressable
@@ -126,32 +127,32 @@ export function DocumentMailSheet({
                   setHulpOpen(true);
                 }}
                 accessibilityRole="button"
-                accessibilityHint="Boss herschrijft alleen de geselecteerde tekst"
+                accessibilityHint={tx('Boss herschrijft alleen de geselecteerde tekst')}
                 style={({ pressed }) => ({
                   flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14,
                   borderRadius: 999, backgroundColor: pressed ? t.bgAlt : t.card, borderWidth: 1, borderColor: t.lineStrong,
                 })}
               >
                 <PenLine size={15} color={t.ink} />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>Herschrijf selectie</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>{tx('Herschrijf selectie')}</Text>
               </Pressable>
             ) : null}
             </View>
           ) : null}
           <FormField
-            label="Bericht"
+            label={tx('Bericht')}
             value={concept.tekst}
             onChangeText={(tekst) => { setSelectie(null); onWijzig({ ...concept, tekst }); }}
             onSelectionChange={toonBoss ? (e) => {
               const { start, end } = e.nativeEvent.selection;
               setSelectie(end > start ? { start, end } : null);
             } : undefined}
-            placeholder="Schrijf uw bericht hier..."
+            placeholder={tx('Schrijf uw bericht hier...')}
             multiline
             style={{ minHeight: 220 }}
           />
           {toonBoss ? (
-            <Text style={{ fontSize: 12, color: t.muted }}>Selecteer een stuk tekst om alleen dat door Boss te laten herschrijven.</Text>
+            <Text style={{ fontSize: 12, color: t.muted }}>{tx('Selecteer een stuk tekst om alleen dat door Boss te laten herschrijven.')}</Text>
           ) : null}
         </>
       )}

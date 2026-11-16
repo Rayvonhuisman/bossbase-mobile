@@ -54,6 +54,7 @@ import { ds, radius, spacing, type ThemeColors } from '@/theme';
 import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { useOnthouden } from '@/lib/useOnthouden';
+import { tx, txm } from '@/i18n';
 
 /**
  * Projecten — de projectenpagina van het dashboard (`ProjectsPage.jsx`):
@@ -68,7 +69,7 @@ import { useOnthouden } from '@/lib/useOnthouden';
 
 export default function ProjectsScreen() {
   return (
-    <PermissionGate permission="projecten" label="Projecten">
+    <PermissionGate permission="projecten" label={tx('Projecten')}>
       <ProjectsInhoud />
     </PermissionGate>
   );
@@ -82,7 +83,7 @@ type Item = ProjectRow &
     facturen: FactuurBedrag[];
   };
 
-const MAANDEN = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+const MAANDEN = [txm('Januari'), txm('Februari'), txm('Maart'), txm('April'), txm('Mei'), txm('Juni'), txm('Juli'), txm('Augustus'), txm('September'), txm('Oktober'), txm('November'), txm('December')];
 
 type Concept = {
   name: string;
@@ -221,13 +222,13 @@ function ProjectsInhoud() {
       magVerkoop && !deals.length ? listDeals() : null,
     ]);
     if (k && !k.error) {
-      setKlanten(k.data.map((x) => ({ id: x.id, label: x.name ?? 'Klant', sub: x.city ?? undefined })));
+      setKlanten(k.data.map((x) => ({ id: x.id, label: x.name ?? tx('Klant'), sub: x.city ?? undefined })));
     }
     if (l && !l.error) {
       setLeden(l.data.filter((x) => x.actief).map((x) => ({ id: x.id, label: x.full_name })));
     }
     if (d && !d.error) {
-      setDeals(d.data.map((x) => ({ id: x.id, label: x.title ?? 'Aanvraag', customerId: x.customer_id })));
+      setDeals(d.data.map((x) => ({ id: x.id, label: x.title ?? tx('Aanvraag'), customerId: x.customer_id })));
     }
   };
 
@@ -253,7 +254,7 @@ function ProjectsInhoud() {
           await herlaad();
           if (extra?.bestond) router.push(`/project/${p.id}` as Href);
         },
-        succesMelding: 'Project opgeslagen',
+        succesMelding: tx('Project opgeslagen'),
       },
     );
   };
@@ -267,16 +268,16 @@ function ProjectsInhoud() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nieuwParam, loading, rechtenGeladen]);
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Projecten laden…" />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Projecten laden…')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Projecten" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Projecten')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Laden mislukt" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Laden mislukt')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -292,11 +293,11 @@ function ProjectsInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Projecten"
-            subtitle="Beheer projecten, uren, offertes en facturatie"
+            title={tx('Projecten')}
+            subtitle={tx('Beheer projecten, uren, offertes en facturatie')}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
-              magMaken ? <HeaderIconButton icon={Plus} label="Nieuw project" onPress={() => openNieuw()} /> : undefined
+              magMaken ? <HeaderIconButton icon={Plus} label={tx('Nieuw project')} onPress={() => openNieuw()} /> : undefined
             }
           />
         }
@@ -307,10 +308,10 @@ function ProjectsInhoud() {
         <View style={styles.periode}>
           <View style={{ flex: 1 }}>
             <SelectField
-              label="Maand"
+              label={tx('Maand')}
               options={[
-                { id: '0', label: 'Hele jaar' },
-                ...MAANDEN.map((m, i) => ({ id: String(i + 1), label: m })),
+                { id: '0', label: tx('Hele jaar') },
+                ...MAANDEN.map((m, i) => ({ id: String(i + 1), label: tx(m) })),
               ]}
               value={String(perMaand)}
               onChange={(v) => setPerMaand(Number(v ?? perMaand))}
@@ -319,7 +320,7 @@ function ProjectsInhoud() {
           </View>
           <View style={{ flex: 1 }}>
             <SelectField
-              label="Jaar"
+              label={tx('Jaar')}
               options={jaren.map((j) => ({ id: String(j), label: String(j) }))}
               value={String(perJaar)}
               onChange={(v) => setPerJaar(Number(v ?? perJaar))}
@@ -330,32 +331,32 @@ function ProjectsInhoud() {
         {/* Tellers over de periode */}
         <View style={[styles.kpis, tablet && styles.kpisTablet]}>
           <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-            <AppKpiCard label="Nieuwe projecten" value={String(kpi.nieuw)} />
+            <AppKpiCard label={tx('Nieuwe projecten')} value={String(kpi.nieuw)} />
           </View>
           {magBedragen ? (
             <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-              <AppKpiCard label="Projectwaarde" value={formatEUR(kpi.waarde)} />
+              <AppKpiCard label={tx('Projectwaarde')} value={formatEUR(kpi.waarde)} />
             </View>
           ) : null}
           {magBedragen ? (
             <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-              <AppKpiCard label="Gefactureerd" value={formatEUR(kpi.gefactureerd)} />
+              <AppKpiCard label={tx('Gefactureerd')} value={formatEUR(kpi.gefactureerd)} />
             </View>
           ) : null}
           <View style={[styles.kpi, tablet && styles.kpiTablet]}>
-            <AppKpiCard label="Gewerkte uren" value={urenPeriode == null ? '–' : formatUren(urenPeriode)} />
+            <AppKpiCard label={tx('Gewerkte uren')} value={urenPeriode == null ? '–' : formatUren(urenPeriode)} />
           </View>
         </View>
 
         <View style={styles.zoek}>
-          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek project, klant…" />
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder={tx('Zoek project, klant…')} />
         </View>
         <AppFilterChips<ProjectStatusFilter>
           chips={[
-            { id: 'all', label: 'Alle', count: items.length },
-            { id: 'gepland', label: 'Gepland', count: tellingen.gepland },
-            { id: 'in_uitvoering', label: 'In uitvoering', count: tellingen.in_uitvoering },
-            { id: 'afgerond', label: 'Afgerond', count: tellingen.afgerond },
+            { id: 'all', label: tx('Alle'), count: items.length },
+            { id: 'gepland', label: tx('Gepland'), count: tellingen.gepland },
+            { id: 'in_uitvoering', label: tx('In uitvoering'), count: tellingen.in_uitvoering },
+            { id: 'afgerond', label: tx('Afgerond'), count: tellingen.afgerond },
           ]}
           active={status}
           onChange={setStatus}
@@ -364,9 +365,9 @@ function ProjectsInhoud() {
           <View style={{ marginTop: spacing.sm }}>
             <AppFilterChips<FacturatieFilter>
               chips={[
-                { id: 'all', label: 'Alle facturatie' },
-                { id: 'unbilled', label: 'Nog te factureren' },
-                { id: 'billed', label: 'Al gefactureerd' },
+                { id: 'all', label: tx('Alle facturatie') },
+                { id: 'unbilled', label: tx('Nog te factureren') },
+                { id: 'billed', label: tx('Al gefactureerd') },
               ]}
               active={facturatie}
               onChange={setFacturatie}
@@ -378,16 +379,16 @@ function ProjectsInhoud() {
           <View>
             <EmptyState
               icon={<Briefcase size={40} color={ds.green} strokeWidth={1.6} />}
-              title={items.length === 0 ? 'Nog geen projecten' : 'Geen projecten gevonden'}
+              title={items.length === 0 ? tx('Nog geen projecten') : tx('Geen projecten gevonden')}
               message={
                 items.length === 0
-                  ? 'Elke nieuwe aanvraag wordt hier vanzelf een project.'
-                  : 'Pas de filters of zoekterm aan om meer projecten te zien.'
+                  ? tx('Elke nieuwe aanvraag wordt hier vanzelf een project.')
+                  : tx('Pas de filters of zoekterm aan om meer projecten te zien.')
               }
             />
             {items.length === 0 && magMaken ? (
               <View style={{ alignItems: 'center' }}>
-                <Button label="Eerste project" onPress={() => openNieuw()} />
+                <Button label={tx('Eerste project')} onPress={() => openNieuw()} />
               </View>
             ) : null}
           </View>
@@ -400,16 +401,16 @@ function ProjectsInhoud() {
                   key={p.id}
                   onPress={() => router.push(`/project/${p.id}` as Href)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Project ${p.name ?? ''} openen`}
+                  accessibilityLabel={tx('Project {naam} openen', { naam: p.name ?? '' })}
                   style={({ pressed }) => [styles.kaart, tablet && styles.kaartTablet, pressed && { opacity: 0.9 }]}
                 >
                   <View style={styles.kaartKop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.naam} numberOfLines={1}>
-                        {p.name || 'Project'}
+                        {p.name || tx('Project')}
                       </Text>
                       <Text style={styles.klant} numberOfLines={1}>
-                        {p.customerName || 'Geen klant'}
+                        {p.customerName || tx('Geen klant')}
                         {p.offerteNummer ? ` · ${p.offerteNummer}` : ''}
                       </Text>
                     </View>
@@ -418,18 +419,18 @@ function ProjectsInhoud() {
                   <View style={styles.cijfers}>
                     {magBedragen ? (
                       <View style={styles.cijfer}>
-                        <Text style={styles.cijferLabel}>Waarde</Text>
+                        <Text style={styles.cijferLabel}>{tx('Waarde')}</Text>
                         <Text style={styles.cijferWaarde}>{formatEUR(Number(p.project_value ?? 0))}</Text>
                       </View>
                     ) : null}
                     <View style={styles.cijfer}>
-                      <Text style={styles.cijferLabel}>Uren</Text>
+                      <Text style={styles.cijferLabel}>{tx('Uren')}</Text>
                       <Text style={styles.cijferWaarde}>
                         {formatUren(p.usedHours)} / {formatUren(p.quoted_hours)}
                       </Text>
                     </View>
                     <View style={styles.cijfer}>
-                      <Text style={styles.cijferLabel}>Deadline</Text>
+                      <Text style={styles.cijferLabel}>{tx('Deadline')}</Text>
                       <Text style={[styles.cijferWaarde, verlopen && { color: t.statusRejectFg }]}>
                         {p.deadline ? formatDateNL(p.deadline) : '—'}
                       </Text>
@@ -437,12 +438,11 @@ function ProjectsInhoud() {
                   </View>
                   {magBedragen ? (
                     <Text style={styles.gefactureerd}>
-                      {p.invoicedAmount > 0
-                        ? `${formatEUR(p.omzetExclBtw)} gefactureerd`
-                        : 'Nog niet gefactureerd'}
-                      {p.remainingToInvoice > 0 && p.invoicedAmount > 0
-                        ? ` · nog ${formatEUR(p.remainingToInvoice)}`
-                        : ''}
+                      {p.invoicedAmount <= 0
+                        ? tx('Nog niet gefactureerd')
+                        : p.remainingToInvoice > 0
+                          ? tx('{bedrag} gefactureerd · nog {rest}', { bedrag: formatEUR(p.omzetExclBtw), rest: formatEUR(p.remainingToInvoice) })
+                          : tx('{bedrag} gefactureerd', { bedrag: formatEUR(p.omzetExclBtw) })}
                     </Text>
                   ) : null}
                 </Pressable>
@@ -454,41 +454,41 @@ function ProjectsInhoud() {
 
       <FormSheet
         visible={concept !== null}
-        title="Nieuw project"
+        title={tx('Nieuw project')}
         error={saveError}
         saving={saving}
-        submitLabel="Project aanmaken"
+        submitLabel={tx('Project aanmaken')}
         submitDisabled={!concept?.name.trim()}
         onSubmit={opslaan}
         onClose={() => setConcept(null)}
       >
         <FormField
-          label="Projectnaam"
+          label={tx('Projectnaam')}
           value={concept?.name ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, name: v } : c))}
-          placeholder="Bv. Renovatie badkamer Jansen"
+          placeholder={tx('Bv. Renovatie badkamer Jansen')}
           autoFocus
         />
         <SelectField
-          label="Klant"
+          label={tx('Klant')}
           value={concept?.customerId ?? null}
           options={klanten}
           onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id, dealId: null } : c))}
           allowEmpty
-          emptyLabel="— Geen klant —"
-          placeholder="— Geen klant —"
+          emptyLabel={tx('— Geen klant —')}
+          placeholder={tx('— Geen klant —')}
           searchable
         />
         {magVerkoop ? (
           <SelectField
-            label="Aanvraag"
+            label={tx('Aanvraag')}
             value={concept?.dealId ?? null}
             options={dealOpties}
             onChange={(id) => setConcept((c) => (c ? { ...c, dealId: id } : c))}
             allowEmpty
-            emptyLabel="— Geen aanvraag —"
-            placeholder="— Geen aanvraag —"
-            hint="Heeft deze aanvraag al een project, dan wordt dat bijgewerkt."
+            emptyLabel={tx('— Geen aanvraag —')}
+            placeholder={tx('— Geen aanvraag —')}
+            hint={tx('Heeft deze aanvraag al een project, dan wordt dat bijgewerkt.')}
             searchable
           />
         ) : null}
@@ -496,7 +496,7 @@ function ProjectsInhoud() {
           {magBedragen ? (
             <View style={{ flex: 1 }}>
               <FormField
-                label="Projectwaarde (excl. btw)"
+                label={tx('Projectwaarde (excl. btw)')}
                 value={concept?.waarde ?? ''}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, waarde: v } : c))}
                 placeholder="0,00"
@@ -506,7 +506,7 @@ function ProjectsInhoud() {
           ) : null}
           <View style={{ flex: 1 }}>
             <FormField
-              label="Begrote uren"
+              label={tx('Begrote uren')}
               value={concept?.uren ?? ''}
               onChangeText={(v) => setConcept((c) => (c ? { ...c, uren: v } : c))}
               placeholder="0"
@@ -517,37 +517,37 @@ function ProjectsInhoud() {
         <View style={styles.formRij}>
           <View style={{ flex: 1 }}>
             <DateField
-              label="Startdatum"
+              label={tx('Startdatum')}
               value={concept?.start || null}
               onChange={(v) => setConcept((c) => (c ? { ...c, start: v } : c))}
               maximum={concept?.deadline || null}
-              placeholder="Kies"
+              placeholder={tx('Kies')}
             />
           </View>
           <View style={{ flex: 1 }}>
             <DateField
-              label="Deadline"
+              label={tx('Deadline')}
               value={concept?.deadline || null}
               onChange={(v) => setConcept((c) => (c ? { ...c, deadline: v } : c))}
               minimum={concept?.start || null}
-              placeholder="Kies"
+              placeholder={tx('Kies')}
             />
           </View>
         </View>
         <SelectField
-          label="Toegewezen aan"
+          label={tx('Toegewezen aan')}
           value={concept?.toegewezen ?? null}
           options={leden}
           onChange={(id) => setConcept((c) => (c ? { ...c, toegewezen: id } : c))}
           allowEmpty
-          emptyLabel="— Geen medewerker —"
-          placeholder="— Geen medewerker —"
+          emptyLabel={tx('— Geen medewerker —')}
+          placeholder={tx('— Geen medewerker —')}
         />
         <FormField
-          label="Omschrijving"
+          label={tx('Omschrijving')}
           value={concept?.description ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, description: v } : c))}
-          placeholder="Werkomschrijving, bijzonderheden, aandachtspunten…"
+          placeholder={tx('Werkomschrijving, bijzonderheden, aandachtspunten…')}
           multiline
         />
       </FormSheet>

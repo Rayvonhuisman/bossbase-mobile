@@ -11,6 +11,7 @@ import { OFFERTE_STATUS } from '@/services/offerteService';
 import { listKoppelbareOffertes, type ProjectOfferte, type ProjectRow } from '@/services/projectService';
 import type { WriteResult } from '@/lib/writeResult';
 import { Blok, useStijl, Veld } from './bouwstenen';
+import { tx } from '@/i18n';
 
 /**
  * De Offertes-tab (`OfferteTab` in het dashboard): de offerte die aan dit
@@ -66,7 +67,7 @@ export function OffertesTab({
     setOpties(
       r.data.map((o) => ({
         id: o.id,
-        label: `${o.nummer || 'Offerte'}${o.omschrijving ? ` · ${alsTekst(o.omschrijving).slice(0, 40)}` : ''}`,
+        label: `${o.nummer || tx('Offerte')}${o.omschrijving ? ` · ${alsTekst(o.omschrijving).slice(0, 40)}` : ''}`,
         sub: `${formatEURCent(Number(o.totaal_incl ?? 0))} · ${OFFERTE_STATUS[o.status ?? ''] ?? o.status ?? ''}`,
       })),
     );
@@ -74,27 +75,27 @@ export function OffertesTab({
 
   const koppel = () => {
     if (!keuze) return;
-    save(() => onKoppel(keuze), { onSuccess: () => setKiezen(false), succesMelding: 'Offerte gekoppeld' });
+    save(() => onKoppel(keuze), { onSuccess: () => setKiezen(false), succesMelding: tx('Offerte gekoppeld') });
   };
 
   const kiesSheet = (
     <FormSheet
       visible={kiezen}
-      title="Bestaande offerte koppelen"
+      title={tx('Bestaande offerte koppelen')}
       subtitle={project.name ?? undefined}
       error={error ?? laadFout}
       saving={saving}
-      submitLabel="Koppel"
+      submitLabel={tx('Koppel')}
       submitDisabled={!keuze}
       onSubmit={koppel}
       onClose={() => setKiezen(false)}
     >
       <SelectField
-        label="Offerte"
+        label={tx('Offerte')}
         value={keuze}
         options={opties}
         onChange={setKeuze}
-        placeholder={opties.length ? 'Kies een offerte' : 'Geen offertes gevonden'}
+        placeholder={opties.length ? tx('Kies een offerte') : tx('Geen offertes gevonden')}
         searchable
       />
     </FormSheet>
@@ -103,14 +104,14 @@ export function OffertesTab({
   if (!gekoppeld) {
     return (
       <>
-        <Blok titel="Nog geen offerte gekoppeld">
+        <Blok titel={tx('Nog geen offerte gekoppeld')}>
           <Text style={styles.tekst}>
-            Koppel een bestaande offerte zodat waarde, uren en facturatie automatisch worden gesynchroniseerd.
+            {tx('Koppel een bestaande offerte zodat waarde, uren en facturatie automatisch worden gesynchroniseerd.')}
           </Text>
           {magBeheren ? (
             <View style={styles.knoppen}>
-              {magOfferteMaken ? <Button label="Nieuwe offerte" onPress={nieuweOfferte} /> : null}
-              <Button label="Bestaande koppelen" variant="secondary" onPress={openKiezen} />
+              {magOfferteMaken ? <Button label={tx('Nieuwe offerte')} onPress={nieuweOfferte} /> : null}
+              <Button label={tx('Bestaande koppelen')} variant="secondary" onPress={openKiezen} />
             </View>
           ) : null}
         </Blok>
@@ -121,21 +122,21 @@ export function OffertesTab({
 
   return (
     <>
-      <Blok titel={gekoppeld.omschrijving ? alsTekst(gekoppeld.omschrijving) : project.name || 'Offerte'}>
+      <Blok titel={gekoppeld.omschrijving ? alsTekst(gekoppeld.omschrijving) : project.name || tx('Offerte')}>
         <Text style={styles.klein}>
           {[gekoppeld.nummer, OFFERTE_STATUS[gekoppeld.status ?? ''] ?? gekoppeld.status].filter(Boolean).join(' · ')}
         </Text>
         <View style={styles.raster}>
-          <Veld label="Offertebedrag (incl.)">
+          <Veld label={tx('Offertebedrag (incl.)')}>
             <Text style={styles.waarde}>{formatEURCent(Number(gekoppeld.totaal_incl ?? 0))}</Text>
           </Veld>
-          <Veld label="Begrote uren">
+          <Veld label={tx('Begrote uren')}>
             <Text style={styles.waarde}>{formatUren(gekoppeld.arbeidsuren)}</Text>
           </Veld>
-          <Veld label="Geldig tot">
+          <Veld label={tx('Geldig tot')}>
             <Text style={styles.waarde}>{gekoppeld.geldig_tot ? formatDateNL(gekoppeld.geldig_tot) : '—'}</Text>
           </Veld>
-          <Veld label="Geaccepteerd">
+          <Veld label={tx('Geaccepteerd')}>
             <Text style={styles.waarde}>
               {gekoppeld.geaccepteerd_op ? formatDateNL(gekoppeld.geaccepteerd_op.slice(0, 10)) : '—'}
             </Text>
@@ -143,21 +144,22 @@ export function OffertesTab({
         </View>
         <View style={styles.knoppen}>
           <Button
-            label="Open offerte"
+            label={tx('Open offerte')}
             variant="secondary"
             onPress={() => router.push(`/offers?id=${encodeURIComponent(gekoppeld.id)}`)}
           />
           <Button
-            label="PDF bekijken"
+            label={tx('PDF bekijken')}
             variant="secondary"
             onPress={() =>
               // Getekend: het ondertekende exemplaar, zoals "Bekijken" bij Offertes.
-              setPdf({ soort: 'offerte', id: gekoppeld.id, titel: `Offerte ${gekoppeld.nummer ?? ''}`.trim(), opgeslagenEerst: true })
+              setPdf({ soort: 'offerte', id: gekoppeld.id, titel: tx('Offerte {nummer}', { nummer: gekoppeld.nummer ?? '' }).trim(), opgeslagenEerst: true })
             }
           />
-          {magFactuurMaken ? <Button label="Factuur maken" variant="secondary" onPress={factuurMaken} /> : null}
+          {magFactuurMaken ? <Button label={tx('Factuur maken')} variant="secondary" onPress={factuurMaken} /> : null}
           {magBeheren && magOfferteMaken ? (
-            <Button label="Nieuwe offerte" variant="ghost" onPress={nieuweOfferte} />
+            <Button label={tx('Nieuwe offerte')} variant="ghost"
+ onPress={nieuweOfferte} />
           ) : null}
         </View>
       </Blok>

@@ -14,6 +14,7 @@ import {
   waarschuwingVoorbeeld,
 } from '@/services/werkbonOndertekenenService';
 import type { Werkbon, WerkbonNotitie } from '@/services/workOrderService';
+import { tx } from '@/i18n';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import { MailVoorbeeld } from './MailVoorbeeld';
@@ -65,8 +66,8 @@ export function WaarschuwingModal({
 
   const naarVoorbeeld = () => {
     setFout('');
-    if (!constatering.trim()) return setFout('Beschrijf wat je hebt geconstateerd');
-    if (!email.trim()) return setFout('Vul een e-mailadres in');
+    if (!constatering.trim()) return setFout(tx('Beschrijf wat je hebt geconstateerd'));
+    if (!email.trim()) return setFout(tx('Vul een e-mailadres in'));
     setStap('voorbeeld');
   };
 
@@ -79,9 +80,9 @@ export function WaarschuwingModal({
       email: email.trim(),
     });
     setBezig(false);
-    if (error || !data) return setFout(error ?? 'Versturen mislukt');
+    if (error || !data) return setFout(error ?? tx('Versturen mislukt'));
     onVerstuurd(data);
-    Dialog.alert('Waarschuwing verstuurd en vastgelegd');
+    Dialog.alert(tx('Waarschuwing verstuurd en vastgelegd'));
   };
 
   const sluit = () => !bezig && onClose();
@@ -92,12 +93,12 @@ export function WaarschuwingModal({
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.kop}>
             <Pressable onPress={sluit} hitSlop={8} style={styles.minTouch} accessibilityRole="button" disabled={bezig}>
-              <Text style={styles.annuleer}>{stap === 'voorbeeld' ? 'Sluiten' : 'Annuleren'}</Text>
+              <Text style={styles.annuleer}>{stap === 'voorbeeld' ? tx('Sluiten') : tx('Annuleren')}</Text>
             </Pressable>
             <View style={styles.titelRij}>
               <AlertTriangle size={16} color={ROOD} strokeWidth={2.2} />
               <Text style={styles.titel} numberOfLines={1}>
-                {stap === 'voorbeeld' ? 'Zo krijgt de klant hem' : 'Waarschuwing voor klant'}
+                {stap === 'voorbeeld' ? tx('Zo krijgt de klant hem') : tx('Waarschuwing voor klant')}
               </Text>
             </View>
             <View style={{ width: 64 }} />
@@ -107,31 +108,31 @@ export function WaarschuwingModal({
               <>
                 <View style={styles.uitleg}>
                   <Text style={styles.uitlegTekst}>
-                    {klantNaam ? `${klantNaam} krijgt ` : 'De klant krijgt '}
-                    een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen vast wanneer en waarheen hij
-                    is verstuurd.
+                    {klantNaam
+                      ? tx('{naam} krijgt een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen vast wanneer en waarheen hij is verstuurd.', { naam: klantNaam })
+                      : tx('De klant krijgt een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen vast wanneer en waarheen hij is verstuurd.')}
                   </Text>
                 </View>
                 <FormField
-                  label="Wat heb je geconstateerd?"
+                  label={tx('Wat heb je geconstateerd?')}
                   value={constatering}
                   onChangeText={setConstatering}
                   multiline
-                  placeholder="Bijvoorbeeld: houtrot in de dakrand aan de achterzijde, over ongeveer 3 meter"
+                  placeholder={tx('Bijvoorbeeld: houtrot in de dakrand aan de achterzijde, over ongeveer 3 meter')}
                 />
                 <FormField
-                  label="Wat kan daarvan het gevolg zijn?"
+                  label={tx('Wat kan daarvan het gevolg zijn?')}
                   value={gevolg}
                   onChangeText={setGevolg}
                   multiline
-                  placeholder="Bijvoorbeeld: lekkage op termijn, of het dak kan hier niet op worden gelegd"
-                  hint="Een waarschuwing staat juridisch sterker als hier staat wat er kan gebeuren. Leeg laten mag."
+                  placeholder={tx('Bijvoorbeeld: lekkage op termijn, of het dak kan hier niet op worden gelegd')}
+                  hint={tx('Een waarschuwing staat juridisch sterker als hier staat wat er kan gebeuren. Leeg laten mag.')}
                 />
                 <FormField
-                  label="Naar welk e-mailadres?"
+                  label={tx('Naar welk e-mailadres?')}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="klant@voorbeeld.nl"
+                  placeholder={tx('klant@voorbeeld.nl')}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -142,14 +143,24 @@ export function WaarschuwingModal({
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.rodeKnop, pressed && { opacity: 0.85 }]}
                 >
-                  <Text style={styles.rodeKnopTekst}>Bekijken en versturen</Text>
+                  <Text style={styles.rodeKnopTekst}>{tx('Bekijken en versturen')}</Text>
                 </Pressable>
               </>
             ) : (
               <>
                 <Text style={styles.aan}>
-                  Aan <Text style={{ fontWeight: '700' }}>{email}</Text> — onderwerp:{' '}
-                  <Text style={{ fontWeight: '700' }}>{voorbeeld?.onderwerp}</Text>
+                  {/* Hele zin vertalen; {email} en {onderwerp} worden vet ingevoegd. */}
+                  {tx('Aan {email} — onderwerp: {onderwerp}')
+                    .split(/(\{email\}|\{onderwerp\})/)
+                    .map((stuk, i) =>
+                      stuk === '{email}' ? (
+                        <Text key={i} style={{ fontWeight: '700' }}>{email}</Text>
+                      ) : stuk === '{onderwerp}' ? (
+                        <Text key={i} style={{ fontWeight: '700' }}>{voorbeeld?.onderwerp}</Text>
+                      ) : (
+                        stuk
+                      ),
+                    )}
                 </Text>
                 {voorbeeld ? <MailVoorbeeld html={voorbeeld.html} /> : null}
                 {fout ? <Text style={styles.fout}>{fout}</Text> : null}
@@ -160,9 +171,9 @@ export function WaarschuwingModal({
                   accessibilityState={{ busy: bezig, disabled: bezig }}
                   style={({ pressed }) => [styles.rodeKnop, (pressed || bezig) && { opacity: 0.85 }]}
                 >
-                  <Text style={styles.rodeKnopTekst}>{bezig ? 'Versturen…' : 'Nu versturen'}</Text>
+                  <Text style={styles.rodeKnopTekst}>{bezig ? tx('Versturen…') : tx('Nu versturen')}</Text>
                 </Pressable>
-                <Button label="Terug" variant="ghost" onPress={() => setStap('invoer')} disabled={bezig} />
+                <Button label={tx('Terug')} variant="ghost" onPress={() => setStap('invoer')} disabled={bezig} />
               </>
             )}
           </ScrollView>

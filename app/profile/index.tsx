@@ -350,6 +350,7 @@ export default function ProfileScreen() {
               key={l.code}
               accessibilityRole="radio"
               accessibilityState={{ checked: l.code === taal }}
+              aria-checked={l.code === taal}
               onPress={async () => {
                 setTaalOpen(false);
                 if (l.code !== taal) await kiesTaal(l.code);

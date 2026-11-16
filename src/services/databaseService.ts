@@ -12,6 +12,7 @@ import type {
   DbProject,
   DbUur,
 } from '@/lib/databaseFilters';
+import { tx } from '@/i18n';
 
 /**
  * Database & Export — dezelfde bronnen als `DatabasePage.jsx`:
@@ -158,23 +159,23 @@ export async function laadDatabase(): Promise<{
 
   if (klantRes.error) {
     console.warn('[databaseService] klanten', klantRes.error.message);
-    return { data: leeg, extra: extraLeeg, fouten: [], error: 'Laden mislukt' };
+    return { data: leeg, extra: extraLeeg, fouten: [], error: tx('Laden mislukt') };
   }
 
   const fouten: string[] = [];
-  const meld = (r: { error: { message: string } | null }, wat: string) => {
+  const meld = (r: { error: { message: string } | null }, wat: string, melding: () => string) => {
     if (r.error) {
       if (__DEV__) console.log(`[databaseService] ${wat}`, r.error.message);
-      fouten.push(`${wat} konden niet worden geladen; de filters daarop werken niet.`);
+      fouten.push(melding());
     }
   };
-  meld(projRes, 'Projecten');
-  meld(factRes, 'Facturen');
-  meld(offRes, 'Offertes');
-  meld(dealRes, 'Aanvragen');
-  meld(actRes, 'Activiteiten');
-  meld(mailRes, 'Verstuurde mails');
-  meld(urenRes, 'Werkbonuren');
+  meld(projRes, 'Projecten', () => tx('Projecten konden niet worden geladen; de filters daarop werken niet.'));
+  meld(factRes, 'Facturen', () => tx('Facturen konden niet worden geladen; de filters daarop werken niet.'));
+  meld(offRes, 'Offertes', () => tx('Offertes konden niet worden geladen; de filters daarop werken niet.'));
+  meld(dealRes, 'Aanvragen', () => tx('Aanvragen konden niet worden geladen; de filters daarop werken niet.'));
+  meld(actRes, 'Activiteiten', () => tx('Activiteiten konden niet worden geladen; de filters daarop werken niet.'));
+  meld(mailRes, 'Verstuurde mails', () => tx('Verstuurde mails konden niet worden geladen; de filters daarop werken niet.'));
+  meld(urenRes, 'Werkbonuren', () => tx('Werkbonuren konden niet worden geladen; de filters daarop werken niet.'));
 
   const klanten: DbKlant[] = klantRes.data.map((r) => ({
     id: String(r.id),

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Pencil, Plus } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * Bouwstenen van de projectkaart, gedeeld door het overzicht en de tabs
@@ -40,7 +41,8 @@ export function Blok({
           <Pressable
             onPress={onTitel}
             accessibilityRole="link"
-            accessibilityLabel={`${titel} openen`}
+            accessibilityLabel={tx('{titel} openen', { titel })}
+
             hitSlop={8}
             style={({ pressed }) => [styles.rijMidden, { gap: 2 }, pressed && { opacity: 0.6 }]}
           >

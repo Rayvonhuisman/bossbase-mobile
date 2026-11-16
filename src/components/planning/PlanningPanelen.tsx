@@ -51,6 +51,7 @@ import {
 import { minutenVanTijd, plusMinuten } from '@/lib/datum';
 import type { Customer } from '@/types/domain';
 import { spacing, type ThemeColors } from '@/theme';
+import { tx, txm } from '@/i18n';
 
 /**
  * Plannen op de planning, zoals het dashboard (PlanningPage):
@@ -80,8 +81,8 @@ const metDagen = (w: PlanWerkbon) => ({ ...w, werkbon_dagen: w.dagen as unknown 
 const huidig = (w: PlanWerkbon) => ({ id: w.id, status: w.status, gestart_op: null }) as Pick<Werkbon, 'id' | 'gestart_op' | 'status'>;
 
 function tijdFout(van: string, tot: string): string | null {
-  if (!van || !tot) return 'Kies een begin- en eindtijd.';
-  if (minutenVanTijd(tot) <= minutenVanTijd(van)) return 'De eindtijd moet na de begintijd liggen.';
+  if (!van || !tot) return tx('Kies een begin- en eindtijd.');
+  if (minutenVanTijd(tot) <= minutenVanTijd(van)) return tx('De eindtijd moet na de begintijd liggen.');
   return null;
 }
 
@@ -123,7 +124,7 @@ export function BlokPaneel({
   return (
     <Paneel
       open={!!blok}
-      titel={plannen ? 'Dagen, ploeg en voertuig' : blok?.werkbon.titel || blok?.werkbon.nummer || 'Werkbon'}
+      titel={plannen ? tx('Dagen, ploeg en voertuig') : blok?.werkbon.titel || blok?.werkbon.nummer || tx('Werkbon')}
       subtitel={
         blok
           ? [plannen ? blok.werkbon.titel : null, blok.werkbon.nummer, blok.werkbon.customer?.name].filter(Boolean).join(' · ')
@@ -137,7 +138,7 @@ export function BlokPaneel({
           werkbon={blok.werkbon}
           bronnen={bronnen}
           standaardDatum={blok.datum}
-          knopLabel="Opslaan"
+          knopLabel={tx('Opslaan')}
           onSluit={sluit}
           onGewijzigd={onGewijzigd}
         />
@@ -195,10 +196,10 @@ function BlokInhoud({
 
   const wie =
     modus === 'voertuig'
-      ? blok.inzittenden.map(naamVan).join(', ') || 'Niemand ingedeeld'
+      ? blok.inzittenden.map(naamVan).join(', ') || tx('Niemand ingedeeld')
       : blok.resource
         ? naamVan(blok.resource)
-        : 'Niet toegewezen';
+        : tx('Niet toegewezen');
   const gewijzigd = van !== blok.starttijd || tot !== (blok.eindtijd ?? '');
 
   const opslaan = async () => {
@@ -236,7 +237,7 @@ function BlokInhoud({
       onGewijzigd();
       onSluit();
     } catch (e) {
-      setFout(e instanceof Error ? e.message : 'Tijd aanpassen mislukt.');
+      setFout(e instanceof Error ? e.message : tx('Tijd aanpassen mislukt.'));
     } finally {
       setBezig(false);
     }
@@ -245,50 +246,54 @@ function BlokInhoud({
   return (
     <ScrollView contentContainerStyle={styles.inhoud} keyboardShouldPersistTaps="handled">
       <View style={styles.feiten}>
-        <Feit label="Dag" waarde={`${korteDatum(blok.datum)}${blok.dagenTotaal > 1 ? ` · dag ${blok.dagNr} van ${blok.dagenTotaal}` : ''}`} />
-        <Feit label="Tijd" waarde={`${blok.starttijd}${blok.eindtijd ? `–${blok.eindtijd}` : ''}`} />
-        <Feit label={modus === 'voertuig' ? 'Inzittenden' : 'Wie'} waarde={wie} />
-        {modus !== 'voertuig' && blok.voertuigId ? <Feit label="Voertuig" waarde={voertuigNaam(blok.voertuigId)} /> : null}
-        {modus === 'voertuig' && blok.resource ? <Feit label="Voertuig" waarde={voertuigNaam(blok.resource)} /> : null}
-        {w.locatie ? <Feit label="Locatie" waarde={w.locatie} /> : null}
+        <Feit
+          label={tx('Dag')}
+          waarde={`${korteDatum(blok.datum)}${blok.dagenTotaal > 1 ? ` · ${tx('dag {nr} van {totaal}', { nr: blok.dagNr, totaal: blok.dagenTotaal })}` : ''}`}
+        />
+        <Feit label={tx('Tijd')} waarde={`${blok.starttijd}${blok.eindtijd ? `–${blok.eindtijd}` : ''}`} />
+        <Feit label={modus === 'voertuig' ? tx('Inzittenden') : tx('Wie')} waarde={wie} />
+        {modus !== 'voertuig' && blok.voertuigId ? <Feit label={tx('Voertuig')} waarde={voertuigNaam(blok.voertuigId)} /> : null}
+        {modus === 'voertuig' && blok.resource ? <Feit label={tx('Voertuig')} waarde={voertuigNaam(blok.resource)} /> : null}
+        {w.locatie ? <Feit label={tx('Locatie')} waarde={w.locatie} /> : null}
       </View>
 
       {opSlot ? (
-        <NoticeBanner toon="info" message="Deze werkbon is ondertekend en zit op slot: de planning kan niet meer wijzigen." />
+        <NoticeBanner toon="info" message={tx('Deze werkbon is ondertekend en zit op slot: de planning kan niet meer wijzigen.')} />
       ) : !magPlannen ? (
         <NoticeBanner toon="info" message={waaromNiet} />
       ) : modus === 'voertuig' ? (
         <Text style={styles.uitleg}>
-          De tijd van een voertuig pas je aan onder “Dagen, ploeg en voertuig aanpassen”; de tijd van een persoon in
-          Totaal of Medewerkers.
+          {tx('De tijd van een voertuig pas je aan onder “Dagen, ploeg en voertuig aanpassen”; de tijd van een persoon in Totaal of Medewerkers.')}
         </Text>
       ) : (
         <View style={styles.blok}>
           <Text style={styles.kop}>
-            {pid ? `Tijd van ${naamVan(pid)} op deze dag` : 'Tijd van deze dag'}
+            {pid ? tx('Tijd van {naam} op deze dag', { naam: naamVan(pid) }) : tx('Tijd van deze dag')}
           </Text>
           <View style={styles.rij}>
             <View style={{ flex: 1 }}>
-              <TimeField label="Van" value={van || null} onChange={setVan} />
+              <TimeField label={tx('Van')} value={van || null} onChange={setVan} />
             </View>
             <View style={{ flex: 1 }}>
-              <TimeField label="Tot" value={tot || null} onChange={setTot} />
+              <TimeField label={tx('Tot')} value={tot || null} onChange={setTot} />
             </View>
           </View>
           {pid ? (
-            <Text style={styles.uitleg}>Alleen {naamVan(pid)} verschuift; de rest van de ploeg en de andere dagen blijven staan.</Text>
+            <Text style={styles.uitleg}>
+              {tx('Alleen {naam} verschuift; de rest van de ploeg en de andere dagen blijven staan.', { naam: naamVan(pid) })}
+            </Text>
           ) : null}
           {fout ? <NoticeBanner toon="fout" message={fout} /> : null}
-          <Button label="Tijd opslaan" onPress={opslaan} loading={bezig} disabled={!gewijzigd || bezig} />
+          <Button label={tx('Tijd opslaan')} onPress={opslaan} loading={bezig} disabled={!gewijzigd || bezig} />
         </View>
       )}
 
       <View style={styles.knoppen}>
         {magPlannen && !opSlot ? (
-          <Button label="Dagen, ploeg en voertuig aanpassen" variant="secondary" onPress={onPlannen} />
+          <Button label={tx('Dagen, ploeg en voertuig aanpassen')} variant="secondary" onPress={onPlannen} />
         ) : null}
         <Button
-          label="Werkbon openen"
+          label={tx('Werkbon openen')}
           variant="ghost"
           onPress={() => {
             onSluit();
@@ -323,7 +328,7 @@ export function InplannenPaneel({
   return (
     <Paneel
       open={!!werkbon}
-      titel={werkbon ? `Inplannen: ${werkbon.titel || werkbon.nummer || 'werkbon'}` : 'Inplannen'}
+      titel={werkbon ? tx('Inplannen: {werkbon}', { werkbon: werkbon.titel || werkbon.nummer || tx('werkbon') }) : tx('Inplannen')}
       subtitel={werkbon ? [werkbon.nummer, werkbon.customer?.name].filter(Boolean).join(' · ') : undefined}
       onSluit={onSluit}
     >
@@ -331,7 +336,7 @@ export function InplannenPaneel({
         <View style={styles.inhoud}>
           <NoticeBanner toon="info" message={waaromNiet} />
           <Button
-            label="Werkbon openen"
+            label={tx('Werkbon openen')}
             variant="secondary"
             onPress={() => {
               onSluit();
@@ -345,7 +350,7 @@ export function InplannenPaneel({
           werkbon={werkbon}
           bronnen={bronnen}
           standaardDatum={standaardDatum}
-          knopLabel="Inplannen"
+          knopLabel={tx('Inplannen')}
           onSluit={onSluit}
           onGewijzigd={onGewijzigd}
         />
@@ -407,7 +412,7 @@ function WerkbonPlannen({
   const origineelKoppeling = useMemo(() => voertuigPlanningUitWerkbon(metDagen(w)).koppeling, [w]);
 
   const setPlanning = (f: (p: Planning) => Planning) => setPlanningState(f);
-  const naam = (id: string) => bronnen.team.find((m) => m.id === id)?.full_name ?? 'Medewerker';
+  const naam = (id: string) => bronnen.team.find((m) => m.id === id)?.full_name ?? tx('Medewerker');
   const datums = geplandeDatums(planning);
   const standaard = datums.length ? tijdVanDag(planning, datums[0]!) : { starttijd: '', eindtijd: '' };
   const metVoertuigen = bronnen.metVoertuigen;
@@ -441,14 +446,14 @@ function WerkbonPlannen({
     });
     if (r.error || !r.data) {
       setBezig(false);
-      return setFout(r.error ?? 'Opslaan mislukt.');
+      return setFout(r.error ?? tx('Opslaan mislukt.'));
     }
     const d = await zetWerkbonDagen(w.id, dagen);
     setBezig(false);
     if (d.error) {
       // De werkbon zelf staat er al; de dagen niet. Melden en open laten.
       onGewijzigd();
-      return setFout(`Opgeslagen, maar de dagen niet: ${d.error}`);
+      return setFout(tx('Opgeslagen, maar de dagen niet: {fout}', { fout: d.error }));
     }
 
     // Meldingen en agenda: zoals het werkbonformulier en de DetailModal.
@@ -506,8 +511,8 @@ function WerkbonPlannen({
   return (
     <ScrollView contentContainerStyle={styles.inhoud} keyboardShouldPersistTaps="handled">
       <View style={styles.blok}>
-        <Text style={styles.kop}>Dagen en tijden</Text>
-        <Text style={styles.uitleg}>Tik de dagen van de klus aan. Elke dag heeft een eigen begin- en eindtijd.</Text>
+        <Text style={styles.kop}>{tx('Dagen en tijden')}</Text>
+        <Text style={styles.uitleg}>{tx('Tik de dagen van de klus aan. Elke dag heeft een eigen begin- en eindtijd.')}</Text>
         <WerkbonKalender
           gekozen={datums}
           onTik={(iso) => setPlanning((p) => wisselDag(p, iso, STANDAARD_TIJD))}
@@ -519,14 +524,13 @@ function WerkbonPlannen({
           uitvoerders={uitvoerders}
           naam={naam}
           bewerkbaar={!bezig}
-          leegTekst="Geen dagen gekozen: de werkbon komt onder Niet ingepland."
+          leegTekst={tx('Geen dagen gekozen: de werkbon komt onder Niet ingepland.')}
         />
       </View>
       <View style={styles.blok}>
-        <Text style={styles.kop}>Wie gaat er</Text>
+        <Text style={styles.kop}>{tx('Wie gaat er')}</Text>
         <Text style={styles.uitleg}>
-          Vink aan wie op de klus staat; de ster maakt iemand verantwoordelijk. Met meer mensen tik je per dag aan wie er
-          die dag werkt.
+          {tx('Vink aan wie op de klus staat; de ster maakt iemand verantwoordelijk. Met meer mensen tik je per dag aan wie er die dag werkt.')}
         </Text>
         <PloegKeuze
           team={bronnen.team}
@@ -540,8 +544,8 @@ function WerkbonPlannen({
         />
       </View>
       <Schakel
-        titel="Ook per e-mail laten weten"
-        uitleg="Wie nieuw op de klus komt of verantwoordelijk wordt, krijgt naast de melding in de app een mail."
+        titel={tx('Ook per e-mail laten weten')}
+        uitleg={tx('Wie nieuw op de klus komt of verantwoordelijk wordt, krijgt naast de melding in de app een mail.')}
         waarde={stuurMail}
         onWissel={setStuurMail}
       />
@@ -568,10 +572,10 @@ function WerkbonPlannen({
 
 /** De soorten zoals het planningvenster van het dashboard ze noemt. */
 const PLAN_SOORTEN: [string, string][] = [
-  ['call', 'Bellen'],
-  ['visit', 'Bezoek'],
-  ['task', 'Vergadering / Klus'],
-  ['follow', 'Overig'],
+  ['call', txm('Bellen')],
+  ['visit', txm('Bezoek')],
+  ['task', txm('Vergadering / Klus')],
+  ['follow', txm('Overig')],
 ];
 
 const adresVan = (c: Customer | undefined) =>
@@ -591,7 +595,7 @@ export function ActiviteitInplannenPaneel({
   onGewijzigd: () => void;
 }) {
   return (
-    <Paneel open={open} titel="Activiteit inplannen" subtitel="Los van een werkbon" onSluit={onSluit}>
+    <Paneel open={open} titel={tx('Activiteit inplannen')} subtitel={tx('Los van een werkbon')} onSluit={onSluit}>
       {open ? (
         <ActiviteitInplannenInhoud team={team} standaardDatum={standaardDatum} onSluit={onSluit} onGewijzigd={onGewijzigd} />
       ) : null}
@@ -672,9 +676,9 @@ function ActiviteitInplannenInhoud({
 
   const opslaan = async () => {
     setFout(null);
-    if (!titel.trim()) return setFout('Titel is verplicht.');
-    if (!datum) return setFout('Datum is verplicht.');
-    if (!van) return setFout('Starttijd is verplicht.');
+    if (!titel.trim()) return setFout(tx('Titel is verplicht.'));
+    if (!datum) return setFout(tx('Datum is verplicht.'));
+    if (!van) return setFout(tx('Starttijd is verplicht.'));
     setBezig(true);
     const notes = notitie.trim() ? naarHtml(notitie, getagd).html : null;
     const r = await createActivity({
@@ -690,7 +694,7 @@ function ActiviteitInplannenInhoud({
     });
     if (!r.ok || !r.data) {
       setBezig(false);
-      return setFout(r.ok ? 'Opslaan mislukt.' : r.melding);
+      return setFout(r.ok ? tx('Opslaan mislukt.') : r.melding);
     }
     const act = r.data;
     const waarschuwingen: string[] = [];
@@ -705,7 +709,7 @@ function ActiviteitInplannenInhoud({
       locatie: locatie || null,
       omschrijving: notes,
     });
-    if (agenda.error) waarschuwingen.push('De activiteit is ingepland, maar het agenda-item niet.');
+    if (agenda.error) waarschuwingen.push(tx('De activiteit is ingepland, maar het agenda-item niet.'));
     void meldActiviteitToewijzing({
       activiteitId: act.id,
       titel: titel.trim(),
@@ -720,7 +724,7 @@ function ActiviteitInplannenInhoud({
       const k = await koppelWerkbonAanActiviteit(werkbonId, act.id);
       if (k.error) {
         waarschuwingen.push(
-          'De activiteit is ingepland, maar kon niet aan de werkbon worden gekoppeld. Koppel hem opnieuw vanuit de werkbon.',
+          tx('De activiteit is ingepland, maar kon niet aan de werkbon worden gekoppeld. Koppel hem opnieuw vanuit de werkbon.'),
         );
       }
     }
@@ -734,24 +738,24 @@ function ActiviteitInplannenInhoud({
     return (
       <View style={styles.inhoud}>
         <NoticeBanner toon="waarschuwing" message={waarschuwing} />
-        <Button label="Sluiten" variant="secondary" onPress={onSluit} />
+        <Button label={tx('Sluiten')} variant="secondary" onPress={onSluit} />
       </View>
     );
   }
 
-  const leden = team.map((m) => ({ id: m.id, full_name: m.full_name ?? 'Medewerker' }));
+  const leden = team.map((m) => ({ id: m.id, full_name: m.full_name ?? tx('Medewerker') }));
 
   return (
     <ScrollView contentContainerStyle={styles.inhoud} keyboardShouldPersistTaps="handled">
       <FormField
-        label="Titel *"
+        label={tx('Titel *')}
         value={titel}
         onChangeText={setTitel}
-        placeholder="Bijv. Klantbezoek of vergadering"
+        placeholder={tx('Bijv. Klantbezoek of vergadering')}
         autoFocus
       />
       <View style={styles.blok}>
-        <Text style={styles.label}>Type</Text>
+        <Text style={styles.label}>{tx('Type')}</Text>
         <View style={styles.chipRij}>
           {PLAN_SOORTEN.map(([id, label]) => {
             const aan = soort === id;
@@ -764,31 +768,31 @@ function ActiviteitInplannenInhoud({
                 aria-checked={aan}
                 style={[styles.chip, aan && styles.chipAan]}
               >
-                <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{label}</Text>
+                <Text style={[styles.chipTekst, aan && { color: t.green700 }]}>{tx(label)}</Text>
               </Pressable>
             );
           })}
         </View>
       </View>
       <SelectField
-        label="Klant"
+        label={tx('Klant')}
         value={klantId}
         onChange={kiesKlant}
         searchable
         allowEmpty
-        emptyLabel="— Geen klant —"
-        placeholder="— Geen klant —"
+        emptyLabel={tx('— Geen klant —')}
+        placeholder={tx('— Geen klant —')}
         options={klanten.map((c) => ({
           id: c.id,
           label: c.name ?? '—',
           sub: [c.city, c.phone].filter(Boolean).join(' · ') || undefined,
         }))}
       />
-      <DateField label="Datum *" value={datum} onChange={setDatum} />
+      <DateField label={tx('Datum *')} value={datum} onChange={setDatum} />
       <View style={styles.rij}>
         <View style={{ flex: 1 }}>
           <TimeField
-            label="Starttijd *"
+            label={tx('Starttijd *')}
             value={van || null}
             onChange={(v) => {
               setVan(v);
@@ -798,7 +802,7 @@ function ActiviteitInplannenInhoud({
         </View>
         <View style={{ flex: 1 }}>
           <TimeField
-            label="Eindtijd (optioneel)"
+            label={tx('Eindtijd (optioneel)')}
             value={tot || null}
             onChange={(v) => {
               setTotHandmatig(true);
@@ -807,67 +811,67 @@ function ActiviteitInplannenInhoud({
           />
         </View>
       </View>
-      <LedenKeuze label="Medewerkers (meerdere mogelijk)" leden={leden} waarde={wie} onChange={setWie} />
-      {!wie.length ? <Text style={styles.uitleg}>Zonder keuze komt de activiteit op jouw naam.</Text> : null}
+      <LedenKeuze label={tx('Medewerkers (meerdere mogelijk)')} leden={leden} waarde={wie} onChange={setWie} />
+      {!wie.length ? <Text style={styles.uitleg}>{tx('Zonder keuze komt de activiteit op jouw naam.')}</Text> : null}
       <Schakel
-        titel="Ook per e-mail laten weten"
-        uitleg="Wie je toewijst, krijgt naast de melding in de app een mail."
+        titel={tx('Ook per e-mail laten weten')}
+        uitleg={tx('Wie je toewijst, krijgt naast de melding in de app een mail.')}
         waarde={stuurMail}
         onWissel={setStuurMail}
       />
       <AdresZoeker
-        label="Locatie"
+        label={tx('Locatie')}
         volledigAdres
         value={locatie}
         onChangeText={setLocatie}
-        placeholder="Zoek straat + huisnummer + plaats"
-        hint="Kies een adres uit de lijst, of typ zelf een omschrijving."
+        placeholder={tx('Zoek straat + huisnummer + plaats')}
+        hint={tx('Kies een adres uit de lijst, of typ zelf een omschrijving.')}
       />
       {voorstel ? (
         <View style={styles.voorstel}>
-          <Text style={styles.uitleg}>Adres van de klant: {voorstel}</Text>
+          <Text style={styles.uitleg}>{tx('Adres van de klant: {adres}', { adres: voorstel })}</Text>
           <View style={styles.rij}>
             <Button
-              label="Overnemen"
+              label={tx('Overnemen')}
               variant="secondary"
               onPress={() => {
                 setLocatie(voorstel);
                 setVoorstel(null);
               }}
             />
-            <Button label="Huidige houden" variant="ghost" onPress={() => setVoorstel(null)} />
+            <Button label={tx('Huidige houden')} variant="ghost" onPress={() => setVoorstel(null)} />
           </View>
         </View>
       ) : null}
       <MentionInvoer
-        label="Notities"
+        label={tx('Notities')}
         value={notitie}
         onChangeText={setNotitie}
         gekozen={getagd}
         onGekozen={setGetagd}
         leden={leden}
-        placeholder="Instructies, agendapunten… Typ @ om iemand te taggen"
+        placeholder={tx('Instructies, agendapunten… Typ @ om iemand te taggen')}
       />
       <View style={[styles.blok, styles.scheiding]}>
-        <Text style={styles.label}>Werkbon koppelen (optioneel)</Text>
+        <Text style={styles.label}>{tx('Werkbon koppelen (optioneel)')}</Text>
         {werkbonnen.length ? (
           <SelectField
-            label="Werkbon"
+            label={tx('Werkbon')}
             value={werkbonId}
             onChange={setWerkbonId}
             allowEmpty
-            emptyLabel="— Geen werkbon —"
-            placeholder="— Geen werkbon —"
-            options={werkbonnen.map((w) => ({ id: w.id, label: w.titel || w.nummer || 'Werkbon', sub: w.nummer ?? undefined }))}
+            emptyLabel={tx('— Geen werkbon —')}
+            placeholder={tx('— Geen werkbon —')}
+            options={werkbonnen.map((w) => ({ id: w.id, label: w.titel || w.nummer || tx('Werkbon'), sub: w.nummer ?? undefined }))}
           />
         ) : (
           <Text style={styles.uitleg}>
-            {klantId ? 'Geen openstaande werkbonnen voor deze klant.' : 'Selecteer eerst een klant om werkbonnen te tonen.'}
+            {klantId ? tx('Geen openstaande werkbonnen voor deze klant.') : tx('Selecteer eerst een klant om werkbonnen te tonen.')}
           </Text>
         )}
       </View>
       {fout ? <NoticeBanner toon="fout" message={fout} /> : null}
-      <Button label="Inplannen" onPress={opslaan} loading={bezig} disabled={bezig} />
+      <Button label={tx('Inplannen')} onPress={opslaan} loading={bezig} disabled={bezig} />
     </ScrollView>
   );
 }

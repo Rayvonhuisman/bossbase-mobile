@@ -13,6 +13,7 @@ import { useSave } from '@/lib/useSave';
 import { pushNotificaties } from '@/services/collegaMeldingService';
 import { addProjectNote, type ProjectNote } from '@/services/projectService';
 import { Blok, useStijl } from './bouwstenen';
+import { tx } from '@/i18n';
 
 /**
  * De Notities-tab (`NotesTab` + `NotitieLog` in het dashboard). Typ @ om een
@@ -75,33 +76,33 @@ export function NotitiesTab({
   };
 
   return (
-    <Blok titel="Notities">
+    <Blok titel={tx('Notities')}>
       <MentionInvoer
-        label="Nieuwe notitie"
+        label={tx('Nieuwe notitie')}
         value={tekst}
         onChangeText={setTekst}
         gekozen={gekozen}
         onGekozen={setGekozen}
         leden={leden.filter((l) => l.full_name).map((l) => ({ id: l.id, full_name: l.full_name ?? '' }))}
-        placeholder="Schrijf een notitie over dit project… Typ @ om iemand te taggen"
+        placeholder={tx('Schrijf een notitie over dit project… Typ @ om iemand te taggen')}
       />
       {error ? <Text style={[styles.klein, { color: t.statusRejectFg }]}>{error}</Text> : null}
       <View style={{ alignItems: 'flex-end' }}>
         <Button
-          label="Notitie toevoegen"
+          label={tx('Notitie toevoegen')}
           onPress={toevoegen}
           loading={saving}
           disabled={!tekst.trim() || saving || !magMaken}
         />
       </View>
       {notities.length === 0 ? (
-        <Text style={styles.leeg}>Nog geen notities. Voeg de eerste notitie toe.</Text>
+        <Text style={styles.leeg}>{tx('Nog geen notities. Voeg de eerste notitie toe.')}</Text>
       ) : (
         notities.map((n) => (
           <View key={n.id} style={styles.notitie}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.notitieMeta}>
-                {n.auteur?.full_name || 'Onbekend'} · {formatDateNL(lokaleDatum(n.created_at))}
+                {n.auteur?.full_name || tx('Onbekend')} · {formatDateNL(lokaleDatum(n.created_at))}
               </Text>
               <Text style={styles.tekst}>{alsTekst(n.note)}</Text>
             </View>
@@ -110,7 +111,8 @@ export function NotitiesTab({
                 onPress={() => onVerwijder(n)}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel="Notitie verwijderen"
+                accessibilityLabel={tx('Notitie verwijderen')}
+
                 style={styles.notitieWeg}
               >
                 <Trash2 size={16} color={t.statusRejectFg} />

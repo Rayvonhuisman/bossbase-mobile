@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { normaliseerStatus, WERKBON_STATUS_STIJL } from '@/lib/werkbonLogica';
+import { tx } from '@/i18n';
 
 /**
  * Statuspil van een werkbon met de kleuren van het dashboard
@@ -11,11 +12,11 @@ export function WerkbonStatusBadge({ status, klein = false }: { status: string |
   return (
     <View
       style={[styles.pil, { backgroundColor: s.bg }, klein && styles.klein]}
-      accessibilityLabel={`Status: ${s.label}`}
+      accessibilityLabel={tx('Status: {status}', { status: tx(s.label) })}
     >
       <View style={[styles.dot, { backgroundColor: s.dot }]} />
       <Text style={[styles.tekst, { color: s.kleur }, klein && styles.tekstKlein]} numberOfLines={1}>
-        {s.label}
+        {tx(s.label)}
       </Text>
     </View>
   );

@@ -12,6 +12,7 @@ import { createCustomer } from '@/services/customerService';
 import { createDeal, DEAL_PRIORITEITEN, type DealRow } from '@/services/dealService';
 import { stuurAanvraagOntvangen } from '@/services/autoMailService';
 import { LedenKeuze, type Lid } from './LedenKeuze';
+import { tx } from '@/i18n';
 
 /**
  * "Nieuwe aanvraag" / "Lead toevoegen" — de `NewLeadModal` van het dashboard:
@@ -80,16 +81,16 @@ export function NieuweAanvraagSheet({
   const opslaan = () => {
     save(
       async () => {
-        if (!titel.trim()) return writeFout('validatie', 'Titel is verplicht');
-        if (!faseId) return writeFout('validatie', 'Kies een fase');
+        if (!titel.trim()) return writeFout('validatie', tx('Titel is verplicht'));
+        if (!faseId) return writeFout('validatie', tx('Kies een fase'));
         let customerId = klantId;
         if (klantModus === 'nieuw') {
-          if (!nieuweKlant.trim()) return writeFout('validatie', 'Naam klant is verplicht');
+          if (!nieuweKlant.trim()) return writeFout('validatie', tx('Naam klant is verplicht'));
           // Zoals het dashboard: e-mail mag leeg, maar dan wel een geldig adres.
           if (nieuwEmail.trim() && !/^\S+@\S+\.\S+$/.test(nieuwEmail.trim()))
-            return writeFout('validatie', 'Ongeldig e-mailadres');
+            return writeFout('validatie', tx('Ongeldig e-mailadres'));
           const companyId = getCompanyId();
-          if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+          if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
           // E-mail en telefoon meteen mee: zonder adres kun je later geen
           // offerte of factuur naar deze klant mailen.
           const k = await createCustomer({
@@ -98,10 +99,10 @@ export function NieuweAanvraagSheet({
             email: nieuwEmail,
             phone: nieuwTelefoon,
           });
-          if (k.error || !k.data) return writeFout('onbekend', k.error ?? 'Klant aanmaken mislukt.');
+          if (k.error || !k.data) return writeFout('onbekend', k.error ?? tx('Klant aanmaken mislukt.'));
           customerId = k.data.id;
         } else if (!customerId) {
-          return writeFout('validatie', 'Kies een klant of maak een nieuwe aan');
+          return writeFout('validatie', tx('Kies een klant of maak een nieuwe aan'));
         }
         const bedrag = omzet.trim() ? Number(omzet.replace(',', '.')) : 0;
         return createDeal({
@@ -118,13 +119,13 @@ export function NieuweAanvraagSheet({
         onSuccess: (deal) => {
           if (klantModus === 'bestaand' && klantId) {
             void stuurAanvraagOntvangen({ dealId: deal.id, customerId: klantId }).then(({ resultaat, aan }) => {
-              if (resultaat === false) toon(`De bevestigingsmail aan ${aan} is niet verstuurd.`, 'fout');
+              if (resultaat === false) toon(tx('De bevestigingsmail aan {aan} is niet verstuurd.', { aan }), 'fout');
             });
           }
           onSaved(deal);
           onClose();
         },
-        succesMelding: 'Nieuwe aanvraag toegevoegd',
+        succesMelding: tx('Nieuwe aanvraag toegevoegd'),
       },
     );
   };
@@ -132,29 +133,29 @@ export function NieuweAanvraagSheet({
   return (
     <FormSheet
       visible={open}
-      title="Nieuwe aanvraag"
+      title={tx('Nieuwe aanvraag')}
       error={error}
       saving={saving}
-      submitLabel="Aanvraag toevoegen"
+      submitLabel={tx('Aanvraag toevoegen')}
       submitDisabled={!titel.trim()}
       onSubmit={opslaan}
       onClose={onClose}
     >
       <FormField
-        label="Titel"
+        label={tx('Titel')}
         value={titel}
         onChangeText={setTitel}
-        placeholder="Bijv. Badkamer renovatie"
+        placeholder={tx('Bijv. Badkamer renovatie')}
         autoFocus
       />
 
       <View style={{ gap: spacing.xs }}>
-        <Text style={styles.label}>Klant</Text>
+        <Text style={styles.label}>{tx('Klant')}</Text>
         <View style={styles.rij} accessibilityRole="tablist">
           {(
             [
-              ['bestaand', 'Bestaande klant'],
-              ...(magKlantMaken ? [['nieuw', 'Nieuwe klant']] : []),
+              ['bestaand', tx('Bestaande klant')],
+              ...(magKlantMaken ? [['nieuw', tx('Nieuwe klant')]] : []),
             ] as [typeof klantModus, string][]
           ).map(([id, label]) => (
             <Pressable
@@ -172,31 +173,31 @@ export function NieuweAanvraagSheet({
       </View>
       {klantModus === 'bestaand' ? (
         <SelectField
-          label="Bestaande klant"
+          label={tx('Bestaande klant')}
           value={klantId}
           options={klanten}
           onChange={setKlantId}
-          placeholder="Kies een klant of maak een nieuwe aan"
+          placeholder={tx('Kies een klant of maak een nieuwe aan')}
           searchable
         />
       ) : (
         <>
-          <FormField label="Naam klant" value={nieuweKlant} onChangeText={setNieuweKlant} placeholder="Naam" />
+          <FormField label={tx('Naam klant')} value={nieuweKlant} onChangeText={setNieuweKlant} placeholder={tx('Naam')} />
           <FormField
-            label="E-mailadres"
+            label={tx('E-mailadres')}
             value={nieuwEmail}
             onChangeText={setNieuwEmail}
-            placeholder="Voor offertes en facturen"
+            placeholder={tx('Voor offertes en facturen')}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="email"
           />
           <FormField
-            label="Telefoon"
+            label={tx('Telefoon')}
             value={nieuwTelefoon}
             onChangeText={setNieuwTelefoon}
-            placeholder="Telefoonnummer"
+            placeholder={tx('Telefoonnummer')}
             keyboardType="phone-pad"
             autoComplete="tel"
           />
@@ -204,21 +205,21 @@ export function NieuweAanvraagSheet({
       )}
 
       <SelectField
-        label="Pipeline fase"
+        label={tx('Pipeline fase')}
         value={faseId}
         options={fasen}
         onChange={setFaseId}
-        placeholder="Kies een fase"
+        placeholder={tx('Kies een fase')}
       />
       <FormField
-        label="Verwachte omzet"
+        label={tx('Verwachte omzet')}
         value={omzet}
         onChangeText={setOmzet}
         placeholder="0,00"
         keyboardType="decimal-pad"
       />
       <View style={{ gap: spacing.xs }}>
-        <Text style={styles.label}>Prioriteit</Text>
+        <Text style={styles.label}>{tx('Prioriteit')}</Text>
         <View style={styles.rij}>
           {DEAL_PRIORITEITEN.map((p) => {
             const aan = prio === p.id;
@@ -238,16 +239,16 @@ export function NieuweAanvraagSheet({
         </View>
       </View>
       <LedenKeuze
-        label="Wie behandelt deze aanvraag?"
+        label={tx('Wie behandelt deze aanvraag?')}
         leden={leden}
         waarde={behandelaars}
         onChange={setBehandelaars}
       />
       <FormField
-        label="Omschrijving"
+        label={tx('Omschrijving')}
         value={omschrijving}
         onChangeText={setOmschrijving}
-        placeholder="Wat wil de klant?"
+        placeholder={tx('Wat wil de klant?')}
         multiline
       />
     </FormSheet>

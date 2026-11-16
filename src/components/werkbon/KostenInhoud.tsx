@@ -5,6 +5,7 @@ import { formatEUR } from '@/lib/format';
 import { bouwKostenOverzicht, type Inkoop, type KostBron } from '@/lib/werkbonKosten';
 import { fmtUren, type UrenRegel } from '@/lib/projectKostenLogica';
 import { createWerkbonInkoop, deleteInkoop, getWerkbonKostenBron, updateInkoop } from '@/services/werkbonKostenService';
+import { tx, txn } from '@/i18n';
 import { useTheme } from '@/providers';
 import { ds, spacing, type ThemeColors } from '@/theme';
 import { InkoopInvoer, InkoopRegel, type InkoopPatch } from './Regels';
@@ -80,20 +81,20 @@ export function KostenInhoud({
     setInkopen((l) => l.map((x) => (x.id === rij.id ? nieuw : x)));
     const { error } = await updateInkoop(rij.id, patch);
     if (error) {
-      Dialog.alert('Bijwerken mislukt', error);
+      Dialog.alert(tx('Bijwerken mislukt'), error);
       setInkopen((l) => l.map((x) => (x.id === rij.id ? rij : x)));
     }
   };
 
   const verwijder = (rij: Inkoop) =>
-    Dialog.alert('Inkoop verwijderen', `"${rij.naam}" verwijderen?`, [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Inkoop verwijderen'), tx('"{naam}" verwijderen?', { naam: rij.naam }), [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: async () => {
           const { error } = await deleteInkoop(rij.id);
-          if (error) return Dialog.alert('Verwijderen mislukt', error);
+          if (error) return Dialog.alert(tx('Verwijderen mislukt'), error);
           setInkopen((l) => l.filter((x) => x.id !== rij.id));
           setOpenId(null);
         },
@@ -103,7 +104,7 @@ export function KostenInhoud({
   const voegToe = async (f: Parameters<typeof createWerkbonInkoop>[1]) => {
     const { data, error } = await createWerkbonInkoop(werkbon, f);
     if (error || !data) {
-      Dialog.alert('Toevoegen mislukt', error ?? 'Probeer het opnieuw.');
+      Dialog.alert(tx('Toevoegen mislukt'), error ?? tx('Probeer het opnieuw.'));
       return false;
     }
     setInkopen((l) => [...l, data]);
@@ -112,41 +113,46 @@ export function KostenInhoud({
 
   const foutTekst = fout
     ? /schema cache|does not exist|project_kosten/i.test(fout)
-      ? 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
-      : 'Inkopen konden niet worden geladen.'
+      ? tx('Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.')
+      : tx('Inkopen konden niet worden geladen.')
     : null;
 
   return (
     <View style={{ gap: spacing.md }}>
       <Text style={styles.uitleg}>
-        Kosten voor deze werkbon die niet bij het materiaal staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen
-        exclusief btw.
+        {tx('Kosten voor deze werkbon die niet bij het materiaal staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.')}
       </Text>
       <View>
-        <Text style={styles.kopLabel}>{magInkoop ? 'Kostprijs' : 'Inkopen'}</Text>
+        <Text style={styles.kopLabel}>{magInkoop ? tx('Kostprijs') : tx('Inkopen')}</Text>
         <Text style={styles.kopWaarde}>{formatEUR(magInkoop ? o.totaal : o.inkopen.bedrag)}</Text>
         {magInkoop && (o.arbeid.bedrag > 0 || o.materiaal.bedrag > 0 || o.inkopen.bedrag > 0) ? (
           <Text style={styles.kopSub}>
-            arbeid {formatEUR(o.arbeid.bedrag)} · materiaal {formatEUR(o.materiaal.bedrag)} · inkopen{' '}
-            {formatEUR(o.inkopen.bedrag)}
+            {tx('arbeid {arbeid} · materiaal {materiaal} · inkopen {inkopen}', {
+              arbeid: formatEUR(o.arbeid.bedrag),
+              materiaal: formatEUR(o.materiaal.bedrag),
+              inkopen: formatEUR(o.inkopen.bedrag),
+            })}
           </Text>
         ) : null}
         {magInkoop && o.arbeid.urenZonderKostprijs > 0 ? (
           <Text style={[styles.kopSub, styles.letOp, { marginTop: 6 }]}>
-            {fmtUren(o.arbeid.urenZonderKostprijs)} zonder kostprijs per uur: die tellen niet mee.
-            {isAdmin ? ' Stel de kostprijs in via het dashboard, bij Instellingen › Tarieven en termijnen.' : ''}
+            {tx('{uren} zonder kostprijs per uur: die tellen niet mee.', { uren: fmtUren(o.arbeid.urenZonderKostprijs) })}
+            {isAdmin ? ` ${tx('Stel de kostprijs in via het dashboard, bij Instellingen › Tarieven en termijnen.')}` : ''}
           </Text>
         ) : null}
         {meerwerkTotaal != null && meerwerkTotaal > 0 ? (
           <Text style={[styles.kopSub, { marginTop: 6 }]}>
-            Meerwerk te factureren: {formatEUR(meerwerkTotaal)} excl. btw
+            {tx('Meerwerk te factureren: {bedrag} excl. btw', { bedrag: formatEUR(meerwerkTotaal) })}
           </Text>
         ) : null}
         {o.boekingen.aantal > 0 ? (
           <Text style={[styles.kopSub, { marginTop: 6 }]}>
-            {o.boekingen.aantal === 1 ? '1 boeking' : `${o.boekingen.aantal} boekingen`} op de Kosten-pagina{' '}
-            {o.boekingen.aantal === 1 ? 'hangt' : 'hangen'} aan deze werkbon ({formatEUR(o.boekingen.bedrag)}). Die tellen niet
-            mee: het materiaal zelf staat hierboven al.
+            {txn(
+              '{n} boeking op de Kosten-pagina hangt aan deze werkbon ({bedrag}). Die tellen niet mee: het materiaal zelf staat hierboven al.',
+              '{n} boekingen op de Kosten-pagina hangen aan deze werkbon ({bedrag}). Die tellen niet mee: het materiaal zelf staat hierboven al.',
+              o.boekingen.aantal,
+              { bedrag: formatEUR(o.boekingen.bedrag) },
+            )}
           </Text>
         ) : null}
       </View>
@@ -155,7 +161,7 @@ export function KostenInhoud({
         <ActivityIndicator color={ds.green700} />
       ) : (
         <>
-          {!inkopen.length ? <Text style={styles.leeg}>{foutTekst || 'Nog geen kosten toegevoegd.'}</Text> : null}
+          {!inkopen.length ? <Text style={styles.leeg}>{foutTekst || tx('Nog geen kosten toegevoegd.')}</Text> : null}
           {inkopen.map((k) => (
             <InkoopRegel
               key={k.id}
@@ -172,7 +178,7 @@ export function KostenInhoud({
           {kanBewerken ? <InkoopInvoer leveranciers={leveranciers} onAdd={voegToe} /> : null}
           {inkopen.length ? (
             <View style={styles.totaal}>
-              <Text style={styles.totaalLabel}>Totaal inkopen (excl. BTW)</Text>
+              <Text style={styles.totaalLabel}>{tx('Totaal inkopen (excl. BTW)')}</Text>
               <Text style={styles.totaalWaarde}>{formatEUR(inkopen.reduce((s, k) => s + k.bedrag, 0))}</Text>
             </View>
           ) : null}

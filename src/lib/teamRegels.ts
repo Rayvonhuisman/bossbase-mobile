@@ -6,7 +6,10 @@
  * is de uitleg vooraf, niet de beveiliging.
  */
 
+import { tx, txm } from '@/i18n';
 import { mailTemplate } from './mail/mailTemplate';
+import { vertaald } from './vertaald';
+
 export type TeamLidBasis = {
   id: string;
   profile_id: string | null;
@@ -16,19 +19,21 @@ export type TeamLidBasis = {
   invite_email_failed_at?: string | null;
 };
 
-export const EIGENAAR_REDEN =
-  'De eigenaar van het account kan alleen door de eigenaar zelf worden aangepast.';
-export const LAATSTE_ADMIN_REDEN =
-  'Dit is de laatste beheerder van het bedrijf. Wijs eerst een andere beheerder aan.';
+export const EIGENAAR_REDEN = txm(
+  'De eigenaar van het account kan alleen door de eigenaar zelf worden aangepast.',
+);
+export const LAATSTE_ADMIN_REDEN = txm(
+  'Dit is de laatste beheerder van het bedrijf. Wijs eerst een andere beheerder aan.',
+);
 
-export const ROL_LABEL: Record<string, string> = {
-  admin: 'Admin',
-  planner: 'Planner',
-  medewerker: 'Medewerker',
-};
+export const ROL_LABEL: Record<string, string> = vertaald({
+  admin: txm('Admin'),
+  planner: txm('Planner'),
+  medewerker: txm('Medewerker'),
+});
 
 export function rolLabel(rol: string | null | undefined): string {
-  return ROL_LABEL[rol ?? ''] ?? 'Medewerker';
+  return ROL_LABEL[rol ?? ''] ?? tx('Medewerker');
 }
 
 export type StatusWeergave = {
@@ -38,12 +43,12 @@ export type StatusWeergave = {
 
 /** "Mail mislukt" gaat vóór "Uitgenodigd": dan is er niets aangekomen. */
 export function statusWeergave(lid: TeamLidBasis): StatusWeergave {
-  if (lid.status === 'actief') return { label: 'Actief', toon: 'actief' };
+  if (lid.status === 'actief') return { label: tx('Actief'), toon: 'actief' };
   if (lid.status === 'uitgenodigd' && lid.invite_email_failed_at) {
-    return { label: 'Mail mislukt', toon: 'mislukt' };
+    return { label: tx('Mail mislukt'), toon: 'mislukt' };
   }
-  if (lid.status === 'uitgenodigd') return { label: 'Uitgenodigd', toon: 'uitgenodigd' };
-  return { label: 'Inactief', toon: 'inactief' };
+  if (lid.status === 'uitgenodigd') return { label: tx('Uitgenodigd'), toon: 'uitgenodigd' };
+  return { label: tx('Inactief'), toon: 'inactief' };
 }
 
 export function teamTellingen(leden: readonly TeamLidBasis[]) {
@@ -72,9 +77,9 @@ export function rolInfo(
 ): { vergrendeld: boolean; reden: string } {
   const ikBenEigenaar = Boolean(eigenaarId) && eigenId === eigenaarId;
   if (isEigenaar(lid, eigenaarId) && !ikBenEigenaar) {
-    return { vergrendeld: true, reden: EIGENAAR_REDEN };
+    return { vergrendeld: true, reden: tx(EIGENAAR_REDEN) };
   }
-  if (isLaatsteAdmin(lid, leden)) return { vergrendeld: true, reden: LAATSTE_ADMIN_REDEN };
+  if (isLaatsteAdmin(lid, leden)) return { vergrendeld: true, reden: tx(LAATSTE_ADMIN_REDEN) };
   return { vergrendeld: false, reden: '' };
 }
 
@@ -90,10 +95,10 @@ export function beheerStand(
   eigenId: string | null,
 ): { soort: 'jij' | 'beschermd' | 'acties'; geblokkeerd: string | null } {
   if (lid.profile_id && lid.profile_id === eigenId) return { soort: 'jij', geblokkeerd: null };
-  if (isEigenaar(lid, eigenaarId)) return { soort: 'beschermd', geblokkeerd: EIGENAAR_REDEN };
+  if (isEigenaar(lid, eigenaarId)) return { soort: 'beschermd', geblokkeerd: tx(EIGENAAR_REDEN) };
   return {
     soort: 'acties',
-    geblokkeerd: isLaatsteAdmin(lid, leden) ? LAATSTE_ADMIN_REDEN : null,
+    geblokkeerd: isLaatsteAdmin(lid, leden) ? tx(LAATSTE_ADMIN_REDEN) : null,
   };
 }
 
@@ -105,8 +110,8 @@ export function beheerStand(
  */
 export function rolOpties(_huidig?: string | null): { id: string; label: string }[] {
   return [
-    { id: 'medewerker', label: 'Medewerker' },
-    { id: 'admin', label: 'Admin' },
+    { id: 'medewerker', label: tx('Medewerker') },
+    { id: 'admin', label: tx('Admin') },
   ];
 }
 

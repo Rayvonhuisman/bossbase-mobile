@@ -9,6 +9,7 @@ import {
   type ProjectJobCost,
   type ProjectKost,
 } from '@/lib/projectKostenLogica';
+import { tx } from '@/i18n';
 
 /**
  * De bronnen van de Nacalculatie-tab op de projectkaart —
@@ -55,7 +56,7 @@ export async function listProjectKosten(
     .order('created_at', { ascending: true });
   if (error) {
     console.warn('[projectKostenService.listProjectKosten]', error.message);
-    return { data: [], error: 'Inkopen konden niet worden geladen.' };
+    return { data: [], error: tx('Inkopen konden niet worden geladen.') };
   }
   return { data: ((data as Record<string, unknown>[]) ?? []).map(naarProjectKost), error: null };
 }
@@ -69,14 +70,10 @@ export type ProjectKostInput = {
 };
 
 function valideer(input: Partial<ProjectKostInput>, nieuw: boolean): string | null {
-  if ((nieuw || input.naam !== undefined) && !input.naam?.trim()) return 'Omschrijving is verplicht.';
-  for (const [veld, label] of [
-    ['aantal', 'aantal'],
-    ['prijs_per', 'kostprijs'],
-  ] as const) {
-    const v = input[veld];
-    if (v !== undefined && (!Number.isFinite(v) || v < 0)) return `Vul een geldig ${label} in.`;
-  }
+  if ((nieuw || input.naam !== undefined) && !input.naam?.trim()) return tx('Omschrijving is verplicht.');
+  const ongeldig = (v: number | undefined) => v !== undefined && (!Number.isFinite(v) || v < 0);
+  if (ongeldig(input.aantal)) return tx('Vul een geldig aantal in.');
+  if (ongeldig(input.prijs_per)) return tx('Vul een geldige kostprijs in.');
   return null;
 }
 
@@ -95,13 +92,13 @@ export async function createProjectKost(
     prijs_per: rond(Number(input.prijs_per) || 0),
     leverancier_id: input.leverancier_id || null,
   });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   const res = await schrijf<Record<string, unknown>>(
     () => supabase.from('project_kosten').insert(payload).select('*'),
     {
       context: 'projectKostenService.createProjectKost',
       bedrijfReadonly: isReadonly(),
-      leegMelding: 'De inkoop is niet opgeslagen. Je hebt het recht Kosten nodig.',
+      leegMelding: tx('De inkoop is niet opgeslagen. Je hebt het recht Kosten nodig.'),
     },
   );
   return res.ok ? { ok: true, data: naarProjectKost(res.data) } : res;
@@ -125,7 +122,7 @@ export async function updateProjectKost(
       context: 'projectKostenService.updateProjectKost',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De inkoop is niet gewijzigd. Je hebt het recht Kosten nodig.',
+      leegMelding: tx('De inkoop is niet gewijzigd. Je hebt het recht Kosten nodig.'),
     },
   );
   return res.ok ? { ok: true, data: naarProjectKost(res.data) } : res;
@@ -138,7 +135,7 @@ export async function deleteProjectKost(id: string): Promise<WriteStatus> {
       context: 'projectKostenService.deleteProjectKost',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'De inkoop is niet verwijderd. Je hebt het recht Kosten nodig.',
+      leegMelding: tx('De inkoop is niet verwijderd. Je hebt het recht Kosten nodig.'),
     },
   );
   return res.ok ? { ok: true, data: null } : res;
@@ -187,7 +184,7 @@ export async function listProjectJobCosts(
   if (res.error) res = await haal(BASIS);
   if (res.error) {
     console.warn('[projectKostenService.listProjectJobCosts]', res.error.message);
-    return { data: [], error: 'Kosten konden niet worden geladen.' };
+    return { data: [], error: tx('Kosten konden niet worden geladen.') };
   }
   return {
     data: ((res.data as unknown as RuweJobCost[]) ?? []).map((r) => {

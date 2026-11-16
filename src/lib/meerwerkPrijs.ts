@@ -10,6 +10,7 @@
 // Nooit op de werkbon-PDF of de ondertekenpagina: src/lib/pdf/werkbonPdf.ts
 // leest deze tabel niet (tests/werkbonLogica.test.mjs bewaakt dat).
 
+import { tx } from '@/i18n';
 import { leesGetalNl } from './getalNl';
 
 export type MeerwerkPrijs = { taakId: string; bedragExcl: number | null; uren: number | null };
@@ -39,8 +40,8 @@ export function leesMeerwerkInvoer(
 ): { fout: string } | { leeg: true } | { bedragExcl: number | null; uren: number | null } {
   const bedrag = getalOfNull(bedragExcl);
   const u = getalOfNull(uren);
-  if (Number.isNaN(bedrag) || (bedrag != null && bedrag < 0)) return { fout: 'Vul een geldig bedrag in.' };
-  if (Number.isNaN(u) || (u != null && u < 0)) return { fout: 'Vul een geldig aantal uren in.' };
+  if (Number.isNaN(bedrag) || (bedrag != null && bedrag < 0)) return { fout: tx('Vul een geldig bedrag in.') };
+  if (Number.isNaN(u) || (u != null && u < 0)) return { fout: tx('Vul een geldig aantal uren in.') };
   if (bedrag == null && u == null) return { leeg: true };
   return { bedragExcl: bedrag, uren: u };
 }

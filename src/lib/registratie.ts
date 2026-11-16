@@ -1,6 +1,6 @@
 /**
- * Registratie — dezelfde regels als het dashboard, zonder runtime-imports zodat
- * het los te testen is (`tests/registratie.test.mjs`).
+ * Registratie — dezelfde regels als het dashboard, los te testen
+ * (`tests/registratie.test.mjs`). Enige runtime-import is de vertaling (@/i18n).
  *
  * Bronnen in het dashboard (BossBase):
  *  - `src/pages/BbAuth.jsx` — RegisterFlow (validateAccount, validateCompany,
@@ -12,6 +12,7 @@
  * Wijzigt het dashboard één van deze, dan hier meeveranderen: verify-code leest
  * de metadata en maakt daarmee het bedrijf aan.
  */
+import { tx, txm } from '@/i18n';
 
 /** Branches gelijk aan TRADES in BbAuth.jsx (en BRANCHES in lib/branches.js). */
 export const BRANCHES = [
@@ -33,13 +34,13 @@ export type Pakket = 'groei' | 'team';
 export const PAKKETTEN: readonly { id: Pakket; titel: string; omschrijving: string }[] = [
   {
     id: 'groei',
-    titel: 'Groei, voor 1-2 personen',
-    omschrijving: "Je werkt alleen of met z'n tweeën. Offertes, facturen, planning en uren, alles in één.",
+    get titel() { return tx('Groei, voor 1-2 personen'); },
+    get omschrijving() { return tx("Je werkt alleen of met z'n tweeën. Offertes, facturen, planning en uren, alles in één."); },
   },
   {
     id: 'team',
-    titel: 'Team, voor 2+ personen',
-    omschrijving: 'Meerdere medewerkers of bussen. Met rollen en rechten, teamplanning en voertuigen.',
+    get titel() { return tx('Team, voor 2+ personen'); },
+    get omschrijving() { return tx('Meerdere medewerkers of bussen. Met rollen en rechten, teamplanning en voertuigen.'); },
   },
 ];
 
@@ -48,10 +49,10 @@ export const PROEF_DAGEN = 14;
 // ─── Wachtwoord ─────────────────────────────────────────────────────────────
 
 export const WACHTWOORD_EISEN: readonly { key: string; label: string; test: (p: string) => boolean }[] = [
-  { key: 'len', label: 'Minimaal 8 tekens', test: (p) => p.length >= 8 },
-  { key: 'upper', label: 'Minimaal 1 hoofdletter', test: (p) => /[A-Z]/.test(p) },
-  { key: 'digit', label: 'Minimaal 1 cijfer', test: (p) => /[0-9]/.test(p) },
-  { key: 'special', label: 'Minimaal 1 speciaal teken', test: (p) => /[^A-Za-z0-9]/.test(p) },
+  { key: 'len', get label() { return tx('Minimaal 8 tekens'); }, test: (p) => p.length >= 8 },
+  { key: 'upper', get label() { return tx('Minimaal 1 hoofdletter'); }, test: (p) => /[A-Z]/.test(p) },
+  { key: 'digit', get label() { return tx('Minimaal 1 cijfer'); }, test: (p) => /[0-9]/.test(p) },
+  { key: 'special', get label() { return tx('Minimaal 1 speciaal teken'); }, test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 export function wachtwoordGeldig(wachtwoord: string): boolean {
@@ -68,9 +69,9 @@ export function emailGeldig(email: string): boolean {
 /** Eén op één `telefoonFout` uit het dashboard. Lege string = goed. */
 export function telefoonFout(invoer: string | null | undefined): string {
   const ruw = (invoer || '').trim();
-  if (!ruw) return 'Vul je telefoonnummer in.';
+  if (!ruw) return tx('Vul je telefoonnummer in.');
   if (!/^\+?[\d\s\-.()/]+$/.test(ruw))
-    return 'Een telefoonnummer bevat alleen cijfers, spaties, streepjes en eventueel een + vooraan.';
+    return tx('Een telefoonnummer bevat alleen cijfers, spaties, streepjes en eventueel een + vooraan.');
 
   const cijfers = ruw.replace(/\D/g, '');
   const internationaal = ruw.startsWith('+') ? cijfers : cijfers.startsWith('00') ? cijfers.slice(2) : null;
@@ -78,15 +79,15 @@ export function telefoonFout(invoer: string | null | undefined): string {
   if (internationaal !== null) {
     if (internationaal.startsWith('31')) {
       const nl = internationaal.slice(2).replace(/^0/, ''); // "+31 (0)6 …" mag ook
-      return /^[1-9]\d{8}$/.test(nl) ? '' : 'Dit is geen geldig Nederlands nummer.';
+      return /^[1-9]\d{8}$/.test(nl) ? '' : tx('Dit is geen geldig Nederlands nummer.');
     }
     return /^[1-9]\d{7,14}$/.test(internationaal)
       ? ''
-      : 'Vul een geldig nummer in, met landcode (bijv. +32 470 12 34 56).';
+      : tx('Vul een geldig nummer in, met landcode (bijv. +32 470 12 34 56).');
   }
 
   if (/^0[1-9]\d{8}$/.test(cijfers)) return '';
-  return 'Vul een geldig telefoonnummer in, bijv. 06-12345678 of +32 470 12 34 56.';
+  return tx('Vul een geldig telefoonnummer in, bijv. 06-12345678 of +32 470 12 34 56.');
 }
 
 // ─── Validatie per stap ─────────────────────────────────────────────────────
@@ -103,19 +104,19 @@ export type BedrijfFouten = Partial<Record<'companyName' | 'phone', string>>;
  */
 export function accountFouten(v: AccountInvoer): AccountFouten {
   const f: AccountFouten = {};
-  if (!v.fullName.trim()) f.fullName = 'Vul je volledige naam in.';
-  if (!emailGeldig(v.email)) f.email = 'Vul een geldig e-mailadres in.';
-  if (!v.password) f.password = 'Vul een wachtwoord in.';
-  else if (!wachtwoordGeldig(v.password)) f.password = 'Vul een wachtwoord in dat aan alle vereisten voldoet.';
-  if (!v.password2) f.password2 = 'Herhaal je wachtwoord.';
-  else if (v.password !== v.password2) f.password2 = 'Wachtwoorden komen niet overeen.';
+  if (!v.fullName.trim()) f.fullName = tx('Vul je volledige naam in.');
+  if (!emailGeldig(v.email)) f.email = tx('Vul een geldig e-mailadres in.');
+  if (!v.password) f.password = tx('Vul een wachtwoord in.');
+  else if (!wachtwoordGeldig(v.password)) f.password = tx('Vul een wachtwoord in dat aan alle vereisten voldoet.');
+  if (!v.password2) f.password2 = tx('Herhaal je wachtwoord.');
+  else if (v.password !== v.password2) f.password2 = tx('Wachtwoorden komen niet overeen.');
   return f;
 }
 
 /** Bedrijfsstap: bedrijfsnaam en telefoon verplicht; branche en KvK niet (zoals het dashboard). */
 export function bedrijfFouten(v: BedrijfInvoer): BedrijfFouten {
   const f: BedrijfFouten = {};
-  if (!v.companyName.trim()) f.companyName = 'Vul je bedrijfsnaam in.';
+  if (!v.companyName.trim()) f.companyName = tx('Vul je bedrijfsnaam in.');
   const tel = telefoonFout(v.phone);
   if (tel) f.phone = tel;
   return f;
@@ -199,7 +200,7 @@ export function verificatieUitkomst(antwoord: VerifieerAntwoord): VerifieerUitko
   const code = antwoord?.code;
   return {
     ok: false,
-    melding: antwoord?.error || 'Code is onjuist.',
+    melding: antwoord?.error || tx('Code is onjuist.'),
     codeLeegmaken: code === 'EXPIRED' || code === 'TOO_MANY' || code === 'NO_CODE',
   };
 }
@@ -218,32 +219,32 @@ export function wachtOpVerificatie(
 // ─── Foutvertaling ──────────────────────────────────────────────────────────
 
 const VERTALINGEN: Record<string, string> = {
-  'Invalid login credentials': 'Onjuist e-mailadres of wachtwoord',
-  'Email not confirmed': 'Je e-mailadres is nog niet bevestigd',
-  'User not found': 'Geen account gevonden met dit e-mailadres',
-  'Email rate limit exceeded': 'Te veel pogingen. Probeer het later opnieuw',
-  'Password should be at least 6 characters': 'Wachtwoord moet minimaal 6 tekens zijn',
-  'User already registered': 'Er bestaat al een account met dit e-mailadres',
-  'Unable to validate email address: invalid format': 'Vul een geldig e-mailadres in',
-  'Signup requires a valid password': 'Vul een geldig wachtwoord in',
-  'New password should be different from the old password': 'Het nieuwe wachtwoord moet verschillen van het oude',
+  'Invalid login credentials': txm('Onjuist e-mailadres of wachtwoord'),
+  'Email not confirmed': txm('Je e-mailadres is nog niet bevestigd'),
+  'User not found': txm('Geen account gevonden met dit e-mailadres'),
+  'Email rate limit exceeded': txm('Te veel pogingen. Probeer het later opnieuw'),
+  'Password should be at least 6 characters': txm('Wachtwoord moet minimaal 6 tekens zijn'),
+  'User already registered': txm('Er bestaat al een account met dit e-mailadres'),
+  'Unable to validate email address: invalid format': txm('Vul een geldig e-mailadres in'),
+  'Signup requires a valid password': txm('Vul een geldig wachtwoord in'),
+  'New password should be different from the old password': txm('Het nieuwe wachtwoord moet verschillen van het oude'),
 };
 
 /** Eén op één `vertaalAuthFout` uit het dashboard. */
 export function vertaalAuthFout(message: string | null | undefined): string {
   const msg = (message || '').trim();
   const vast = VERTALINGEN[msg];
-  if (vast) return vast;
-  if (/invalid login credentials/i.test(msg)) return 'Onjuist e-mailadres of wachtwoord';
-  if (/email not confirmed|not confirmed/i.test(msg)) return 'Je e-mailadres is nog niet bevestigd';
-  if (/user not found/i.test(msg)) return 'Geen account gevonden met dit e-mailadres';
-  if (/rate limit/i.test(msg)) return 'Te veel pogingen. Probeer het later opnieuw';
-  if (/at least 6 characters/i.test(msg)) return 'Wachtwoord moet minimaal 6 tekens zijn';
-  if (/already registered/i.test(msg)) return 'Er bestaat al een account met dit e-mailadres';
+  if (vast) return tx(vast);
+  if (/invalid login credentials/i.test(msg)) return tx('Onjuist e-mailadres of wachtwoord');
+  if (/email not confirmed|not confirmed/i.test(msg)) return tx('Je e-mailadres is nog niet bevestigd');
+  if (/user not found/i.test(msg)) return tx('Geen account gevonden met dit e-mailadres');
+  if (/rate limit/i.test(msg)) return tx('Te veel pogingen. Probeer het later opnieuw');
+  if (/at least 6 characters/i.test(msg)) return tx('Wachtwoord moet minimaal 6 tekens zijn');
+  if (/already registered/i.test(msg)) return tx('Er bestaat al een account met dit e-mailadres');
   if (/[a-z]/i.test(msg) && /\b(the|invalid|error|failed|should|requires|please|try|credentials)\b/i.test(msg)) {
-    return 'Er ging iets mis. Probeer het opnieuw';
+    return tx('Er ging iets mis. Probeer het opnieuw');
   }
-  return msg || 'Er ging iets mis. Probeer het opnieuw';
+  return msg || tx('Er ging iets mis. Probeer het opnieuw');
 }
 
 // ─── Juridische links ───────────────────────────────────────────────────────

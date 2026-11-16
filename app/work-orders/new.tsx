@@ -6,6 +6,7 @@ import { WerkbonFormulier } from '@/components/WerkbonFormulier';
 import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canCreateWorkOrder } from '@/services/workOrderService';
 import { terugOfNaar } from '@/lib/navigatie';
+import { tx } from '@/i18n';
 
 /**
  * Nieuwe werkbon — de `WerkbonModal` (modus nieuw) van het dashboard.
@@ -39,16 +40,16 @@ export default function NewWorkOrderScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppTopBar variant="detail" title="Nieuwe werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
+        <AppTopBar variant="detail" title={tx('Nieuwe werkbon')} onBack={() => terugOfNaar(router, '/work-orders')} />
         {!loaded ? (
-          <LoadingScreen label="Rechten controleren..." />
+          <LoadingScreen label={tx('Rechten controleren...')} />
         ) : !magAanmaken ? (
           <ErrorState
-            title="Geen rechten"
+            title={tx('Geen rechten')}
             message={
               readonly
-                ? 'Je account staat op alleen-lezen; er kan niets worden aangemaakt.'
-                : 'Een werkbon aanmaken kan een beheerder of iemand met het recht planning of werkbonnen bewerken.'
+                ? tx('Je account staat op alleen-lezen; er kan niets worden aangemaakt.')
+                : tx('Een werkbon aanmaken kan een beheerder of iemand met het recht planning of werkbonnen bewerken.')
             }
           />
         ) : (

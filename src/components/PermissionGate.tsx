@@ -6,6 +6,7 @@ import { usePermissions, useTheme } from '@/providers';
 import type { Feature, Permission } from '@/lib/permissions';
 import type { ThemeColors } from '@/theme';
 import { LoadingScreen } from './LoadingScreen';
+import { tx } from '@/i18n';
 
 type Props = {
   children: ReactNode;
@@ -52,19 +53,21 @@ export function PermissionGate({ children, permission, feature, label, fallback 
     return () => clearTimeout(timer);
   }, [loaded, allowed, router, fallback]);
 
-  if (!loaded) return <LoadingScreen label="Rechten controleren..." />;
+  if (!loaded) return <LoadingScreen label={tx('Rechten controleren...')} />;
 
   if (!allowed) {
     const styles = makeStyles(t);
     const reden = permission && !can(permission)
-      ? 'Je hebt hier geen toegang toe.'
-      : `${label ?? 'Deze functie'} zit niet in je abonnement.`;
+      ? tx('Je hebt hier geen toegang toe.')
+      : label
+        ? tx('{functie} zit niet in je abonnement.', { functie: label })
+        : tx('Deze functie zit niet in je abonnement.');
     return (
       <View style={styles.root}>
         <View style={styles.icon}>
           <ShieldAlert size={26} color={t.muted} strokeWidth={1.9} />
         </View>
-        <Text style={styles.title}>{label ?? 'Geen toegang'}</Text>
+        <Text style={styles.title}>{label ?? tx('Geen toegang')}</Text>
         <Text style={styles.body}>{reden}</Text>
       </View>
     );

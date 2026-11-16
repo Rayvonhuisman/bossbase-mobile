@@ -5,6 +5,7 @@ import type { ProjectCijfers } from '@/lib/projectLogica';
 import { factuurStatusLabel } from '@/services/factuurService';
 import type { ProjectFactuur } from '@/services/projectService';
 import { Blok, KleineKnop, Rij, useStijl, Veld } from './bouwstenen';
+import { tx } from '@/i18n';
 
 /**
  * De Facturen-tab (`FacturenTab` in het dashboard): projectwaarde,
@@ -39,15 +40,15 @@ export function FacturenTab({
   return (
     <>
       {magBedragen ? (
-        <Blok titel="Facturatie">
+        <Blok titel={tx('Facturatie')}>
           <View style={styles.raster}>
-            <Veld label="Projectwaarde">
+            <Veld label={tx('Projectwaarde')}>
               <Text style={styles.tegelWaarde}>{formatEUR(projectWaarde)}</Text>
             </Veld>
-            <Veld label="Gefactureerd">
+            <Veld label={tx('Gefactureerd')}>
               <Text style={styles.tegelWaarde}>{formatEUR(cijfers.omzetExclBtw)}</Text>
             </Veld>
-            <Veld label="Te factureren">
+            <Veld label={tx('Te factureren')}>
               <Text style={[styles.tegelWaarde, cijfers.remainingToInvoice > 0 && { color: t.statusWarnFg }]}>
                 {formatEUR(cijfers.remainingToInvoice)}
               </Text>
@@ -57,19 +58,20 @@ export function FacturenTab({
       ) : null}
 
       <Blok
-        titel={`Facturen (${facturen.length})`}
-        actie={magMaken ? <KleineKnop label="Nieuwe factuur" icon="plus" onPress={nieuw} /> : undefined}
+        titel={tx('Facturen ({n})', { n: facturen.length })}
+        actie={magMaken ? <KleineKnop label={tx('Nieuwe factuur')} icon="plus" onPress={nieuw} /> : undefined}
       >
         {facturen.length === 0 ? (
-          <Text style={styles.leeg}>Nog geen facturen aangemaakt voor dit project.</Text>
+          <Text style={styles.leeg}>{tx('Nog geen facturen aangemaakt voor dit project.')}</Text>
         ) : (
           facturen.map((f) => (
             <Rij
               key={f.id}
-              titel={f.nummer || 'Factuur'}
+              titel={f.nummer || tx('Factuur')}
               sub={[
                 f.factuurdatum ? formatDateNL(f.factuurdatum) : null,
-                f.vervaldatum ? `vervalt ${formatDateNL(f.vervaldatum)}` : null,
+                f.vervaldatum ? tx('vervalt {datum}', { datum: formatDateNL(f.vervaldatum) }) : null
+,
                 factuurStatusLabel(f.status),
               ]
                 .filter(Boolean)

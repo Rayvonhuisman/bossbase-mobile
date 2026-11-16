@@ -1,4 +1,5 @@
 import { File } from 'expo-file-system';
+import { tx } from '@/i18n';
 import { Dialog } from './dialog';
 import type { KandidaatBestand } from './kiesBestandType';
 
@@ -20,7 +21,7 @@ export async function kiesBestanden(): Promise<KandidaatBestand[] | null> {
   try {
     DocumentPicker = await import('expo-document-picker');
   } catch {
-    Dialog.alert('Werk de app bij', 'Bestanden kiezen kan in een nieuwere versie van de app. Camera en fotobibliotheek werken wel.');
+    Dialog.alert(tx('Werk de app bij'), tx('Bestanden kiezen kan in een nieuwere versie van de app. Camera en fotobibliotheek werken wel.'));
     return null;
   }
   try {
@@ -33,7 +34,7 @@ export async function kiesBestanden(): Promise<KandidaatBestand[] | null> {
       lees: async () => (await new File(a.uri).bytes()).buffer as ArrayBuffer,
     }));
   } catch {
-    Dialog.alert('Bestand niet gelezen', 'Er ging iets mis bij het kiezen van het bestand.');
+    Dialog.alert(tx('Bestand niet gelezen'), tx('Er ging iets mis bij het kiezen van het bestand.'));
     return null;
   }
 }

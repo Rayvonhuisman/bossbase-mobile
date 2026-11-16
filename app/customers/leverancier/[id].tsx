@@ -48,6 +48,7 @@ import { useLaden } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
 import { formatDateNL, formatEUR } from '@/lib/format';
 import { ds, type ThemeColors } from '@/theme';
+import { tx, txm, txn } from '@/i18n';
 
 /**
  * Leverancierskaart — `LeverancierPage.jsx` van het dashboard: kop met badge
@@ -62,8 +63,8 @@ import { ds, type ThemeColors } from '@/theme';
 
 const LIJST = '/customers?soort=leveranciers';
 const TIJDLIJN_LABEL: Record<string, string> = {
-  notitie_toegevoegd: 'Notitie',
-  email_verstuurd: 'E-mail verstuurd',
+  notitie_toegevoegd: txm('Notitie'),
+  email_verstuurd: txm('E-mail verstuurd'),
 };
 
 export default function LeverancierKaart() {
@@ -92,7 +93,7 @@ export default function LeverancierKaart() {
       listLeverancierMaterialen(id),
     ]);
     if (levRes.error || !levRes.data) {
-      setFout(levRes.error ?? 'Deze leverancier bestaat niet of je hebt geen toegang.');
+      setFout(levRes.error ?? tx('Deze leverancier bestaat niet of je hebt geen toegang.'));
       setLev(null);
       return;
     }
@@ -110,8 +111,8 @@ export default function LeverancierKaart() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: t.bg }}>
-          <AppTopBar variant="detail" title="Leverancier" onBack={terug} />
-          <LoadingScreen label="Leverancier laden..." />
+          <AppTopBar variant="detail" title={tx('Leverancier')} onBack={terug} />
+          <LoadingScreen label={tx('Leverancier laden...')} />
         </View>
       </>
     );
@@ -121,10 +122,10 @@ export default function LeverancierKaart() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: t.bg }}>
-          <AppTopBar variant="detail" title="Leverancier" onBack={terug} />
+          <AppTopBar variant="detail" title={tx('Leverancier')} onBack={terug} />
           <ErrorState
-            title="Leverancier niet gevonden"
-            message={fout ?? 'Deze leverancier bestaat niet of je hebt geen toegang.'}
+            title={tx('Leverancier niet gevonden')}
+            message={fout ?? tx('Deze leverancier bestaat niet of je hebt geen toegang.')}
             onRetry={opnieuw}
           />
         </View>
@@ -145,37 +146,37 @@ export default function LeverancierKaart() {
   const zichtbareNotities = alleNotities ? notities : notities.slice(0, 2);
 
   const bellen = () => {
-    if (!callPhone(telefoon)) Dialog.alert('Geen telefoonnummer', 'Voor deze leverancier is geen nummer bekend.');
+    if (!callPhone(telefoon)) Dialog.alert(tx('Geen telefoonnummer'), tx('Voor deze leverancier is geen nummer bekend.'));
   };
   const mailen = () => {
     if (!sendMail(lev.email)) {
-      Dialog.alert('Geen e-mailadres', 'Deze leverancier heeft geen e-mailadres. Vul er een in bij Gegevens.');
+      Dialog.alert(tx('Geen e-mailadres'), tx('Deze leverancier heeft geen e-mailadres. Vul er een in bij Gegevens.'));
     }
   };
   const route = () => {
-    if (!openMaps(adres)) Dialog.alert('Geen adres', 'Voor deze leverancier is geen adres bekend.');
+    if (!openMaps(adres)) Dialog.alert(tx('Geen adres'), tx('Voor deze leverancier is geen adres bekend.'));
   };
 
   const overzichtKolom = (
     <>
       <KaartBlok
-        titel="Notities"
+        titel={tx('Notities')}
         aantal={notities.length}
-        actie={notities.length > 2 ? (alleNotities ? 'Minder' : `Alle notities (${notities.length})`) : undefined}
+        actie={notities.length > 2 ? (alleNotities ? tx('Minder') : tx('Alle notities ({n})', { n: notities.length })) : undefined}
         onActie={() => setAlleNotities((v) => !v)}
       >
         {magNotitie ? (
           <View style={styles.notitieInvoer}>
             <FormField
-              label="Nieuwe notitie"
+              label={tx('Nieuwe notitie')}
               value={nieuweNotitie}
               onChangeText={setNieuweNotitie}
-              placeholder="Afspraken, levertijden, contactmomenten…"
+              placeholder={tx('Afspraken, levertijden, contactmomenten…')}
               multiline
             />
             {notitieFout ? <Text style={styles.fout}>{notitieFout}</Text> : null}
             <Button
-              label={notitieBezig ? 'Opslaan…' : 'Toevoegen'}
+              label={notitieBezig ? tx('Opslaan…') : tx('Toevoegen')}
               variant="secondary"
               loading={notitieBezig}
               disabled={!nieuweNotitie.trim() || notitieBezig}
@@ -192,7 +193,7 @@ export default function LeverancierKaart() {
           </View>
         ) : null}
         {notities.length === 0 ? (
-          <KaartLeeg tekst="Nog geen notities bij deze leverancier." />
+          <KaartLeeg tekst={tx('Nog geen notities bij deze leverancier.')} />
         ) : (
           zichtbareNotities.map((n, i) => (
             <KaartRij
@@ -205,9 +206,9 @@ export default function LeverancierKaart() {
         )}
       </KaartBlok>
 
-      <KaartBlok titel="Materialen" aantal={materialen.length}>
+      <KaartBlok titel={tx('Materialen')} aantal={materialen.length}>
         {materialen.length === 0 ? (
-          <KaartLeeg tekst="Nog geen materialen gekoppeld aan deze leverancier." />
+          <KaartLeeg tekst={tx('Nog geen materialen gekoppeld aan deze leverancier.')} />
         ) : (
           materialen.map((m, i) => {
             const marge =
@@ -218,11 +219,11 @@ export default function LeverancierKaart() {
               <KaartRij
                 key={m.id}
                 eerste={i === 0}
-                titel={m.naam || 'Materiaal'}
+                titel={m.naam || tx('Materiaal')}
                 sub={[
                   m.eenheid,
-                  toonInkoop && m.inkoopprijs != null ? `Inkoop ${formatEUR(m.inkoopprijs)}` : null,
-                  marge != null ? `Marge ${formatEUR(marge)}` : null,
+                  toonInkoop && m.inkoopprijs != null ? tx('Inkoop {bedrag}', { bedrag: formatEUR(m.inkoopprijs) }) : null,
+                  marge != null ? tx('Marge {bedrag}', { bedrag: formatEUR(marge) }) : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -238,12 +239,12 @@ export default function LeverancierKaart() {
       </KaartBlok>
 
       {overigeTijdlijn.length > 0 ? (
-        <KaartBlok titel="Tijdlijn" aantal={overigeTijdlijn.length}>
+        <KaartBlok titel={tx('Tijdlijn')} aantal={overigeTijdlijn.length}>
           {overigeTijdlijn.slice(0, 20).map((r, i) => (
             <KaartRij
               key={r.id}
               eerste={i === 0}
-              titel={TIJDLIJN_LABEL[r.type] ?? r.type.replace(/_/g, ' ')}
+              titel={TIJDLIJN_LABEL[r.type] ? tx(TIJDLIJN_LABEL[r.type] ?? '') : r.type.replace(/_/g, ' ')}
               sub={[formatDateNL(r.aangemaakt_op), r.tekst].filter(Boolean).join(' · ')}
             />
           ))}
@@ -254,23 +255,23 @@ export default function LeverancierKaart() {
 
   const gegevensKolom = (
     <>
-      <KaartBlok titel="Gegevens">
-        <GegevensRij eerste label="Contactpersoon" waarde={lev.contactpersoon} />
-        <GegevensRij label="E-mail" waarde={lev.email} onPress={mailen} />
-        <GegevensRij label="Telefoon" waarde={lev.telefoon} onPress={bellen} />
+      <KaartBlok titel={tx('Gegevens')}>
+        <GegevensRij eerste label={tx('Contactpersoon')} waarde={lev.contactpersoon} />
+        <GegevensRij label={tx('E-mail')} waarde={lev.email} onPress={mailen} />
+        <GegevensRij label={tx('Telefoon')} waarde={lev.telefoon} onPress={bellen} />
         <GegevensRij
-          label="Mobiel"
+          label={tx('Mobiel')}
           waarde={lev.mobiel}
           onPress={() => callPhone(lev.mobiel)}
         />
-        <GegevensRij label="Adres" waarde={adres} onPress={route} />
-        <GegevensRij label="Website" waarde={lev.website} />
+        <GegevensRij label={tx('Adres')} waarde={adres} onPress={route} />
+        <GegevensRij label={tx('Website')} waarde={lev.website} />
         <GegevensRij label="KvK" waarde={lev.kvk_number} />
-        <GegevensRij label="Btw" waarde={lev.btw_number} />
+        <GegevensRij label={tx('Btw')} waarde={lev.btw_number} />
         <GegevensRij label="IBAN" waarde={lev.iban} />
         <GegevensRij
-          label="Betaaltermijn"
-          waarde={lev.betaaltermijn_dagen != null ? `${lev.betaaltermijn_dagen} dagen` : null}
+          label={tx('Betaaltermijn')}
+          waarde={lev.betaaltermijn_dagen != null ? txn('{n} dag', '{n} dagen', lev.betaaltermijn_dagen) : null}
         />
       </KaartBlok>
     </>
@@ -300,14 +301,14 @@ export default function LeverancierKaart() {
           <AppTopBar
             variant="detail"
             onBack={terug}
-            eyebrow={actief ? 'Leverancier' : 'Leverancier · inactief'}
+            eyebrow={actief ? tx('Leverancier') : tx('Leverancier · inactief')}
             title={naam}
             subtitle={[lev.contactpersoon, lev.city].filter(Boolean).join(' · ') || undefined}
             rightAction={
               magBewerken ? (
                 <HeaderIconButton
                   icon={Pencil}
-                  label="Leverancier bewerken"
+                  label={tx('Leverancier bewerken')}
                   variant="plain"
                   onPress={() => {
                     setSaveFout(null);
@@ -321,19 +322,19 @@ export default function LeverancierKaart() {
           <View style={styles.badgeRij}>
             <View style={[styles.badge, !actief && styles.badgeInactief]}>
               <Text style={[styles.badgeTekst, !actief && styles.badgeTekstInactief]}>
-                {actief ? 'Leverancier' : 'Inactief'}
+                {actief ? tx('Leverancier') : tx('Inactief')}
               </Text>
             </View>
           </View>
 
           <View style={styles.acties}>
-            <SnelKnop label="Bellen" primair uit={!telefoon} onPress={bellen}>
+            <SnelKnop label={tx('Bellen')} primair uit={!telefoon} onPress={bellen}>
               <Phone size={18} color={ds.greenInk} strokeWidth={2.4} />
             </SnelKnop>
-            <SnelKnop label="Route" uit={!adres} onPress={route}>
+            <SnelKnop label={tx('Route')} uit={!adres} onPress={route}>
               <NavigationIcon size={18} color={t.ink} strokeWidth={2} />
             </SnelKnop>
-            <SnelKnop label="Mail" uit={!lev.email} onPress={mailen}>
+            <SnelKnop label={tx('Mail')} uit={!lev.email} onPress={mailen}>
               <Mail size={18} color={t.ink} strokeWidth={2} />
             </SnelKnop>
           </View>
@@ -341,10 +342,10 @@ export default function LeverancierKaart() {
           {rechtenGeladen && can('projectbedragen') ? (
             <KaartCijfers
               cijfers={[
-                { label: 'Materialen', waarde: String(materialen.length) },
+                { label: tx('Materialen'), waarde: String(materialen.length) },
                 {
-                  label: 'Betaaltermijn',
-                  waarde: lev.betaaltermijn_dagen != null ? `${lev.betaaltermijn_dagen} dagen` : '—',
+                  label: tx('Betaaltermijn'),
+                  waarde: lev.betaaltermijn_dagen != null ? txn('{n} dag', '{n} dagen', lev.betaaltermijn_dagen) : '—',
                 },
               ]}
             />
@@ -356,7 +357,7 @@ export default function LeverancierKaart() {
 
         <FormSheet
           visible={concept !== null}
-          title="Leverancier bewerken"
+          title={tx('Leverancier bewerken')}
           subtitle={naam}
           error={saveFout}
           saving={saving}
@@ -364,7 +365,7 @@ export default function LeverancierKaart() {
           onSubmit={() => {
             if (!concept || !id) return;
             save(() => updateLeverancier(id, concept), {
-              succesMelding: 'Leverancier opgeslagen',
+              succesMelding: tx('Leverancier opgeslagen'),
               onSuccess: async () => {
                 setConcept(null);
                 await herlaad();
@@ -375,23 +376,23 @@ export default function LeverancierKaart() {
           destructive={
             magVerwijderen
               ? {
-                  label: 'Leverancier verwijderen',
+                  label: tx('Leverancier verwijderen'),
                   onPress: () =>
                     bevestigVerwijderen(
-                      'Leverancier',
+                      tx('Leverancier'),
                       () => {
                         if (!id) return;
                         save(() => deleteLeverancier(id), {
                           onSuccess: (_data, extra) => {
                             setConcept(null);
                             if (typeof extra?.waarschuwing === 'string') {
-                              Dialog.alert('Let op', extra.waarschuwing);
+                              Dialog.alert(tx('Let op'), extra.waarschuwing);
                             }
                             terugOfNaar(router, LIJST);
                           },
                         });
                       },
-                      'Een leverancier met kostenposten kan niet verwijderd worden.',
+                      tx('Een leverancier met kostenposten kan niet verwijderd worden.'),
                     ),
                 }
               : undefined

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 export type Lid = { id: string; full_name: string };
 
@@ -32,7 +33,7 @@ export function LedenKeuze({
     <View style={{ gap: spacing.xs }}>
       <Text style={styles.label}>{label}</Text>
       {leden.length === 0 ? (
-        <Text style={styles.leeg}>Geen teamleden</Text>
+        <Text style={styles.leeg}>{tx('Geen teamleden')}</Text>
       ) : (
         <View style={styles.rij}>
           {leden.map((l) => {

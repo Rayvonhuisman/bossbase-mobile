@@ -13,6 +13,7 @@ import {
 import { alsTekst } from '@/lib/notitieTekst';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { Paneel } from './Paneel';
+import { tx } from '@/i18n';
 
 /**
  * De meldingenbel, zoals in het dashboard: getagd, toegewezen, verantwoordelijk,
@@ -87,13 +88,13 @@ export function Meldingen({
   return (
     <Paneel
       open={open}
-      titel="Notificaties"
-      subtitel={ongelezen ? `${ongelezen} ongelezen` : 'Alles gelezen'}
+      titel={tx('Notificaties')}
+      subtitel={ongelezen ? tx('{n} ongelezen', { n: ongelezen }) : tx('Alles gelezen')}
       onSluit={sluit}
       voet={
         ongelezen ? (
           <Pressable onPress={() => void allesGelezen()} accessibilityRole="button" style={styles.allesKnop}>
-            <Text style={styles.allesTekst}>Alles gelezen</Text>
+            <Text style={styles.allesTekst}>{tx('Alles gelezen')}</Text>
           </Pressable>
         ) : undefined
       }
@@ -105,12 +106,12 @@ export function Meldingen({
           <View style={styles.leeg}>
             <Text style={styles.leegTekst}>{fout}</Text>
             <Pressable onPress={() => void laad()} accessibilityRole="button">
-              <Text style={styles.link}>Opnieuw proberen</Text>
+              <Text style={styles.link}>{tx('Opnieuw proberen')}</Text>
             </Pressable>
           </View>
         ) : !items.length ? (
           <View style={styles.leeg}>
-            <Text style={styles.leegTekst}>Geen nieuwe notificaties</Text>
+            <Text style={styles.leegTekst}>{tx('Geen nieuwe notificaties')}</Text>
           </View>
         ) : (
           items.map((m) => {
@@ -120,7 +121,7 @@ export function Meldingen({
                 key={m.id}
                 onPress={() => void openMelding(m)}
                 accessibilityRole="button"
-                accessibilityLabel={`${m.read_at ? '' : 'Ongelezen: '}${m.title}`}
+                accessibilityLabel={m.read_at ? m.title : tx('Ongelezen: {titel}', { titel: m.title })}
                 style={({ pressed }) => [styles.rij, !m.read_at && styles.rijOngelezen, pressed && { opacity: 0.85 }]}
               >
                 <View style={[styles.icoon, m.type === 'mention' && styles.icoonMention]}>

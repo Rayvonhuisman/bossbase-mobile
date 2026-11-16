@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { Dialog } from '@/lib/dialog';
+import { tx, txn, locale } from '@/i18n';
 import {
   ChevronRight,
   Navigation as NavigationIcon,
@@ -82,12 +83,12 @@ function activityLabel(c: Customer): string {
   if (Number.isNaN(d.getTime())) return '';
   const now = Date.now();
   const days = Math.floor((now - d.getTime()) / (24 * 60 * 60 * 1000));
-  if (days === 0) return 'Vandaag';
-  if (days === 1) return 'Gisteren';
-  if (days < 7) return `${days} dagen geleden`;
-  if (days < 14) return '1 week geleden';
-  if (days < 30) return `${Math.floor(days / 7)} weken geleden`;
-  return new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' }).format(d);
+  if (days === 0) return tx('Vandaag');
+  if (days === 1) return tx('Gisteren');
+  if (days < 7) return tx('{n} dagen geleden', { n: days });
+  if (days < 14) return tx('1 week geleden');
+  if (days < 30) return tx('{n} weken geleden', { n: Math.floor(days / 7) });
+  return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' }).format(d);
 }
 
 /**
@@ -250,11 +251,11 @@ export default function CustomersScreen() {
 
   const chips: ChipDef<FilterKey>[] = useMemo(
     () => [
-      { id: 'alle', label: 'Alle', count: counts.all },
-      { id: 'actief', label: 'Actief', count: counts.actief },
-      { id: 'recent', label: 'Recent' },
-      { id: 'zakelijk', label: 'Zakelijk' },
-      { id: 'particulier', label: 'Particulier' },
+      { id: 'alle', label: tx('Alle'), count: counts.all },
+      { id: 'actief', label: tx('Actief'), count: counts.actief },
+      { id: 'recent', label: tx('Recent') },
+      { id: 'zakelijk', label: tx('Zakelijk') },
+      { id: 'particulier', label: tx('Particulier') },
     ],
     [counts],
   );
@@ -295,13 +296,13 @@ export default function CustomersScreen() {
 
   const onCall = (telefoon: string | null | undefined) => {
     if (!callPhone(telefoon)) {
-      Dialog.alert('Geen telefoonnummer', 'Voor deze relatie is geen nummer bekend.');
+      Dialog.alert(tx('Geen telefoonnummer'), tx('Voor deze relatie is geen nummer bekend.'));
     }
   };
   const onNavigate = (delen: (string | null | undefined)[]) => {
     const addr = delen.filter(Boolean).join(', ');
     if (!openMaps(addr)) {
-      Dialog.alert('Geen adres', 'Voor deze relatie is geen adres bekend.');
+      Dialog.alert(tx('Geen adres'), tx('Voor deze relatie is geen adres bekend.'));
     }
   };
   const onOpenCustomer = (c: Customer) => {
@@ -315,14 +316,14 @@ export default function CustomersScreen() {
 
   // Stale-while-refresh: only take over the screen when there is no data yet.
   if (loading && items.length === 0 && leveranciers.length === 0) {
-    return <LoadingScreen label="Relaties laden..." />;
+    return <LoadingScreen label={tx('Relaties laden...')} />;
   }
   if (error && items.length === 0 && leveranciers.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <ErrorState
-          title="Relaties niet geladen"
-          message="Controleer je verbinding en probeer opnieuw."
+          title={tx('Relaties niet geladen')}
+          message={tx('Controleer je verbinding en probeer opnieuw.')}
           onRetry={opnieuw}
         />
       </View>
@@ -332,9 +333,14 @@ export default function CustomersScreen() {
   const aantalInactief = leveranciers.filter((l) => !isActief(l)).length;
   const subtitle =
     soort === 'klanten'
-      ? `${items.length} ${items.length === 1 ? 'klant' : 'klanten'} · ${counts.zakelijk} zakelijk · ${counts.actief} actief`
-      : `${leveranciers.length} ${leveranciers.length === 1 ? 'leverancier' : 'leveranciers'}` +
-        (aantalInactief ? ` · ${aantalInactief} inactief` : '');
+      ? txn(
+          '{n} klant · {zakelijk} zakelijk · {actief} actief',
+          '{n} klanten · {zakelijk} zakelijk · {actief} actief',
+          items.length,
+          { zakelijk: counts.zakelijk, actief: counts.actief },
+        )
+      : txn('{n} leverancier', '{n} leveranciers', leveranciers.length) +
+        (aantalInactief ? ` · ${tx('{n} inactief', { n: aantalInactief })}` : '');
   const magMaken = soort === 'klanten' ? canCreate : magLeverancierMaken;
 
   return (
@@ -344,13 +350,13 @@ export default function CustomersScreen() {
           /* Aanmaken staat rechtsboven, zoals in het ontwerp — niet meer als
              zwevende knop over de onderste rijen heen. */
           <AppTopBar
-            title="Relaties"
+            title={tx('Relaties')}
             subtitle={subtitle}
             rightAction={
               magMaken ? (
                 <HeaderIconButton
                   icon={Plus}
-                  label={soort === 'klanten' ? 'Nieuwe klant' : 'Nieuwe leverancier'}
+                  label={soort === 'klanten' ? tx('Nieuwe klant') : tx('Nieuwe leverancier')}
                   size={42}
                   onPress={onCreate}
                 />
@@ -367,8 +373,8 @@ export default function CustomersScreen() {
           <View style={styles.segment} accessibilityRole="tablist">
             {(
               [
-                { id: 'klanten', label: 'Klanten', n: items.length },
-                { id: 'leveranciers', label: 'Leveranciers', n: leveranciers.length },
+                { id: 'klanten', label: tx('Klanten'), n: items.length },
+                { id: 'leveranciers', label: tx('Leveranciers'), n: leveranciers.length },
               ] as const
             ).map((s) => {
               const aan = soort === s.id;
@@ -401,8 +407,8 @@ export default function CustomersScreen() {
             onChange={setQuery}
             placeholder={
               soort === 'klanten'
-                ? 'Zoek op naam, plaats of nummer…'
-                : 'Zoek op naam, plaats of e-mail…'
+                ? tx('Zoek op naam, plaats of nummer…')
+                : tx('Zoek op naam, plaats of e-mail…')
             }
           />
         </View>
@@ -430,7 +436,7 @@ export default function CustomersScreen() {
             {/* Favorites strip (only when no query) */}
             {!query && favorites.length > 0 ? (
               <>
-                <Text style={styles.recentKop}>Recent</Text>
+                <Text style={styles.recentKop}>{tx('Recent')}</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -455,11 +461,11 @@ export default function CustomersScreen() {
                   <View style={styles.emptyIcon}>
                     <Search size={28} color={ds.green} strokeWidth={1.8} />
                   </View>
-                  <Text style={styles.emptyTitle}>Geen klanten gevonden</Text>
+                  <Text style={styles.emptyTitle}>{tx('Geen klanten gevonden')}</Text>
                   <Text style={styles.emptyBody}>
                     {items.length === 0
-                      ? 'Maak je eerste klant aan of pas je zoekopdracht aan.'
-                      : 'Geen klanten die passen bij je zoekopdracht of filter.'}
+                      ? tx('Maak je eerste klant aan of pas je zoekopdracht aan.')
+                      : tx('Geen klanten die passen bij je zoekopdracht of filter.')}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
@@ -469,7 +475,7 @@ export default function CustomersScreen() {
                     }}
                     style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
                   >
-                    <Text style={styles.emptyBtnText}>Filters wissen</Text>
+                    <Text style={styles.emptyBtnText}>{tx('Filters wissen')}</Text>
                   </Pressable>
                 </AppCard>
               </View>
@@ -539,7 +545,7 @@ function LeverancierLijst({
     return (
       <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
         <AppCard padding={20} style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Leveranciers niet geladen</Text>
+          <Text style={styles.emptyTitle}>{tx('Leveranciers niet geladen')}</Text>
           <Text style={styles.emptyBody}>{fout}</Text>
         </AppCard>
       </View>
@@ -552,11 +558,11 @@ function LeverancierLijst({
           <View style={styles.emptyIcon}>
             <Truck size={28} color={ds.green} strokeWidth={1.8} />
           </View>
-          <Text style={styles.emptyTitle}>Geen leveranciers gevonden</Text>
+          <Text style={styles.emptyTitle}>{tx('Geen leveranciers gevonden')}</Text>
           <Text style={styles.emptyBody}>
             {totaal === 0
-              ? 'Maak je eerste leverancier aan — dan landen je kosten in de boekhouding onder de juiste relatie.'
-              : 'Pas je zoekopdracht aan.'}
+              ? tx('Maak je eerste leverancier aan — dan landen je kosten in de boekhouding onder de juiste relatie.')
+              : tx('Pas je zoekopdracht aan.')}
           </Text>
           {query ? (
             <Pressable
@@ -564,7 +570,7 @@ function LeverancierLijst({
               onPress={onWis}
               style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
             >
-              <Text style={styles.emptyBtnText}>Zoekopdracht wissen</Text>
+              <Text style={styles.emptyBtnText}>{tx('Zoekopdracht wissen')}</Text>
             </Pressable>
           ) : null}
         </AppCard>
@@ -580,9 +586,9 @@ function LeverancierLijst({
           const actief = isActief(l);
           const k = kosten[l.id];
           const sub = [
-            l.contactpersoon || (actief ? 'Leverancier' : null),
+            l.contactpersoon || (actief ? tx('Leverancier') : null),
             l.city,
-            k && k.bedrag ? `Kosten ${formatEUR(k.bedrag)}` : null,
+            k && k.bedrag ? tx('Kosten {bedrag}', { bedrag: formatEUR(k.bedrag) }) : null,
           ]
             .filter(Boolean)
             .join(' · ');
@@ -592,7 +598,7 @@ function LeverancierLijst({
               <Pressable
                 onPress={() => onOpen(l)}
                 accessibilityRole="button"
-                accessibilityLabel={`${naam}${actief ? '' : ', inactief'}`}
+                accessibilityLabel={actief ? naam : tx('{naam}, inactief', { naam })}
                 style={({ pressed }) => [styles.rowHoofd, pressed && { opacity: 0.85 }]}
               >
               <View style={[styles.rowAvatar, { backgroundColor: av.bg }]}>
@@ -603,7 +609,7 @@ function LeverancierLijst({
                   <Text style={[styles.rowName, { flexShrink: 1 }]} numberOfLines={1}>
                     {naam}
                   </Text>
-                  {!actief ? <Text style={styles.inactiefLabel}>Inactief</Text> : null}
+                  {!actief ? <Text style={styles.inactiefLabel}>{tx('Inactief')}</Text> : null}
                 </View>
                 {sub ? (
                   <Text style={styles.rowSub} numberOfLines={1}>
@@ -618,7 +624,7 @@ function LeverancierLijst({
                     accessibilityRole="button"
                     onPress={() => onCall(l)}
                     hitSlop={6}
-                    accessibilityLabel={`${naam} bellen`}
+                    accessibilityLabel={tx('{naam} bellen', { naam })}
                     style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
                   >
                     <Phone size={15} color={t.ink} strokeWidth={2} />
@@ -704,7 +710,7 @@ function CustomerRow({
     <View style={[styles.row, !first && styles.rowBorder]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${c.name ?? 'Klant'} openen`}
+        accessibilityLabel={tx('{naam} openen', { naam: c.name ?? tx('Klant') })}
         onPress={onPress}
         style={({ pressed }) => [styles.rowHoofd, pressed && { opacity: 0.85 }]}
       >
@@ -720,10 +726,10 @@ function CustomerRow({
         </Text>
         {totalen && totalen.gefactureerd ? (
           <Text style={styles.rowSub} numberOfLines={1}>
-            Gefactureerd {formatEUR(totalen.gefactureerd)}
+            {tx('Gefactureerd {bedrag}', { bedrag: formatEUR(totalen.gefactureerd) })}
             {' · '}
             <Text style={totalen.betaald > 0 ? styles.betaald : undefined}>
-              Betaald {formatEUR(totalen.betaald)}
+              {tx('Betaald {bedrag}', { bedrag: formatEUR(totalen.betaald) })}
             </Text>
           </Text>
         ) : null}
@@ -733,7 +739,7 @@ function CustomerRow({
         {c.phone ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${c.name ?? 'Klant'} bellen`}
+            accessibilityLabel={tx('{naam} bellen', { naam: c.name ?? tx('Klant') })}
             onPress={onCall}
             hitSlop={6}
             style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}
@@ -744,7 +750,7 @@ function CustomerRow({
         {c.address || c.city ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Route naar ${c.name ?? 'klant'}`}
+            accessibilityLabel={tx('Route naar {naam}', { naam: c.name ?? tx('klant') })}
             onPress={onNavigate}
             hitSlop={6}
             style={({ pressed }) => [styles.iconAction, pressed && { opacity: 0.7 }]}

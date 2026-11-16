@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { tx } from '@/i18n';
 import { Dialog } from './dialog';
 import { useToast } from '@/providers';
 import type { WriteResult } from './writeResult';
@@ -82,10 +83,10 @@ export function useSave<T>() {
 export function bevestigVerwijderen(
   wat: string,
   onBevestig: () => void,
-  uitleg = 'Dit kan niet ongedaan worden gemaakt.',
+  uitleg = tx('Dit kan niet ongedaan worden gemaakt.'),
 ): void {
-  Dialog.alert(`${wat} verwijderen?`, uitleg, [
-    { text: 'Annuleren', style: 'cancel' },
-    { text: 'Verwijderen', style: 'destructive', onPress: onBevestig },
+  Dialog.alert(tx('{wat} verwijderen?', { wat }), uitleg, [
+    { text: tx('Annuleren'), style: 'cancel' },
+    { text: tx('Verwijderen'), style: 'destructive', onPress: onBevestig },
   ]);
 }

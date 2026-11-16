@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Dialog } from '@/lib/dialog';
+import { tx } from '@/i18n';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import type { VoorbereideFoto } from '@/lib/fotoType';
 
@@ -18,7 +19,7 @@ export async function kiesAfbeelding(): Promise<Extract<VoorbereideFoto, { ok: t
     if (r.canceled) return null;
     const asset = r.assets?.[0];
     if (!asset) {
-      Dialog.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere afbeelding.');
+      Dialog.alert(tx('Foto niet gelezen'), tx('Probeer het opnieuw of kies een andere afbeelding.'));
       return null;
     }
     const foto = await bereidFotoVoor(asset);
@@ -28,7 +29,7 @@ export async function kiesAfbeelding(): Promise<Extract<VoorbereideFoto, { ok: t
     }
     return foto;
   } catch {
-    Dialog.alert('Foto niet gelezen', 'Er ging iets mis bij het kiezen van de afbeelding.');
+    Dialog.alert(tx('Foto niet gelezen'), tx('Er ging iets mis bij het kiezen van de afbeelding.'));
     return null;
   }
 }

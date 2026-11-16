@@ -25,6 +25,7 @@ import { formatEURCent } from '@/lib/format';
 import { NAAST_ELKAAR_VANAF, WERKRUIMTE_MAX } from '@/lib/schermklasseRegels';
 import { spacing, type ThemeColors } from '@/theme';
 import { MobielKader } from '../MobielKader';
+import { tx, txn } from '@/i18n';
 
 /**
  * Wat nog ontbreekt. Met `veld` springt "Ga naar" naar het veld of de regel
@@ -141,7 +142,7 @@ export function Werkruimte({
           {(['bewerken', 'voorbeeld'] as const).map((w) => (
             <Pressable key={w} onPress={() => setWeergave(w)} accessibilityRole="tab" accessibilityState={{ selected: weergave === w }} style={[s.segKnop, weergave === w && s.segAan]}>
               {w === 'bewerken' ? <Pencil size={14} color={weergave === w ? t.ink : t.muted} /> : <Eye size={14} color={weergave === w ? t.ink : t.muted} />}
-              <Text style={[s.segTekst, weergave === w && s.segTekstAan]}>{w === 'bewerken' ? 'Bewerken' : 'Voorbeeld'}</Text>
+              <Text style={[s.segTekst, weergave === w && s.segTekstAan]}>{w === 'bewerken' ? tx('Bewerken') : tx('Voorbeeld')}</Text>
             </Pressable>
           ))}
         </View>
@@ -149,12 +150,14 @@ export function Werkruimte({
           <Pressable onPress={() => setAandachtOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: aandachtOpen }} style={s.nodig}>
             <AlertTriangle size={14} color={t.statusWarnFg} />
             <Text style={s.nodigTekst} numberOfLines={1}>
-              Nog nodig: {aandachtspunten[0]!.tekst}{aandachtspunten.length > 1 ? ` en ${aandachtspunten.length - 1} meer` : ''}
+              {aandachtspunten.length > 1
+                ? txn('Nog nodig: {punt} en {n} meer', 'Nog nodig: {punt} en {n} meer', aandachtspunten.length - 1, { punt: aandachtspunten[0]!.tekst })
+                : tx('Nog nodig: {punt}', { punt: aandachtspunten[0]!.tekst })}
             </Text>
             {aandachtOpen ? <ChevronUp size={14} color={t.statusWarnFg} /> : <ChevronDown size={14} color={t.statusWarnFg} />}
           </Pressable>
         ) : (
-          <View style={s.klaar} accessibilityRole="text"><Check size={14} color={t.green700} strokeWidth={2.6} /><Text style={s.klaarTekst}>Klaar om op te slaan</Text></View>
+          <View style={s.klaar} accessibilityRole="text"><Check size={14} color={t.green700} strokeWidth={2.6} /><Text style={s.klaarTekst}>{tx('Klaar om op te slaan')}</Text></View>
         )}
       </View>
       {aandachtOpen && aandachtspunten.length ? (
@@ -171,10 +174,10 @@ export function Werkruimte({
                     else naarVeld(a.veld!);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`${a.actie?.label ?? 'Ga naar'}: ${a.tekst}`}
+                  accessibilityLabel={tx('{actie}: {punt}', { actie: a.actie?.label ?? tx('Ga naar'), punt: a.tekst })}
                   hitSlop={6}
                 >
-                  <Text style={s.aandachtActie}>{a.actie?.label ?? 'Ga naar'}</Text>
+                  <Text style={s.aandachtActie}>{a.actie?.label ?? tx('Ga naar')}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -194,9 +197,9 @@ export function Werkruimte({
           </View>
         ) : null}
         <View style={s.voetTotaal}>
-          <Text style={s.voetLabel}>Totaal incl. btw</Text>
+          <Text style={s.voetLabel}>{tx('Totaal incl. btw')}</Text>
           <Text style={s.voetBedrag}>{formatEURCent(totaal.incl)}</Text>
-          <Text style={s.voetSub}>{formatEURCent(totaal.excl)} excl.</Text>
+          <Text style={s.voetSub}>{tx('{bedrag} excl.', { bedrag: formatEURCent(totaal.excl) })}</Text>
         </View>
         <View style={s.voetKnoppen}>{acties}</View>
       </View>
@@ -207,13 +210,13 @@ export function Werkruimte({
   const gesprekVlak = (
     <View style={[s.vlak, naastElkaar && s.gesprekNaast, !naastElkaar && tab !== 'gesprek' && s.verborgen, { paddingBottom: onderrand }]}>
       {naastElkaar ? (
-        <View style={s.gesprekKop}><MessageSquare size={16} color={t.green700} /><Text style={s.gesprekKopTekst}>Boss</Text><Text style={s.gesprekKopSub}>AI-assistent · beta · doet een voorstel, jij beslist</Text></View>
+        <View style={s.gesprekKop}><MessageSquare size={16} color={t.green700} /><Text style={s.gesprekKopTekst}>Boss</Text><Text style={s.gesprekKopSub}>{tx('AI-assistent · beta · doet een voorstel, jij beslist')}</Text></View>
       ) : null}
       {gesprek}
       {toast && !naastElkaar && tab === 'gesprek' ? (
         <Pressable onPress={toonDocument} accessibilityRole="button" style={[s.toast, { bottom: 96 + onderrand }]}>
           <Text style={s.toastTekst} numberOfLines={2}>{toast}</Text>
-          <Text style={s.toastActie}>Bekijk document ›</Text>
+          <Text style={s.toastActie}>{tx('Bekijk document ›')}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -226,9 +229,9 @@ export function Werkruimte({
           <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[s.kop, { paddingTop: insets.top + 6 }]}>
               <View style={s.kopRij}>
-                <Pressable onPress={onTerug} accessibilityRole="button" accessibilityLabel="Terug naar het formulier. Je gesprek en het document blijven bewaard." hitSlop={8} style={s.terug}>
+                <Pressable onPress={onTerug} accessibilityRole="button" accessibilityLabel={tx('Terug naar het formulier. Je gesprek en het document blijven bewaard.')} hitSlop={8} style={s.terug}>
                   <ChevronLeft size={22} color={t.ink2} />
-                  {naastElkaar ? <Text style={s.terugTekst}>Terug</Text> : null}
+                  {naastElkaar ? <Text style={s.terugTekst}>{tx('Terug')}</Text> : null}
                 </Pressable>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={s.titel} numberOfLines={1} accessibilityRole="header">{titel}</Text>
@@ -236,7 +239,7 @@ export function Werkruimte({
                     {nummer ? <Text style={s.nummer}>{nummer}</Text> : null}
                     <View style={[s.punt, status.toon === 'versie' && { backgroundColor: t.statusSubmitFg }]} />
                     <Text style={s.metaTekst} numberOfLines={1}>{status.label}</Text>
-                    {bossBezig ? <Text style={s.bezig}>· Boss werkt eraan</Text> : null}
+                    {bossBezig ? <Text style={s.bezig}>· {tx('Boss werkt eraan')}</Text> : null}
                   </View>
                 </View>
               </View>
@@ -244,14 +247,14 @@ export function Werkruimte({
                 <View style={s.tabs} accessibilityRole="tablist">
                   <Pressable onPress={toonDocument} accessibilityRole="tab" accessibilityState={{ selected: tab === 'document' }} style={[s.tab, tab === 'document' && s.tabAan]}>
                     <FileText size={15} color={tab === 'document' ? t.ink : t.muted} />
-                    <Text style={[s.tabTekst, tab === 'document' && s.tabTekstAan]}>Document</Text>
+                    <Text style={[s.tabTekst, tab === 'document' && s.tabTekstAan]}>{tx('Document')}</Text>
                     {aandachtspunten.length ? <View style={s.teller}><Text style={s.tellerTekst}>{aandachtspunten.length}</Text></View> : null}
-                    {!documentGezien && tab !== 'document' ? <View style={s.stip} accessibilityLabel="Nieuw in het document" /> : null}
+                    {!documentGezien && tab !== 'document' ? <View style={s.stip} accessibilityLabel={tx('Nieuw in het document')} /> : null}
                   </Pressable>
                   <Pressable onPress={() => setTab('gesprek')} accessibilityRole="tab" accessibilityState={{ selected: tab === 'gesprek' }} style={[s.tab, tab === 'gesprek' && s.tabAan]}>
                     <MessageSquare size={15} color={tab === 'gesprek' ? t.ink : t.muted} />
-                    <Text style={[s.tabTekst, tab === 'gesprek' && s.tabTekstAan]}>Gesprek</Text>
-                    {(bossBezig || bossWacht > 0) && tab !== 'gesprek' ? <View style={s.stip} accessibilityLabel={bossBezig ? 'Boss werkt' : 'Boss wacht op je'} /> : null}
+                    <Text style={[s.tabTekst, tab === 'gesprek' && s.tabTekstAan]}>{tx('Gesprek')}</Text>
+                    {(bossBezig || bossWacht > 0) && tab !== 'gesprek' ? <View style={s.stip} accessibilityLabel={bossBezig ? tx('Boss werkt') : tx('Boss wacht op je')} /> : null}
                   </Pressable>
                 </View>
               ) : null}

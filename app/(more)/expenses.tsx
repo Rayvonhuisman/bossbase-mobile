@@ -68,6 +68,7 @@ import { useOnthouden } from '@/lib/useOnthouden';
 import { FotoViewer } from '@/components/FotoViewer';
 import { kiesFotoBron, maakOfKiesFoto, type GekozenFoto } from '@/lib/kiesFoto';
 import { getalOfNul } from '@/lib/getalNl';
+import { tx, txm, txn } from '@/i18n';
 
 /**
  * Kosten — dezelfde `job_costs`-tabel als het dashboard.
@@ -94,7 +95,7 @@ import { getalOfNul } from '@/lib/getalNl';
 
 export default function ExpensesScreen() {
   return (
-    <PermissionGate permission="kosten" feature="kosten_nacalculatie" label="Kosten">
+    <PermissionGate permission="kosten" feature="kosten_nacalculatie" label={tx('Kosten')}>
       <ExpensesScreenInhoud />
     </PermissionGate>
   );
@@ -120,9 +121,9 @@ type Concept = {
 };
 
 /** Zelfde tekst als het dashboard (lib/kostenCategorieen BON_VERPLICHT_MELDING). */
-const BON_VERPLICHT_MELDING =
-  'Voeg de factuur of bon toe. Zonder bewijsstuk kun je de btw niet terugvorderen ' +
-  'en staat de kostenpost straks zonder document in je boekhouding.';
+const BON_VERPLICHT_MELDING = txm(
+  'Voeg de factuur of bon toe. Zonder bewijsstuk kun je de btw niet terugvorderen en staat de kostenpost straks zonder document in je boekhouding.',
+);
 
 function ExpensesScreenInhoud() {
   const router = useRouter();
@@ -213,10 +214,10 @@ function ExpensesScreenInhoud() {
     ]);
     if (!levRes.error) setLeveranciers(levRes.data.map((l) => ({ id: l.id, label: l.naam })));
     if (!klantRes.error) {
-      setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? 'Klant' })));
+      setKlanten(klantRes.data.map((k) => ({ id: k.id, label: k.name ?? tx('Klant') })));
     }
     if (!projRes.error) {
-      setProjecten(projRes.data.map((p) => ({ id: p.id, label: p.name ?? 'Project' })));
+      setProjecten(projRes.data.map((p) => ({ id: p.id, label: p.name ?? tx('Project') })));
     }
     setCategorieen(catRes);
   }, [laadPeriode]);
@@ -259,13 +260,13 @@ function ExpensesScreenInhoud() {
   );
 
   const klantVan = (r: KostenRij): string => {
-    if (r.klantId) return klantNamen.get(r.klantId) ?? r.klantNaam ?? 'Klant';
-    return r.klantType === 'algemeen' ? 'Algemeen' : 'Geen klant';
+    if (r.klantId) return klantNamen.get(r.klantId) ?? r.klantNaam ?? tx('Klant');
+    return r.klantType === 'algemeen' ? tx('Algemeen') : tx('Geen klant');
   };
   const leverancierVan = (r: KostenRij): string => {
-    if (r.leverancierId) return leverancierNamen.get(r.leverancierId) ?? r.leverancierNaam ?? 'Leverancier';
-    if (r.werkbonMateriaalId || r.werkbonInkoop) return 'via werkbon';
-    return 'Leverancier ontbreekt';
+    if (r.leverancierId) return leverancierNamen.get(r.leverancierId) ?? r.leverancierNaam ?? tx('Leverancier');
+    if (r.werkbonMateriaalId || r.werkbonInkoop) return tx('via werkbon');
+    return tx('Leverancier ontbreekt');
   };
   const subtitleVoor = (r: KostenRij): string => {
     const bron = kostenBron(r.externeRef);
@@ -281,7 +282,7 @@ function ExpensesScreenInhoud() {
 
   const categorieOpties: SelectOption[] = pagina.categorieen.map((c) => ({
     id: c,
-    label: categorieMeta(c).label,
+    label: tx(categorieMeta(c).label),
   }));
 
   const openNieuw = () => {
@@ -356,7 +357,7 @@ function ExpensesScreenInhoud() {
         const rij = resultaat as JobCostRow | null;
         if (bonnen.length && rij?.id) {
           const fout = await koppelBonnen([rij.id], bonnen);
-          if (fout) Dialog.alert('Kostenpost opgeslagen', fout);
+          if (fout) Dialog.alert(tx('Kostenpost opgeslagen'), fout);
         }
         await herlaad();
       },
@@ -385,32 +386,34 @@ function ExpensesScreenInhoud() {
     const id = concept.id;
     const opSlot = concept.opSlot;
     bevestigVerwijderen(
-      'Kostenpost',
+      tx('Kostenpost'),
       () => {
         save(() => deleteJobCost(id), {
           onSuccess: async (_data, extra) => {
             setConcept(null);
-            if (typeof extra?.waarschuwing === 'string') Dialog.alert('Let op', extra.waarschuwing);
+            if (typeof extra?.waarschuwing === 'string') Dialog.alert(tx('Let op'), extra.waarschuwing);
             await herlaad();
           },
         });
       },
       opSlot
-        ? 'Komt deze kost uit je boekhouding, dan gaat hij ook op de negeerlijst zodat de volgende synchronisatie hem niet terughaalt. Hoort hij bij werkbonmateriaal, dan verdwijnt dat materiaal mee.'
-        : 'Dit kan niet ongedaan worden gemaakt.',
+        ? tx(
+            'Komt deze kost uit je boekhouding, dan gaat hij ook op de negeerlijst zodat de volgende synchronisatie hem niet terughaalt. Hoort hij bij werkbonmateriaal, dan verdwijnt dat materiaal mee.',
+          )
+        : tx('Dit kan niet ongedaan worden gemaakt.'),
     );
   };
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Kosten laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Kosten laden...')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Kosten" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Kosten')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -439,13 +442,13 @@ function ExpensesScreenInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Kosten"
+            title={tx('Kosten')}
             subtitle={periodeLabel}
             meta={formatEURCent(pagina.totaal)}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Kosten toevoegen" onPress={openNieuw} />
+                <HeaderIconButton icon={Plus} label={tx('Kosten toevoegen')} onPress={openNieuw} />
               ) : undefined
             }
           />
@@ -457,8 +460,8 @@ function ExpensesScreenInhoud() {
         <View style={{ paddingTop: 12 }}>
           <AppFilterChips<KostenWeergave>
             chips={[
-              { id: 'kosten', label: 'Geboekte kosten' },
-              { id: 'materiaal', label: 'Kosten op werkbonnen' },
+              { id: 'kosten', label: tx('Geboekte kosten') },
+              { id: 'materiaal', label: tx('Kosten op werkbonnen') },
             ]}
             active={weergave}
             onChange={kiesWeergave}
@@ -468,7 +471,7 @@ function ExpensesScreenInhoud() {
         {/* Periode */}
         <View style={{ paddingTop: 10 }}>
           <AppFilterChips<PeriodeType>
-            chips={PERIODE_TYPES.map((p) => ({ id: p.id, label: p.label }))}
+            chips={PERIODE_TYPES.map((p) => ({ id: p.id, label: tx(p.label) }))}
             active={periodeType}
             onChange={kiesPeriodeType}
           />
@@ -477,7 +480,7 @@ function ExpensesScreenInhoud() {
           <Pressable
             onPress={() => setPeriodeOffset((o) => o - 1)}
             accessibilityRole="button"
-            accessibilityLabel="Vorige periode"
+            accessibilityLabel={tx('Vorige periode')}
             style={styles.periodeKnop}
           >
             <ChevronLeft size={20} color={t.ink} />
@@ -488,7 +491,7 @@ function ExpensesScreenInhoud() {
           <Pressable
             onPress={() => setPeriodeOffset((o) => o + 1)}
             accessibilityRole="button"
-            accessibilityLabel="Volgende periode"
+            accessibilityLabel={tx('Volgende periode')}
             style={styles.periodeKnop}
           >
             <ChevronRight size={20} color={t.ink} />
@@ -497,10 +500,10 @@ function ExpensesScreenInhoud() {
             <Pressable
               onPress={() => setPeriodeOffset(0)}
               accessibilityRole="button"
-              accessibilityLabel="Terug naar nu"
+              accessibilityLabel={tx('Terug naar nu')}
               style={[styles.periodeKnop, styles.nuKnop]}
             >
-              <Text style={styles.nuTekst}>Nu</Text>
+              <Text style={styles.nuTekst}>{tx('Nu')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -509,25 +512,25 @@ function ExpensesScreenInhoud() {
         <View style={[styles.filterRij, breed && { flexDirection: 'row' }]}>
           <View style={breed ? { flex: 1 } : undefined}>
             <SelectField
-              label="Klant"
+              label={tx('Klant')}
               value={filterKlant}
               options={klanten}
               onChange={setFilterKlant}
               allowEmpty
-              emptyLabel="Alle klanten"
-              placeholder="Alle klanten"
+              emptyLabel={tx('Alle klanten')}
+              placeholder={tx('Alle klanten')}
               searchable
             />
           </View>
           <View style={breed ? { flex: 1 } : undefined}>
             <SelectField
-              label="Categorie"
+              label={tx('Categorie')}
               value={filterCat}
               options={categorieOpties}
               onChange={setFilterCat}
               allowEmpty
-              emptyLabel="Alle categorieën"
-              placeholder="Alle categorieën"
+              emptyLabel={tx('Alle categorieën')}
+              placeholder={tx('Alle categorieën')}
             />
           </View>
         </View>
@@ -536,9 +539,9 @@ function ExpensesScreenInhoud() {
           breed={breed}
           tegels={pagina.tegels.map((tg) => ({
             id: tg.id,
-            label: tg.label,
+            label: tx(tg.label),
             waarde: formatEURCent(tg.bedrag),
-            uitleg: tg.uitleg,
+            uitleg: tg.uitleg ? tx(tg.uitleg) : tg.uitleg,
           }))}
         />
 
@@ -549,21 +552,20 @@ function ExpensesScreenInhoud() {
           {toontMateriaal ? (
             <NoticeBanner
               toon="info"
-              title="Dit zijn geen boekingen"
-              message={
-                'Materiaal en inkopen die op werkbonnen staan. Ze tellen niet mee in je kosten en ' +
-                'je btw — in je boekhouding is de factuur van je leverancier de kostenpost. Ze ' +
-                'tellen wél mee in de nacalculatie van een project, samen met de arbeid (uren × kostprijs per uur). ' +
-                'Die staat op het project, onder Nacalculatie.'
-              }
+              title={tx('Dit zijn geen boekingen')}
+              message={tx(
+                'Materiaal en inkopen die op werkbonnen staan. Ze tellen niet mee in je kosten en je btw — in je boekhouding is de factuur van je leverancier de kostenpost. Ze tellen wél mee in de nacalculatie van een project, samen met de arbeid (uren × kostprijs per uur). Die staat op het project, onder Nacalculatie.',
+              )}
             />
           ) : pagina.zonderLeverancier > 0 ? (
             <NoticeBanner
               toon="waarschuwing"
-              title={`${pagina.zonderLeverancier} ${
-                pagina.zonderLeverancier === 1 ? 'kostenpost heeft' : 'kostenposten hebben'
-              } nog geen leverancier`}
-              message="Zonder leverancier kunnen ze niet naar de boekhouding. Open zo’n regel en kies alsnog een leverancier."
+              title={txn(
+                '{n} kostenpost heeft nog geen leverancier',
+                '{n} kostenposten hebben nog geen leverancier',
+                pagina.zonderLeverancier,
+              )}
+              message={tx('Zonder leverancier kunnen ze niet naar de boekhouding. Open zo’n regel en kies alsnog een leverancier.')}
             />
           ) : null}
         </View>
@@ -571,10 +573,10 @@ function ExpensesScreenInhoud() {
         {pagina.regels.length === 0 ? (
           <EmptyState
             icon={<Wallet size={40} color={ds.green} strokeWidth={1.6} />}
-            title={periodeLaden ? 'Kosten laden...' : toontMateriaal ? 'Geen kosten op werkbonnen' : 'Geen kosten'}
+            title={periodeLaden ? tx('Kosten laden...') : toontMateriaal ? tx('Geen kosten op werkbonnen') : tx('Geen kosten')}
             message={
               periodeLaden
-                ? 'Even geduld.'
+                ? tx('Even geduld.')
                 : legeKostenTekst(weergave, periodeLabel, Boolean(filterKlant || filterCat)) +
                   (magMaken || toontMateriaal
                     ? ''
@@ -584,7 +586,7 @@ function ExpensesScreenInhoud() {
         ) : (
           <>
             <AppSection
-              title={toontMateriaal ? 'Kosten op werkbonnen' : 'Kostenregels'}
+              title={toontMateriaal ? tx('Kosten op werkbonnen') : tx('Kostenregels')}
               count={pagina.regels.length}
               variant="eyebrow"
             />
@@ -598,7 +600,7 @@ function ExpensesScreenInhoud() {
                     key={`${r.werkbonInkoop ? 'i' : 'k'}-${r.id}`}
                     first={i === 0}
                     icon={opSlot ? Lock : Wallet}
-                    title={r.omschrijving || cat.label}
+                    title={r.omschrijving || tx(cat.label)}
                     subtitle={subtitleVoor(r)}
                     onPress={
                       !r.werkbonInkoop && bron && magWijzigen ? () => openBewerk(bron) : undefined
@@ -608,10 +610,13 @@ function ExpensesScreenInhoud() {
                         <Text style={styles.bedrag}>{formatEURCent(r.bedrag)}</Text>
                         {r.btwPct != null ? (
                           <Text style={styles.incl}>
-                            {formatEURCent(calcBtw(r.bedrag, r.btwPct, 'excl').incl)} incl. · {r.btwPct}%
+                            {tx('{bedrag} incl. · {pct}%', {
+                              bedrag: formatEURCent(calcBtw(r.bedrag, r.btwPct, 'excl').incl),
+                              pct: r.btwPct,
+                            })}
                           </Text>
                         ) : null}
-                        <DocumentStatusBadge toon={cat.toon} label={cat.label} />
+                        <DocumentStatusBadge toon={cat.toon} label={tx(cat.label)} />
                       </View>
                     }
                   />
@@ -619,9 +624,9 @@ function ExpensesScreenInhoud() {
               })}
             </AppListGroup>
             <Text style={styles.voetnoot}>
-              Bedragen zijn exclusief btw. Kosten met een slotje komen uit je boekhouding of van
-              werkbonmateriaal; die pas je aan bij de bron. Inkopen op een werkbon wijzig je op de
-              werkbon.
+              {tx(
+                'Bedragen zijn exclusief btw. Kosten met een slotje komen uit je boekhouding of van werkbonmateriaal; die pas je aan bij de bron. Inkopen op een werkbon wijzig je op de werkbon.',
+              )}
             </Text>
           </>
         )}
@@ -629,7 +634,7 @@ function ExpensesScreenInhoud() {
 
       <FormSheet
         visible={concept !== null}
-        title={concept?.id ? 'Kostenpost bewerken' : 'Nieuwe kostenpost'}
+        title={concept?.id ? tx('Kostenpost bewerken') : tx('Nieuwe kostenpost')}
         error={saveError}
         saving={saving}
         submitDisabled={
@@ -643,29 +648,30 @@ function ExpensesScreenInhoud() {
         onClose={() => setConcept(null)}
         destructive={
           concept?.id && magVerwijderen
-            ? { label: 'Kostenpost verwijderen', onPress: verwijderen }
+            ? { label: tx('Kostenpost verwijderen'), onPress: verwijderen }
             : undefined
         }
       >
         {concept?.opSlot ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              Deze kostenpost komt uit je boekhouding of hoort bij werkbonmateriaal. De inhoud pas
-              je aan bij de bron; verwijderen kan hier wel.
+              {tx(
+                'Deze kostenpost komt uit je boekhouding of hoort bij werkbonmateriaal. De inhoud pas je aan bij de bron; verwijderen kan hier wel.',
+              )}
             </Text>
           </View>
         ) : null}
 
         <FormField
-          label="Omschrijving"
+          label={tx('Omschrijving')}
           value={concept?.description ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, description: v } : c))}
-          placeholder="Bijv. Dakpannen 200 stuks"
+          placeholder={tx('Bijv. Dakpannen 200 stuks')}
           autoFocus={!concept?.id}
         />
 
         <FormField
-          label={concept?.btwInclusief ? 'Bedrag incl. btw' : 'Bedrag excl. btw'}
+          label={concept?.btwInclusief ? tx('Bedrag incl. btw') : tx('Bedrag excl. btw')}
           value={concept?.bedrag ?? ''}
           onChangeText={(v) => setConcept((c) => (c ? { ...c, bedrag: v } : c))}
           placeholder="0,00"
@@ -674,12 +680,12 @@ function ExpensesScreenInhoud() {
         />
 
         <View style={{ gap: spacing.xs }}>
-          <Text style={styles.label}>Btw</Text>
+          <Text style={styles.label}>{tx('Btw')}</Text>
           <View style={styles.chipRij}>
             {[
               { id: '21', label: '21%' },
               { id: '9', label: '9%' },
-              { id: '0', label: 'Geen btw (0%)' },
+              { id: '0', label: tx('Geen btw (0%)') },
             ].map((o) => {
               const actief = Number(concept?.btwPct.replace(',', '.')) === Number(o.id);
               return (
@@ -699,18 +705,23 @@ function ExpensesScreenInhoud() {
           </View>
           {btwOverzicht ? (
             <Text style={styles.schakelUitleg}>
-              Excl. {formatEURCent(btwOverzicht.excl)} · btw {formatEURCent(btwOverzicht.btw)} · incl.{' '}
-              {formatEURCent(btwOverzicht.incl)}. Opgeslagen wordt het bedrag excl. btw, net als in
-              het dashboard.
+              {tx(
+                'Excl. {excl} · btw {btw} · incl. {incl}. Opgeslagen wordt het bedrag excl. btw, net als in het dashboard.',
+                {
+                  excl: formatEURCent(btwOverzicht.excl),
+                  btw: formatEURCent(btwOverzicht.btw),
+                  incl: formatEURCent(btwOverzicht.incl),
+                },
+              )}
             </Text>
           ) : null}
         </View>
 
         <View style={styles.schakelRij}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.schakelTitel}>Bedrag is inclusief btw</Text>
+            <Text style={styles.schakelTitel}>{tx('Bedrag is inclusief btw')}</Text>
             <Text style={styles.schakelUitleg}>
-              Staat dit uit, dan is het ingevulde bedrag exclusief btw.
+              {tx('Staat dit uit, dan is het ingevulde bedrag exclusief btw.')}
             </Text>
           </View>
           <Switch
@@ -721,7 +732,7 @@ function ExpensesScreenInhoud() {
         </View>
 
         <View style={{ gap: spacing.xs }}>
-          <Text style={styles.label}>Categorie</Text>
+          <Text style={styles.label}>{tx('Categorie')}</Text>
           <View style={styles.chipRij}>
             {categorieKeuzes.map((cat) => {
               const actief = concept?.category === cat;
@@ -745,7 +756,7 @@ function ExpensesScreenInhoud() {
         {!concept?.opSlot ? (
           <View style={{ gap: 8 }}>
             {conceptCategorie?.bonVerplicht && !concept?.bonnen.length && !concept?.heeftBijlage ? (
-              <NoticeBanner toon="info" message={BON_VERPLICHT_MELDING} />
+              <NoticeBanner toon="info" message={tx(BON_VERPLICHT_MELDING)} />
             ) : null}
             {concept?.bonnen.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -755,7 +766,7 @@ function ExpensesScreenInhoud() {
                     <Pressable
                       onPress={() => setConcept((c) => (c ? { ...c, bonnen: c.bonnen.filter((_, j) => j !== i) } : c))}
                       accessibilityRole="button"
-                      accessibilityLabel="Bon weghalen"
+                      accessibilityLabel={tx('Bon weghalen')}
                       hitSlop={8}
                       style={styles.bonWeg}
                     >
@@ -767,10 +778,10 @@ function ExpensesScreenInhoud() {
             ) : null}
             {!concept?.heeftBijlage ? (
               <Button
-                label={concept?.bonnen.length ? 'Nog een bon toevoegen' : 'Bon toevoegen'}
+                label={concept?.bonnen.length ? tx('Nog een bon toevoegen') : tx('Bon toevoegen')}
                 variant="secondary"
                 onPress={async () => {
-                  const bron = await kiesFotoBron('Bon toevoegen');
+                  const bron = await kiesFotoBron(tx('Bon toevoegen'));
                   if (!bron) return;
                   const foto = await maakOfKiesFoto(bron);
                   if (foto) setConcept((c) => (c ? { ...c, bonnen: [...c.bonnen, foto] } : c));
@@ -781,34 +792,34 @@ function ExpensesScreenInhoud() {
         ) : null}
 
         {concept?.id && bijlageUrl ? (
-          <Button label="Bon bekijken" variant="secondary" onPress={() => setBonInBeeld(bijlageUrl)} />
+          <Button label={tx('Bon bekijken')} variant="secondary" onPress={() => setBonInBeeld(bijlageUrl)} />
         ) : null}
 
         <SelectField
-          label="Leverancier"
+          label={tx('Leverancier')}
           value={concept?.leverancierId ?? null}
           options={leveranciers}
           onChange={(id) => setConcept((c) => (c ? { ...c, leverancierId: id } : c))}
-          placeholder={leveranciers.length === 0 ? 'Nog geen leveranciers' : 'Kies een leverancier'}
+          placeholder={leveranciers.length === 0 ? tx('Nog geen leveranciers') : tx('Kies een leverancier')}
           disabled={leveranciers.length === 0}
-          hint="Verplicht: zonder leverancier weigert de administratie de kostenpost."
+          hint={tx('Verplicht: zonder leverancier weigert de administratie de kostenpost.')}
         />
 
         <View style={styles.levBlok}>
           <FormField
-            label="Nieuwe leverancier"
+            label={tx('Nieuwe leverancier')}
             value={nieuweLeverancier}
             onChangeText={setNieuweLeverancier}
-            placeholder="Naam van de leverancier"
+            placeholder={tx('Naam van de leverancier')}
             hint={
               leveranciers.length === 0
-                ? 'Je hebt nog geen leveranciers. Voeg er hier één toe.'
-                : 'Staat je leverancier er niet bij? Voeg hem hier toe.'
+                ? tx('Je hebt nog geen leveranciers. Voeg er hier één toe.')
+                : tx('Staat je leverancier er niet bij? Voeg hem hier toe.')
             }
           />
           {levFout ? <Text style={styles.levFout}>{levFout}</Text> : null}
           <Button
-            label={levBezig ? 'Toevoegen…' : 'Leverancier toevoegen'}
+            label={levBezig ? tx('Toevoegen…') : tx('Leverancier toevoegen')}
             variant="secondary"
             loading={levBezig}
             disabled={!nieuweLeverancier.trim() || levBezig || saving}
@@ -817,36 +828,36 @@ function ExpensesScreenInhoud() {
         </View>
 
         <DateField
-          label="Kostendatum"
+          label={tx('Kostendatum')}
           value={concept?.datum || null}
           onChange={(v) => setConcept((c) => (c ? { ...c, datum: v } : c))}
-          placeholder="Kies"
+          placeholder={tx('Kies')}
         />
 
         <SelectField
-          label="Klant"
+          label={tx('Klant')}
           value={concept?.customerId ?? null}
           options={klanten}
           onChange={(id) => setConcept((c) => (c ? { ...c, customerId: id } : c))}
           allowEmpty
-          emptyLabel="Algemene kosten"
-          placeholder="Algemene kosten"
+          emptyLabel={tx('Algemene kosten')}
+          placeholder={tx('Algemene kosten')}
         />
 
         <SelectField
-          label="Project"
+          label={tx('Project')}
           value={concept?.projectId ?? null}
           options={projecten}
           onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
           allowEmpty
-          emptyLabel="Geen project"
-          placeholder="Geen project"
-          hint="Bepaalt onder welk project de nacalculatie deze kost meetelt."
+          emptyLabel={tx('Geen project')}
+          placeholder={tx('Geen project')}
+          hint={tx('Bepaalt onder welk project de nacalculatie deze kost meetelt.')}
         />
         <FotoViewer
           fotos={bonInBeeld ? [{ id: 'bon', url: bonInBeeld }] : []}
           index={bonInBeeld ? 0 : null}
-          titel="Bon"
+          titel={tx('Bon')}
           onSluit={() => setBonInBeeld(null)}
         />
       </FormSheet>

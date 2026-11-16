@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import { naarZitplaatsen } from '@/lib/instellingenRegels';
+import { tx, txm } from '@/i18n';
 
 /**
  * De tabellen achter de tabs van Instellingen die niet in `settingsService`
@@ -20,7 +21,7 @@ const opties = (context: string, leegMelding?: string) => ({
   leegMelding,
 });
 
-const ALLEEN_BEHEER = 'Niet opgeslagen. Alleen een beheerder kan dit wijzigen.';
+const ALLEEN_BEHEER = txm('Niet opgeslagen. Alleen een beheerder kan dit wijzigen.');
 
 // ── E-mailtemplates ────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export async function listEmailTemplates(): Promise<{ data: EmailTemplate[]; err
     .order('type', { ascending: true });
   if (error) {
     console.warn('[instellingenService.listEmailTemplates]', error.message);
-    return { data: [], error: 'E-mailtemplates konden niet worden geladen.' };
+    return { data: [], error: tx('E-mailtemplates konden niet worden geladen.') };
   }
   return { data: ((data as TemplateDb[]) ?? []).map(naarTemplate), error: null };
 }
@@ -87,13 +88,13 @@ export async function updateEmailTemplate(
   if (input.auto_dagen !== undefined) {
     const d = Number(input.auto_dagen);
     if (!Number.isFinite(d) || d < 0 || d > 365) {
-      return writeFout('validatie', 'Vul een aantal dagen tussen 0 en 365 in.');
+      return writeFout('validatie', tx('Vul een aantal dagen tussen 0 en 365 in.'));
     }
     updates.auto_dagen = d;
   }
   const res = await schrijf<TemplateDb>(
     () => supabase.from('email_templates').update(updates).eq('id', id).select(TEMPLATE_KOLOMMEN),
-    opties('instellingenService.updateEmailTemplate', ALLEEN_BEHEER),
+    opties('instellingenService.updateEmailTemplate', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: naarTemplate(res.data) } : res;
 }
@@ -115,10 +116,10 @@ export async function createEmailTemplate(input: {
     auto_versturen: false,
     auto_dagen: 7,
   });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   const res = await schrijf<TemplateDb>(
     () => supabase.from('email_templates').insert(payload).select(TEMPLATE_KOLOMMEN),
-    opties('instellingenService.createEmailTemplate', ALLEEN_BEHEER),
+    opties('instellingenService.createEmailTemplate', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: naarTemplate(res.data) } : res;
 }
@@ -126,7 +127,7 @@ export async function createEmailTemplate(input: {
 export async function deleteEmailTemplate(id: string): Promise<WriteStatus> {
   const res = await schrijf<{ id: string }>(
     () => supabase.from('email_templates').delete().eq('id', id).select('id'),
-    opties('instellingenService.deleteEmailTemplate', ALLEEN_BEHEER),
+    opties('instellingenService.deleteEmailTemplate', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -142,7 +143,7 @@ export async function listFasen(): Promise<{ data: Fase[]; error: string | null 
     .order('position', { ascending: true });
   if (error) {
     console.warn('[instellingenService.listFasen]', error.message);
-    return { data: [], error: 'De pipelinefasen konden niet worden geladen.' };
+    return { data: [], error: tx('De pipelinefasen konden niet worden geladen.') };
   }
   return {
     data: ((data as Fase[]) ?? []).map((f) => ({
@@ -157,7 +158,7 @@ export async function listFasen(): Promise<{ data: Fase[]; error: string | null 
 
 export async function createFase(input: { name: string; color_class: string }): Promise<WriteResult<Fase>> {
   const naam = input.name.trim();
-  if (!naam) return writeFout('validatie', 'Vul een naam in.');
+  if (!naam) return writeFout('validatie', tx('Vul een naam in.'));
   const { data: laatste } = await supabase
     .from('pipeline_stages')
     .select('position')
@@ -166,10 +167,10 @@ export async function createFase(input: { name: string; color_class: string }): 
     .maybeSingle();
   const positie = Number((laatste as { position?: number } | null)?.position ?? -1) + 1;
   const payload = withCompanyId({ name: naam, position: positie, color_class: input.color_class });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   return schrijf<Fase>(
     () => supabase.from('pipeline_stages').insert(payload).select('id, name, position, color_class'),
-    opties('instellingenService.createFase', ALLEEN_BEHEER),
+    opties('instellingenService.createFase', tx(ALLEEN_BEHEER)),
   );
 }
 
@@ -179,7 +180,7 @@ export async function updateFase(
   input: { name: string; color_class?: string },
 ): Promise<WriteResult<Fase>> {
   const naam = input.name.trim();
-  if (!naam) return writeFout('validatie', 'Vul een naam in.');
+  if (!naam) return writeFout('validatie', tx('Vul een naam in.'));
   const patch: { name: string; color_class?: string } = { name: naam };
   if (input.color_class) patch.color_class = input.color_class;
   return schrijf<Fase>(
@@ -189,17 +190,17 @@ export async function updateFase(
         .update(patch)
         .eq('id', id)
         .select('id, name, position, color_class'),
-    opties('instellingenService.updateFase', ALLEEN_BEHEER),
+    opties('instellingenService.updateFase', tx(ALLEEN_BEHEER)),
   );
 }
 
 export async function deleteFase(id: string): Promise<WriteStatus> {
   const res = await schrijf<{ id: string }>(
     () => supabase.from('pipeline_stages').delete().eq('id', id).select('id'),
-    opties('instellingenService.deleteFase', ALLEEN_BEHEER),
+    opties('instellingenService.deleteFase', tx(ALLEEN_BEHEER)),
   );
   if (!res.ok && res.soort === 'conflict') {
-    return writeFout('conflict', 'Er staan nog aanvragen of projecten in deze fase. Verplaats die eerst.');
+    return writeFout('conflict', tx('Er staan nog aanvragen of projecten in deze fase. Verplaats die eerst.'));
   }
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -220,14 +221,14 @@ export async function zetKoppeling(moment: string, stageId: string | null): Prom
     stage_id: stageId || null,
     updated_at: new Date().toISOString(),
   });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   const res = await schrijf<{ moment: string }>(
     () =>
       supabase
         .from('pipeline_koppelingen')
         .upsert(payload, { onConflict: 'company_id,moment' })
         .select('moment'),
-    opties('instellingenService.zetKoppeling', ALLEEN_BEHEER),
+    opties('instellingenService.zetKoppeling', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -245,7 +246,7 @@ export async function listVerlorenRedenen(): Promise<VerlorenReden[]> {
 
 export async function createVerlorenReden(label: string): Promise<WriteResult<VerlorenReden>> {
   const tekst = label.trim();
-  if (!tekst) return writeFout('validatie', 'Reden is verplicht');
+  if (!tekst) return writeFout('validatie', tx('Reden is verplicht'));
   const { data: laatste } = await supabase
     .from('lost_reasons')
     .select('position')
@@ -254,26 +255,26 @@ export async function createVerlorenReden(label: string): Promise<WriteResult<Ve
     .maybeSingle();
   const positie = Number((laatste as { position?: number } | null)?.position ?? -1) + 1;
   const payload = withCompanyId({ label: tekst, position: positie });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   return schrijf<VerlorenReden>(
     () => supabase.from('lost_reasons').insert(payload).select('id, label, position'),
-    opties('instellingenService.createVerlorenReden', ALLEEN_BEHEER),
+    opties('instellingenService.createVerlorenReden', tx(ALLEEN_BEHEER)),
   );
 }
 
 export async function updateVerlorenReden(id: string, label: string): Promise<WriteResult<VerlorenReden>> {
   const tekst = label.trim();
-  if (!tekst) return writeFout('validatie', 'Reden is verplicht');
+  if (!tekst) return writeFout('validatie', tx('Reden is verplicht'));
   return schrijf<VerlorenReden>(
     () => supabase.from('lost_reasons').update({ label: tekst }).eq('id', id).select('id, label, position'),
-    opties('instellingenService.updateVerlorenReden', ALLEEN_BEHEER),
+    opties('instellingenService.updateVerlorenReden', tx(ALLEEN_BEHEER)),
   );
 }
 
 export async function deleteVerlorenReden(id: string): Promise<WriteStatus> {
   const res = await schrijf<{ id: string }>(
     () => supabase.from('lost_reasons').delete().eq('id', id).select('id'),
-    opties('instellingenService.deleteVerlorenReden', ALLEEN_BEHEER),
+    opties('instellingenService.deleteVerlorenReden', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -311,7 +312,7 @@ export async function listVoertuigen(): Promise<{ data: Voertuig[]; error: strin
   const { data, error } = await supabase.from('voertuigen').select('*').order('naam');
   if (error) {
     console.warn('[instellingenService.listVoertuigen]', error.message);
-    return { data: [], error: 'De voertuigen konden niet worden geladen.' };
+    return { data: [], error: tx('De voertuigen konden niet worden geladen.') };
   }
   return { data: ((data as VoertuigDb[]) ?? []).map(naarVoertuig), error: null };
 }
@@ -326,7 +327,7 @@ export type VoertuigInput = {
 
 export async function saveVoertuig(id: string | null, input: VoertuigInput): Promise<WriteResult<Voertuig>> {
   const naam = input.naam.trim();
-  if (!naam) return writeFout('validatie', 'Naam is verplicht');
+  if (!naam) return writeFout('validatie', tx('Naam is verplicht'));
   const basis: Record<string, unknown> = {
     naam,
     kenteken: input.kenteken.trim() || null,
@@ -337,7 +338,7 @@ export async function saveVoertuig(id: string | null, input: VoertuigInput): Pro
     if (input.actief !== undefined) basis.actief = input.actief;
     const res = await schrijf<VoertuigDb>(
       () => supabase.from('voertuigen').update(basis).eq('id', id).select('*'),
-      opties('instellingenService.saveVoertuig.update', ALLEEN_BEHEER),
+      opties('instellingenService.saveVoertuig.update', tx(ALLEEN_BEHEER)),
     );
     return res.ok ? { ok: true, data: naarVoertuig(res.data) } : res;
   }
@@ -348,10 +349,10 @@ export async function saveVoertuig(id: string | null, input: VoertuigInput): Pro
     ...(zitplaatsen != null ? { zitplaatsen } : {}),
     actief: true,
   });
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   const res = await schrijf<VoertuigDb>(
     () => supabase.from('voertuigen').insert(payload).select('*'),
-    opties('instellingenService.saveVoertuig.insert', ALLEEN_BEHEER),
+    opties('instellingenService.saveVoertuig.insert', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: naarVoertuig(res.data) } : res;
 }
@@ -359,10 +360,10 @@ export async function saveVoertuig(id: string | null, input: VoertuigInput): Pro
 export async function deleteVoertuig(id: string): Promise<WriteStatus> {
   const res = await schrijf<{ id: string }>(
     () => supabase.from('voertuigen').delete().eq('id', id).select('id'),
-    opties('instellingenService.deleteVoertuig', ALLEEN_BEHEER),
+    opties('instellingenService.deleteVoertuig', tx(ALLEEN_BEHEER)),
   );
   if (!res.ok && res.soort === 'conflict') {
-    return writeFout('conflict', 'Dit voertuig is nog ingepland. Zet het op inactief in plaats van te verwijderen.');
+    return writeFout('conflict', tx('Dit voertuig is nog ingepland. Zet het op inactief in plaats van te verwijderen.'));
   }
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -414,13 +415,13 @@ export async function saveEenheid(
   input: { naam: string; standaard_prijs: string; eenheid_label: string; btw_pct: string },
 ): Promise<WriteResult<EigenEenheid>> {
   const naam = input.naam.trim();
-  if (!naam) return writeFout('validatie', 'Naam is verplicht');
+  if (!naam) return writeFout('validatie', tx('Naam is verplicht'));
   const prijs = Number(input.standaard_prijs.replace(',', '.') || 0);
-  if (!Number.isFinite(prijs)) return writeFout('validatie', 'Vul een geldige standaardprijs in.');
+  if (!Number.isFinite(prijs)) return writeFout('validatie', tx('Vul een geldige standaardprijs in.'));
   const btwTekst = input.btw_pct.replace(',', '.').trim();
   const btw = btwTekst === '' ? null : Number(btwTekst);
   if (btw !== null && (!Number.isFinite(btw) || btw < 0 || btw > 100)) {
-    return writeFout('validatie', 'Vul een btw-percentage tussen 0 en 100 in, of laat het leeg.');
+    return writeFout('validatie', tx('Vul een btw-percentage tussen 0 en 100 in, of laat het leeg.'));
   }
   const basis = {
     naam,
@@ -436,15 +437,15 @@ export async function saveEenheid(
           .update({ ...basis, updated_at: new Date().toISOString() })
           .eq('id', id)
           .select(EENHEID_KOLOMMEN),
-      opties('instellingenService.saveEenheid.update', ALLEEN_BEHEER),
+      opties('instellingenService.saveEenheid.update', tx(ALLEEN_BEHEER)),
     );
     return res.ok ? { ok: true, data: naarEenheid(res.data) } : res;
   }
   const payload = withCompanyId(basis);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   const res = await schrijf<EenheidDb>(
     () => supabase.from('eigen_eenheden').insert(payload).select(EENHEID_KOLOMMEN),
-    opties('instellingenService.saveEenheid.insert', ALLEEN_BEHEER),
+    opties('instellingenService.saveEenheid.insert', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: naarEenheid(res.data) } : res;
 }
@@ -452,7 +453,7 @@ export async function saveEenheid(
 export async function deleteEenheid(id: string): Promise<WriteStatus> {
   const res = await schrijf<{ id: string }>(
     () => supabase.from('eigen_eenheden').delete().eq('id', id).select('id'),
-    opties('instellingenService.deleteEenheid', ALLEEN_BEHEER),
+    opties('instellingenService.deleteEenheid', tx(ALLEEN_BEHEER)),
   );
   return res.ok ? { ok: true, data: null } : res;
 }
@@ -508,7 +509,7 @@ export async function getAbonnement(): Promise<{ data: AbonnementStand | null; e
   const { data, error } = await supabase.rpc('get_billing_status');
   if (error) {
     console.warn('[instellingenService.getAbonnement]', error.message);
-    return { data: null, error: 'Het abonnement kon niet worden geladen.' };
+    return { data: null, error: tx('Het abonnement kon niet worden geladen.') };
   }
   const d = data as Record<string, unknown> | null;
   if (!d) return { data: null, error: null };

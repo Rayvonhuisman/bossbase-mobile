@@ -17,6 +17,7 @@ import {
   type Planning,
 } from '@/lib/werkbonLogica';
 import { ds, spacing, type ThemeColors } from '@/theme';
+import { tx, locale } from '@/i18n';
 
 /**
  * De dagen van een werkbon (WerkbonDagenVelden van het dashboard), gedeeld
@@ -26,6 +27,12 @@ import { ds, spacing, type ThemeColors } from '@/theme';
  * - `DagKaarten`: per gekozen dag een begin- en eindtijd, "tijd voor alle
  *   dagen", en met meer dan één persoon de dagploeg (wie werkt die dag).
  */
+/** Korte dagnamen ma t/m zo in de taal van de app (1 januari 2024 was een maandag). */
+function dagnamenVanafMaandag(): string[] {
+  const f = new Intl.DateTimeFormat(locale(), { weekday: 'short', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, i) => f.format(new Date(Date.UTC(2024, 0, 1 + i))).replace(/\./g, ''));
+}
+
 export function WerkbonKalender({
   gekozen,
   onTik,
@@ -49,16 +56,16 @@ export function WerkbonKalender({
   return (
     <View style={styles.kalender}>
       <View style={styles.kalKop}>
-        <Pressable accessibilityRole="button" onPress={() => schuif(-1)} accessibilityLabel="Vorige maand" style={styles.kalNav}>
+        <Pressable accessibilityRole="button" onPress={() => schuif(-1)} accessibilityLabel={tx('Vorige maand')} style={styles.kalNav}>
           <ChevronLeft size={20} color={t.ink2} />
         </Pressable>
         <Text style={styles.kalTitel}>{maandNaam(maand.jaar, maand.maand)}</Text>
-        <Pressable accessibilityRole="button" onPress={() => schuif(1)} accessibilityLabel="Volgende maand" style={styles.kalNav}>
+        <Pressable accessibilityRole="button" onPress={() => schuif(1)} accessibilityLabel={tx('Volgende maand')} style={styles.kalNav}>
           <ChevronRight size={20} color={t.ink2} />
         </Pressable>
       </View>
       <View style={styles.kalRaster}>
-        {['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => (
+        {dagnamenVanafMaandag().map((d) => (
           <Text key={d} style={styles.kalDagnaam}>
             {d}
           </Text>
@@ -102,7 +109,7 @@ export function DagKaarten({
   uitvoerders,
   naam,
   bewerkbaar,
-  leegTekst = 'Geen dagen gekozen: de werkbon staat nog niet ingepland.',
+  leegTekst,
 }: {
   planning: Planning;
   onChange: (p: (vorige: Planning) => Planning) => void;
@@ -122,13 +129,13 @@ export function DagKaarten({
       tijden: { ...p.tijden, [iso]: { ...tijdVanDag(p, iso, standaard), [veld]: waarde } },
     }));
 
-  if (!datums.length) return <Text style={styles.hint}>{leegTekst}</Text>;
+  if (!datums.length) return <Text style={styles.hint}>{leegTekst ?? tx('Geen dagen gekozen: de werkbon staat nog niet ingepland.')}</Text>;
 
   return (
     <View style={{ gap: spacing.md }}>
       {tijdenVerschillen(planning) && bewerkbaar ? (
         <Pressable onPress={() => onChange((p) => tijdVoorAlleDagen(p))} accessibilityRole="button" style={styles.linkKnop}>
-          <Text style={styles.linkTekst}>Tijd van {korteDatum(datums[0])} voor alle dagen</Text>
+          <Text style={styles.linkTekst}>{tx('Tijd van {dag} voor alle dagen', { dag: korteDatum(datums[0]) })}</Text>
         </Pressable>
       ) : null}
       {datums.map((iso) => {
@@ -140,7 +147,7 @@ export function DagKaarten({
             <View style={styles.tijdRij}>
               <View style={{ flex: 1 }}>
                 <TimeField
-                  label="Begin"
+                  label={tx('Begin')}
                   value={tijd.starttijd || null}
                   onChange={(v) => zetDagTijd(iso, 'starttijd', v)}
                   disabled={!bewerkbaar}
@@ -148,7 +155,7 @@ export function DagKaarten({
               </View>
               <View style={{ flex: 1 }}>
                 <TimeField
-                  label="Eind"
+                  label={tx('Eind')}
                   value={tijd.eindtijd || null}
                   onChange={(v) => zetDagTijd(iso, 'eindtijd', v)}
                   disabled={!bewerkbaar}
@@ -168,7 +175,7 @@ export function DagKaarten({
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: aan }}
                       aria-checked={aan}
-                      accessibilityLabel={`${naam(pid)} op ${korteDatum(iso)}`}
+                      accessibilityLabel={tx('{naam} op {dag}', { naam: naam(pid), dag: korteDatum(iso) })}
                       style={[styles.chip, aan ? styles.chipAan : styles.chipUit]}
                     >
                       <Text style={[styles.chipTekst, aan && { color: t.green700 }, !aan && styles.doorgestreept]}>

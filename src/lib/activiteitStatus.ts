@@ -10,9 +10,10 @@
  *   dag = vandaag        → 'today'
  *   later of geen datum  → 'open'     (binnenkort)
  *
- * Geen imports: de kalenderdag (`dagVan`) en "vandaag" komen als argument
- * binnen, zodat dit bestand rechtstreeks in Node draait.
+ * Alleen de vertaling als import: de kalenderdag (`dagVan`) en "vandaag" komen
+ * als argument binnen, zodat dit bestand in Node draait.
  */
+import { tx } from '@/i18n';
 
 export type ActiviteitStatus = 'overdue' | 'today' | 'open' | 'completed';
 
@@ -54,12 +55,12 @@ export function dagenTussen(a: string, b: string): number {
 export type ActiviteitGroep = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'done';
 
 export const ACTIVITEIT_GROEPEN: { key: ActiviteitGroep; titel: string }[] = [
-  { key: 'overdue', titel: 'Te laat' },
-  { key: 'today', titel: 'Vandaag' },
-  { key: 'tomorrow', titel: 'Morgen' },
-  { key: 'week', titel: 'Deze week' },
-  { key: 'later', titel: 'Later' },
-  { key: 'done', titel: 'Afgerond' },
+  { key: 'overdue', get titel() { return tx('Te laat'); } },
+  { key: 'today', get titel() { return tx('Vandaag'); } },
+  { key: 'tomorrow', get titel() { return tx('Morgen'); } },
+  { key: 'week', get titel() { return tx('Deze week'); } },
+  { key: 'later', get titel() { return tx('Later'); } },
+  { key: 'done', get titel() { return tx('Afgerond'); } },
 ];
 
 /** `dateGroup` uit het dashboard: Te laat / Vandaag / Morgen / Deze week (≤ 7 d) / Later / Afgerond. */

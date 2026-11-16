@@ -6,6 +6,7 @@ import { isNetwerkfout } from '@/lib/netwerkfout';
 import { wachtOpVerificatie } from '@/lib/registratie';
 import { schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
 import type { Company, Profile } from '@/types/domain';
+import { tx } from '@/i18n';
 
 export type ProfileFetchErrorKind =
   | 'profile_not_found'
@@ -226,15 +227,15 @@ export async function updateEigenProfiel(input: {
   full_name?: string;
 }): Promise<WriteResult<{ id: string; full_name: string | null }>> {
   const userId = getUserId();
-  if (!userId) return writeFout('geen-rechten', 'Je bent niet ingelogd.');
+  if (!userId) return writeFout('geen-rechten', tx('Je bent niet ingelogd.'));
 
   const updates: Record<string, unknown> = {};
   if (input.full_name !== undefined) {
     const naam = input.full_name.trim();
-    if (!naam) return writeFout('validatie', 'Vul je naam in.');
+    if (!naam) return writeFout('validatie', tx('Vul je naam in.'));
     updates.full_name = naam;
   }
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<{ id: string; full_name: string | null }>(
     () => supabase.from('profiles').update(updates).eq('id', userId).select('id, full_name'),
@@ -263,9 +264,9 @@ export async function wijzigWachtwoordMetHuidig(
     data: { session },
   } = await supabase.auth.getSession();
   const email = session?.user?.email;
-  if (!email) return writeFout('geen-rechten', 'Geen actieve sessie gevonden — log opnieuw in.');
+  if (!email) return writeFout('geen-rechten', tx('Geen actieve sessie gevonden — log opnieuw in.'));
   const { error: aanmeldFout } = await supabase.auth.signInWithPassword({ email, password: huidig });
-  if (aanmeldFout) return writeFout('validatie', 'Huidig wachtwoord is onjuist');
+  if (aanmeldFout) return writeFout('validatie', tx('Huidig wachtwoord is onjuist'));
   const { error } = await supabase.auth.updateUser({ password: nieuw });
   if (error) return writeFout('onbekend', translateAuthError(error.message));
   return { ok: true, data: null };
@@ -284,15 +285,15 @@ export async function uploadEigenAvatar(input: {
   vorigeUrl: string | null;
 }): Promise<WriteStatus> {
   const userId = getUserId();
-  if (!userId) return writeFout('geen-rechten', 'Je bent niet ingelogd.');
+  if (!userId) return writeFout('geen-rechten', tx('Je bent niet ingelogd.'));
   if (input.bytes.byteLength > 5 * 1024 * 1024) {
-    return writeFout('validatie', 'Maximaal 5 MB per foto');
+    return writeFout('validatie', tx('Maximaal 5 MB per foto'));
   }
   const pad = `${input.companyId}/${userId}/avatar-${Date.now()}.${input.extensie}`;
   const { error: upErr } = await supabase.storage
     .from('avatars')
     .upload(pad, input.bytes, { contentType: input.contentType, upsert: false, cacheControl: '3600' });
-  if (upErr) return writeFout('onbekend', 'De foto kon niet worden geüpload.', upErr.message);
+  if (upErr) return writeFout('onbekend', tx('De foto kon niet worden geüpload.'), upErr.message);
   const { data: pub } = supabase.storage.from('avatars').getPublicUrl(pad);
   const res = await schrijf<{ id: string }>(
     () => supabase.from('profiles').update({ avatar_url: pub.publicUrl }).eq('id', userId).select('id'),
@@ -305,7 +306,7 @@ export async function uploadEigenAvatar(input: {
 
 export async function verwijderEigenAvatar(vorigeUrl: string | null): Promise<WriteStatus> {
   const userId = getUserId();
-  if (!userId) return writeFout('geen-rechten', 'Je bent niet ingelogd.');
+  if (!userId) return writeFout('geen-rechten', tx('Je bent niet ingelogd.'));
   const res = await schrijf<{ id: string }>(
     () => supabase.from('profiles').update({ avatar_url: null }).eq('id', userId).select('id'),
     { context: 'profileService.verwijderEigenAvatar', bedrijfReadonly: isReadonly() },
@@ -334,6 +335,6 @@ async function ruimAvatarOp(url: string | null): Promise<void> {
  */
 export async function deactiveerEigenAccount(): Promise<WriteStatus> {
   const { error } = await supabase.rpc('delete_own_account');
-  if (error) return writeFout('onbekend', error.message || 'Deactiveren mislukt');
+  if (error) return writeFout('onbekend', error.message || tx('Deactiveren mislukt'));
   return { ok: true, data: null };
 }

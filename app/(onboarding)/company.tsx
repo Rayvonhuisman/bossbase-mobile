@@ -20,6 +20,7 @@ import { useOnboarding } from '@/providers';
 import { BRANCHES, bedrijfFouten, heeftFouten, type BedrijfFouten } from '@/lib/registratie';
 import { Field, PrimaryButton, TopBar } from './_components';
 import { onb } from './_tokens';
+import { tx } from '@/i18n';
 
 /** Iconen zoals TRADES in het dashboard (BbAuth.jsx). */
 const BRANCHE_ICOON: Record<(typeof BRANCHES)[number], typeof Hammer> = {
@@ -66,8 +67,8 @@ export default function CompanyScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.headerBlock}>
-          <Text style={styles.title}>Over je bedrijf</Text>
-          <Text style={styles.sub}>We passen BossBase aan op jouw branche.</Text>
+          <Text style={styles.title}>{tx('Over je bedrijf')}</Text>
+          <Text style={styles.sub}>{tx('We passen BossBase aan op jouw branche.')}</Text>
         </View>
 
         <ScrollView
@@ -77,20 +78,20 @@ export default function CompanyScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Field
-            label="Bedrijfsnaam"
+            label={tx('Bedrijfsnaam')}
             value={companyName}
             onChangeText={(v) => {
               setCompanyName(v);
               if (fouten.companyName) setFouten((f) => ({ ...f, companyName: undefined }));
             }}
-            placeholder="Veldhuis Schilderwerken"
+            placeholder={tx('Veldhuis Schilderwerken')}
             autoCapitalize="words"
             autoComplete="organization"
-            error={fouten.companyName}
+            error={fouten.companyName && tx(fouten.companyName)}
           />
 
           <View>
-            <Text style={styles.groupLabel}>Branche</Text>
+            <Text style={styles.groupLabel}>{tx('Branche')}</Text>
             <View style={styles.chips} accessibilityRole="radiogroup">
               {BRANCHES.map((b) => {
                 const on = branche === b;
@@ -106,7 +107,7 @@ export default function CompanyScreen() {
                   >
                     <Icon size={16} color={onb.ink} strokeWidth={2} />
                     <Text style={styles.chipText} numberOfLines={1}>
-                      {b}
+                      {tx(b)}
                     </Text>
                   </Pressable>
                 );
@@ -115,7 +116,7 @@ export default function CompanyScreen() {
           </View>
 
           <Field
-            label="Telefoon"
+            label={tx('Telefoon')}
             value={phone}
             onChangeText={(v) => {
               setPhone(v);
@@ -125,21 +126,21 @@ export default function CompanyScreen() {
             keyboardType="phone-pad"
             autoComplete="tel"
             textContentType="telephoneNumber"
-            error={fouten.phone}
+            error={fouten.phone && tx(fouten.phone)}
           />
           <Field
-            label="KvK-nummer"
+            label={tx('KvK-nummer')}
             value={kvk}
             onChangeText={setKvk}
             placeholder="12345678"
             keyboardType="number-pad"
-            hint="Optioneel"
+            hint={tx('Optioneel')}
           />
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
           <PrimaryButton
-            label="Doorgaan"
+            label={tx('Doorgaan')}
             onPress={onContinue}
             trailing={<ArrowRight size={16} color="#fff" strokeWidth={2} />}
           />

@@ -9,6 +9,7 @@ import {
   UUR_KOSTPRIJS,
   type ProjectJobCost,
 } from '@/lib/projectKostenLogica';
+import { tx } from '@/i18n';
 
 /**
  * De bronnen van Financiën — dezelfde als `RevenuePage` in het dashboard:
@@ -59,7 +60,7 @@ export async function getFinancienKpi(bereik: { van: string; tot: string }): Pro
   const { data, error } = await supabase.rpc('bb_financien_kpi', { p_van: bereik.van, p_tot: bereik.tot });
   if (error) {
     console.warn('[financienService.getFinancienKpi]', error.message);
-    return { data: null, error: 'De cijfers konden niet worden geladen.' };
+    return { data: null, error: tx('De cijfers konden niet worden geladen.') };
   }
   const d = (data ?? {}) as Record<string, unknown>;
   return {
@@ -81,7 +82,7 @@ export async function listFinancienFacturen(): Promise<Res<FinFactuur[]>> {
     'id, customer_id, status, totaal_incl, totaal_excl, factuurdatum, betaald_op, is_credit, gecrediteerd, credit_van_factuur_id',
     'listFinancienFacturen',
   );
-  return error ? { data: [], error: 'Facturen konden niet worden geladen.' } : { data, error: null };
+  return error ? { data: [], error: tx('Facturen konden niet worden geladen.') } : { data, error: null };
 }
 
 /** De geboekte kosten (de boekhouding), zonder de spiegelregels van werkbonmateriaal. */
@@ -92,7 +93,7 @@ export async function listGeboekteKosten(): Promise<Res<FinKost[]>> {
     'listGeboekteKosten',
     'zonder',
   );
-  if (error) return { data: [], error: 'Kosten konden niet worden geladen.' };
+  if (error) return { data: [], error: tx('Kosten konden niet worden geladen.') };
   return {
     data: data.map((r) => ({
       amount: Number(r.amount) || 0,
@@ -176,7 +177,7 @@ export async function getKostenPerKlant(customerIds: string[]): Promise<Res<Map<
   if (jc.error) jc = await lees<RuweMateriaalKost>('job_costs', BASIS, 'materiaal', 'alleen');
 
   const fout = projecten.error ?? werkbonnen.error ?? deals.error ?? pk.error ?? uren.error ?? jc.error;
-  if (fout) return { data: null, error: 'De kosten per klant konden niet worden geladen.' };
+  if (fout) return { data: null, error: tx('De kosten per klant konden niet worden geladen.') };
 
   const projectKosten = pk.data.map((r) => naarProjectKost(r));
   const per = verdeelPerKlant(customerIds, {

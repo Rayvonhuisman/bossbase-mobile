@@ -1,4 +1,5 @@
 import type { Permission } from './permissions';
+import { tx } from '@/i18n';
 
 /**
  * De rechtenmatrix zoals het teamscherm hem toont — één op één overgenomen uit
@@ -28,106 +29,106 @@ export type PermissionGroep = {
 export const PERMISSION_GROEPEN: PermissionGroep[] = [
   {
     key: 'klanten_verkoop',
-    label: 'Klanten & Verkoop',
+    get label() { return tx('Klanten & Verkoop'); },
     subs: [
       {
         key: 'klanten_bewerken',
-        label: 'Klanten bewerken',
-        kort: 'Klanten aanmaken en gegevens wijzigen',
+        get label() { return tx('Klanten bewerken'); },
+        get kort() { return tx('Klanten aanmaken en gegevens wijzigen'); },
       },
       {
         key: 'klanten_verwijderen',
-        label: 'Klanten verwijderen',
-        kort: 'Klanten definitief verwijderen',
+        get label() { return tx('Klanten verwijderen'); },
+        get kort() { return tx('Klanten definitief verwijderen'); },
       },
       {
         key: 'verkoop',
-        label: 'Verkooppijplijn',
-        kort: 'Aanvragen en projecten in de pipeline bekijken en beheren',
+        get label() { return tx('Verkooppijplijn'); },
+        get kort() { return tx('Aanvragen en projecten in de pipeline bekijken en beheren'); },
       },
       {
         key: 'contracten',
-        label: 'Contracten',
-        kort: 'Onderhoudscontracten, beurten en SLA bekijken en beheren',
+        get label() { return tx('Contracten'); },
+        get kort() { return tx('Onderhoudscontracten, beurten en SLA bekijken en beheren'); },
       },
     ],
   },
   {
     key: 'uitvoering',
-    label: 'Uitvoering',
+    get label() { return tx('Uitvoering'); },
     subs: [
       {
         key: 'projecten',
-        label: 'Projecten',
-        kort: 'De Projecten-pagina openen',
+        get label() { return tx('Projecten'); },
+        get kort() { return tx('De Projecten-pagina openen'); },
       },
       {
         key: 'projecten_bewerken',
-        label: 'Projecten bewerken',
-        kort: 'Alle projecten aanmaken en bewerken',
+        get label() { return tx('Projecten bewerken'); },
+        get kort() { return tx('Alle projecten aanmaken en bewerken'); },
       },
       {
         key: 'werkbonnen_bewerken',
-        label: 'Werkbonnen bewerken',
-        kort: 'Alle werkbonnen bewerken + materiaalkosten',
+        get label() { return tx('Werkbonnen bewerken'); },
+        get kort() { return tx('Alle werkbonnen bewerken + materiaalkosten'); },
       },
       {
         key: 'planning',
-        label: 'Planning',
-        kort: 'Inplannen, weekplanning, agenda van collega’s',
+        get label() { return tx('Planning'); },
+        get kort() { return tx('Inplannen, weekplanning, agenda van collega’s'); },
       },
       {
         key: 'alles_inzien',
-        label: 'Alle projecten & werkbonnen inzien',
-        kort: 'Brede inzage in werk van collega’s',
+        get label() { return tx('Alle projecten & werkbonnen inzien'); },
+        get kort() { return tx('Brede inzage in werk van collega’s'); },
         // WARN_ON_ENABLE in het dashboard.
         waarschuw: true,
       },
       {
         key: 'agenda_inzien',
-        label: 'Elkaars agenda inzien',
-        kort: 'Agenda’s van collega’s bekijken',
+        get label() { return tx('Elkaars agenda inzien'); },
+        get kort() { return tx('Agenda’s van collega’s bekijken'); },
       },
     ],
   },
   {
     key: 'financieel',
-    label: 'Financieel',
+    get label() { return tx('Financieel'); },
     subs: [
       {
         key: 'projectbedragen',
-        label: 'Projectbedragen zien',
-        kort: 'Bedragen en marges op projecten/werkbonnen',
+        get label() { return tx('Projectbedragen zien'); },
+        get kort() { return tx('Bedragen en marges op projecten/werkbonnen'); },
       },
       {
         key: 'bedrijfsfinancien',
-        label: 'Bedrijfsfinanciën zien',
-        kort: 'Omzet, winst en marges van het bedrijf',
+        get label() { return tx('Bedrijfsfinanciën zien'); },
+        get kort() { return tx('Omzet, winst en marges van het bedrijf'); },
       },
-      { key: 'offertes', label: 'Offertes', kort: 'Offertes maken, versturen en inzien' },
-      { key: 'facturen', label: 'Facturen', kort: 'Facturen maken, versturen en inzien' },
+      { key: 'offertes', get label() { return tx('Offertes'); }, get kort() { return tx('Offertes maken, versturen en inzien'); } },
+      { key: 'facturen', get label() { return tx('Facturen'); }, get kort() { return tx('Facturen maken, versturen en inzien'); } },
       {
         key: 'inkoopprijzen',
-        label: 'Inkoop- en kostprijzen zien',
-        kort: 'Inkoopprijzen, kostprijs per uur, calculatie en nacalculatie',
+        get label() { return tx('Inkoop- en kostprijzen zien'); },
+        get kort() { return tx('Inkoopprijzen, kostprijs per uur, calculatie en nacalculatie'); },
       },
-      { key: 'kosten', label: 'Kosten', kort: 'Kosten en inkoop registreren en inzien' },
+      { key: 'kosten', get label() { return tx('Kosten'); }, get kort() { return tx('Kosten en inkoop registreren en inzien'); } },
     ],
   },
   {
     key: 'beheer',
-    label: 'Beheer',
+    get label() { return tx('Beheer'); },
     subs: [
       {
         key: 'team',
-        label: 'Team beheren',
-        kort: 'Team-pagina openen (beheer blijft bij admin)',
+        get label() { return tx('Team beheren'); },
+        get kort() { return tx('Team-pagina openen (beheer blijft bij admin)'); },
       },
-      { key: 'instellingen', label: 'Instellingen', kort: 'Bedrijfsinstellingen beheren' },
+      { key: 'instellingen', get label() { return tx('Instellingen'); }, get kort() { return tx('Bedrijfsinstellingen beheren'); } },
       {
         key: 'database',
-        label: 'Database & Export',
-        kort: 'Gegevens bekijken en exporteren naar Excel',
+        get label() { return tx('Database & Export'); },
+        get kort() { return tx('Gegevens bekijken en exporteren naar Excel'); },
       },
     ],
   },
@@ -147,7 +148,7 @@ export type Rechtenset = { key: string; label: string; rechten: Permission[] };
 export const RECHTENSETS: Rechtenset[] = [
   {
     key: 'kantoor',
-    label: 'Kantoor/administratie',
+    get label() { return tx('Kantoor/administratie'); },
     rechten: [
       'klanten_bewerken', 'verkoop', 'agenda_inzien',
       'offertes', 'facturen', 'kosten', 'projectbedragen', 'bedrijfsfinancien',

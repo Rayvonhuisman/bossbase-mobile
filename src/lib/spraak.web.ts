@@ -5,10 +5,11 @@
  * eerst kunt nakijken. Werkt de browser niet mee, dan zegt de knop dat.
  */
 import { useEffect, useRef, useState } from 'react';
+import { locale, tx, txm } from '@/i18n';
 import type { Spraak, SpraakStand } from './spraak';
 
 export type { Spraak, SpraakStand } from './spraak';
-export const DICTEER_HINT = 'Tik op de microfoon van je toetsenbord om in te spreken.';
+export const DICTEER_HINT = txm('Tik op de microfoon van je toetsenbord om in te spreken.');
 
 type Herkenning = {
   lang: string;
@@ -29,11 +30,11 @@ const Klasse = (): (new () => Herkenning) | null => {
 };
 
 const FOUT: Record<string, string> = {
-  'not-allowed': 'De browser mag de microfoon niet gebruiken. Sta de microfoon toe in de instellingen van je browser.',
-  'service-not-allowed': 'De browser mag de microfoon niet gebruiken. Sta de microfoon toe in de instellingen van je browser.',
-  'no-speech': 'Ik hoorde niets. Probeer het nog eens, iets dichter bij de microfoon.',
-  'audio-capture': 'Er is geen microfoon gevonden.',
-  network: 'Spraakherkenning is niet bereikbaar. Controleer je internet of typ je opdracht.',
+  'not-allowed': txm('De browser mag de microfoon niet gebruiken. Sta de microfoon toe in de instellingen van je browser.'),
+  'service-not-allowed': txm('De browser mag de microfoon niet gebruiken. Sta de microfoon toe in de instellingen van je browser.'),
+  'no-speech': txm('Ik hoorde niets. Probeer het nog eens, iets dichter bij de microfoon.'),
+  'audio-capture': txm('Er is geen microfoon gevonden.'),
+  network: txm('Spraakherkenning is niet bereikbaar. Controleer je internet of typ je opdracht.'),
 };
 
 export function useSpraak({ setTekst }: { setTekst: (f: (oud: string) => string) => void }): Spraak {
@@ -49,13 +50,13 @@ export function useSpraak({ setTekst }: { setTekst: (f: (oud: string) => string)
   const start = () => {
     const K = Klasse();
     if (!K) {
-      setFout('Inspreken werkt niet in deze browser. Gebruik Chrome, Edge of Safari, of de microfoon van je toetsenbord.');
+      setFout(tx('Inspreken werkt niet in deze browser. Gebruik Chrome, Edge of Safari, of de microfoon van je toetsenbord.'));
       return;
     }
     setFout(null);
     setTussen('');
     const h = new K();
-    h.lang = 'nl-NL';
+    h.lang = locale();
     h.continuous = true;
     h.interimResults = true;
     setTekst((oud) => {
@@ -75,7 +76,7 @@ export function useSpraak({ setTekst }: { setTekst: (f: (oud: string) => string)
       setTekst(() => `${basis.current}${definitief}${tijdelijk}`.replace(/\s+/g, ' ').trimStart());
     };
     h.onerror = (e) => {
-      if (e.error !== 'aborted') setFout(FOUT[e.error] ?? 'Inspreken lukte niet. Probeer het nog eens of typ je opdracht.');
+      if (e.error !== 'aborted') setFout(tx(FOUT[e.error] ?? 'Inspreken lukte niet. Probeer het nog eens of typ je opdracht.'));
     };
     h.onend = () => {
       setStand('uit');
@@ -89,7 +90,7 @@ export function useSpraak({ setTekst }: { setTekst: (f: (oud: string) => string)
       h.start();
     } catch {
       setStand('uit');
-      setFout('Inspreken lukte niet. Probeer het nog eens of typ je opdracht.');
+      setFout(tx('Inspreken lukte niet. Probeer het nog eens of typ je opdracht.'));
     }
   };
 

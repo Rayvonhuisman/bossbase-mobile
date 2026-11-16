@@ -7,6 +7,7 @@ import { bytesNaarBase64 } from '@/lib/pdf/afbeelding';
 import { deelPdf, kanPrintenViaDelen, printPdf } from '@/lib/pdfDelen';
 import { Dialog } from '@/lib/dialog';
 import { PdfFrame, type PdfBericht } from './PdfFrame';
+import { tx } from '@/i18n';
 
 export type PdfDocument = {
   soort: DocumentSoort;
@@ -62,12 +63,12 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
         // Het bewaarde bestand (wat de klant kreeg): binnenhalen, zodat bekijken,
         // delen en printen hetzelfde bestand gebruiken.
         const antwoord = await fetch(r.url);
-        if (!antwoord.ok) throw new PdfFout('Het opgeslagen document kon niet worden geladen.');
+        if (!antwoord.ok) throw new PdfFout(tx('Het opgeslagen document kon niet worden geladen.'));
         const bytes = new Uint8Array(await antwoord.arrayBuffer());
         if (actief) setPdf({ base64: bytesNaarBase64(bytes), bestandsnaam: r.bestandsnaam });
       } catch (e) {
         if (__DEV__) console.log('[PdfWeergave] PDF maken mislukt', e);
-        if (actief) setFout(e instanceof PdfFout ? e.message : 'De PDF kon niet worden gemaakt. Probeer het opnieuw.');
+        if (actief) setFout(e instanceof PdfFout ? e.message : tx('De PDF kon niet worden gemaakt. Probeer het opnieuw.'));
       }
     })();
     return () => {
@@ -77,7 +78,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
 
   const bericht = (b: PdfBericht) => {
     if (b.type === 'tik') setKnoppen((k) => !k);
-    if (b.type === 'fout') setFout('De PDF kon niet worden getoond.');
+    if (b.type === 'fout') setFout(tx('De PDF kon niet worden getoond.'));
   };
 
   const actie = async (soort: 'delen' | 'printen') => {
@@ -87,7 +88,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
       if (soort === 'delen') await deelPdf(pdf.base64, pdf.bestandsnaam);
       else await printPdf(pdf.base64, pdf.bestandsnaam);
     } catch {
-      Dialog.alert(soort === 'delen' ? 'Delen lukte niet' : 'Printen lukte niet', 'Probeer het opnieuw.');
+      Dialog.alert(soort === 'delen' ? tx('Delen lukte niet') : tx('Printen lukte niet'), tx('Probeer het opnieuw.'));
     } finally {
       setBezig(null);
     }
@@ -104,7 +105,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
           ) : (
             <>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.melding}>PDF maken…</Text>
+              <Text style={styles.melding}>{tx('PDF maken…')}</Text>
             </>
           )}
         </Pressable>
@@ -112,7 +113,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
 
       {knoppen || fout ? (
         <View style={[styles.balk, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-          <Pressable onPress={onSluit} accessibilityRole="button" accessibilityLabel="Sluiten" hitSlop={8} style={styles.knop}>
+          <Pressable onPress={onSluit} accessibilityRole="button" accessibilityLabel={tx('Sluiten')} hitSlop={8} style={styles.knop}>
             <X size={24} color="#fff" strokeWidth={2.4} />
           </Pressable>
           <Text style={styles.titel} numberOfLines={1}>
@@ -124,7 +125,7 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
                 onPress={() => actie('printen')}
                 disabled={!pdf || !!bezig}
                 accessibilityRole="button"
-                accessibilityLabel="Printen"
+                accessibilityLabel={tx('Printen')}
                 hitSlop={6}
                 style={[styles.knop, !pdf && styles.uit]}
               >
@@ -135,12 +136,12 @@ function Inhoud({ document, onSluit }: { document: PdfDocument; onSluit: () => v
               onPress={() => actie('delen')}
               disabled={!pdf || !!bezig}
               accessibilityRole="button"
-              accessibilityLabel={kanPrintenViaDelen ? 'Delen of printen' : 'Delen'}
+              accessibilityLabel={kanPrintenViaDelen ? tx('Delen of printen') : tx('Delen')}
               hitSlop={6}
               style={[styles.deelKnop, !pdf && styles.uit]}
             >
               {bezig === 'delen' ? <ActivityIndicator color="#0D0D0D" /> : <Share2 size={18} color="#0D0D0D" />}
-              <Text style={styles.deelTekst}>Delen</Text>
+              <Text style={styles.deelTekst}>{tx('Delen')}</Text>
             </Pressable>
           </View>
         </View>

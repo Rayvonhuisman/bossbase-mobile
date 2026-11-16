@@ -4,6 +4,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 // Alleen de rekenkern van qrcode (puur JavaScript, geen canvas of Node): zo werkt
 // hij gelijk op iOS, Android en web. Tekenen doet react-native-svg.
 import QRCodeKern from 'qrcode/lib/core/qrcode';
+import { tx } from '@/i18n';
 
 /**
  * QR-code als SVG, altijd zwart op wit (ook in donkere modus): anders scant een
@@ -26,7 +27,7 @@ export function QrCode({ waarde, grootte, label }: { waarde: string; grootte: nu
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={label ?? 'QR-code'}
+      accessibilityLabel={label ?? tx('QR-code')}
       style={{ width: grootte, height: grootte, backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden' }}
     >
       <Svg width={grootte} height={grootte} viewBox={`0 0 ${n} ${n}`}>

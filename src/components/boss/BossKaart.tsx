@@ -7,6 +7,7 @@ import { createNote } from '@/services/noteService';
 import { addProjectNote } from '@/services/projectService';
 import { createActivity } from '@/services/activityService';
 import { datumTekst, kiesKeuze, kopVan, meldBossOpgeslagen, waaromNiet, type BossKaart as Kaart } from '@/lib/boss/vastleggen';
+import { tx } from '@/i18n';
 
 /**
  * Een voorstel van Boss in de chat: notitie, taak of metingen. Boss legt zelf
@@ -41,7 +42,7 @@ export function BossKaartje({
     const tekst = (concept?.tekst ?? k.tekst).trim();
     const datum = concept?.datum ?? k.datum;
     const tijd = concept?.tijd ?? k.tijd;
-    if (!tekst) return setFout('Er staat nog niets in.');
+    if (!tekst) return setFout(tx('Er staat nog niets in.'));
     if (k.soort === 'metingen' && k.project) {
       onWijzig({ ...k, stand: 'doorgezet', tekst });
       onMetingen(k.project.id, tekst);
@@ -107,25 +108,25 @@ export function BossKaartje({
             onChangeText={(v) => setConcept((c) => (c ? { ...c, tekst: v } : c))}
             multiline
             style={[s.veld, { minHeight: 64 }]}
-            accessibilityLabel="Tekst"
+            accessibilityLabel={tx('Tekst')}
           />
           {k.soort === 'taak' ? (
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <TextInput
                 value={concept.datum}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, datum: v } : c))}
-                placeholder="JJJJ-MM-DD"
+                placeholder={tx('JJJJ-MM-DD')}
                 placeholderTextColor={t.muted2}
                 style={[s.veld, { flex: 1 }]}
-                accessibilityLabel="Datum"
+                accessibilityLabel={tx('Datum')}
               />
               <TextInput
                 value={concept.tijd}
                 onChangeText={(v) => setConcept((c) => (c ? { ...c, tijd: v } : c))}
-                placeholder="UU:MM"
+                placeholder={tx('UU:MM')}
                 placeholderTextColor={t.muted2}
                 style={[s.veld, { width: 90 }]}
-                accessibilityLabel="Tijd"
+                accessibilityLabel={tx('Tijd')}
               />
             </View>
           ) : null}
@@ -134,9 +135,8 @@ export function BossKaartje({
         <>
           {k.soort === 'taak' && k.datum ? (
             <Text style={[s.klein, k.datum_onzeker && !klaar ? { color: t.statusWarnFg } : null]}>
-              {datumTekst(k.datum)}
-              {k.tijd ? ` om ${k.tijd}` : ''}
-              {k.datum_onzeker && !klaar ? ' · controleer de datum' : ''}
+              {k.tijd ? tx('{datum} om {tijd}', { datum: datumTekst(k.datum), tijd: k.tijd }) : datumTekst(k.datum)}
+              {k.datum_onzeker && !klaar ? ` · ${tx('controleer de datum')}` : ''}
             </Text>
           ) : null}
           {k.tekst ? <Text style={s.tekst}>{k.tekst}</Text> : null}
@@ -147,13 +147,13 @@ export function BossKaartje({
 
       <View style={[s.knoppen, { marginTop: 8 }]}>
         {klaar ? (
-          <Text style={[s.klein, { color: t.green700 }]}>{stand === 'doorgezet' ? 'Geopend bij het project' : 'Opgeslagen'}</Text>
+          <Text style={[s.klein, { color: t.green700 }]}>{stand === 'doorgezet' ? tx('Geopend bij het project') : tx('Opgeslagen')}</Text>
         ) : k.geweigerd ? (
-          <Knop label="Sluiten" s={s} onPress={() => onWijzig({ ...k, stand: 'weg' })} />
+          <Knop label={tx('Sluiten')} s={s} onPress={() => onWijzig({ ...k, stand: 'weg' })} />
         ) : (
           <>
             <Knop
-              label={k.soort === 'metingen' ? 'Openen en nakijken' : bezig ? 'Opslaan…' : 'Opslaan'}
+              label={k.soort === 'metingen' ? tx('Openen en nakijken') : bezig ? tx('Opslaan…') : tx('Opslaan')}
               hoofd
               s={s}
               uit={!kan || bezig}
@@ -161,11 +161,11 @@ export function BossKaartje({
               testID="boss-kaart-opslaan"
             />
             {k.soort !== 'metingen' && !concept ? (
-              <Knop label="Aanpassen" s={s} uit={bezig} onPress={() => setConcept({ tekst: k.tekst, datum: k.datum, tijd: k.tijd })} />
+              <Knop label={tx('Aanpassen')} s={s} uit={bezig} onPress={() => setConcept({ tekst: k.tekst, datum: k.datum, tijd: k.tijd })} />
             ) : null}
             {concept ? (
               <Knop
-                label="Klaar"
+                label={tx('Klaar')}
                 s={s}
                 uit={bezig}
                 onPress={() => {
@@ -174,7 +174,7 @@ export function BossKaartje({
                 }}
               />
             ) : null}
-            <Knop label="Annuleren" s={s} uit={bezig} onPress={() => onWijzig({ ...k, stand: 'weg' })} />
+            <Knop label={tx('Annuleren')} s={s} uit={bezig} onPress={() => onWijzig({ ...k, stand: 'weg' })} />
           </>
         )}
       </View>

@@ -59,6 +59,7 @@ import { useLaden } from '@/lib/useLaden';
 import { useSchermklasse } from '@/lib/schermklasse';
 import { terugOfNaar } from '@/lib/navigatie';
 import { ds, dsShadow, type ThemeColors } from '@/theme';
+import { tx, txn, locale } from '@/i18n';
 import { useOnthouden } from '@/lib/useOnthouden';
 import {
   ActiviteitInplannenPaneel,
@@ -98,7 +99,7 @@ import {
  */
 export default function PlanningbordRoute() {
   return (
-    <PermissionGate permission="planning" feature="planning" label="Planning">
+    <PermissionGate permission="planning" feature="planning" label={tx('Planning')}>
       <PlanningbordScreen />
     </PermissionGate>
   );
@@ -123,24 +124,25 @@ const ACTIVITEIT_KLEUR = ds.green;
 
 type Resource = { id: string | null; naam: string; kleur: string; sub?: string };
 
-const DAG_LANG = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const dagLang = (d: Date) =>
+  new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+const wkdagKort = (d: Date) => new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(d);
+const maandKort = (d: Date) => new Intl.DateTimeFormat(locale(), { month: 'short' }).format(d);
 const datum = (iso: string) => new Date(`${iso}T12:00:00`);
 
 function periodeLabel(zicht: Zicht, anker: string, dagen: string[]): string {
-  if (zicht === 'dag') return DAG_LANG.format(datum(anker));
+  if (zicht === 'dag') return dagLang(datum(anker));
   const a = datum(dagen[0]!);
   const b = datum(dagen[6]!);
-  const links = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${MAAND_KORT[a.getMonth()]}`;
+  const links = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${maandKort(a)}`;
   // Het jaar alleen als het niet dit jaar is: anders past het op een telefoon niet.
   const jaar = b.getFullYear() === new Date().getFullYear() ? '' : ` ${b.getFullYear()}`;
-  return `${links}–${b.getDate()} ${MAAND_KORT[b.getMonth()]}${jaar} · wk ${isoWeek(dagen[0]!)}`;
+  return `${links}–${b.getDate()} ${maandKort(b)}${jaar} · ${tx('wk {n}', { n: isoWeek(dagen[0]!) })}`;
 }
 
 function dagKort(iso: string): string {
   const d = datum(iso);
-  return `${DAG_KORT[d.getDay()]} ${d.getDate()}`;
+  return `${wkdagKort(d)} ${d.getDate()}`;
 }
 
 function PlanningbordScreen() {
@@ -149,8 +151,8 @@ function PlanningbordScreen() {
   // Plannen zoals het dashboard: recht `planning` én de module planning (magSlepen).
   const magPlannen = can('planning') && hasFeature('planning') && !readonly;
   const waaromNiet = readonly
-    ? 'Je abonnement staat op alleen-lezen; plannen kan pas weer met een lopend abonnement.'
-    : 'Plannen vraagt het recht Planning.';
+    ? tx('Je abonnement staat op alleen-lezen; plannen kan pas weer met een lopend abonnement.')
+    : tx('Plannen vraagt het recht Planning.');
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { klasse } = useSchermklasse();
@@ -195,16 +197,16 @@ function PlanningbordScreen() {
     }
     setWerkbonnen(wb.data);
     setLos(nietIngepland(nl.data));
-    setTeam(tm.data.map((p) => ({ id: p.id, naam: p.full_name ?? 'Medewerker' })));
+    setTeam(tm.data.map((p) => ({ id: p.id, naam: p.full_name ?? tx('Medewerker') })));
     setVoertuigen(vt.data);
     setActiviteiten(ac.data);
     setDeelFout(
       nl.error
-        ? 'De niet-ingeplande werkbonnen konden niet worden geladen.'
+        ? tx('De niet-ingeplande werkbonnen konden niet worden geladen.')
         : ac.error
-          ? 'De activiteiten konden niet worden geladen.'
+          ? tx('De activiteiten konden niet worden geladen.')
           : tm.error || vt.error
-            ? 'Niet alle namen konden worden geladen.'
+            ? tx('Niet alle namen konden worden geladen.')
             : null,
     );
   }, [van, tot, metVoertuigen]);
@@ -256,18 +258,18 @@ function PlanningbordScreen() {
         id: v.id,
         naam: v.naam,
         kleur: v.kleur || ds.green,
-        sub: [v.kenteken, v.zitplaatsen ? `${v.zitplaatsen} plekken` : null].filter(Boolean).join(' · ') || undefined,
+        sub: [v.kenteken, v.zitplaatsen ? txn('{n} plek', '{n} plekken', v.zitplaatsen) : null].filter(Boolean).join(' · ') || undefined,
       }));
       for (const id of inBlokken) {
-        if (id && !voertuigVan.has(id)) rijen.push({ id, naam: 'Voertuig', kleur: '#9ca3af' });
+        if (id && !voertuigVan.has(id)) rijen.push({ id, naam: tx('Voertuig'), kleur: '#9ca3af' });
       }
       return rijen;
     }
     const rijen: Resource[] = team.map((m, i) => ({ id: m.id, naam: m.naam, kleur: medewerkerKleur(i) }));
     for (const id of inBlokken) {
-      if (id && !naamVan.has(id)) rijen.push({ id, naam: 'Oud-medewerker', kleur: '#9ca3af' });
+      if (id && !naamVan.has(id)) rijen.push({ id, naam: tx('Oud-medewerker'), kleur: '#9ca3af' });
     }
-    if (inBlokken.has(null)) rijen.push({ id: null, naam: 'Niet toegewezen', kleur: medewerkerKleur(-1) });
+    if (inBlokken.has(null)) rijen.push({ id: null, naam: tx('Niet toegewezen'), kleur: medewerkerKleur(-1) });
     return rijen;
   }, [actieveModus, items, team, voertuigen, naamVan, voertuigVan]);
 
@@ -288,7 +290,7 @@ function PlanningbordScreen() {
     ]);
     if (k) setKlantOpties(k.data.map((c) => ({ id: c.id, label: c.name ?? '—' })));
     if (r.data) setActiviteitOpen(conceptVanActiviteit(r.data));
-    else setDeelFout(r.error ?? 'De activiteit kon niet worden geopend.');
+    else setDeelFout(r.error ?? tx('De activiteit kon niet worden geopend.'));
   };
 
   /** Na het activiteitenvenster: het agenda-item bestaat of komt er; zonder datum weg. */
@@ -317,10 +319,10 @@ function PlanningbordScreen() {
   const blokTekst = (b: RoosterBlok<PlanWerkbon>) => {
     const w = b.werkbon;
     const persoon =
-      actieveModus === 'totaal' ? (b.resource ? (naamVan.get(b.resource) ?? 'Oud-medewerker') : 'Niet toegewezen') : null;
+      actieveModus === 'totaal' ? (b.resource ? (naamVan.get(b.resource) ?? tx('Oud-medewerker')) : tx('Niet toegewezen')) : null;
     const wie =
       actieveModus === 'voertuig'
-        ? b.inzittenden.map((p) => naamVan.get(p) ?? 'Medewerker').join(', ')
+        ? b.inzittenden.map((p) => naamVan.get(p) ?? tx('Medewerker')).join(', ')
         : b.voertuigId
           ? (voertuigVan.get(b.voertuigId)?.naam ?? null)
           : null;
@@ -329,8 +331,8 @@ function PlanningbordScreen() {
         ? `${b.inzittenden.length}/${voertuigVan.get(b.resource)!.zitplaatsen}`
         : null;
     return {
-      titel: w.titel || w.nummer || 'Werkbon',
-      tijd: `${b.starttijd}${b.eindtijd ? `–${b.eindtijd}` : ''}${b.dagenTotaal > 1 ? ` · dag ${b.dagNr}/${b.dagenTotaal}` : ''}`,
+      titel: w.titel || w.nummer || tx('Werkbon'),
+      tijd: `${b.starttijd}${b.eindtijd ? `–${b.eindtijd}` : ''}${b.dagenTotaal > 1 ? ` · ${tx('dag {nr}/{totaal}', { nr: b.dagNr, totaal: b.dagenTotaal })}` : ''}`,
       meta: [persoon, w.customer?.name, wie, bezet].filter(Boolean).join(' · '),
     };
   };
@@ -338,10 +340,10 @@ function PlanningbordScreen() {
   const activiteitBlok = (b: ActiviteitBlok<PlanningActiviteit>, compact?: boolean) => {
     const a = b.activiteit;
     const isDubbel = dubbel.has(b.sleutel);
-    const titel = a.title || 'Activiteit';
+    const titel = a.title || tx('Activiteit');
     const tijd = `${b.starttijd}–${b.eindtijd}`;
     const meta = [
-      actieveModus === 'totaal' ? b.personen.map((p) => naamVan.get(p) ?? 'Medewerker').join(', ') : null,
+      actieveModus === 'totaal' ? b.personen.map((p) => naamVan.get(p) ?? tx('Medewerker')).join(', ') : null,
       a.customer?.name,
     ]
       .filter(Boolean)
@@ -351,7 +353,14 @@ function PlanningbordScreen() {
         key={b.sleutel}
         onPress={() => void openActiviteit(a)}
         accessibilityRole="button"
-        accessibilityLabel={`Activiteit ${titel}, ${tijd}${a.completed ? ', afgerond' : ''}${isDubbel ? ', dubbel ingepland' : ''}`}
+        accessibilityLabel={[
+          tx('Activiteit {titel}', { titel }),
+          tijd,
+          a.completed ? tx('afgerond') : null,
+          isDubbel ? tx('dubbel ingepland') : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}
         style={({ pressed }) => [styles.blok, styles.blokActiviteit, compact && styles.blokCompact, pressed && { opacity: 0.85 }]}
       >
         <View style={[styles.blokStreep, { backgroundColor: ACTIVITEIT_KLEUR }]} />
@@ -390,7 +399,7 @@ function PlanningbordScreen() {
         key={b.sleutel}
         onPress={() => setBlokOpen(b)}
         accessibilityRole="button"
-        accessibilityLabel={`${tekst.titel}, ${tekst.tijd}${isDubbel ? ', dubbel ingepland' : ''}`}
+        accessibilityLabel={`${tekst.titel}, ${tekst.tijd}${isDubbel ? `, ${tx('dubbel ingepland')}` : ''}`}
         style={({ pressed }) => [styles.blok, compact && styles.blokCompact, pressed && { opacity: 0.85 }]}
       >
         <View style={[styles.blokStreep, { backgroundColor: kleur }]} />
@@ -415,17 +424,17 @@ function PlanningbordScreen() {
     );
   };
 
-  if (loading && werkbonnen.length === 0 && !error) return <LoadingScreen label="Planning laden…" />;
+  if (loading && werkbonnen.length === 0 && !error) return <LoadingScreen label={tx('Planning laden…')} />;
 
   const kop = (
     <AppTopBar
       variant="detail"
-      title="Planning"
-      subtitle="Weekplanning per medewerker en voertuig"
+      title={tx('Planning')}
+      subtitle={tx('Weekplanning per medewerker en voertuig')}
       onBack={() => terugOfNaar(router, '/menu')}
       rightAction={
         magPlannen ? (
-          <HeaderIconButton icon={Plus} label="Activiteit inplannen" onPress={() => setNieuweActiviteit(true)} />
+          <HeaderIconButton icon={Plus} label={tx('Activiteit inplannen')} onPress={() => setNieuweActiviteit(true)} />
         ) : undefined
       }
     />
@@ -435,7 +444,7 @@ function PlanningbordScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen scroll={false} header={kop}>
-          <ErrorState title="Planning niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Planning niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -459,8 +468,8 @@ function PlanningbordScreen() {
         <View style={styles.schakelRij}>
           <Schakel
             opties={[
-              ['dag', 'Dag'],
-              ['week', 'Week'],
+              ['dag', tx('Dag')],
+              ['week', tx('Week')],
             ]}
             waarde={zicht}
             onChange={(v) => setZicht(v as Zicht)}
@@ -468,9 +477,9 @@ function PlanningbordScreen() {
           />
           <Schakel
             opties={[
-              ['totaal', 'Totaal'],
-              ['medewerker', 'Medewerkers'],
-              ...(metVoertuigen ? ([['voertuig', 'Voertuigen']] as [string, string][]) : []),
+              ['totaal', tx('Totaal')],
+              ['medewerker', tx('Medewerkers')],
+              ...(metVoertuigen ? ([['voertuig', tx('Voertuigen')]] as [string, string][]) : []),
             ]}
             waarde={actieveModus}
             onChange={(v) => {
@@ -485,7 +494,7 @@ function PlanningbordScreen() {
           <Pressable
             onPress={() => stap(-1)}
             accessibilityRole="button"
-            accessibilityLabel={zicht === 'dag' ? 'Vorige dag' : 'Vorige week'}
+            accessibilityLabel={zicht === 'dag' ? tx('Vorige dag') : tx('Vorige week')}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronLeft size={20} color={t.ink} strokeWidth={2.4} />
@@ -496,15 +505,15 @@ function PlanningbordScreen() {
           <Pressable
             onPress={() => setAnker(vandaag)}
             accessibilityRole="button"
-            accessibilityLabel="Naar vandaag"
+            accessibilityLabel={tx('Naar vandaag')}
             style={({ pressed }) => [styles.todayBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.todayBtnText}>Vandaag</Text>
+            <Text style={styles.todayBtnText}>{tx('Vandaag')}</Text>
           </Pressable>
           <Pressable
             onPress={() => stap(1)}
             accessibilityRole="button"
-            accessibilityLabel={zicht === 'dag' ? 'Volgende dag' : 'Volgende week'}
+            accessibilityLabel={zicht === 'dag' ? tx('Volgende dag') : tx('Volgende week')}
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
           >
             <ChevronRight size={20} color={t.ink} strokeWidth={2.4} />
@@ -520,7 +529,9 @@ function PlanningbordScreen() {
           <View style={styles.pad}>
             <NoticeBanner
               toon="waarschuwing"
-              message="Blokken met een oranje driehoek zijn dubbel ingepland: dezelfde persoon of hetzelfde voertuig staat op dat moment op twee werkbonnen of activiteiten."
+              message={tx(
+                'Blokken met een oranje driehoek zijn dubbel ingepland: dezelfde persoon of hetzelfde voertuig staat op dat moment op twee werkbonnen of activiteiten.',
+              )}
             />
           </View>
         ) : null}
@@ -543,10 +554,10 @@ function PlanningbordScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: aan }}
                   aria-pressed={aan}
-                  accessibilityLabel={`${dagKort(d)}${werk ? ', heeft werk' : ''}`}
+                  accessibilityLabel={`${dagKort(d)}${werk ? `, ${tx('heeft werk')}` : ''}`}
                   style={[styles.dagKnop, aan && styles.dagKnopAan, d === vandaag && !aan && styles.dagKnopVandaag]}
                 >
-                  <Text style={[styles.dagKnopDag, aan && styles.dagKnopTekstAan]}>{DAG_KORT[dt.getDay()]}</Text>
+                  <Text style={[styles.dagKnopDag, aan && styles.dagKnopTekstAan]}>{wkdagKort(dt)}</Text>
                   <Text style={[styles.dagKnopTekst, aan && styles.dagKnopTekstAan]}>{dt.getDate()}</Text>
                   <View style={[styles.dagKnopStip, { backgroundColor: werk ? ds.green : 'transparent' }]} />
                 </Pressable>
@@ -570,7 +581,7 @@ function PlanningbordScreen() {
           <View style={styles.pad}>
             <AppCard padding={20}>
               <Text style={styles.leeg}>
-                {actieveModus === 'voertuig' ? 'Er zijn nog geen voertuigen.' : 'Er zijn nog geen teamleden.'}
+                {actieveModus === 'voertuig' ? tx('Er zijn nog geen voertuigen.') : tx('Er zijn nog geen teamleden.')}
               </Text>
             </AppCard>
           </View>
@@ -590,7 +601,7 @@ function PlanningbordScreen() {
                     ]}
                   >
                     <Text style={[styles.roosterKopTekst, d === vandaag && { color: t.green700 }]}>
-                      {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+                      {d === vandaag ? tx('{dag} · vandaag', { dag: dagKort(d) }) : dagKort(d)}
                     </Text>
                   </View>
                 ))}
@@ -642,7 +653,7 @@ function PlanningbordScreen() {
                     <Text style={styles.resNaam} numberOfLines={1}>
                       {r.naam}
                     </Text>
-                    <Text style={styles.resAantal}>{lijst.length ? `${lijst.length}` : 'vrij'}</Text>
+                    <Text style={styles.resAantal}>{lijst.length ? `${lijst.length}` : tx('vrij')}</Text>
                   </View>
                   {lijst.map((b) => item(b, r.kleur))}
                 </View>
@@ -681,10 +692,10 @@ function PlanningbordScreen() {
                 return (
                   <View key={d} style={{ gap: 6 }}>
                     <Text style={[styles.dagKop, d === vandaag && { color: t.green700 }]}>
-                      {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+                      {d === vandaag ? tx('{dag} · vandaag', { dag: dagKort(d) }) : dagKort(d)}
                     </Text>
                     {lijst.length === 0 ? (
-                      <Text style={styles.vrij}>Niet ingepland</Text>
+                      <Text style={styles.vrij}>{tx('Niet ingepland')}</Text>
                     ) : (
                       lijst.map((b) => item(b, r?.kleur ?? ds.green))
                     )}
@@ -704,7 +715,7 @@ function PlanningbordScreen() {
             aria-expanded={losOpen}
             style={styles.losKop}
           >
-            <Text style={styles.losTitel}>Niet ingepland ({los.length})</Text>
+            <Text style={styles.losTitel}>{tx('Niet ingepland ({n})', { n: los.length })}</Text>
             {losOpen ? (
               <ChevronUp size={18} color={t.muted} strokeWidth={2.2} />
             ) : (
@@ -713,7 +724,7 @@ function PlanningbordScreen() {
           </Pressable>
           {losOpen ? (
             los.length === 0 ? (
-              <Text style={styles.vrij}>Alle werkbonnen zijn ingepland.</Text>
+              <Text style={styles.vrij}>{tx('Alle werkbonnen zijn ingepland.')}</Text>
             ) : (
               <View style={[styles.losLijst, breed && styles.losLijstBreed]}>
                 {los.map((w) => (
@@ -721,18 +732,18 @@ function PlanningbordScreen() {
                     key={w.id}
                     onPress={() => setInplannen(w)}
                     accessibilityRole="button"
-                    accessibilityHint={magPlannen ? 'Inplannen' : 'Werkbon openen'}
+                    accessibilityHint={magPlannen ? tx('Inplannen') : tx('Werkbon openen')}
                     style={({ pressed }) => [styles.losKaart, breed && styles.losKaartBreed, pressed && { opacity: 0.85 }]}
                   >
                     <Text style={styles.losKaartTitel} numberOfLines={1}>
-                      {[w.nummer, w.titel || 'Werkbon'].filter(Boolean).join(' · ')}
+                      {[w.nummer, w.titel || tx('Werkbon')].filter(Boolean).join(' · ')}
                     </Text>
                     <Text style={styles.losKaartMeta} numberOfLines={1}>
                       {[
                         w.customer?.name,
                         w.assigned_to_ids?.length
-                          ? w.assigned_to_ids.map((p) => naamVan.get(p) ?? 'Medewerker').join(', ')
-                          : 'Niemand toegewezen',
+                          ? w.assigned_to_ids.map((p) => naamVan.get(p) ?? tx('Medewerker')).join(', ')
+                          : tx('Niemand toegewezen'),
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -744,8 +755,10 @@ function PlanningbordScreen() {
           ) : null}
           <Text style={styles.voetnoot}>
             {magPlannen
-              ? 'Tik op een blok om de tijd aan te passen of de dagen, ploeg en voertuigen te plannen, of op een werkbon hierboven om hem in te plannen. Met + plan je een activiteit zonder werkbon.'
-              : 'Tik op een blok of werkbon voor de details.'}
+              ? tx(
+                  'Tik op een blok om de tijd aan te passen of de dagen, ploeg en voertuigen te plannen, of op een werkbon hierboven om hem in te plannen. Met + plan je een activiteit zonder werkbon.',
+                )
+              : tx('Tik op een blok of werkbon voor de details.')}
           </Text>
         </View>
       </AppScreen>
@@ -754,8 +767,8 @@ function PlanningbordScreen() {
         blok={blokOpen}
         modus={actieveModus}
         bronnen={bronnen}
-        naamVan={(id) => naamVan.get(id) ?? 'Medewerker'}
-        voertuigNaam={(id) => voertuigVan.get(id)?.naam ?? 'Voertuig'}
+        naamVan={(id) => naamVan.get(id) ?? tx('Medewerker')}
+        voertuigNaam={(id) => voertuigVan.get(id)?.naam ?? tx('Voertuig')}
         magPlannen={magPlannen}
         waaromNiet={waaromNiet}
         onSluit={() => setBlokOpen(null)}
@@ -825,7 +838,7 @@ function TotaalRooster({
               ]}
             >
               <Text style={[styles.roosterKopTekst, d === vandaag && { color: t.green700 }]}>
-                {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+                {d === vandaag ? tx('{dag} · vandaag', { dag: dagKort(d) }) : dagKort(d)}
               </Text>
             </View>
           ))}
@@ -843,7 +856,7 @@ function TotaalRooster({
                 ]}
               >
                 {lijst.length === 0 ? (
-                  <Text style={[styles.vrij, { padding: 4 }]}>Niets</Text>
+                  <Text style={[styles.vrij, { padding: 4 }]}>{tx('Niets')}</Text>
                 ) : (
                   lijst.map((b) => (
                     <View key={b.sleutel} style={zicht === 'dag' ? { width: 200 } : undefined}>
@@ -866,11 +879,11 @@ function TotaalRooster({
           <View key={d} style={{ gap: 6 }}>
             {zicht === 'week' ? (
               <Text style={[styles.dagKop, d === vandaag && { color: t.green700 }]}>
-                {d === vandaag ? `${dagKort(d)} · vandaag` : dagKort(d)}
+                {d === vandaag ? tx('{dag} · vandaag', { dag: dagKort(d) }) : dagKort(d)}
               </Text>
             ) : null}
             {lijst.length === 0 ? (
-              <Text style={styles.vrij}>Niets ingepland</Text>
+              <Text style={styles.vrij}>{tx('Niets ingepland')}</Text>
             ) : (
               lijst.map((b) => regel(b, null))
             )}

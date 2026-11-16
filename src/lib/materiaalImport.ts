@@ -8,18 +8,19 @@
  *
  * Geen netwerk en geen React: tests/offerteCalculatie.test.mjs.
  */
+import { tx } from '@/i18n';
 import { EENHEDEN } from './werkbonLogica';
 
 export type ImportVeld = 'naam' | 'artikelnummer' | 'eenheid' | 'inkoopprijs' | 'verkoopprijs' | 'btwPct';
 export type KolomMap = Partial<Record<ImportVeld, number>>;
 
 export const VELDEN: { key: ImportVeld; label: string }[] = [
-  { key: 'naam', label: 'Naam' },
-  { key: 'artikelnummer', label: 'Artikelnummer' },
-  { key: 'eenheid', label: 'Eenheid' },
-  { key: 'inkoopprijs', label: 'Inkoopprijs' },
-  { key: 'verkoopprijs', label: 'Verkoopprijs' },
-  { key: 'btwPct', label: 'BTW' },
+  { key: 'naam', get label() { return tx('Naam'); } },
+  { key: 'artikelnummer', get label() { return tx('Artikelnummer'); } },
+  { key: 'eenheid', get label() { return tx('Eenheid'); } },
+  { key: 'inkoopprijs', get label() { return tx('Inkoopprijs'); } },
+  { key: 'verkoopprijs', get label() { return tx('Verkoopprijs'); } },
+  { key: 'btwPct', get label() { return tx('BTW'); } },
 ];
 
 /** Eén regel in het controlescherm (uit een CSV of van de edge function). */
@@ -294,7 +295,7 @@ export function regelsUitRijen(rijen: unknown[][], kopIndex: number, map: KolomM
       verkoopprijs,
       btwPct: leesBtw(cel(rij, 'btwPct')),
       twijfel: inkoopprijs == null && verkoopprijs == null,
-      twijfelReden: inkoopprijs == null && verkoopprijs == null ? 'Geen prijs gevonden.' : '',
+      twijfelReden: inkoopprijs == null && verkoopprijs == null ? tx('Geen prijs gevonden.') : '',
     });
   }
   return uit;

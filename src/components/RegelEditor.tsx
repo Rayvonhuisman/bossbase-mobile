@@ -25,6 +25,7 @@ import { spacing, type ThemeColors } from '@/theme';
 import { FormField } from './FormField';
 import { SelectField } from './SelectField';
 import { NoticeBanner } from './NoticeBanner';
+import { tx, txm } from '@/i18n';
 
 type Props = {
   regels: Regel[];
@@ -47,16 +48,18 @@ type Props = {
 
 // Waar een hoeveelheid of prijs van Boss vandaan komt, kort (dashboard `VoorstelRegel`).
 const BRON_LABEL: Record<string, string> = {
-  opdracht: 'je opdracht', antwoord: 'jouw antwoord', bestand: 'gecontroleerde maat', huidig: 'stond al zo',
-  instellingen: 'Instellingen', materiaal: 'Materialen', eigen_eenheid: 'Eenheidsprijzen', berekening: 'berekend',
+  opdracht: txm('je opdracht'), antwoord: txm('jouw antwoord'), bestand: txm('gecontroleerde maat'), huidig: txm('stond al zo'),
+  instellingen: txm('Instellingen'), materiaal: txm('Materialen'), eigen_eenheid: txm('Eenheidsprijzen'), berekening: txm('berekend'),
 };
 function herkomstTekst(r: Regel): string | null {
   const delen: string[] = [];
   const h = r.herkomst;
-  if (h?.aantal?.soort) delen.push(`Hoev.: ${h.aantal.soort === 'offerte' && h.aantal.offerte ? h.aantal.offerte : (BRON_LABEL[h.aantal.soort] ?? 'geen bron')}`);
-  if (h?.prijs?.soort) delen.push(`Prijs: ${h.prijs.soort === 'offerte' && h.prijs.offerte ? h.prijs.offerte : (BRON_LABEL[h.prijs.soort] ?? 'geen bron')}`);
+  const bron = (b: { soort: string; offerte?: string | null }) =>
+    b.soort === 'offerte' && b.offerte ? b.offerte : BRON_LABEL[b.soort] ? tx(BRON_LABEL[b.soort]!) : tx('geen bron');
+  if (h?.aantal?.soort) delen.push(tx('Hoev.: {bron}', { bron: bron(h.aantal) }));
+  if (h?.prijs?.soort) delen.push(tx('Prijs: {bron}', { bron: bron(h.prijs) }));
   if (r.bossBron) delen.push(r.bossBron);
-  if (r.bossTekst || h?.tekst_door_boss) delen.push('Tekst door Boss');
+  if (r.bossTekst || h?.tekst_door_boss) delen.push(tx('Tekst door Boss'));
   return delen.length ? delen.join(' · ') : null;
 }
 /** Boss vond geen hoeveelheid of prijs en het veld is nog leeg. */
@@ -150,17 +153,17 @@ export function RegelEditor({
       <WerkruimteVeld key={r.sleutel} naam={`regel:${r.sleutel}`}>
       <View style={[styles.kaart, flits && styles.flits]}>
         <View style={styles.kaartKop}>
-          <Text style={styles.kaartNr}>Regel {nr}</Text>
+          <Text style={styles.kaartNr}>{tx('Regel {nr}', { nr })}</Text>
           <View style={styles.knoppen}>
-            <IconKnop styles={styles} label="Naar boven" disabled={disabled || eerste} onPress={() => verschuif(r.sleutel, -1)}>
+            <IconKnop styles={styles} label={tx('Naar boven')} disabled={disabled || eerste} onPress={() => verschuif(r.sleutel, -1)}>
               <ChevronUp size={16} color={t.ink} strokeWidth={2} />
             </IconKnop>
-            <IconKnop styles={styles} label="Naar beneden" disabled={disabled || laatste} onPress={() => verschuif(r.sleutel, 1)}>
+            <IconKnop styles={styles} label={tx('Naar beneden')} disabled={disabled || laatste} onPress={() => verschuif(r.sleutel, 1)}>
               <ChevronDown size={16} color={t.ink} strokeWidth={2} />
             </IconKnop>
             <IconKnop
               styles={styles}
-              label="Regel verwijderen"
+              label={tx('Regel verwijderen')}
               disabled={disabled || regels.length === 1}
               onPress={() => onChange(regels.filter((x) => x.sleutel !== r.sleutel))}
             >
@@ -170,7 +173,7 @@ export function RegelEditor({
         </View>
 
         <SelectField
-          label="Soort"
+          label={tx('Soort')}
           value={r.type}
           options={typeOpties(eenheden, r.type)}
           onChange={(id) => id && zet(r.sleutel, (x) => pasTypeToe(x, id, standaard, eenheden))}
@@ -178,7 +181,7 @@ export function RegelEditor({
         />
 
         <FormField
-          label="Omschrijving"
+          label={tx('Omschrijving')}
           value={r.omschrijving}
           onChangeText={(v) => zetVeld(r.sleutel, 'omschrijving', v)}
           placeholder={cfg.omschrijvingFallback}
@@ -188,34 +191,34 @@ export function RegelEditor({
         <View style={styles.rij}>
           <View style={{ flex: 1 }}>
             <FormField
-              label={r.eenheid || cfg.eenheid ? `Aantal (${r.eenheid || cfg.eenheid})` : 'Aantal'}
+              label={r.eenheid || cfg.eenheid ? tx('Aantal ({eenheid})', { eenheid: r.eenheid || cfg.eenheid }) : tx('Aantal')}
               value={r.aantal}
               onChangeText={(v) => zetVeld(r.sleutel, 'aantal', v)}
-              placeholder={mist(r, 'aantal') ? 'Vul in' : '1'}
+              placeholder={mist(r, 'aantal') ? tx('Vul in') : '1'}
               keyboardType="decimal-pad"
               editable={!disabled}
               style={mist(r, 'aantal') ? styles.veldMist : undefined}
-              accessibilityLabel={mist(r, 'aantal') ? 'Aantal ontbreekt, vul het in' : undefined}
+              accessibilityLabel={mist(r, 'aantal') ? tx('Aantal ontbreekt, vul het in') : undefined}
             />
           </View>
           <View style={{ flex: 1 }}>
             <FormField
-              label="Prijs per eenheid"
+              label={tx('Prijs per eenheid')}
               value={r.prijs}
               onChangeText={(v) => zetVeld(r.sleutel, 'prijs', v)}
-              placeholder={mist(r, 'prijs') ? 'Vul in' : '0,00'}
+              placeholder={mist(r, 'prijs') ? tx('Vul in') : '0,00'}
               keyboardType="decimal-pad"
               editable={!disabled}
               style={mist(r, 'prijs') ? styles.veldMist : undefined}
-              accessibilityLabel={mist(r, 'prijs') ? 'Prijs ontbreekt, vul hem in' : undefined}
+              accessibilityLabel={mist(r, 'prijs') ? tx('Prijs ontbreekt, vul hem in') : undefined}
             />
           </View>
         </View>
 
         <SelectField
-          label="Btw"
+          label={tx('Btw')}
           value={r.btwRegime}
-          options={BTW_REGIMES.map((b) => ({ id: b.value, label: b.label, sub: b.kort }))}
+          options={BTW_REGIMES.map((b) => ({ id: b.value, label: tx(b.label), sub: b.kort ? tx(b.kort) : undefined }))}
           onChange={(id) =>
             id &&
             zet(r.sleutel, (x) => ({
@@ -229,9 +232,9 @@ export function RegelEditor({
 
         {metGroepen && lijstGroepen.length > 0 ? (
           <SelectField
-            label="Groep"
+            label={tx('Groep')}
             value={groepVan(r) ?? ''}
-            options={[{ id: '', label: 'Geen groep' }, ...lijstGroepen.map((g) => ({ id: g.id, label: g.naam || 'Naamloze groep' }))]}
+            options={[{ id: '', label: tx('Geen groep') }, ...lijstGroepen.map((g) => ({ id: g.id, label: g.naam || tx('Naamloze groep') }))]}
             onChange={(id) => zet(r.sleutel, (x) => ({ ...x, groepId: id || null }))}
             disabled={disabled}
           />
@@ -240,7 +243,7 @@ export function RegelEditor({
         {herkomst ? <Text style={styles.herkomst}>{herkomst}</Text> : null}
 
         <View style={styles.regelTotaal}>
-          <Text style={styles.regelTotaalLabel}>Regelbedrag</Text>
+          <Text style={styles.regelTotaalLabel}>{tx('Regelbedrag')}</Text>
           <Text style={styles.regelTotaalBedrag}>{formatEURCent(regelprijs(r))}</Text>
         </View>
       </View>
@@ -261,7 +264,7 @@ export function RegelEditor({
   const reeks = (lijst: Regel[], startNr: number) =>
     lijst.flatMap((r, i) => [factuurGroepKop(r, lijst[i - 1]), kaart(r, startNr + i, i === 0, i === lijst.length - 1)]);
 
-  const voegToeKnop = (groepId: string | null, label = 'Regel toevoegen') => (
+  const voegToeKnop = (groepId: string | null, label = tx('Regel toevoegen')) => (
     <Pressable
       onPress={() => (metGroepen ? voegToe(groepId) : onChange([...regels, nieuweRegel(null)]))}
       disabled={disabled}
@@ -284,7 +287,7 @@ export function RegelEditor({
 
   return (
     <View style={{ gap: spacing.md }}>
-      <Text style={styles.kop}>Regels</Text>
+      <Text style={styles.kop}>{tx('Regels')}</Text>
 
       {reeks(los, 1)}
       {!metGroepen || lijstGroepen.length === 0 || los.length > 0 ? voegToeKnop(null) : null}
@@ -292,33 +295,35 @@ export function RegelEditor({
       {perGroep.map(({ g, regels: inGroep, eerste }) => {
         const sub = berekenTotalen(inGroep).excl;
         return (
-          <View key={g.id} style={[styles.groep, flitsIds.includes(g.id) && styles.flits]} accessibilityLabel={`Groep ${g.naam}`}>
+          <View key={g.id} style={[styles.groep, flitsIds.includes(g.id) && styles.flits]} accessibilityLabel={tx('Groep {naam}', { naam: g.naam })}>
             <View style={styles.groepKop}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Groep"
+                  label={tx('Groep')}
                   value={g.naam}
                   onChangeText={(v) => zetGroep(g.id, { naam: v })}
-                  placeholder="Bijvoorbeeld Badkamer"
+                  placeholder={tx('Bijvoorbeeld Badkamer')}
                   editable={!disabled}
                 />
               </View>
-              <IconKnop styles={styles} label={`Groep ${g.naam} weghalen`} disabled={disabled} onPress={() => groepWeg(g.id)}>
+              <IconKnop styles={styles} label={tx('Groep {naam} weghalen', { naam: g.naam })} disabled={disabled} onPress={() => groepWeg(g.id)}>
                 <Trash2 size={16} color={t.statusRejectFg} strokeWidth={2} />
               </IconKnop>
             </View>
             <FormField
-              label="Werkzaamheden · komt op de offerte"
+              label={tx('Werkzaamheden · komt op de offerte')}
               value={g.werkzaamheden}
               onChangeText={(v) => zetGroep(g.id, { werkzaamheden: v })}
-              placeholder="Wat er in deze groep gebeurt"
+              placeholder={tx('Wat er in deze groep gebeurt')}
               multiline
               editable={!disabled}
             />
             {reeks(inGroep, eerste)}
-            {voegToeKnop(g.id, `Regel in ${g.naam || 'deze groep'}`)}
+            {voegToeKnop(g.id, g.naam ? tx('Regel in {naam}', { naam: g.naam }) : tx('Regel in deze groep'))}
             <View style={styles.regelTotaal}>
-              <Text style={styles.regelTotaalLabel}>Subtotaal {g.naam || 'groep'} excl. btw</Text>
+              <Text style={styles.regelTotaalLabel}>
+                {g.naam ? tx('Subtotaal {naam} excl. btw', { naam: g.naam }) : tx('Subtotaal groep excl. btw')}
+              </Text>
               <Text style={styles.regelTotaalBedrag}>{formatEURCent(sub)}</Text>
             </View>
           </View>
@@ -333,29 +338,28 @@ export function RegelEditor({
           style={({ pressed }) => [styles.groepKnop, disabled && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}
         >
           <Layers size={16} color={t.ink2} strokeWidth={2} />
-          <Text style={styles.groepKnopTekst}>Groep toevoegen</Text>
+          <Text style={styles.groepKnopTekst}>{tx('Groep toevoegen')}</Text>
         </Pressable>
       ) : null}
 
       {verlegdConflict ? (
         <NoticeBanner
           toon="waarschuwing"
-          message={
-            'Verlegde btw staat naast belaste regels. Dat weigert de boekhoudkoppeling, en ' +
-            'fiscaal kan het niet samen op één document.'
-          }
+          message={tx(
+            'Verlegde btw staat naast belaste regels. Dat weigert de boekhoudkoppeling, en fiscaal kan het niet samen op één document.',
+          )}
         />
       ) : null}
 
       {metTotalen ? (
         <View style={styles.totalen}>
-          <Rij styles={styles} label="Subtotaal excl. btw" bedrag={totalen.excl} />
+          <Rij styles={styles} label={tx('Subtotaal excl. btw')} bedrag={totalen.excl} />
           {totalen.btwPerTarief
             .filter((b) => b.bedrag !== 0)
             .map((b) => (
-              <Rij key={b.pct} styles={styles} label={`Btw ${b.pct}%`} bedrag={b.bedrag} />
+              <Rij key={b.pct} styles={styles} label={tx('Btw {pct}%', { pct: b.pct })} bedrag={b.bedrag} />
             ))}
-          <Rij styles={styles} label="Totaal incl. btw" bedrag={totalen.incl} groot />
+          <Rij styles={styles} label={tx('Totaal incl. btw')} bedrag={totalen.incl} groot />
         </View>
       ) : null}
     </View>

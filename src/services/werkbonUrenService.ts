@@ -5,6 +5,7 @@ import { rondUrenAf } from '@/lib/urenBerekening';
 import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 import { kostprijsVanUurRij, UUR_KOSTPRIJS } from '@/lib/projectKostenLogica';
 import type { WerkbonUur } from '@/types/domain';
+import { tx } from '@/i18n';
 
 /**
  * Hours booked on a work order — table `werkbon_uren`.
@@ -52,10 +53,10 @@ function describeError(
   // Raised by trigger bb_werkbon_op_slot once the work order is signed.
   if (/op slot/i.test(msg)) return msg;
   if (error.code === '42501' || error.code === 'PGRST301' || /row-level security|permission denied/i.test(msg)) {
-    return 'Je mag geen uren boeken op deze werkbon.';
+    return tx('Je mag geen uren boeken op deze werkbon.');
   }
-  if (/werkbon_uren_uren_chk/i.test(msg)) return 'Het aantal uren moet groter zijn dan 0.';
-  return 'De uren konden niet worden opgeslagen. Probeer het opnieuw.';
+  if (/werkbon_uren_uren_chk/i.test(msg)) return tx('Het aantal uren moet groter zijn dan 0.');
+  return tx('De uren konden niet worden opgeslagen. Probeer het opnieuw.');
 }
 
 /**
@@ -171,18 +172,18 @@ export async function createWerkbonUur(
   input: CreateWerkbonUurInput,
 ): Promise<WriteResult<WerkbonUur>> {
   if (!isGeldigeDatum(input.datum)) {
-    return writeFout('validatie', 'Vul een geldige datum in.');
+    return writeFout('validatie', tx('Vul een geldige datum in.'));
   }
   // Twee decimalen, zoals het dashboard (zie lib/urenBerekening).
   const uren = rondUrenAf(input.uren);
   if (!Number.isFinite(uren) || uren <= 0) {
-    return writeFout('validatie', 'Vul een geldig aantal uren in.');
+    return writeFout('validatie', tx('Vul een geldig aantal uren in.'));
   }
   if (input.pauze_minuten !== undefined && (!Number.isFinite(input.pauze_minuten) || input.pauze_minuten < 0)) {
-    return writeFout('validatie', 'Vul een geldig aantal pauzeminuten in.');
+    return writeFout('validatie', tx('Vul een geldig aantal pauzeminuten in.'));
   }
   if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
-    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+    return writeFout('validatie', tx('Vul een geldig aantal kilometers in.'));
   }
 
   return schrijf<WerkbonUur>(
@@ -207,7 +208,7 @@ export async function createWerkbonUur(
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
       leegMelding:
-        'De uren zijn niet opgeslagen. Je kunt alleen uren boeken op een werkbon waar je op staat.',
+        tx('De uren zijn niet opgeslagen. Je kunt alleen uren boeken op een werkbon waar je op staat.'),
     },
   );
 }
@@ -241,14 +242,14 @@ export async function updateWerkbonUur(
   input: UpdateWerkbonUurInput,
 ): Promise<WriteResult<WerkbonUur>> {
   if (!isGeldigeDatum(input.datum)) {
-    return writeFout('validatie', 'Vul een geldige datum in.');
+    return writeFout('validatie', tx('Vul een geldige datum in.'));
   }
   const uren = rondUrenAf(input.uren);
   if (!Number.isFinite(uren) || uren <= 0) {
-    return writeFout('validatie', 'Vul een geldig aantal uren in.');
+    return writeFout('validatie', tx('Vul een geldig aantal uren in.'));
   }
   if (input.reis_km != null && (!Number.isFinite(input.reis_km) || input.reis_km < 0)) {
-    return writeFout('validatie', 'Vul een geldig aantal kilometers in.');
+    return writeFout('validatie', tx('Vul een geldig aantal kilometers in.'));
   }
 
   const res = await schrijf<WerkbonUur>(
@@ -271,7 +272,7 @@ export async function updateWerkbonUur(
       context: 'werkbonUrenService.updateWerkbonUur',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Niet gewijzigd. Je kunt alleen je eigen uren wijzigen, of als beheerder of planner die van anderen.',
+      leegMelding: tx('Niet gewijzigd. Je kunt alleen je eigen uren wijzigen, of als beheerder of planner die van anderen.'),
     },
   );
   return metDbMelding(res);
@@ -285,7 +286,7 @@ export async function deleteWerkbonUur(id: string): Promise<WriteResult<{ id: st
       context: 'werkbonUrenService.deleteWerkbonUur',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Niet verwijderd. Je kunt alleen je eigen uren verwijderen, of als beheerder of planner die van anderen.',
+      leegMelding: tx('Niet verwijderd. Je kunt alleen je eigen uren verwijderen, of als beheerder of planner die van anderen.'),
     },
   );
   return metDbMelding(res);

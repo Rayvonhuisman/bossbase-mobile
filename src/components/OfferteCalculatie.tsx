@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Calculator, ChevronDown, Lock } from 'lucide-react-native';
@@ -18,6 +18,7 @@ import {
   regelUren,
 } from '@/lib/offerteCalculatie';
 import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
+import { tx, txn, locale } from '@/i18n';
 
 /**
  * De interne calculatie onder de regels van een offerte (`OfferteCalculatie`
@@ -35,7 +36,15 @@ import { ds, radius, spacing, typography, type ThemeColors } from '@/theme';
  */
 
 const getalNl = (n: number | null | undefined) =>
-  Number(n || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 });
+  Number(n || 0).toLocaleString(locale(), { maximumFractionDigits: 2 });
+
+/** Zet onderdelen (vette bedragen) op de plek van {plaatshouders} in een vertaalde zin. */
+function metOnderdelen(zin: string, onderdelen: Record<string, ReactNode>): ReactNode[] {
+  return zin.split(/(\{\w+\})/).map((stuk, i) => {
+    const naam = /^\{(\w+)\}$/.exec(stuk)?.[1];
+    return naam !== undefined && naam in onderdelen ? <Fragment key={i}>{onderdelen[naam]}</Fragment> : stuk;
+  });
+}
 
 const margeSleutel = (id: string | null | undefined) => `bb-gewenste-marge:${id || 'x'}`;
 
@@ -110,7 +119,7 @@ export function OfferteCalculatie({
   });
 
   return (
-    <View style={styles.blok} accessibilityLabel="Calculatie">
+    <View style={styles.blok} accessibilityLabel={tx('Calculatie')}>
       <Pressable
         onPress={() => setOpen((o) => !o)}
         accessibilityRole="button"
@@ -120,21 +129,25 @@ export function OfferteCalculatie({
       >
         <View style={styles.kopRij}>
           <Calculator size={16} color={ds.green700} />
-          <Text style={styles.titel}>Calculatie</Text>
+          <Text style={styles.titel}>{tx('Calculatie')}</Text>
           <View style={styles.intern}>
             <Lock size={10} color={t.muted} />
-            <Text style={styles.internTekst}>Alleen voor jou</Text>
+            <Text style={styles.internTekst}>{tx('Alleen voor jou')}</Text>
           </View>
           <View style={{ flex: 1 }} />
           <ChevronDown size={18} color={t.muted} style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }} />
         </View>
         {!open ? (
           <Text style={styles.samen}>
-            Kostprijs <Text style={styles.vet}>{formatEURCent(c.kostprijs)}</Text>
+            {metOnderdelen(tx('Kostprijs {bedrag}'), {
+              bedrag: <Text style={styles.vet}>{formatEURCent(c.kostprijs)}</Text>,
+            })}
             {c.verkoop > 0 ? (
               <>
-                {' · resultaat '}
-                <Text style={[styles.vet, c.resultaat < 0 && styles.neg]}>{formatEURCent(c.resultaat)}</Text>
+                {' · '}
+                {metOnderdelen(tx('resultaat {bedrag}'), {
+                  bedrag: <Text style={[styles.vet, c.resultaat < 0 && styles.neg]}>{formatEURCent(c.resultaat)}</Text>,
+                })}
                 {c.marge != null ? ` (${getalNl(c.marge)}%)` : ''}
               </>
             ) : null}
@@ -145,28 +158,28 @@ export function OfferteCalculatie({
       {open ? (
         <View style={styles.inhoud}>
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>Kostprijs per uur voor deze offerte</Text>
+            <Text style={styles.label}>{tx('Kostprijs per uur voor deze offerte')}</Text>
             <TextInput
               value={kostprijsPerUur}
               onChangeText={onKostprijsPerUur}
               keyboardType="decimal-pad"
-              placeholder={standaardKostprijs != null ? nummerNaarVeld(standaardKostprijs) : 'Nog niet ingesteld'}
+              placeholder={standaardKostprijs != null ? nummerNaarVeld(standaardKostprijs) : tx('Nog niet ingesteld')}
               placeholderTextColor={t.muted2}
-              accessibilityLabel="Kostprijs per uur voor deze offerte"
+              accessibilityLabel={tx('Kostprijs per uur voor deze offerte')}
               style={styles.veld}
             />
             <Text style={styles.hint}>
-              Wat een gewerkt uur jou kost, excl. btw. Standaard uit Instellingen; blijft bij deze offerte bewaard.
+              {tx('Wat een gewerkt uur jou kost, excl. btw. Standaard uit Instellingen; blijft bij deze offerte bewaard.')}
             </Text>
           </View>
 
           {regels.length === 0 ? (
-            <Text style={styles.hint}>Nog geen regels om te calculeren.</Text>
+            <Text style={styles.hint}>{tx('Nog geen regels om te calculeren.')}</Text>
           ) : (
             <View style={{ gap: spacing.sm }}>
               {regels.map((r) => {
                 const cfg = typeConfig(r.type, eenheden);
-                const eenheid = r.eenheid || cfg.eenheid || 'eenheid';
+                const eenheid = r.eenheid || cfg.eenheid || tx('eenheid');
                 const uren = regelUren(r);
                 const regelKost = (kpu == null ? 0 : uren * kpu) + regelMateriaal(r);
                 const mist = mistCalculatie(r);
@@ -182,7 +195,7 @@ export function OfferteCalculatie({
                         </Text>
                         <Text style={styles.hint}>
                           {getalNl(getalUit(r.aantal))} {eenheid}
-                          {mist ? ' · nog geen calculatie' : ''}
+                          {mist ? ` · ${tx('nog geen calculatie')}` : ''}
                         </Text>
                       </View>
                       {heeftGeenCalculatie(r) ? null : (
@@ -190,32 +203,32 @@ export function OfferteCalculatie({
                       )}
                     </View>
                     {isUrenRegel(r) ? (
-                      <Text style={styles.hint}>{getalNl(uren)} uur (de hoeveelheid)</Text>
+                      <Text style={styles.hint}>{tx('{uren} uur (de hoeveelheid)', { uren: getalNl(uren) })}</Text>
                     ) : heeftGeenCalculatie(r) ? (
-                      <Text style={styles.hint}>Reiskosten: geen calculatie</Text>
+                      <Text style={styles.hint}>{tx('Reiskosten: geen calculatie')}</Text>
                     ) : (
                       <View style={styles.velden}>
                         <View style={styles.veldKolom}>
-                          <Text style={styles.label}>Uren per {eenheid}</Text>
+                          <Text style={styles.label}>{tx('Uren per {eenheid}', { eenheid })}</Text>
                           <TextInput
                             value={r.calc?.urenPer ?? ''}
                             onChangeText={(v) => zetCalc(r.sleutel, 'urenPer', v)}
                             keyboardType="decimal-pad"
                             placeholder="0"
                             placeholderTextColor={t.muted2}
-                            accessibilityLabel={`Uren per ${eenheid}: ${r.omschrijving}`}
+                            accessibilityLabel={tx('Uren per {eenheid}: {omschrijving}', { eenheid, omschrijving: r.omschrijving })}
                             style={styles.veld}
                           />
                         </View>
                         <View style={styles.veldKolom}>
-                          <Text style={styles.label}>Kostprijs per {eenheid}</Text>
+                          <Text style={styles.label}>{tx('Kostprijs per {eenheid}', { eenheid })}</Text>
                           <TextInput
                             value={r.calc?.kostprijsPer ?? ''}
                             onChangeText={(v) => zetCalc(r.sleutel, 'kostprijsPer', v)}
                             keyboardType="decimal-pad"
                             placeholder="0,00"
                             placeholderTextColor={t.muted2}
-                            accessibilityLabel={`Kostprijs per ${eenheid}: ${r.omschrijving}`}
+                            accessibilityLabel={tx('Kostprijs per {eenheid}: {omschrijving}', { eenheid, omschrijving: r.omschrijving })}
                             style={styles.veld}
                           />
                         </View>
@@ -224,17 +237,18 @@ export function OfferteCalculatie({
                     {a != null ? (
                       <View style={styles.adviesRij}>
                         <Text style={styles.hint}>
-                          Vragen per {eenheid}{' '}
-                          <Text style={[styles.vet, !gelijk && nu < a && styles.neg]}>{formatEURCent(a)}</Text>
+                          {metOnderdelen(tx('Vragen per {eenheid} {bedrag}', { eenheid }), {
+                            bedrag: <Text style={[styles.vet, !gelijk && nu < a && styles.neg]}>{formatEURCent(a)}</Text>,
+                          })}
                         </Text>
                         {!gelijk && !prijzenVast ? (
                           <Pressable
                             onPress={() => neemOver([r.sleutel])}
                             accessibilityRole="button"
-                            accessibilityLabel={`Prijs ${formatEURCent(a)} overnemen voor ${r.omschrijving || 'deze regel'}`}
+                            accessibilityLabel={tx('Prijs {bedrag} overnemen voor {omschrijving}', { bedrag: formatEURCent(a), omschrijving: r.omschrijving || tx('deze regel') })}
                             style={({ pressed }) => [styles.neemKnop, pressed && { opacity: 0.7 }]}
                           >
-                            <Text style={styles.neemTekst}>Overnemen</Text>
+                            <Text style={styles.neemTekst}>{tx('Overnemen')}</Text>
                           </Pressable>
                         ) : null}
                       </View>
@@ -246,13 +260,17 @@ export function OfferteCalculatie({
           )}
 
           <View style={styles.totaal}>
-            <TotaalRij styles={styles} label="Arbeid" waarde={`${getalNl(c.uren)} uur${kpu != null ? ` × ${formatEURCent(kpu)}` : ''} = ${formatEURCent(c.arbeid)}`} />
-            <TotaalRij styles={styles} label="Materiaal en inkoop" waarde={formatEURCent(c.materiaal)} />
-            <TotaalRij styles={styles} label="Kostprijs" waarde={formatEURCent(c.kostprijs)} som />
-            <TotaalRij styles={styles} label="Offerte excl. btw" waarde={formatEURCent(c.verkoop)} />
+            <TotaalRij styles={styles} label={tx('Arbeid')} waarde={
+              kpu != null
+                ? tx('{uren} uur × {tarief} = {bedrag}', { uren: getalNl(c.uren), tarief: formatEURCent(kpu), bedrag: formatEURCent(c.arbeid) })
+                : tx('{uren} uur = {bedrag}', { uren: getalNl(c.uren), bedrag: formatEURCent(c.arbeid) })
+            } />
+            <TotaalRij styles={styles} label={tx('Materiaal en inkoop')} waarde={formatEURCent(c.materiaal)} />
+            <TotaalRij styles={styles} label={tx('Kostprijs')} waarde={formatEURCent(c.kostprijs)} som />
+            <TotaalRij styles={styles} label={tx('Offerte excl. btw')} waarde={formatEURCent(c.verkoop)} />
             <TotaalRij
               styles={styles}
-              label="Verwacht resultaat"
+              label={tx('Verwacht resultaat')}
               waarde={`${formatEURCent(c.resultaat)}${c.marge != null ? ` (${getalNl(c.marge)}%)` : ''}`}
               som
               neg={c.resultaat < 0}
@@ -260,33 +278,35 @@ export function OfferteCalculatie({
           </View>
 
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>Gewenste marge</Text>
+            <Text style={styles.label}>{tx('Gewenste marge')}</Text>
             <View style={styles.pctRij}>
               <TextInput
                 value={marge}
                 onChangeText={setMarge}
                 keyboardType="decimal-pad"
-                placeholder="Bijv. 25"
+                placeholder={tx('Bijv. 25')}
                 placeholderTextColor={t.muted2}
-                accessibilityLabel="Gewenste marge in procenten"
+                accessibilityLabel={tx('Gewenste marge in procenten')}
                 style={[styles.veld, styles.pctVeld]}
               />
               <Text style={styles.pct}>%</Text>
             </View>
             <Text style={styles.hint}>
-              Wat je wilt overhouden, als deel van je verkoopprijs. Bij 25% marge en € 75 kostprijs vraag je € 100.
+              {tx('Wat je wilt overhouden, als deel van je verkoopprijs. Bij 25% marge en € 75 kostprijs vraag je € 100.')}
             </Text>
-            {marge !== '' && !margeGeldig ? <Text style={styles.let}>Vul een marge in tussen 0 en 95%.</Text> : null}
+            {marge !== '' && !margeGeldig ? <Text style={styles.let}>{tx('Vul een marge in tussen 0 en 95%.')}</Text> : null}
             {margeGeldig && adviesTotaal != null ? (
               <View style={{ gap: spacing.sm }}>
                 <Text style={styles.tekst}>
-                  Vragen voor {getalNl(margeGetal)}% marge: <Text style={styles.vet}>{formatEURCent(adviesTotaal)}</Text> excl. btw
+                  {metOnderdelen(tx('Vragen voor {marge}% marge: {bedrag} excl. btw', { marge: getalNl(margeGetal) }), {
+                    bedrag: <Text style={styles.vet}>{formatEURCent(adviesTotaal)}</Text>,
+                  })}
                   {c.verkoop > 0 && Math.abs(adviesTotaal - c.verkoop) >= 0.01 ? (
                     <Text style={c.verkoop < adviesTotaal ? styles.neg : styles.hint}>
-                      {` · nu ${formatEURCent(c.verkoop)}, ${
+                      {` · ${
                         c.verkoop < adviesTotaal
-                          ? `${formatEURCent(adviesTotaal - c.verkoop)} te weinig`
-                          : `${formatEURCent(c.verkoop - adviesTotaal)} meer`
+                          ? tx('nu {nu}, {verschil} te weinig', { nu: formatEURCent(c.verkoop), verschil: formatEURCent(adviesTotaal - c.verkoop) })
+                          : tx('nu {nu}, {verschil} meer', { nu: formatEURCent(c.verkoop), verschil: formatEURCent(c.verkoop - adviesTotaal) })
                       }`}
                     </Text>
                   ) : null}
@@ -297,33 +317,35 @@ export function OfferteCalculatie({
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.alleKnop, pressed && { opacity: 0.7 }]}
                   >
-                    <Text style={styles.neemTekst}>Alle {metAdvies.length} prijzen overnemen</Text>
+                    <Text style={styles.neemTekst}>{tx('Alle {n} prijzen overnemen', { n: metAdvies.length })}</Text>
                   </Pressable>
                 ) : null}
                 {prijzenVast ? (
                   <Text style={styles.hint}>
-                    De prijzen van deze offerte liggen vast. Maak een nieuwe versie om ze aan te passen.
+                    {tx('De prijzen van deze offerte liggen vast. Maak een nieuwe versie om ze aan te passen.')}
                   </Text>
                 ) : null}
               </View>
             ) : null}
             {margeGeldig && adviesTotaal == null ? (
-              <Text style={styles.hint}>Vul eerst de calculatie in: zonder kostprijs is er niets uit te rekenen.</Text>
+              <Text style={styles.hint}>{tx('Vul eerst de calculatie in: zonder kostprijs is er niets uit te rekenen.')}</Text>
             ) : null}
           </View>
 
           {c.zonderKostprijsPerUur ? (
-            <Text style={styles.let}>Zonder kostprijs per uur telt de arbeid niet mee in de kostprijs.</Text>
+            <Text style={styles.let}>{tx('Zonder kostprijs per uur telt de arbeid niet mee in de kostprijs.')}</Text>
           ) : null}
           {c.regelsZonderCalculatie > 0 ? (
             <Text style={styles.let}>
-              {c.regelsZonderCalculatie === 1 ? '1 regel heeft' : `${c.regelsZonderCalculatie} regels hebben`} nog geen
-              uren of kostprijs. Vul ze in, anders is de kostprijs te laag.
+              {txn(
+                '{n} regel heeft nog geen uren of kostprijs. Vul ze in, anders is de kostprijs te laag.',
+                '{n} regels hebben nog geen uren of kostprijs. Vul ze in, anders is de kostprijs te laag.',
+                c.regelsZonderCalculatie,
+              )}
             </Text>
           ) : null}
           <Text style={styles.hint}>
-            Wordt de offerte geaccepteerd, dan is dit de begroting van het project. Op het project zie je onder
-            Nacalculatie wat het werkelijk kost.
+            {tx('Wordt de offerte geaccepteerd, dan is dit de begroting van het project. Op het project zie je onder Nacalculatie wat het werkelijk kost.')}
           </Text>
         </View>
       ) : null}

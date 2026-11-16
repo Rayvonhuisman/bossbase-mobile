@@ -10,6 +10,7 @@
  *
  * Altijd een route (bestemming), geen zoekopdracht: de knop heet "Route".
  */
+import { tx } from '@/i18n';
 
 export type RouteApparaat = 'ios' | 'android' | 'computer';
 
@@ -44,7 +45,7 @@ export function routeKeuzes(
   if (!adres.trim()) return [];
   const u = routeUrls(adres);
   if (apparaat === 'ios') {
-    const apple = { label: 'Apple Kaarten', url: u.apple };
+    const apple = { label: tx('Apple Kaarten'), url: u.apple };
     return googleMapsGeinstalleerd ? [apple, { label: 'Google Maps', url: u.googleApp }] : [apple];
   }
   return [{ label: 'Google Maps', url: u.googleWeb }];

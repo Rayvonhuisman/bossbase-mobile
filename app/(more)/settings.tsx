@@ -12,6 +12,7 @@ import {
 import { kiesTab, zichtbareTabs, type InstellingenTab } from '@/lib/instellingenRegels';
 import { useLaden, type LaadBron } from '@/lib/useLaden';
 import { terugOfNaar } from '@/lib/navigatie';
+import { tx } from '@/i18n';
 import { ProfielTab } from '@/components/instellingen/ProfielTab';
 import { BedrijfTab } from '@/components/instellingen/BedrijfTab';
 import { StandaardTab } from '@/components/instellingen/StandaardTab';
@@ -83,7 +84,7 @@ export default function SettingsScreen() {
 
   const magBedrijfWijzigen = mag('bedrijfsinstellingen', 'wijzigen');
 
-  if (!rechtenGeladen || loading) return <LoadingScreen label="Instellingen laden..." />;
+  if (!rechtenGeladen || loading) return <LoadingScreen label={tx('Instellingen laden...')} />;
 
   const bedrijfsTabFout = tab !== 'profiel' && tab !== 'integraties' && error;
 
@@ -93,8 +94,8 @@ export default function SettingsScreen() {
         header={
           <AppTopBar
             variant="detail"
-            title="Instellingen"
-            subtitle={tabs.find((x) => x.id === tab)?.label}
+            title={tx('Instellingen')}
+            subtitle={(() => { const l = tabs.find((x) => x.id === tab)?.label; return l ? tx(l) : undefined; })()}
             onBack={() => terugOfNaar(router, '/menu')}
           />
         }
@@ -104,7 +105,7 @@ export default function SettingsScreen() {
         {tabs.length > 1 ? (
           <View style={{ paddingTop: 4 }}>
             <AppFilterChips
-              chips={tabs.map((x) => ({ id: x.id, label: x.label }))}
+              chips={tabs.map((x) => ({ id: x.id, label: tx(x.label) }))}
               active={tab}
               onChange={zetTab}
             />
@@ -112,7 +113,7 @@ export default function SettingsScreen() {
         ) : null}
 
         {bedrijfsTabFout ? (
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         ) : tab === 'profiel' ? (
           <ProfielTab />
         ) : tab === 'bedrijf' ? (

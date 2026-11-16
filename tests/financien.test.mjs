@@ -321,7 +321,7 @@ test('route en menu: Financiën alleen met bedrijfsfinancien, geen pakketfeature
   const R = await import('../src/lib/permissions.ts');
   assert.deepEqual(R.gateFor('/financien'), { permission: 'bedrijfsfinancien' });
   const menu = readFileSync(new URL('../app/(tabs)/menu.tsx', import.meta.url), 'utf8');
-  assert.match(menu, /title: 'Financiën', sub: 'Financieel overzicht', route: '\/financien'/);
+  assert.match(menu, /title: tx\('Financiën'\), sub: tx\('Financieel overzicht'\), route: '\/financien'/);
   const scherm = readFileSync(new URL('../app/(more)/financien.tsx', import.meta.url), 'utf8');
-  assert.match(scherm, /<PermissionGate permission="bedrijfsfinancien" label="Financiën">/);
+  assert.match(scherm, /<PermissionGate permission="bedrijfsfinancien" label=\{tx\('Financiën'\)\}>/);
 });

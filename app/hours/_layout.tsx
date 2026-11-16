@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { HeaderActions, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
+import { tx } from '@/i18n';
 
 /**
  * Stack for hour-entry sub-screens (e.g. /hours/new). The Uren tab itself lives
@@ -29,7 +30,7 @@ export default function HoursStackLayout() {
         headerRight: () => <HeaderActions iconSize={32} />,
       }}
     >
-      <Stack.Screen name="new" options={{ title: 'Uren toevoegen' }} />
+      <Stack.Screen name="new" options={{ title: tx('Uren toevoegen') }} />
     </Stack>
   );
 }

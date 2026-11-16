@@ -11,6 +11,7 @@
  * Per sleutel twee delen met elk een eigen eigenaar: `document` (het scherm) en
  * `gesprek` (het Boss-gesprek).
  */
+import { locale } from '@/i18n';
 import { supabase } from '@/lib/supabase';
 
 export type BewaardConcept = {
@@ -49,4 +50,4 @@ export function heeftConcept(sleutel: string | null): boolean {
 }
 
 export const tijdVan = (ms: number) =>
-  new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });

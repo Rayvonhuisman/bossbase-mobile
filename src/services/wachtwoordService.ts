@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { tx } from '@/i18n';
 
 /**
  * "Wachtwoord vergeten": vraagt een resetlink aan via de Edge Function
@@ -11,7 +12,7 @@ export async function vraagWachtwoordResetAan(email: string): Promise<{ error: s
   try {
     const { data, error } = await supabase.functions.invoke('request-password-reset', { body: { email } });
     if (error) {
-      let melding = 'Versturen mislukt. Probeer het opnieuw.';
+      let melding = tx('Versturen mislukt. Probeer het opnieuw.');
       try {
         const b = await (error as { context?: Response }).context?.json();
         if (b?.error) melding = b.error;
@@ -20,9 +21,9 @@ export async function vraagWachtwoordResetAan(email: string): Promise<{ error: s
       }
       return { error: melding };
     }
-    if (!data?.success) return { error: data?.error || 'Versturen mislukt. Probeer het opnieuw.' };
+    if (!data?.success) return { error: data?.error || tx('Versturen mislukt. Probeer het opnieuw.') };
     return { error: null };
   } catch {
-    return { error: 'Geen verbinding. Probeer het opnieuw.' };
+    return { error: tx('Geen verbinding. Probeer het opnieuw.') };
   }
 }

@@ -16,6 +16,7 @@ import { hhmm, type DagPayload, type WerkbonDag } from '@/lib/werkbonLogica';
 import { idBatches, MATERIAAL_BEDRAG_VELDEN, vulBedragen } from '@/lib/bedragen';
 import { magWerkbonRegelsBeheren } from '@/lib/werkbonRechten';
 import { mentionMeldingen } from '@/lib/mentions';
+import { tx } from '@/i18n';
 
 /**
  * Een werkbonrij zoals WORK_ORDER_COLUMNS hem levert: de basisvorm uit
@@ -107,15 +108,15 @@ function describeError(where: string, error: { code?: string; message?: string; 
   // bestaat. Dat is geen gebruikersfout maar een verouderde query, en die
   // verdient een melding die dat zegt in plaats van "probeer het opnieuw".
   if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.code === '42703') {
-    return 'De app vroeg gegevens op die niet meer bestaan. Werk de app bij.';
+    return tx('De app vroeg gegevens op die niet meer bestaan. Werk de app bij.');
   }
   if (error.code === '42501' || error.code === 'PGRST301' || /row-level security|permission denied/i.test(msg)) {
-    return 'Je hebt geen rechten voor deze actie.';
+    return tx('Je hebt geen rechten voor deze actie.');
   }
   // Raised by trigger bb_werkbon_op_slot on a signed work order.
   if (/op slot/i.test(msg)) return msg;
-  if (/JWT|token/i.test(msg)) return 'Je sessie is verlopen. Log opnieuw in.';
-  return 'Er ging iets mis bij het ophalen. Probeer het opnieuw.';
+  if (/JWT|token/i.test(msg)) return tx('Je sessie is verlopen. Log opnieuw in.');
+  return tx('Er ging iets mis bij het ophalen. Probeer het opnieuw.');
 }
 
 /** Privébucket met de werkbonfoto's. Weergave loopt via signed URLs. */
@@ -245,7 +246,7 @@ export async function listVoertuigen(
   }
   const map: Record<string, { naam: string; kleur: string | null; zitplaatsen: number | null }> = {};
   for (const row of (data as { id: string; naam: string | null; kleur: string | null; zitplaatsen?: number | null }[]) ?? []) {
-    map[row.id] = { naam: row.naam ?? 'Voertuig', kleur: row.kleur, zitplaatsen: row.zitplaatsen ?? null };
+    map[row.id] = { naam: row.naam ?? tx('Voertuig'), kleur: row.kleur, zitplaatsen: row.zitplaatsen ?? null };
   }
   return { data: map, error: null };
 }
@@ -316,7 +317,7 @@ export async function setTaskDone(
     return {
       data: null,
       error:
-        'Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan dat.',
+        tx('Je mag deze taak niet afvinken. Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan dat.'),
     };
   }
   return { data: row, error: null };
@@ -424,7 +425,7 @@ export async function uploadWorkOrderPhoto(input: {
   const row = (data as unknown as WorkOrderPhoto[])?.[0];
   if (!row) {
     await supabase.storage.from(FOTO_BUCKET).remove([pad]);
-    return { data: null, error: 'De foto is niet opgeslagen — je hebt hier geen rechten voor.' };
+    return { data: null, error: tx('De foto is niet opgeslagen — je hebt hier geen rechten voor.') };
   }
 
   const { data: signed } = await supabase.storage
@@ -457,7 +458,7 @@ export async function deleteWorkOrderPhoto(
   const { data, error } = await supabase.from('werkbon_fotos').delete().eq('id', id).select('id');
   if (error) return { error: describeError('deleteWorkOrderPhoto', error) };
   if (!((data as { id: string }[]) ?? []).length) {
-    return { error: 'De foto is niet verwijderd — je hebt hier geen rechten voor.' };
+    return { error: tx('De foto is niet verwijderd — je hebt hier geen rechten voor.') };
   }
   return { error: null };
 }
@@ -637,7 +638,7 @@ export async function zetWerkbonGeannuleerd(
     return { data: null, error: describeError('zetWerkbonGeannuleerd', error) };
   }
   const row = (data as unknown as Werkbon[])?.[0];
-  if (!row) return { data: null, error: 'Je kunt deze werkbon niet annuleren.' };
+  if (!row) return { data: null, error: tx('Je kunt deze werkbon niet annuleren.') };
   return { data: row, error: null };
 }
 
@@ -674,7 +675,7 @@ export async function updateWorkOrderStatus(
     return {
       data: null,
       error:
-        'De status is niet opgeslagen — je hebt geen rechten op deze werkbon, of hij is al ondertekend.',
+        tx('De status is niet opgeslagen — je hebt geen rechten op deze werkbon, of hij is al ondertekend.'),
     };
   }
   return { data: row, error: null };
@@ -714,7 +715,7 @@ export async function setNoteVoorKlant(
   if (error) return { data: null, error: describeError('setNoteVoorKlant', error) };
   const row = (data as unknown as WerkbonNotitie[])?.[0];
   if (!row) {
-    return { data: null, error: 'Niet gewijzigd — alleen de schrijver, een beheerder of wie werkbonnen mag bewerken kan dat.' };
+    return { data: null, error: tx('Niet gewijzigd — alleen de schrijver, een beheerder of wie werkbonnen mag bewerken kan dat.') };
   }
   return { data: row, error: null };
 }
@@ -749,7 +750,7 @@ export async function addWorkOrderNote(input: {
   voor_klant?: boolean;
 }): Promise<{ data: WorkOrderNote | null; error: string | null }> {
   const note = input.note.trim();
-  if (!note) return { data: null, error: 'Een lege notitie kan niet worden opgeslagen.' };
+  if (!note) return { data: null, error: tx('Een lege notitie kan niet worden opgeslagen.') };
 
   const { data, error } = await supabase
     .from('werkbon_notities')
@@ -767,7 +768,7 @@ export async function addWorkOrderNote(input: {
   }
   const row = (data as unknown as WorkOrderNote[])?.[0];
   if (!row) {
-    return { data: null, error: 'De notitie is niet opgeslagen — je hebt hier geen rechten voor.' };
+    return { data: null, error: tx('De notitie is niet opgeslagen — je hebt hier geen rechten voor.') };
   }
   return { data: row, error: null };
 }
@@ -783,7 +784,7 @@ export async function updateWorkOrderNote(
   note: string,
 ): Promise<{ data: WerkbonNotitie | null; error: string | null }> {
   const tekst = note.trim();
-  if (!tekst) return { data: null, error: 'Een lege notitie kan niet worden opgeslagen.' };
+  if (!tekst) return { data: null, error: tx('Een lege notitie kan niet worden opgeslagen.') };
   const { data, error } = await supabase
     .from('werkbon_notities')
     .update({ note: tekst, updated_at: new Date().toISOString() })
@@ -791,7 +792,7 @@ export async function updateWorkOrderNote(
     .select(NOTE_COLUMNS);
   if (error) return { data: null, error: describeError('updateWorkOrderNote', error) };
   const row = (data as unknown as WerkbonNotitie[])?.[0];
-  if (!row) return { data: null, error: 'Niet gewijzigd — je mag deze notitie niet wijzigen.' };
+  if (!row) return { data: null, error: tx('Niet gewijzigd — je mag deze notitie niet wijzigen.') };
   return { data: row, error: null };
 }
 
@@ -799,7 +800,7 @@ export async function updateWorkOrderNote(
 export async function deleteWorkOrderNote(id: string): Promise<{ error: string | null }> {
   const { data, error } = await supabase.from('werkbon_notities').delete().eq('id', id).select('id');
   if (error) return { error: describeError('deleteWorkOrderNote', error) };
-  if (!data?.length) return { error: 'Niet verwijderd — je mag deze notitie niet verwijderen.' };
+  if (!data?.length) return { error: tx('Niet verwijderd — je mag deze notitie niet verwijderen.') };
   return { error: null };
 }
 
@@ -846,7 +847,7 @@ export async function addWorkOrderTask(input: {
   volgorde?: number;
 }): Promise<{ data: WorkOrderTask | null; error: string | null }> {
   const omschrijving = input.omschrijving.trim();
-  if (!omschrijving) return { data: null, error: 'Vul een omschrijving in.' };
+  if (!omschrijving) return { data: null, error: tx('Vul een omschrijving in.') };
 
   const { data, error } = await supabase
     .from('werkbon_taken')
@@ -865,7 +866,7 @@ export async function addWorkOrderTask(input: {
   if (!row) {
     return {
       data: null,
-      error: 'De regel is niet opgeslagen — je hebt hier geen rechten voor.',
+      error: tx('De regel is niet opgeslagen — je hebt hier geen rechten voor.'),
     };
   }
   return { data: row, error: null };
@@ -875,7 +876,7 @@ export async function deleteWorkOrderTask(id: string): Promise<{ error: string |
   const { data, error } = await supabase.from('werkbon_taken').delete().eq('id', id).select('id');
   if (error) return { error: describeError('deleteWorkOrderTask', error) };
   if (!((data as { id: string }[]) ?? []).length) {
-    return { error: 'De regel is niet verwijderd — je hebt hier geen rechten voor.' };
+    return { error: tx('De regel is niet verwijderd — je hebt hier geen rechten voor.') };
   }
   return { error: null };
 }
@@ -1009,9 +1010,9 @@ export async function addWorkOrderMaterial(input: {
   inkoopprijs_per?: number | null;
 }): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   const naam = input.naam.trim();
-  if (!naam) return { data: null, error: 'Vul een naam in.' };
+  if (!naam) return { data: null, error: tx('Vul een naam in.') };
   if (!Number.isFinite(input.aantal) || input.aantal <= 0) {
-    return { data: null, error: 'Vul een geldig aantal in.' };
+    return { data: null, error: tx('Vul een geldig aantal in.') };
   }
   const prijs = Number(input.prijs_per ?? 0) || 0;
 
@@ -1033,7 +1034,7 @@ export async function addWorkOrderMaterial(input: {
   if (error) return { data: null, error: describeError('addWorkOrderMaterial', error) };
   const row = (data as unknown as MateriaalRij[])?.[0];
   if (!row) {
-    return { data: null, error: 'Het materiaal is niet opgeslagen — je hebt hier geen rechten voor.' };
+    return { data: null, error: tx('Het materiaal is niet opgeslagen — je hebt hier geen rechten voor.') };
   }
   // De inkooprij maakt een trigger aan (met de bibliotheekprijs). Alleen een
   // ingevulde waarde overschrijven; zonder recht weigert RLS dat stil.
@@ -1062,7 +1063,7 @@ export async function updateMaterialAmount(
   aantal: number,
 ): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   if (!Number.isFinite(aantal) || aantal <= 0) {
-    return { data: null, error: 'Vul een geldig aantal in.' };
+    return { data: null, error: tx('Vul een geldig aantal in.') };
   }
   const { data, error } = await supabase
     .from('werkbon_materialen')
@@ -1072,7 +1073,7 @@ export async function updateMaterialAmount(
 
   if (error) return { data: null, error: describeError('updateMaterialAmount', error) };
   const row = (data as unknown as MateriaalRij[])?.[0];
-  if (!row) return { data: null, error: 'Het aantal is niet opgeslagen — je hebt hier geen rechten voor.' };
+  if (!row) return { data: null, error: tx('Het aantal is niet opgeslagen — je hebt hier geen rechten voor.') };
   const [metPrijs] = await metMateriaalBedragen([row]);
   return { data: naarRegel(metPrijs ?? row), error: null };
 }
@@ -1099,15 +1100,15 @@ export async function updateWorkOrderMaterial(
 ): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   const { inkoopprijs_per, ...velden } = patch;
   const heeftInkoop = 'inkoopprijs_per' in patch;
-  if ('naam' in velden && !String(velden.naam ?? '').trim()) return { data: null, error: 'Vul een naam in.' };
+  if ('naam' in velden && !String(velden.naam ?? '').trim()) return { data: null, error: tx('Vul een naam in.') };
   if ('aantal' in velden && (!Number.isFinite(velden.aantal) || (velden.aantal ?? 0) < 0)) {
-    return { data: null, error: 'Vul een geldig aantal in.' };
+    return { data: null, error: tx('Vul een geldig aantal in.') };
   }
   if (Object.keys(velden).length) {
     const { data, error } = await supabase.from('werkbon_materialen').update(velden).eq('id', id).select('id');
     if (error) return { data: null, error: describeError('updateWorkOrderMaterial', error) };
     if (!((data as { id: string }[]) ?? []).length) {
-      return { data: null, error: 'Niet opgeslagen — je hebt hier geen rechten voor.' };
+      return { data: null, error: tx('Niet opgeslagen — je hebt hier geen rechten voor.') };
     }
   }
   if (heeftInkoop) {
@@ -1117,7 +1118,7 @@ export async function updateWorkOrderMaterial(
       .eq('werkbon_materiaal_id', id);
   }
   const regel = await leesRegel(id);
-  if (!regel) return { data: null, error: 'De regel kon niet opnieuw worden geladen.' };
+  if (!regel) return { data: null, error: tx('De regel kon niet opnieuw worden geladen.') };
   return { data: regel, error: null };
 }
 
@@ -1129,7 +1130,7 @@ export async function deleteWorkOrderMaterial(id: string): Promise<{ error: stri
     .select('id');
   if (error) return { error: describeError('deleteWorkOrderMaterial', error) };
   if (!((data as { id: string }[]) ?? []).length) {
-    return { error: 'Het materiaal is niet verwijderd — je hebt hier geen rechten voor.' };
+    return { error: tx('Het materiaal is niet verwijderd — je hebt hier geen rechten voor.') };
   }
   return { error: null };
 }
@@ -1221,7 +1222,7 @@ export async function createWorkOrder(
   input: CreateWorkOrderInput,
 ): Promise<{ data: Werkbon | null; error: string | null }> {
   const titel = input.titel.trim();
-  if (!titel) return { data: null, error: 'Titel is verplicht.' };
+  if (!titel) return { data: null, error: tx('Titel is verplicht.') };
   const { uitvoerders, verantwoordelijken } = normaliseerPloeg(input.assigned_to_ids, input.verantwoordelijke_ids);
 
   const payload: Record<string, unknown> = {
@@ -1256,7 +1257,7 @@ export async function createWorkOrder(
   if (!row) {
     return {
       data: null,
-      error: 'De werkbon is niet aangemaakt — daarvoor heb je het recht werkbonnen bewerken of planning nodig.',
+      error: tx('De werkbon is niet aangemaakt — daarvoor heb je het recht werkbonnen bewerken of planning nodig.'),
     };
   }
   return { data: row, error: null };
@@ -1279,7 +1280,7 @@ export async function updateWorkOrder(
   const patch: Record<string, unknown> = {};
   if (input.titel !== undefined) {
     const titel = input.titel.trim();
-    if (!titel) return { data: null, error: 'Titel is verplicht.' };
+    if (!titel) return { data: null, error: tx('Titel is verplicht.') };
     patch.titel = titel;
   }
   if (input.customer_id !== undefined) patch.customer_id = input.customer_id || null;
@@ -1312,7 +1313,7 @@ export async function updateWorkOrder(
   if (error) return { data: null, error: describeError('updateWorkOrder', error) };
   const row = (data as unknown as Werkbon[])?.[0];
   if (!row) {
-    return { data: null, error: 'De werkbon is niet bijgewerkt — je hebt geen rechten op deze werkbon.' };
+    return { data: null, error: tx('De werkbon is niet bijgewerkt — je hebt geen rechten op deze werkbon.') };
   }
   return { data: row, error: null };
 }

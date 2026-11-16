@@ -18,6 +18,7 @@ import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import { DICTEER_HINT, useSpraak } from '@/lib/spraak';
 import { BossAvatar } from '../BossChat';
+import { tx } from '@/i18n';
 
 export type Label = { sleutel: string; soort: string; naam: string; onWeg?: () => void };
 export type PlusOptie = { label: string; sub?: string; icoon: 'camera' | 'foto' | 'bestand' | 'offerte' | 'werkbon' | 'project'; onPress: () => void };
@@ -76,7 +77,7 @@ export function BossGesprek({
                 <Text style={s.chipSoort}>{l.soort}: </Text>{l.naam}
               </Text>
               {l.onWeg ? (
-                <Pressable onPress={l.onWeg} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${l.soort} ${l.naam} niet gebruiken`}>
+                <Pressable onPress={l.onWeg} hitSlop={8} accessibilityRole="button" accessibilityLabel={tx('{soort} {naam} niet gebruiken', { soort: l.soort, naam: l.naam })}>
                   <X size={13} color={t.muted} />
                 </Pressable>
               ) : null}
@@ -91,8 +92,8 @@ export function BossGesprek({
         {busy ? (
           <Kaart soort="ai" rol="status">
             <View style={s.kopRij}>
-              <View style={s.kopLinks}><Sparkles size={16} color={t.green700} /><Text style={s.kopTekst}>Boss werkt eraan</Text></View>
-              <KleineKnop label="Stoppen" variant="secundair" onPress={onStop} icoon={<Square size={12} color={t.ink} />} />
+              <View style={s.kopLinks}><Sparkles size={16} color={t.green700} /><Text style={s.kopTekst}>{tx('Boss werkt eraan')}</Text></View>
+              <KleineKnop label={tx('Stoppen')} variant="secundair" onPress={onStop} icoon={<Square size={12} color={t.ink} />} />
             </View>
             {voortgang.map((x) => (
               <View key={x.l} style={s.stap}>
@@ -131,27 +132,27 @@ export function BossGesprek({
         ) : null}
         {luistert ? (
           <View style={s.luister} accessibilityLiveRegion="polite">
-            <Text style={s.luisterKop}>{spraak.stand === 'start' ? 'Microfoon starten…' : 'Boss luistert… tik op stop als je klaar bent'}</Text>
+            <Text style={s.luisterKop}>{spraak.stand === 'start' ? tx('Microfoon starten…') : tx('Boss luistert… tik op stop als je klaar bent')}</Text>
             {spraak.tussen ? <Text style={s.luisterTekst}>{spraak.tussen}</Text> : null}
           </View>
         ) : null}
         {spraak.fout ? (
           <Pressable onPress={spraak.wisFout} style={s.melding} accessibilityRole="alert">
             <AlertTriangle size={14} color={t.statusRejectFg} />
-            <Text style={s.meldingTekst}>{spraak.fout} Wat in het invoerveld staat, blijft staan.</Text>
+            <Text style={s.meldingTekst}>{tx('{fout} Wat in het invoerveld staat, blijft staan.', { fout: spraak.fout })}</Text>
           </Pressable>
         ) : null}
         {dicteerHint && Platform.OS !== 'web' ? (
-          <Pressable onPress={() => setDicteerHint(false)} accessibilityRole="button" accessibilityHint="Tik om deze uitleg te sluiten" style={[s.melding, s.hint]}>
+          <Pressable onPress={() => setDicteerHint(false)} accessibilityRole="button" accessibilityHint={tx('Tik om deze uitleg te sluiten')} style={[s.melding, s.hint]}>
             <Mic size={14} color={t.green700} />
-            <Text style={[s.meldingTekst, { color: t.ink2 }]}>{DICTEER_HINT}</Text>
+            <Text style={[s.meldingTekst, { color: t.ink2 }]}>{tx(DICTEER_HINT)}</Text>
           </Pressable>
         ) : null}
         <View style={s.invoerRij}>
           <Pressable
             onPress={() => setMenu((m) => !m)}
             accessibilityRole="button"
-            accessibilityLabel="Foto, bestand of bron toevoegen"
+            accessibilityLabel={tx('Foto, bestand of bron toevoegen')}
             accessibilityState={{ expanded: menu }}
             style={({ pressed }) => [s.rond, pressed && { opacity: 0.7 }]}
           >
@@ -165,7 +166,7 @@ export function BossGesprek({
             placeholderTextColor={t.muted2}
             multiline
             style={s.invoer}
-            accessibilityLabel="Opdracht voor Boss"
+            accessibilityLabel={tx('Opdracht voor Boss')}
             onKeyPress={(e) => {
               const ne = e.nativeEvent as { key: string; shiftKey?: boolean };
               if (Platform.OS === 'web' && ne.key === 'Enter' && !ne.shiftKey) {
@@ -178,7 +179,7 @@ export function BossGesprek({
             <Pressable
               onPress={mic}
               accessibilityRole="button"
-              accessibilityLabel={luistert ? 'Inspreken stoppen' : 'Opdracht inspreken'}
+              accessibilityLabel={luistert ? tx('Inspreken stoppen') : tx('Opdracht inspreken')}
               style={({ pressed }) => [s.rond, s.mic, luistert && s.micAan, pressed && { opacity: 0.8 }]}
             >
               {luistert ? <Square size={16} color="#FFFFFF" fill="#FFFFFF" /> : <Mic size={20} color="#0D0D0D" />}
@@ -188,7 +189,7 @@ export function BossGesprek({
               onPress={() => onSend()}
               disabled={busy}
               accessibilityRole="button"
-              accessibilityLabel="Opdracht versturen naar Boss"
+              accessibilityLabel={tx('Opdracht versturen naar Boss')}
               style={({ pressed }) => [s.rond, s.mic, busy && { opacity: 0.45 }, pressed && { opacity: 0.8 }]}
             >
               <ArrowUp size={20} color="#0D0D0D" strokeWidth={2.6} />
@@ -302,7 +303,7 @@ export function Waarschuwingen({ lijst }: { lijst?: string[] }) {
 }
 
 /** Toelichting staat standaard dicht: het voorstel zelf is wat telt. */
-export function Uitleg({ lijst, titel = 'Waarop is dit gebaseerd?' }: { lijst?: string[]; titel?: string }) {
+export function Uitleg({ lijst, titel }: { lijst?: string[]; titel?: string }) {
   const { colors: t } = useTheme();
   const [open, setOpen] = useState(false);
   if (!lijst?.length) return null;
@@ -310,7 +311,7 @@ export function Uitleg({ lijst, titel = 'Waarop is dit gebaseerd?' }: { lijst?: 
     <View style={{ gap: 6 }}>
       <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} hitSlop={6}>
         {open ? <ChevronUp size={14} color={t.muted} /> : <ChevronDown size={14} color={t.muted} />}
-        <Text style={{ fontSize: 12.5, fontWeight: '600', color: t.muted }}>{titel} ({lijst.length})</Text>
+        <Text style={{ fontSize: 12.5, fontWeight: '600', color: t.muted }}>{titel ?? tx('Waarop is dit gebaseerd?')} ({lijst.length})</Text>
       </Pressable>
       {open ? lijst.map((b, i) => (
         <View key={i} style={{ flexDirection: 'row', gap: 6 }}>
@@ -338,7 +339,7 @@ export function Inklap<T>({ items, render, eerst = 3 }: { items: T[]; render: (x
       {lang ? (
         <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {open ? <ChevronUp size={14} color={t.green700} /> : <ChevronDown size={14} color={t.green700} />}
-          <Text style={{ fontSize: 13, fontWeight: '700', color: t.green700 }}>{open ? 'Minder tonen' : `Alle ${items.length} wijzigingen tonen`}</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: t.green700 }}>{open ? tx('Minder tonen') : tx('Alle {n} wijzigingen tonen', { n: items.length })}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -352,7 +353,7 @@ export function WijzigRegel({ teken, titel, sub, bedrag, oudTitel }: { teken: '+
   const kleur = teken === '+' ? { bg: t.green50, fg: t.green700 } : teken === '~' ? { bg: t.statusSubmitBg, fg: t.statusSubmitFg } : { bg: t.statusRejectBg, fg: t.statusRejectFg };
   return (
     <View style={s.wz}>
-      <View style={[s.tk, { backgroundColor: kleur.bg }]} accessibilityLabel={teken === '+' ? 'Nieuw' : teken === '~' ? 'Gewijzigd' : 'Verwijderd'}>
+      <View style={[s.tk, { backgroundColor: kleur.bg }]} accessibilityLabel={teken === '+' ? tx('Nieuw') : teken === '~' ? tx('Gewijzigd') : tx('Verwijderd')}>
         <Text style={[s.tkTekst, { color: kleur.fg }]}>{teken}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -370,8 +371,8 @@ export function TotaalRegels({ excl, incl, voorExcl, voorIncl }: { excl: string;
   const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={s.totaal}>
-      <View style={s.totaalRij}><Text style={s.totaalLabel}>Subtotaal excl. btw</Text><Text style={s.totaalWaarde}>{voorExcl ? <Text style={s.doorgehaald}>{voorExcl}  </Text> : null}{excl}</Text></View>
-      <View style={s.totaalRij}><Text style={[s.totaalLabel, s.vet]}>Totaal incl. btw</Text><Text style={[s.totaalWaarde, s.vet]}>{voorIncl ? <Text style={s.doorgehaald}>{voorIncl}  </Text> : null}{incl}</Text></View>
+      <View style={s.totaalRij}><Text style={s.totaalLabel}>{tx('Subtotaal excl. btw')}</Text><Text style={s.totaalWaarde}>{voorExcl ? <Text style={s.doorgehaald}>{voorExcl}  </Text> : null}{excl}</Text></View>
+      <View style={s.totaalRij}><Text style={[s.totaalLabel, s.vet]}>{tx('Totaal incl. btw')}</Text><Text style={[s.totaalWaarde, s.vet]}>{voorIncl ? <Text style={s.doorgehaald}>{voorIncl}  </Text> : null}{incl}</Text></View>
     </View>
   );
 }

@@ -10,6 +10,7 @@ import { PAKKETTEN, PROEF_DAGEN } from '@/lib/registratie';
 import { stuurBevestigingsmailOpnieuw } from '@/services/registratieService';
 import { GhostLink, GreenButton, TopBar } from './_components';
 import { onb } from './_tokens';
+import { tx, txm } from '@/i18n';
 
 type PreviewCard = {
   title: string;
@@ -20,10 +21,10 @@ type PreviewCard = {
 };
 
 const CARDS: PreviewCard[] = [
-  { title: 'Klanten', sub: '0 contacten', Icon: Users, tint: '#FFF3E0', accent: '#E68A00' },
-  { title: 'Agenda', sub: 'Deze week', Icon: CalendarIcon, tint: onb.greenSoft, accent: onb.greenDk },
-  { title: 'Werkbonnen', sub: 'Klaar om te starten', Icon: ClipboardList, tint: '#EEF2FF', accent: '#3955D7' },
-  { title: 'Uren', sub: 'Schrijf op locatie', Icon: Clock, tint: '#F4ECFF', accent: '#7847C6' },
+  { title: txm('Klanten'), sub: txm('0 contacten'), Icon: Users, tint: '#FFF3E0', accent: '#E68A00' },
+  { title: txm('Agenda'), sub: txm('Deze week'), Icon: CalendarIcon, tint: onb.greenSoft, accent: onb.greenDk },
+  { title: txm('Werkbonnen'), sub: txm('Klaar om te starten'), Icon: ClipboardList, tint: '#EEF2FF', accent: '#3955D7' },
+  { title: txm('Uren'), sub: txm('Schrijf op locatie'), Icon: Clock, tint: '#F4ECFF', accent: '#7847C6' },
 ];
 
 /**
@@ -86,20 +87,21 @@ export default function SuccessScreen() {
           <View style={[styles.checkCircle, styles.mailCircle]}>
             <MailCheck size={40} color={onb.ink} strokeWidth={2} />
           </View>
-          <Text style={styles.title}>Bevestig je e-mailadres</Text>
+          <Text style={styles.title}>{tx('Bevestig je e-mailadres')}</Text>
           <Text style={styles.sub}>
-            We hebben een verificatiemail gestuurd naar <Text style={styles.strong}>{data.email}</Text>. Klik op de link
-            in de mail om je account te activeren.
+            {tx('We hebben een verificatiemail gestuurd naar {email}. Klik op de link in de mail om je account te activeren.')
+              .split(/(\{email\})/)
+              .map((deel, i) => (deel === '{email}' ? <Text key={i} style={styles.strong}>{data.email}</Text> : deel))}
           </Text>
           <View style={styles.noteBox}>
-            <Text style={styles.noteText}>Geen mail ontvangen? Check ook je spammap. De mail kan soms even duren.</Text>
+            <Text style={styles.noteText}>{tx('Geen mail ontvangen? Check ook je spammap. De mail kan soms even duren.')}</Text>
           </View>
         </View>
         <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-          <GreenButton label="Naar inloggen" onPress={onNaarInloggen} />
+          <GreenButton label={tx('Naar inloggen')} onPress={onNaarInloggen} />
           <GhostLink
             label={
-              opnieuwBezig ? 'Versturen…' : opnieuwVerstuurd ? 'Opnieuw verstuurd' : 'Verificatiemail opnieuw sturen'
+              opnieuwBezig ? tx('Versturen…') : opnieuwVerstuurd ? tx('Opnieuw verstuurd') : tx('Verificatiemail opnieuw sturen')
             }
             onPress={opnieuwBezig ? () => {} : onOpnieuw}
           />
@@ -129,12 +131,19 @@ export default function SuccessScreen() {
         </View>
 
         <Text style={styles.title}>
-          {firstName ? `Welkom, ${firstName}` : 'Je werkruimte'}
-          {'\n'}staat klaar
+          {firstName ? tx('Welkom, {naam}\nstaat klaar', { naam: firstName }) : tx('Je werkruimte\nstaat klaar')}
         </Text>
         <Text style={styles.sub}>
-          Je e-mailadres is bevestigd{company?.name ? ` en ${company.name} is aangemaakt` : ''}. Je probeert{' '}
-          {pakketNaam} {PROEF_DAGEN} dagen gratis, zonder creditcard.
+          {company?.name
+            ? tx('Je e-mailadres is bevestigd en {bedrijf} is aangemaakt. Je probeert {pakket} {dagen} dagen gratis, zonder creditcard.', {
+                bedrijf: company.name,
+                pakket: pakketNaam,
+                dagen: PROEF_DAGEN,
+              })
+            : tx('Je e-mailadres is bevestigd. Je probeert {pakket} {dagen} dagen gratis, zonder creditcard.', {
+                pakket: pakketNaam,
+                dagen: PROEF_DAGEN,
+              })}
         </Text>
 
         {/* 2×2 preview grid */}
@@ -144,8 +153,8 @@ export default function SuccessScreen() {
               <View style={[styles.cellIcon, { backgroundColor: c.tint }]}>
                 <c.Icon size={20} color={c.accent} strokeWidth={1.8} />
               </View>
-              <Text style={styles.cellTitle}>{c.title}</Text>
-              <Text style={styles.cellSub}>{c.sub}</Text>
+              <Text style={styles.cellTitle}>{tx(c.title)}</Text>
+              <Text style={styles.cellSub}>{tx(c.sub)}</Text>
             </View>
           ))}
         </View>
@@ -153,7 +162,7 @@ export default function SuccessScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <GreenButton
-          label="Open BossBase"
+          label={tx('Open BossBase')}
           onPress={onOpenApp}
           trailing={<ArrowRight size={16} color={onb.ink} strokeWidth={2} />}
         />

@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react-native';
 import { herlaadNieuweVersie, useNieuweVersie } from '@/lib/pwa';
 import { useTheme } from '@/providers';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * "Nieuwe versie beschikbaar" — alleen in de webapp, zodra een nieuwe build
@@ -22,7 +23,7 @@ export function NieuweVersieMelding() {
   return (
     <View style={[styles.wrap, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
       <View style={styles.kaart} accessibilityRole="alert">
-        <Text style={styles.tekst}>Nieuwe versie beschikbaar</Text>
+        <Text style={styles.tekst}>{tx('Nieuwe versie beschikbaar')}</Text>
         <Pressable
           onPress={herlaadNieuweVersie}
           accessibilityRole="button"
@@ -30,7 +31,7 @@ export function NieuweVersieMelding() {
           style={({ pressed }) => [styles.knop, pressed && { opacity: 0.7 }]}
         >
           <RefreshCw size={15} color={t.greenInk} strokeWidth={2.4} />
-          <Text style={styles.knopTekst}>Herladen</Text>
+          <Text style={styles.knopTekst}>{tx('Herladen')}</Text>
         </Pressable>
       </View>
     </View>

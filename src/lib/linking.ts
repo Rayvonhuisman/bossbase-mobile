@@ -1,3 +1,4 @@
+import { tx } from '@/i18n';
 import { Linking, Platform } from 'react-native';
 import { Dialog } from './dialog';
 import { routeApparaatVanBrowser, routeKeuzes, type RouteApparaat } from './routeLinks';
@@ -9,13 +10,13 @@ import { routeApparaatVanBrowser, routeKeuzes, type RouteApparaat } from './rout
  * - Show a friendly Dutch alert if the OS refuses the URL.
  */
 
-async function safeOpen(url: string, fallbackMsg = 'Deze actie wordt niet ondersteund.') {
+async function safeOpen(url: string, fallbackMsg = tx('Deze actie wordt niet ondersteund.')) {
   try {
     await Linking.openURL(url);
   } catch (e) {
     // De URL bevat een telefoonnummer of e-mailadres: alleen tijdens ontwikkeling loggen.
     if (__DEV__) console.warn('[linking] openURL failed', { url, err: e });
-    Dialog.alert('Kon niet openen', fallbackMsg);
+    Dialog.alert(tx('Kon niet openen'), fallbackMsg);
   }
 }
 
@@ -24,7 +25,7 @@ export function callPhone(phone: string | null | undefined): boolean {
   if (!phone) return false;
   const clean = phone.replace(/\s/g, '');
   if (!clean) return false;
-  safeOpen(`tel:${clean}`, 'Bellen werkt niet op dit toestel.');
+  safeOpen(`tel:${clean}`, tx('Bellen werkt niet op dit toestel.'));
   return true;
 }
 
@@ -33,7 +34,7 @@ export function sendMail(email: string | null | undefined): boolean {
   if (!email) return false;
   const trimmed = email.trim();
   if (!trimmed) return false;
-  safeOpen(`mailto:${trimmed}`, 'Mail werkt niet op dit toestel.');
+  safeOpen(`mailto:${trimmed}`, tx('Mail werkt niet op dit toestel.'));
   return true;
 }
 
@@ -62,13 +63,13 @@ export function openMaps(address: string | null | undefined): boolean {
     }
     const keuzes = routeKeuzes(adres, apparaat, google);
     if (keuzes.length > 1) {
-      Dialog.alert('Route openen in', undefined, [
-        ...keuzes.map((k) => ({ text: k.label, onPress: () => void safeOpen(k.url, 'Navigeren werkt niet op dit toestel.') })),
-        { text: 'Annuleren', style: 'cancel' as const },
+      Dialog.alert(tx('Route openen in'), undefined, [
+        ...keuzes.map((k) => ({ text: k.label, onPress: () => void safeOpen(k.url, tx('Navigeren werkt niet op dit toestel.')) })),
+        { text: tx('Annuleren'), style: 'cancel' as const },
       ]);
       return;
     }
-    if (keuzes[0]) await safeOpen(keuzes[0].url, 'Navigeren werkt niet op dit toestel.');
+    if (keuzes[0]) await safeOpen(keuzes[0].url, tx('Navigeren werkt niet op dit toestel.'));
   })();
   return true;
 }

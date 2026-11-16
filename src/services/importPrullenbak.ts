@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/sessionContext';
+import { tx } from '@/i18n';
 
 /**
  * De prullenbak van de boekhoudkoppeling — `negeerBijImport` uit het dashboard.
@@ -21,11 +22,6 @@ import { getCompanyId } from '@/lib/sessionContext';
  * samen met een dubbele van de regels die je liet staan.
  */
 
-const LABEL: Record<string, string> = {
-  factuur: 'De factuur',
-  kost: 'De kostenpost',
-};
-
 /**
  * Zet een geïmporteerd record op de negeerlijst.
  *
@@ -46,8 +42,11 @@ export async function negeerBijImport(
   if (!externeId) return null;
 
   const melding =
-    `${LABEL[soort] ?? 'Het record'} is verwijderd, maar kon niet in de prullenbak worden ` +
-    'gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.';
+    soort === 'factuur'
+      ? tx('De factuur is verwijderd, maar kon niet in de prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.')
+      : soort === 'kost'
+        ? tx('De kostenpost is verwijderd, maar kon niet in de prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.')
+        : tx('Het record is verwijderd, maar kon niet in de prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.');
 
   const companyId = getCompanyId();
   if (!companyId) return melding;

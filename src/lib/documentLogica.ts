@@ -4,9 +4,10 @@
  * (`utils/statusColors.js`, `OffertesPage.jsx`, `FacturenPage.jsx`,
  * `factuurService.createCreditFactuur`, `generatePdf.documentTotalen`).
  *
- * Bewust zonder imports: de tests draaien dit bestand rechtstreeks in Node.
+ * Bewust zonder zware imports (alleen @/i18n): de tests draaien dit bestand in Node.
  */
 
+import { tx } from '@/i18n';
 import { leesGetalNl } from './getalNl';
 
 // ── Statussen ──────────────────────────────────────────────────────────────
@@ -16,27 +17,27 @@ export type StatusToon = 'gray' | 'blue' | 'orange' | 'green' | 'red' | 'purple'
 export type StatusInfo = { toon: StatusToon; label: string };
 
 const OFFERTE_STATUSSEN: Record<string, StatusInfo> = {
-  concept: { toon: 'gray', label: 'Concept' },
-  verzonden: { toon: 'blue', label: 'Verzonden' },
-  verstuurd: { toon: 'blue', label: 'Verzonden' },
-  bekeken: { toon: 'blue', label: 'Bekeken' },
-  geaccepteerd: { toon: 'green', label: 'Geaccepteerd' },
-  afgewezen: { toon: 'red', label: 'Afgewezen' },
-  verlopen: { toon: 'red', label: 'Verlopen' },
+  concept: { toon: 'gray', get label() { return tx('Concept'); } },
+  verzonden: { toon: 'blue', get label() { return tx('Verzonden'); } },
+  verstuurd: { toon: 'blue', get label() { return tx('Verzonden'); } },
+  bekeken: { toon: 'blue', get label() { return tx('Bekeken'); } },
+  geaccepteerd: { toon: 'green', get label() { return tx('Geaccepteerd'); } },
+  afgewezen: { toon: 'red', get label() { return tx('Afgewezen'); } },
+  verlopen: { toon: 'red', get label() { return tx('Verlopen'); } },
 };
 
 const FACTUUR_STATUSSEN: Record<string, StatusInfo> = {
-  concept: { toon: 'gray', label: 'Concept' },
-  aangemaakt: { toon: 'gray', label: 'Concept' },
-  verzonden: { toon: 'blue', label: 'Verzonden' },
-  verstuurd: { toon: 'blue', label: 'Verzonden' },
-  open: { toon: 'blue', label: 'Open' },
-  betaald: { toon: 'green', label: 'Betaald' },
-  verlopen: { toon: 'red', label: 'Te laat' },
-  te_laat: { toon: 'red', label: 'Te laat' },
+  concept: { toon: 'gray', get label() { return tx('Concept'); } },
+  aangemaakt: { toon: 'gray', get label() { return tx('Concept'); } },
+  verzonden: { toon: 'blue', get label() { return tx('Verzonden'); } },
+  verstuurd: { toon: 'blue', get label() { return tx('Verzonden'); } },
+  open: { toon: 'blue', get label() { return tx('Open'); } },
+  betaald: { toon: 'green', get label() { return tx('Betaald'); } },
+  verlopen: { toon: 'red', get label() { return tx('Te laat'); } },
+  te_laat: { toon: 'red', get label() { return tx('Te laat'); } },
   // Concept met een nummer dat niet meer weg mag (doorlopende reeks), zoals het dashboard.
-  vervallen: { toon: 'gray', label: 'Vervallen' },
-  geboekt: { toon: 'purple', label: 'Uit SnelStart' },
+  vervallen: { toon: 'gray', get label() { return tx('Vervallen'); } },
+  geboekt: { toon: 'purple', get label() { return tx('Uit SnelStart'); } },
 };
 
 /** "In uitvoering" / "in-uitvoering" → "in_uitvoering", net als het dashboard. */
@@ -72,11 +73,11 @@ export type OfferteLijstItem = {
 };
 
 export const OFFERTE_FILTERS = [
-  { id: 'alle', label: 'Alle' },
-  { id: 'concept', label: 'Concept' },
-  { id: 'verzonden', label: 'Verzonden' },
-  { id: 'geaccepteerd', label: 'Geaccepteerd' },
-  { id: 'afgewezen', label: 'Afgewezen' },
+  { id: 'alle', get label() { return tx('Alle'); } },
+  { id: 'concept', get label() { return tx('Concept'); } },
+  { id: 'verzonden', get label() { return tx('Verzonden'); } },
+  { id: 'geaccepteerd', get label() { return tx('Geaccepteerd'); } },
+  { id: 'afgewezen', get label() { return tx('Afgewezen'); } },
 ] as const;
 export type OfferteFilter = (typeof OFFERTE_FILTERS)[number]['id'];
 
@@ -186,12 +187,12 @@ export function factuurWeergaveStatus(
 }
 
 export const FACTUUR_FILTERS = [
-  { id: 'alle', label: 'Alle' },
-  { id: 'concept', label: 'Concept' },
-  { id: 'verzonden', label: 'Verzonden' },
-  { id: 'betaald', label: 'Betaald' },
-  { id: 'verlopen', label: 'Verlopen' },
-  { id: 'gecrediteerd', label: 'Gecrediteerd' },
+  { id: 'alle', get label() { return tx('Alle'); } },
+  { id: 'concept', get label() { return tx('Concept'); } },
+  { id: 'verzonden', get label() { return tx('Verzonden'); } },
+  { id: 'betaald', get label() { return tx('Betaald'); } },
+  { id: 'verlopen', get label() { return tx('Verlopen'); } },
+  { id: 'gecrediteerd', get label() { return tx('Gecrediteerd'); } },
 ] as const;
 export type FactuurFilter = (typeof FACTUUR_FILTERS)[number]['id'];
 
@@ -531,7 +532,7 @@ export function factuurStatusWeigering(
   aantalRegels: number | null,
 ): string | null {
   if (nieuweStatus === 'betaald' && ['concept', 'aangemaakt'].includes(f.status) && aantalRegels === 0) {
-    return 'Deze factuur heeft nog geen regels. Voeg eerst regels toe en verstuur hem, daarna kun je hem op betaald zetten.';
+    return tx('Deze factuur heeft nog geen regels. Voeg eerst regels toe en verstuur hem, daarna kun je hem op betaald zetten.');
   }
   return null;
 }
@@ -578,16 +579,16 @@ export function gedeeltelijkeCreditRegels<R extends CreditBronRegel>(
   keuzes: { regel: R; gekozen: boolean; aantal: string; prijs: string }[],
 ): { ok: true; regels: CreditBronRegel[] } | { ok: false; melding: string } {
   const gekozen = keuzes.filter((k) => k.gekozen);
-  if (gekozen.length === 0) return { ok: false, melding: 'Selecteer minimaal één regel.' };
+  if (gekozen.length === 0) return { ok: false, melding: tx('Selecteer minimaal één regel.') };
   const regels: CreditBronRegel[] = [];
   for (const k of gekozen) {
     const aantal = leesGetalNl(k.aantal) ?? NaN;
     const prijs = Math.abs(leesGetalNl(k.prijs) ?? NaN);
     if (!Number.isFinite(aantal) || aantal <= 0) {
-      return { ok: false, melding: `Vul bij "${k.regel.omschrijving}" een aantal groter dan 0 in.` };
+      return { ok: false, melding: tx('Vul bij "{omschrijving}" een aantal groter dan 0 in.', { omschrijving: k.regel.omschrijving }) };
     }
     if (!Number.isFinite(prijs)) {
-      return { ok: false, melding: `Vul bij "${k.regel.omschrijving}" een geldige prijs in.` };
+      return { ok: false, melding: tx('Vul bij "{omschrijving}" een geldige prijs in.', { omschrijving: k.regel.omschrijving }) };
     }
     regels.push({
       ...k.regel,

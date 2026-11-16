@@ -22,6 +22,7 @@ import { EMAIL_RE, type SignResultaat } from '@/lib/werkbonVersturen';
 import { mailTerOndertekening, tekenOpToestel } from '@/services/werkbonOndertekenenService';
 import type { Werkbon } from '@/services/workOrderService';
 import type { WorkOrderTask } from '@/types/domain';
+import { tx, txn } from '@/i18n';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import { HandtekeningVak } from './HandtekeningVak';
@@ -89,17 +90,19 @@ export function AfrondenModal({
   };
 
   const open = taken.filter((t) => !t.afgerond);
+  // Hele zin vertalen; {vet} wordt het vetgedrukte stuk.
+  const geenBedragen = tx('Op de werkbon staan {vet}: geen prijzen, geen tarieven, geen inkoop.').split('{vet}');
   const sluit = () => !bezig && onClose();
 
   const onderteken = async () => {
     setFout('');
-    if (!naam.trim()) return setFout('Vul de naam van de ondertekenaar in.');
-    if (!EMAIL_RE.test(email.trim())) return setFout('Vul een geldig e-mailadres in — daar gaat de bevestiging heen.');
-    if (!handtekening) return setFout('Laat de klant eerst tekenen.');
+    if (!naam.trim()) return setFout(tx('Vul de naam van de ondertekenaar in.'));
+    if (!EMAIL_RE.test(email.trim())) return setFout(tx('Vul een geldig e-mailadres in — daar gaat de bevestiging heen.'));
+    if (!handtekening) return setFout(tx('Laat de klant eerst tekenen.'));
     setBezig(true);
     const { data, error } = await tekenOpToestel(werkbon, { naam, email, handtekening });
     setBezig(false);
-    if (error || !data) return setFout(error ?? 'Ondertekenen mislukt');
+    if (error || !data) return setFout(error ?? tx('Ondertekenen mislukt'));
     onKlaar({ soort: 'ondertekend', resultaat: data });
   };
 
@@ -108,7 +111,7 @@ export function AfrondenModal({
     setBezig(true);
     const { data, error } = await mailTerOndertekening(werkbon, email);
     setBezig(false);
-    if (error || !data) return setFout(error ?? 'Versturen mislukt');
+    if (error || !data) return setFout(error ?? tx('Versturen mislukt'));
     onKlaar({ soort: 'gemaild', email: data.email });
   };
 
@@ -127,11 +130,11 @@ export function AfrondenModal({
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.kop}>
             <Pressable onPress={sluit} hitSlop={8} style={styles.minTouch} accessibilityRole="button" disabled={bezig}>
-              <Text style={styles.annuleer}>Annuleren</Text>
+              <Text style={styles.annuleer}>{tx('Annuleren')}</Text>
             </Pressable>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.titel} numberOfLines={1}>
-                {stap === 'mailen' ? 'Ter ondertekening sturen' : 'Klus afronden'}
+                {stap === 'mailen' ? tx('Ter ondertekening sturen') : tx('Klus afronden')}
               </Text>
               <Text style={styles.sub} numberOfLines={1}>
                 {werkbon.nummer ? `${werkbon.nummer} · ` : ''}
@@ -144,17 +147,17 @@ export function AfrondenModal({
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" scrollEnabled={!tekent}>
             {/* Samenvatting — wat de klant straks op de bon ziet */}
             <View style={styles.cijfers}>
-              <Cijfer styles={styles} label="Taken" waarde={`${taken.filter((t) => t.afgerond).length}/${taken.length}`} />
-              <Cijfer styles={styles} label="Uren" waarde={formatHours(rond2(aantalUren))} />
-              <Cijfer styles={styles} label="Materiaal" waarde={String(aantalMateriaal)} />
-              <Cijfer styles={styles} label="Foto's" waarde={String(aantalFotos)} />
+              <Cijfer styles={styles} label={tx('Taken')} waarde={`${taken.filter((t) => t.afgerond).length}/${taken.length}`} />
+              <Cijfer styles={styles} label={tx('Uren')} waarde={formatHours(rond2(aantalUren))} />
+              <Cijfer styles={styles} label={tx('Materiaal')} waarde={String(aantalMateriaal)} />
+              <Cijfer styles={styles} label={tx('Foto\'s')} waarde={String(aantalFotos)} />
             </View>
 
             {/* Openstaande taken: aftikken kost één tik, achteraf kan het niet meer. */}
             {open.length > 0 ? (
               <View style={styles.waarschuwing}>
                 <Text style={styles.waarschuwingKop}>
-                  {open.length === 1 ? 'Eén taak staat nog open' : `${open.length} taken staan nog open`}
+                  {txn('Eén taak staat nog open', '{n} taken staan nog open', open.length)}
                 </Text>
                 {open.map((t) => (
                   <Pressable
@@ -179,8 +182,7 @@ export function AfrondenModal({
                   </Pressable>
                 ))}
                 <Text style={styles.waarschuwingTekst}>
-                  Deze taken komen niet op de bon die de klant tekent. Vink af wat je wél hebt gedaan — na ondertekenen ligt de bon
-                  vast en kan dat niet meer.
+                  {tx('Deze taken komen niet op de bon die de klant tekent. Vink af wat je wél hebt gedaan — na ondertekenen ligt de bon vast en kan dat niet meer.')}
                 </Text>
               </View>
             ) : null}
@@ -188,39 +190,40 @@ export function AfrondenModal({
             {!urenGeboekt ? (
               <View style={styles.waarschuwing}>
                 <Text style={styles.waarschuwingTekst}>
-                  Er zijn nog geen uren op deze werkbon geboekt. Na ondertekenen kan dat niet meer — de bon gaat dan op slot.
+                  {tx('Er zijn nog geen uren op deze werkbon geboekt. Na ondertekenen kan dat niet meer — de bon gaat dan op slot.')}
                 </Text>
               </View>
             ) : null}
 
             <View style={styles.info}>
               <Text style={styles.infoTekst}>
-                Op de werkbon staan <Text style={{ fontWeight: '800' }}>geen bedragen</Text>: geen prijzen, geen tarieven, geen
-                inkoop.
+                {geenBedragen[0]}
+                <Text style={{ fontWeight: '800' }}>{tx('geen bedragen')}</Text>
+                {geenBedragen[1]}{' '}
                 {aantalKlantNotities > 0
-                  ? ` Wel ${aantalKlantNotities === 1 ? 'één notitie' : `${aantalKlantNotities} notities`} die je als "voor de klant" hebt gemarkeerd.`
-                  : ' Interne notities blijven intern.'}
+                  ? txn('Wel één notitie die je als "voor de klant" hebt gemarkeerd.', 'Wel {n} notities die je als "voor de klant" hebt gemarkeerd.', aantalKlantNotities)
+                  : tx('Interne notities blijven intern.')}
               </Text>
             </View>
 
             <Button
-              label="Bekijk de bon zoals de klant hem ziet"
+              label={tx('Bekijk de bon zoals de klant hem ziet')}
               variant="secondary"
               onPress={() =>
-                setPdf({ soort: 'werkbon', id: werkbon.id, titel: `Werkbon ${werkbon.nummer ?? ''}`.trim(), opgeslagenEerst: false })
+                setPdf({ soort: 'werkbon', id: werkbon.id, titel: tx('Werkbon {nummer}', { nummer: werkbon.nummer ?? '' }).trim(), opgeslagenEerst: false })
               }
               disabled={bezig}
             />
 
             {stap === 'tekenen' ? (
               <>
-                <FormField label="Naam ondertekenaar" value={naam} onChangeText={setNaam} placeholder="Naam van de klant" editable={!bezig} />
+                <FormField label={tx('Naam ondertekenaar')} value={naam} onChangeText={setNaam} placeholder={tx('Naam van de klant')} editable={!bezig} />
                 <FormField
-                  label="E-mailadres"
-                  hint="Hier gaat de ondertekende werkbon als bevestiging heen."
+                  label={tx('E-mailadres')}
+                  hint={tx('Hier gaat de ondertekende werkbon als bevestiging heen.')}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="klant@voorbeeld.nl"
+                  placeholder={tx('klant@voorbeeld.nl')}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -232,11 +235,11 @@ export function AfrondenModal({
 
             {stap === 'mailen' ? (
               <FormField
-                label="E-mailadres klant"
-                hint="De klant krijgt de werkbon als PDF én een link om te tekenen. De werkbon blijft open tot hij getekend heeft."
+                label={tx('E-mailadres klant')}
+                hint={tx('De klant krijgt de werkbon als PDF én een link om te tekenen. De werkbon blijft open tot hij getekend heeft.')}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="klant@voorbeeld.nl"
+                placeholder={tx('klant@voorbeeld.nl')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -249,19 +252,19 @@ export function AfrondenModal({
 
             {stap === 'overzicht' ? (
               <View style={{ gap: spacing.sm }}>
-                <Button label="Klant tekent nu" onPress={() => setStap('tekenen')} disabled={bezig} />
-                <Button label="Per mail" variant="secondary" onPress={() => setStap('mailen')} disabled={bezig} />
-                <Button label="Zonder handtekening" variant="ghost" onPress={zonder} loading={bezig} />
+                <Button label={tx('Klant tekent nu')} onPress={() => setStap('tekenen')} disabled={bezig} />
+                <Button label={tx('Per mail')} variant="secondary" onPress={() => setStap('mailen')} disabled={bezig} />
+                <Button label={tx('Zonder handtekening')} variant="ghost" onPress={zonder} loading={bezig} />
               </View>
             ) : stap === 'tekenen' ? (
               <View style={{ gap: spacing.sm }}>
-                <Button label="Ondertekenen en afronden" onPress={onderteken} loading={bezig} disabled={!handtekening} />
-                <Button label="Terug" variant="ghost" onPress={() => setStap('overzicht')} disabled={bezig} />
+                <Button label={tx('Ondertekenen en afronden')} onPress={onderteken} loading={bezig} disabled={!handtekening} />
+                <Button label={tx('Terug')} variant="ghost" onPress={() => setStap('overzicht')} disabled={bezig} />
               </View>
             ) : (
               <View style={{ gap: spacing.sm }}>
-                <Button label="Versturen" onPress={mailen} loading={bezig} disabled={!email} />
-                <Button label="Terug" variant="ghost" onPress={() => setStap('overzicht')} disabled={bezig} />
+                <Button label={tx('Versturen')} onPress={mailen} loading={bezig} disabled={!email} />
+                <Button label={tx('Terug')} variant="ghost" onPress={() => setStap('overzicht')} disabled={bezig} />
               </View>
             )}
           </ScrollView>

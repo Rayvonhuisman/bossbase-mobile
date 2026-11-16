@@ -3,6 +3,8 @@
  * de systeemvoorkeur. Dezelfde sleutel en regels als `public/thema-start.js`
  * (dat op web het thema al vóór de eerste weergave zet).
  */
+import { tx } from '@/i18n';
+
 export type Thema = 'light' | 'dark';
 
 /**
@@ -22,9 +24,9 @@ export function bepaalThema(opgeslagen: string | null | undefined, systeem: stri
 export type ThemaVoorkeur = Thema | 'systeem';
 
 export const THEMA_OPTIES: { id: ThemaVoorkeur; label: string }[] = [
-  { id: 'light', label: 'Licht' },
-  { id: 'dark', label: 'Donker' },
-  { id: 'systeem', label: 'Zoals het apparaat' },
+  { id: 'light', get label() { return tx('Licht'); } },
+  { id: 'dark', get label() { return tx('Donker'); } },
+  { id: 'systeem', get label() { return tx('Zoals het apparaat'); } },
 ];
 
 export function leesVoorkeur(opgeslagen: string | null | undefined): ThemaVoorkeur {

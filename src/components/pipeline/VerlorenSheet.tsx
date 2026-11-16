@@ -6,6 +6,8 @@ import { useTheme } from '@/providers';
 import { useSave } from '@/lib/useSave';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { listLostReasons, markDealLost, type DealRow } from '@/services/dealService';
+import { tx } from '@/i18n';
+import { toonWaarde } from '@/i18n/databaseWaarden';
 
 /**
  * "Markeer als verloren" — de `VerlorenModal` van het dashboard: verplichte
@@ -54,24 +56,24 @@ export function VerlorenSheet({
         onSaved(bij);
         onClose();
       },
-      succesMelding: 'Gemarkeerd als verloren',
+      succesMelding: tx('Gemarkeerd als verloren'),
     });
   };
 
   return (
     <FormSheet
       visible={deal !== null}
-      title="Markeer als verloren"
+      title={tx('Markeer als verloren')}
       subtitle={deal?.title ?? undefined}
-      error={error ?? (verlorenFaseId ? null : 'Geen "Verloren"-fase gevonden in de pipeline')}
+      error={error ?? (verlorenFaseId ? null : tx('Geen "Verloren"-fase gevonden in de pipeline'))}
       saving={saving}
-      submitLabel="Markeer als verloren"
+      submitLabel={tx('Markeer als verloren')}
       submitDisabled={!reden || !verlorenFaseId}
       onSubmit={opslaan}
       onClose={onClose}
     >
       <View style={{ gap: spacing.xs }}>
-        <Text style={styles.label}>Reden</Text>
+        <Text style={styles.label}>{tx('Reden')}</Text>
         <View style={styles.rij}>
           {redenen.map((r) => {
             const aan = reden === r;
@@ -84,17 +86,17 @@ export function VerlorenSheet({
                 aria-checked={aan}
                 style={[styles.chip, aan && styles.chipAan]}
               >
-                <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{r}</Text>
+                <Text style={[styles.chipTekst, aan && styles.chipTekstAan]}>{toonWaarde(r)}</Text>
               </Pressable>
             );
           })}
         </View>
       </View>
       <FormField
-        label="Toelichting"
+        label={tx('Toelichting')}
         value={toelichting}
         onChangeText={setToelichting}
-        placeholder="Optioneel"
+        placeholder={tx('Optioneel')}
         multiline
       />
     </FormSheet>

@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import { LoadingScreen } from '@/components';
 import { useAuth, useOnboarding } from '@/providers';
+import { tx } from '@/i18n';
 
 export default function Index() {
   const auth = useAuth();
@@ -8,7 +9,7 @@ export default function Index() {
 
   // Wacht tot session + onboarding-flag bekend zijn voordat we routen.
   if (auth.status === 'restoring' || auth.status === 'loading-profile' || onb.status === 'restoring') {
-    return <LoadingScreen label="Bezig met laden..." />;
+    return <LoadingScreen label={tx('Bezig met laden...')} />;
   }
 
   // Ingelogd? → direct naar dashboard.

@@ -14,6 +14,7 @@ import { pushNotificaties } from '@/services/collegaMeldingService';
 import { listCompanyProfiles } from '@/services/teamService';
 import { createWorkOrder } from '@/services/workOrderService';
 import { getAfspraakExtra, koppelWerkbonAanAfspraak, plaatsAfspraakNotitie } from '@/services/activityService';
+import { tx } from '@/i18n';
 
 type Lid = LogLid;
 
@@ -99,12 +100,12 @@ export function AfspraakExtra({
         verantwoordelijke_ids: wie ? [wie] : [],
       });
       if (wb.error || !wb.data) {
-        toon(wb.error ?? 'Werkbon aanmaken mislukt.', 'fout');
+        toon(wb.error ?? tx('Werkbon aanmaken mislukt.'), 'fout');
         return;
       }
       const k = await koppelWerkbonAanAfspraak(afspraakId, wb.data.id);
       if (!k.ok) toon(k.melding, 'waarschuwing');
-      else toon('Werkbon aangemaakt', 'succes');
+      else toon(tx('Werkbon aangemaakt'), 'succes');
       setWerkbonId(wb.data.id);
     } finally {
       setMaken(false);
@@ -140,7 +141,7 @@ export function AfspraakExtra({
   return (
     <View style={{ gap: 12 }}>
       <View style={{ gap: 6 }}>
-        <Text style={{ ...typography.label, color: t.muted2 }}>Werkbon</Text>
+        <Text style={{ ...typography.label, color: t.muted2 }}>{tx('Werkbon')}</Text>
         {werkbonId ? (
           <Pressable
             accessibilityRole="link"
@@ -150,14 +151,14 @@ export function AfspraakExtra({
               router.push(`/work-orders/${werkbonId}`);
             }}
           >
-            <Text style={{ fontSize: 13.5, fontWeight: '700', color: t.green700 }}>Werkbon openen ›</Text>
+            <Text style={{ fontSize: 13.5, fontWeight: '700', color: t.green700 }}>{tx('Werkbon openen ›')}</Text>
           </Pressable>
         ) : (
           <>
-            <Text style={styles.leeg}>Geen werkbon gekoppeld</Text>
+            <Text style={styles.leeg}>{tx('Geen werkbon gekoppeld')}</Text>
             {magBewerken ? (
               <View style={{ alignItems: 'flex-start' }}>
-                <Button label="Werkbon aanmaken" variant="secondary" onPress={werkbonMaken} loading={maken} />
+                <Button label={tx('Werkbon aanmaken')} variant="secondary" onPress={werkbonMaken} loading={maken} />
               </View>
             ) : null}
           </>
@@ -166,7 +167,7 @@ export function AfspraakExtra({
 
       {laadFout ? <Text style={styles.leeg}>{laadFout}</Text> : null}
       <NotitieLog
-        label="Notitielog"
+        label={tx('Notitielog')}
         items={nieuwsteEerst(notities).map((n) => ({ id: n.id, html: n.text, auteur: n.name, at: n.at }))}
         leden={leden}
         bezig={plaatsen.saving}

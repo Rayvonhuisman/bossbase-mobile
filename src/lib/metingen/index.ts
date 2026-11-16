@@ -6,6 +6,7 @@
  * staat alleen wat de app eromheen nodig heeft, zonder React, zodat het in Node
  * te testen is (tests/metingen.test.mjs).
  */
+import { tx, txn } from '@/i18n';
 import { voegStukToe } from './vendored/metingControle.js';
 import {
   SOORTEN,
@@ -310,14 +311,15 @@ export function stukVerwerkt({
       : [...stukken, { id: stukId, tekst, aantal: metingen.length }];
   const n = uitkomst.toegevoegd;
   const delen = [
-    metingen.length === 0 ? 'geen maten gevonden' : `${n === 1 ? '1 meting' : `${n} metingen`} erbij`,
-    uitkomst.vervangen ? `${uitkomst.vervangen} verbeterd` : '',
-    uitkomst.overgeslagen ? `${uitkomst.overgeslagen} stond er al` : '',
+    metingen.length === 0 ? tx('geen maten gevonden') : txn('{n} meting erbij', '{n} metingen erbij', n),
+    uitkomst.vervangen ? tx('{aantal} verbeterd', { aantal: uitkomst.vervangen }) : '',
+    uitkomst.overgeslagen ? tx('{aantal} stond er al', { aantal: uitkomst.overgeslagen }) : '',
   ].filter(Boolean);
+  const kern = tx('Stuk {nr}: {delen}.', { nr, delen: delen.join(', ') });
   return {
     regels: terug,
     stukken: nieuweStukken,
-    bericht: { tekst: `Stuk ${nr}: ${delen.join(', ')}.${melding ? ` ${melding}` : ''}`, fout: metingen.length === 0 },
+    bericht: { tekst: melding ? `${kern} ${melding}` : kern, fout: metingen.length === 0 },
   };
 }
 
@@ -339,10 +341,10 @@ export function haalStukWeg(regels: Regel[], stukken: Stuk[], stukId: string) {
 
 /** Wat moet er nog gebeuren voordat de lijst opgeslagen kan worden? null = klaar. */
 export function waaromNietOpslaan(regels: Regel[]): string | null {
-  if (!regels.length) return 'Er staan nog geen metingen in de lijst.';
+  if (!regels.length) return tx('Er staan nog geen metingen in de lijst.');
   const open = regels.filter((r) => !r.nagekeken).length;
-  if (open) return open === 1 ? '1 meting moet je nog nakijken.' : `${open} metingen moet je nog nakijken.`;
+  if (open) return txn('{n} meting moet je nog nakijken.', '{n} metingen moet je nog nakijken.', open);
   const zonderNaam = regels.filter((r) => !r.naam.trim()).length;
-  if (zonderNaam) return zonderNaam === 1 ? '1 meting heeft nog geen naam.' : `${zonderNaam} metingen hebben nog geen naam.`;
+  if (zonderNaam) return txn('{n} meting heeft nog geen naam.', '{n} metingen hebben nog geen naam.', zonderNaam);
   return null;
 }

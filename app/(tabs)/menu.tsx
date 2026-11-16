@@ -44,6 +44,7 @@ import { useSchermklasse } from '@/lib/schermklasse';
 import { sectieGewicht, verdeelOverKolommen } from '@/lib/menuKolommen';
 import { FAQ_URL, HULP_TELEFOON, HULP_TELEFOON_LINK, KENNISBANK_URL } from '@/lib/hulp';
 import { dsShadow, spacing, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 type Item = {
   icon: LucideIcon;
@@ -83,58 +84,58 @@ export default function MenuScreen() {
 
   const groepen: Groep[] = [
     {
-      titel: 'Hoofdmenu',
+      titel: tx('Hoofdmenu'),
       items: [
-        { icon: Home, title: 'Vandaag', sub: 'Je dag in één oogopslag', onPress: ga('/today') },
-        { icon: FolderKanban, title: 'Pipeline', sub: 'Aanvragen en projecten per fase', route: '/pipeline', onPress: ga('/pipeline') },
-        { icon: Users, title: 'Relaties', sub: 'Klanten en leveranciers', onPress: ga('/customers') },
-        { icon: ListChecks, title: 'Activiteiten', sub: 'Bellen, mailen, bezoeken en taken', onPress: ga('/activities') },
+        { icon: Home, title: tx('Vandaag'), sub: tx('Je dag in één oogopslag'), onPress: ga('/today') },
+        { icon: FolderKanban, title: tx('Pipeline'), sub: tx('Aanvragen en projecten per fase'), route: '/pipeline', onPress: ga('/pipeline') },
+        { icon: Users, title: tx('Relaties'), sub: tx('Klanten en leveranciers'), onPress: ga('/customers') },
+        { icon: ListChecks, title: tx('Activiteiten'), sub: tx('Bellen, mailen, bezoeken en taken'), onPress: ga('/activities') },
       ],
     },
     {
-      titel: 'Uitvoering',
+      titel: tx('Uitvoering'),
       items: [
-        { icon: CalendarDays, title: 'Agenda', sub: 'Afspraken en werkbonnen', onPress: ga('/planning') },
-        { icon: CalendarRange, title: 'Planning', sub: 'Medewerkers, voertuigen en niet ingepland', route: '/planningbord', onPress: ga('/planningbord') },
-        { icon: Briefcase, title: 'Projecten', sub: 'Status, planning en notities', route: '/projects', onPress: ga('/projects') },
-        { icon: ClipboardList, title: 'Werkbonnen', sub: 'Klussen en uitvoering', onPress: ga('/work-orders') },
-        { icon: Package, title: 'Prijslijst', sub: 'Materialen met prijs en leverancier', onPress: ga('/materialen') },
-        { icon: Clock, title: 'Uren', sub: 'Werkdag- en werkbonuren', onPress: ga('/hours') },
+        { icon: CalendarDays, title: tx('Agenda'), sub: tx('Afspraken en werkbonnen'), onPress: ga('/planning') },
+        { icon: CalendarRange, title: tx('Planning'), sub: tx('Medewerkers, voertuigen en niet ingepland'), route: '/planningbord', onPress: ga('/planningbord') },
+        { icon: Briefcase, title: tx('Projecten'), sub: tx('Status, planning en notities'), route: '/projects', onPress: ga('/projects') },
+        { icon: ClipboardList, title: tx('Werkbonnen'), sub: tx('Klussen en uitvoering'), onPress: ga('/work-orders') },
+        { icon: Package, title: tx('Prijslijst'), sub: tx('Materialen met prijs en leverancier'), onPress: ga('/materialen') },
+        { icon: Clock, title: tx('Uren'), sub: tx('Werkdag- en werkbonuren'), onPress: ga('/hours') },
       ],
     },
     {
-      titel: 'Financieel',
+      titel: tx('Financieel'),
       items: [
-        { icon: FileText, title: 'Offertes', sub: 'Opstellen en opvolgen', route: '/offers', onPress: ga('/offers') },
-        { icon: Receipt, title: 'Facturen', sub: 'Aanmaken en betaald zetten', route: '/invoices', onPress: ga('/invoices') },
-        { icon: Wallet, title: 'Kosten', sub: 'Geboekte kosten en materiaal', route: '/expenses', onPress: ga('/expenses') },
-        { icon: ChartColumn, title: 'Financiën', sub: 'Financieel overzicht', route: '/financien', onPress: ga('/financien') },
+        { icon: FileText, title: tx('Offertes'), sub: tx('Opstellen en opvolgen'), route: '/offers', onPress: ga('/offers') },
+        { icon: Receipt, title: tx('Facturen'), sub: tx('Aanmaken en betaald zetten'), route: '/invoices', onPress: ga('/invoices') },
+        { icon: Wallet, title: tx('Kosten'), sub: tx('Geboekte kosten en materiaal'), route: '/expenses', onPress: ga('/expenses') },
+        { icon: ChartColumn, title: tx('Financiën'), sub: tx('Financieel overzicht'), route: '/financien', onPress: ga('/financien') },
       ],
     },
   ];
 
-  const naam = profile?.full_name ?? user?.email ?? 'Mijn account';
+  const naam = profile?.full_name ?? user?.email ?? tx('Mijn account');
   const initialenNaam = initialen(profile?.full_name ?? user?.email ?? '?', '?');
   const avatar = avatarKleuren(naam, colorMode === 'dark');
-  const rolLabel = role === 'admin' ? 'Beheerder' : 'Medewerker';
+  const rolLabel = role === 'admin' ? tx('Beheerder') : tx('Medewerker');
   const styles = makeStyles(t);
 
   // Niets van het menu tonen zolang de rechten onderweg zijn. Een item dat
   // eerst verschijnt en daarna verdwijnt heeft zijn bestaan al verraden.
-  if (!loaded) return <LoadingScreen label="Menu laden..." />;
+  if (!loaded) return <LoadingScreen label={tx('Menu laden...')} />;
 
   const bijNaam = zichtbaar([
-    { icon: Database, title: 'Database', route: '/database', onPress: ga('/database') },
-    { icon: UsersRound, title: 'Team', route: '/team', onPress: ga('/team') },
-    { icon: Settings, title: 'Instellingen', route: '/settings', onPress: ga('/settings') },
+    { icon: Database, title: tx('Database'), route: '/database', onPress: ga('/database') },
+    { icon: UsersRound, title: tx('Team'), route: '/team', onPress: ga('/team') },
+    { icon: Settings, title: tx('Instellingen'), route: '/settings', onPress: ga('/settings') },
   ]);
 
   const ondersteuning: Item[] = [
-    { icon: MessageCircleQuestion, title: 'Help', sub: 'Vraag het Boss, onze helpagent', onPress: () => openBoss() },
-    { icon: Bug, title: 'Bug of idee', sub: 'Meld het en help BossBase beter maken', onPress: openMelden },
-    { icon: BookOpen, title: 'Kennisbank', sub: 'Uitleg en handleidingen op bossbase.nl', onPress: () => void Linking.openURL(KENNISBANK_URL) },
-    { icon: HelpCircle, title: 'Veelgestelde vragen', sub: 'Snel antwoord op bossbase.nl', onPress: () => void Linking.openURL(FAQ_URL) },
-    { icon: Phone, title: 'Bel ons', sub: HULP_TELEFOON, onPress: () => void Linking.openURL(HULP_TELEFOON_LINK) },
+    { icon: MessageCircleQuestion, title: tx('Help'), sub: tx('Vraag het Boss, onze helpagent'), onPress: () => openBoss() },
+    { icon: Bug, title: tx('Bug of idee'), sub: tx('Meld het en help BossBase beter maken'), onPress: openMelden },
+    { icon: BookOpen, title: tx('Kennisbank'), sub: tx('Uitleg en handleidingen op bossbase.nl'), onPress: () => void Linking.openURL(KENNISBANK_URL) },
+    { icon: HelpCircle, title: tx('Veelgestelde vragen'), sub: tx('Snel antwoord op bossbase.nl'), onPress: () => void Linking.openURL(FAQ_URL) },
+    { icon: Phone, title: tx('Bel ons'), sub: HULP_TELEFOON, onPress: () => void Linking.openURL(HULP_TELEFOON_LINK) },
   ];
 
   const secties = groepen.map((g) => ({ ...g, items: zichtbaar(g.items) })).filter((g) => g.items.length > 0);
@@ -142,7 +143,7 @@ export default function MenuScreen() {
   // Alle blokken onder het profiel, in menuvolgorde. Een sectie zonder
   // zichtbare onderdelen is hierboven al weggevallen en laat dus geen ruimte na.
   const blokken: { key: string; gewicht: number; inhoud: ReactNode }[] = [
-    ...[...secties, { titel: 'Ondersteuning', items: ondersteuning }].map((g) => ({
+    ...[...secties, { titel: tx('Ondersteuning'), items: ondersteuning }].map((g) => ({
       key: g.titel,
       gewicht: sectieGewicht(g.items.length),
       inhoud: <Group title={g.titel} items={g.items} />,
@@ -152,7 +153,7 @@ export default function MenuScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <AppScreen
-        header={<AppTopBar eyebrow={company?.name ?? undefined} title="Menu" subtitle="Alle functies van BossBase" showProfileButton />}
+        header={<AppTopBar eyebrow={company?.name ?? undefined} title={tx('Menu')} subtitle={tx('Alle functies van BossBase')} showProfileButton />}
       >
         {/* Wie je bent, met Instellingen en Team ernaast — zoals onderaan de
             zijbalk van het dashboard. */}
@@ -160,7 +161,7 @@ export default function MenuScreen() {
           <Pressable
             onPress={ga('/profile')}
             accessibilityRole="button"
-            accessibilityLabel={`Profiel van ${naam}`}
+            accessibilityLabel={tx('Profiel van {naam}', { naam })}
             style={({ pressed }) => [styles.profielKaart, pressed && { opacity: 0.95 }]}
           >
             <View style={[styles.profielAvatar, { backgroundColor: avatar.bg }]}>

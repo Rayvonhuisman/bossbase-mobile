@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Dialog } from '@/lib/dialog';
+import { tx, txn, locale } from '@/i18n';
 import { VerhuisSectie } from '@/components/werkbon/VerhuisSectie';
 import { openMaps } from '@/lib/linking';
 import { FotoViewer } from '@/components/FotoViewer';
@@ -240,7 +241,7 @@ export default function WorkOrderDetailScreen() {
       setError(woResult.error);
       setWorkOrder(null);
     } else if (!woResult.data) {
-      setError('Deze werkbon bestaat niet of je hebt er geen toegang toe.');
+      setError(tx('Deze werkbon bestaat niet of je hebt er geen toegang toe.'));
       setWorkOrder(null);
     } else {
       setWorkOrder(woResult.data);
@@ -368,11 +369,11 @@ export default function WorkOrderDetailScreen() {
     const { data, error: updateError } = await updateWorkOrderStatus(workOrder, next, gestartOp);
     setStatusUpdating(false);
     if (updateError || !data) {
-      Dialog.alert('Status niet opgeslagen', updateError ?? 'Probeer het opnieuw.');
+      Dialog.alert(tx('Status niet opgeslagen'), updateError ?? tx('Probeer het opnieuw.'));
       return;
     }
     setWorkOrder(data);
-    if (next === 'afgerond') Dialog.alert('Klus afgerond.');
+    if (next === 'afgerond') Dialog.alert(tx('Klus afgerond.'));
   };
 
   // Annuleren en terugzetten (besluit 26-10), zoals het dashboard: admin of
@@ -383,25 +384,25 @@ export default function WorkOrderDetailScreen() {
     if (!workOrder) return;
     const terug = workOrder.status === 'geannuleerd';
     if (!terug && uren.length) {
-      Dialog.alert('Werkbon annuleren', 'Er staan uren op deze werkbon. Verwijder die eerst; dan kun je hem annuleren.');
+      Dialog.alert(tx('Werkbon annuleren'), tx('Er staan uren op deze werkbon. Verwijder die eerst; dan kun je hem annuleren.'));
       return;
     }
     Dialog.alert(
-      terug ? 'Werkbon terugzetten' : 'Werkbon annuleren',
+      terug ? tx('Werkbon terugzetten') : tx('Werkbon annuleren'),
       terug
-        ? 'De werkbon gaat terug naar Gepland en staat weer in de planning en de agenda.'
-        : 'De werkbon gaat niet door. Hij verdwijnt uit de planning en de agenda en telt niet mee in de nacalculatie. De medewerkers op de werkbon krijgen een melding. Terugzetten kan.',
+        ? tx('De werkbon gaat terug naar Gepland en staat weer in de planning en de agenda.')
+        : tx('De werkbon gaat niet door. Hij verdwijnt uit de planning en de agenda en telt niet mee in de nacalculatie. De medewerkers op de werkbon krijgen een melding. Terugzetten kan.'),
       [
-        { text: 'Niet nu', style: 'cancel' },
+        { text: tx('Niet nu'), style: 'cancel' },
         {
-          text: terug ? 'Terugzetten' : 'Werkbon annuleren',
+          text: terug ? tx('Terugzetten') : tx('Werkbon annuleren'),
           style: terug ? 'default' : 'destructive',
           onPress: async () => {
             setStatusUpdating(true);
             const { data, error: e } = await zetWerkbonGeannuleerd(workOrder.id, !terug);
             setStatusUpdating(false);
             if (e || !data) {
-              Dialog.alert('Niet gelukt', e ?? 'Probeer het opnieuw.');
+              Dialog.alert(tx('Niet gelukt'), e ?? tx('Probeer het opnieuw.'));
               return;
             }
             setWorkOrder(data);
@@ -413,9 +414,9 @@ export default function WorkOrderDetailScreen() {
   };
 
   const startKlus = () =>
-    Dialog.alert('Klus starten', 'De werkbon gaat naar "In uitvoering".', [
-      { text: 'Annuleren', style: 'cancel' },
-      { text: 'Start klus', onPress: () => zetStatus('in_uitvoering') },
+    Dialog.alert(tx('Klus starten'), tx('De werkbon gaat naar "In uitvoering".'), [
+      { text: tx('Annuleren'), style: 'cancel' },
+      { text: tx('Start klus'), onPress: () => zetStatus('in_uitvoering') },
     ]);
 
   const gewoneTaken = useMemo(() => tasks.filter((t) => !t.is_meerwerk), [tasks]);
@@ -441,7 +442,7 @@ export default function WorkOrderDetailScreen() {
     [offerteBron],
   );
   const overnemenUitOfferte = async (o: OfferteBron, regelIds: string[]) => {
-    if (!workOrder) return 'Werkbon niet geladen.';
+    if (!workOrder) return tx('Werkbon niet geladen.');
     const { data: n, error: e } = await takenUitOfferte(workOrder.id, o.id, regelIds);
     if (e) return e;
     setToonOvernemen(false);
@@ -449,7 +450,11 @@ export default function WorkOrderDetailScreen() {
     const r = await listWorkOrderTasks(workOrder.id);
     if (!r.error) setTasks(r.data);
     Dialog.alert(
-      n === 0 ? 'Deze taken stonden er al.' : `${n === 1 ? '1 taak' : `${n} taken`} overgenomen uit ${o.nummer || 'de offerte'}`,
+      n === 0
+        ? tx('Deze taken stonden er al.')
+        : o.nummer
+          ? txn('{n} taak overgenomen uit {nummer}', '{n} taken overgenomen uit {nummer}', n ?? 0, { nummer: o.nummer })
+          : txn('{n} taak overgenomen uit de offerte', '{n} taken overgenomen uit de offerte', n ?? 0),
     );
     return null;
   };
@@ -459,13 +464,13 @@ export default function WorkOrderDetailScreen() {
     const { error: e } = await materiaalUitOfferte(workOrder.id, m.id);
     if (e) {
       setMateriaalUitOfferteBezig(null);
-      Dialog.alert('Toevoegen mislukt', e);
+      Dialog.alert(tx('Toevoegen mislukt'), e);
       return;
     }
     const r = await listWorkOrderMaterials(workOrder.id);
     setMateriaalUitOfferteBezig(null);
     if (!r.error) setMaterials(r.data);
-    Dialog.alert(`${m.omschrijving} staat op de werkbon`);
+    Dialog.alert(tx('{omschrijving} staat op de werkbon', { omschrijving: m.omschrijving }));
   };
 
   // Bedrag en uren bij het meerwerk (werkbon_meerwerk_prijs, migratie
@@ -497,7 +502,7 @@ export default function WorkOrderDetailScreen() {
     if (!workOrder) return false;
     const { data, error: e } = await zetMeerwerkPrijs(taakId, workOrder.company_id, invoer);
     if (e) {
-      Dialog.alert('Bedrag opslaan mislukt', e);
+      Dialog.alert(tx('Bedrag opslaan mislukt'), e);
       return false;
     }
     setMeerwerkPrijzen((prev) => {
@@ -540,9 +545,9 @@ export default function WorkOrderDetailScreen() {
 
   /** Uitkomst 3 van de afrondmodal: afronden zonder handtekening (finishComplete). */
   const afrondenZonderHandtekening = async (): Promise<string | null> => {
-    if (!workOrder) return 'Werkbon niet geladen.';
+    if (!workOrder) return tx('Werkbon niet geladen.');
     const { data, error: e } = await updateWorkOrderStatus(workOrder, 'afgerond');
-    if (e || !data) return e ?? 'Afronden mislukt';
+    if (e || !data) return e ?? tx('Afronden mislukt');
     setWorkOrder(data);
     return null;
   };
@@ -554,12 +559,12 @@ export default function WorkOrderDetailScreen() {
       // De Edge Function heeft de bon bijgewerkt en op slot gezet; opnieuw laden.
       herlaad();
       const m = signMelding(u.resultaat);
-      Dialog.alert(m.ok ? 'Ondertekend' : 'Ondertekend, met een melding', m.tekst);
+      Dialog.alert(m.ok ? tx('Ondertekend') : tx('Ondertekend, met een melding'), m.tekst);
     } else if (u.soort === 'gemaild') {
       herlaad();
-      Dialog.alert('Verstuurd', `Werkbon verstuurd naar ${u.email}. De bon blijft open tot de klant tekent.`);
+      Dialog.alert(tx('Verstuurd'), tx('Werkbon verstuurd naar {email}. De bon blijft open tot de klant tekent.', { email: u.email }));
     } else {
-      Dialog.alert('Klus afgerond.');
+      Dialog.alert(tx('Klus afgerond.'));
     }
   };
 
@@ -567,10 +572,10 @@ export default function WorkOrderDetailScreen() {
   const handleToggleTask = async (task: WorkOrderTask) => {
     if (!canEdit) {
       Dialog.alert(
-        opSlot ? 'Werkbon is ondertekend' : 'Alleen inzage',
+        opSlot ? tx('Werkbon is ondertekend') : tx('Alleen inzage'),
         opSlot
-          ? 'Deze werkbon staat op slot en kan niet meer worden gewijzigd.'
-          : 'Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan taken afvinken.',
+          ? tx('Deze werkbon staat op slot en kan niet meer worden gewijzigd.')
+          : tx('Alleen de verantwoordelijke, een beheerder of wie werkbonnen mag bewerken kan taken afvinken.'),
       );
       return;
     }
@@ -578,7 +583,7 @@ export default function WorkOrderDetailScreen() {
     const { data, error: taskError } = await setTaskDone(task.id, !task.afgerond);
     setBusyTaskId(null);
     if (taskError || !data) {
-      Dialog.alert('Niet opgeslagen', taskError ?? 'Probeer het opnieuw.');
+      Dialog.alert(tx('Niet opgeslagen'), taskError ?? tx('Probeer het opnieuw.'));
       return;
     }
     setTasks((prev) => prev.map((t) => (t.id === data.id ? data : t)));
@@ -586,20 +591,20 @@ export default function WorkOrderDetailScreen() {
 
   const bevestigVerwijderen = (titel: string, tekst: string, doe: () => Promise<string | null>) => {
     Dialog.alert(titel, tekst, [
-      { text: 'Annuleren', style: 'cancel' },
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: async () => {
           const fout = await doe();
-          if (fout) Dialog.alert('Niet verwijderd', fout);
+          if (fout) Dialog.alert(tx('Niet verwijderd'), fout);
         },
       },
     ]);
   };
 
   const handleAddTask = async (omschrijving: string, meerwerk: boolean) => {
-    if (!workOrder) return { error: 'Werkbon niet geladen.' };
+    if (!workOrder) return { error: tx('Werkbon niet geladen.') };
     const volgende = tasks.reduce((max, t) => Math.max(max, t.volgorde), -1) + 1;
     const { data, error: taskError } = await addWorkOrderTask({
       werkbon_id: workOrder.id,
@@ -608,15 +613,15 @@ export default function WorkOrderDetailScreen() {
       is_meerwerk: meerwerk,
       volgorde: volgende,
     });
-    if (taskError || !data) return { error: taskError ?? 'Opslaan mislukt.' };
+    if (taskError || !data) return { error: taskError ?? tx('Opslaan mislukt.') };
     setTasks((prev) => [...prev, data]);
     return { error: null };
   };
 
   const handleDeleteTask = (task: WorkOrderTask) =>
     bevestigVerwijderen(
-      task.is_meerwerk ? 'Meerwerk verwijderen' : 'Taak verwijderen',
-      `Taak "${task.omschrijving}" verwijderen?`,
+      task.is_meerwerk ? tx('Meerwerk verwijderen') : tx('Taak verwijderen'),
+      tx('Taak "{omschrijving}" verwijderen?', { omschrijving: task.omschrijving }),
       async () => {
         const { error: e } = await deleteWorkOrderTask(task.id);
         if (!e) setTasks((prev) => prev.filter((t) => t.id !== task.id));
@@ -630,14 +635,14 @@ export default function WorkOrderDetailScreen() {
   const handleMaterialWijzig = async (m: WerkbonMateriaalRegel, patch: MateriaalWijziging) => {
     const { data, error: e } = await updateWorkOrderMaterial(m.id, patch);
     if (e || !data) {
-      Dialog.alert('Bijwerken mislukt', e ?? 'Probeer het opnieuw.');
+      Dialog.alert(tx('Bijwerken mislukt'), e ?? tx('Probeer het opnieuw.'));
       return;
     }
     setMaterials((prev) => prev.map((x) => (x.id === data.id ? data : x)));
   };
 
   const handleDeleteMaterial = (m: WerkbonMateriaalRegel) =>
-    bevestigVerwijderen('Materiaal verwijderen', `Materiaal "${m.naam}" verwijderen?`, async () => {
+    bevestigVerwijderen(tx('Materiaal verwijderen'), tx('Materiaal "{naam}" verwijderen?', { naam: m.naam }), async () => {
       const { error: e } = await deleteWorkOrderMaterial(m.id);
       if (!e) {
         setMaterials((prev) => prev.filter((x) => x.id !== m.id));
@@ -657,10 +662,10 @@ export default function WorkOrderDetailScreen() {
   // ── Foto's ──────────────────────────────────────────────────────────────
   const kiesFoto = (categorie: FotoCategorie) => {
     if (!workOrder || fotoSlot.current || fotoBezig) return;
-    Dialog.alert(`Foto toevoegen · ${FOTO_CATEGORIE_STIJL[categorie].label}`, 'Waar komt de foto vandaan?', [
-      { text: 'Camera', onPress: () => pakEnUpload('camera', categorie) },
-      { text: 'Fotobibliotheek', onPress: () => pakEnUpload('bibliotheek', categorie) },
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Foto toevoegen · {categorie}', { categorie: tx(FOTO_CATEGORIE_STIJL[categorie].label) }), tx('Waar komt de foto vandaan?'), [
+      { text: tx('Camera'), onPress: () => pakEnUpload('camera', categorie) },
+      { text: tx('Fotobibliotheek'), onPress: () => pakEnUpload('bibliotheek', categorie) },
+      { text: tx('Annuleren'), style: 'cancel' },
     ]);
   };
 
@@ -678,10 +683,10 @@ export default function WorkOrderDetailScreen() {
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!rechtenVraag.granted) {
           Dialog.alert(
-            'Geen toestemming',
+            tx('Geen toestemming'),
             bron === 'camera'
-              ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-              : "Geef BossBase toegang tot je foto's om er een te kiezen.",
+              ? tx('Geef BossBase toegang tot de camera om een foto te maken.')
+              : tx("Geef BossBase toegang tot je foto's om er een te kiezen."),
           );
           return;
         }
@@ -692,7 +697,7 @@ export default function WorkOrderDetailScreen() {
       if (resultaat.canceled) return;
       const asset = resultaat.assets?.[0];
       if (!asset) {
-        Dialog.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere foto.');
+        Dialog.alert(tx('Foto niet gelezen'), tx('Probeer het opnieuw of kies een andere foto.'));
         return;
       }
       setFotoBezig(categorie);
@@ -712,7 +717,7 @@ export default function WorkOrderDetailScreen() {
       });
       setFotoBezig(null);
       if (fotoError || !data) {
-        Dialog.alert('Foto niet opgeslagen', fotoError ?? 'Probeer het opnieuw.');
+        Dialog.alert(tx('Foto niet opgeslagen'), fotoError ?? tx('Probeer het opnieuw.'));
         return;
       }
       // Meteen tonen; een lopende herlaadactie mag dit niet meer wissen.
@@ -721,7 +726,7 @@ export default function WorkOrderDetailScreen() {
     } catch (e) {
       setFotoBezig(null);
       if (__DEV__) console.log('[werkbon] foto toevoegen mislukt', e);
-      Dialog.alert('Foto niet opgeslagen', 'Er ging iets mis bij het toevoegen van de foto.');
+      Dialog.alert(tx('Foto niet opgeslagen'), tx('Er ging iets mis bij het toevoegen van de foto.'));
     } finally {
       fotoSlot.current = false;
       setFotoKiezen(false);
@@ -734,7 +739,7 @@ export default function WorkOrderDetailScreen() {
   const fotosInBeeld = fotoInBeeld ? photos.filter((p) => (p.categorie ?? 'tijdens') === fotoInBeeld.cat) : [];
 
   const handleDeletePhoto = (foto: WorkOrderPhoto) =>
-    bevestigVerwijderen('Foto verwijderen?', 'De foto wordt definitief verwijderd.', async () => {
+    bevestigVerwijderen(tx('Foto verwijderen?'), tx('De foto wordt definitief verwijderd.'), async () => {
       const { error: e } = await deleteWorkOrderPhoto(foto.id, foto.url);
       if (!e) {
         fotoMutatie.current += 1;
@@ -745,15 +750,15 @@ export default function WorkOrderDetailScreen() {
 
   // ── Uren en notities corrigeren ─────────────────────────────────────────
   const verwijderUur = (u: WerkbonUur) => {
-    Dialog.alert('Uren verwijderen?', `${korteDatum(u.datum)} · ${u.medewerker?.full_name ?? 'Onbekend'}`, [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Uren verwijderen?'), `${korteDatum(u.datum)} · ${u.medewerker?.full_name ?? tx('Onbekend')}`, [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: async () => {
           const res = await deleteWerkbonUur(u.id);
           if (!res.ok) {
-            Dialog.alert('Niet verwijderd', res.melding);
+            Dialog.alert(tx('Niet verwijderd'), res.melding);
             return;
           }
           setUren((prev) => prev.filter((x) => x.id !== u.id));
@@ -763,15 +768,15 @@ export default function WorkOrderDetailScreen() {
   };
 
   const verwijderNotitie = (n: WerkbonNotitie) => {
-    Dialog.alert('Notitie verwijderen?', alsTekst(n.note).slice(0, 120), [
-      { text: 'Annuleren', style: 'cancel' },
+    Dialog.alert(tx('Notitie verwijderen?'), alsTekst(n.note).slice(0, 120), [
+      { text: tx('Annuleren'), style: 'cancel' },
       {
-        text: 'Verwijderen',
+        text: tx('Verwijderen'),
         style: 'destructive',
         onPress: async () => {
           const { error: e } = await deleteWorkOrderNote(n.id);
           if (e) {
-            Dialog.alert('Niet verwijderd', e);
+            Dialog.alert(tx('Niet verwijderd'), e);
             return;
           }
           setNotes((prev) => prev.filter((x) => x.id !== n.id));
@@ -784,26 +789,26 @@ export default function WorkOrderDetailScreen() {
   const wisselZichtbaarheid = async (n: WerkbonNotitie) => {
     const { data, error: e } = await setNoteVoorKlant(n.id, !n.voor_klant);
     if (e || !data) {
-      Dialog.alert('Niet gewijzigd', e ?? 'Probeer het opnieuw.');
+      Dialog.alert(tx('Niet gewijzigd'), e ?? tx('Probeer het opnieuw.'));
       return;
     }
     setNotes((prev) => prev.map((x) => (x.id === data.id ? data : x)));
-    Dialog.alert(data.voor_klant ? 'Staat nu op de werkbon' : 'Weer intern');
+    Dialog.alert(data.voor_klant ? tx('Staat nu op de werkbon') : tx('Weer intern'));
   };
 
   const namesFor = (ids: string[] | null | undefined): string =>
-    (ids ?? []).map((uid) => teamNames[uid] ?? 'Onbekend').join(', ');
+    (ids ?? []).map((uid) => teamNames[uid] ?? tx('Onbekend')).join(', ');
 
   const openUrl = async (url: string) => {
     try {
       await Linking.openURL(url);
     } catch {
-      Dialog.alert('Kon niet openen', 'Deze actie wordt niet door je toestel ondersteund.');
+      Dialog.alert(tx('Kon niet openen'), tx('Deze actie wordt niet door je toestel ondersteund.'));
     }
   };
 
   const topBarLeeg = (
-    <AppTopBar variant="detail" title="Werkbon" onBack={() => terugOfNaar(router, '/work-orders')} />
+    <AppTopBar variant="detail" title={tx('Werkbon')} onBack={() => terugOfNaar(router, '/work-orders')} />
   );
 
   if (loading) {
@@ -812,7 +817,7 @@ export default function WorkOrderDetailScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={{ flex: 1, backgroundColor: th.bg }}>
           {topBarLeeg}
-          <LoadingScreen label="Detail laden..." />
+          <LoadingScreen label={tx('Detail laden...')} />
         </View>
       </>
     );
@@ -825,8 +830,8 @@ export default function WorkOrderDetailScreen() {
         <View style={{ flex: 1, backgroundColor: th.bg }}>
           {topBarLeeg}
           <ErrorState
-            title="Werkbon niet gevonden"
-            message={error ?? 'Deze werkbon bestaat niet of je hebt geen toegang.'}
+            title={tx('Werkbon niet gevonden')}
+            message={error ?? tx('Deze werkbon bestaat niet of je hebt geen toegang.')}
             onRetry={opnieuw}
           />
         </View>
@@ -846,7 +851,7 @@ export default function WorkOrderDetailScreen() {
   const pLabel = planningLabel(workOrder);
   const mijn = mijnVolgendeDag(workOrder, user?.id, vandaag());
   const metVoertuigen = hasFeature('voertuigen');
-  const busNaam = (vid: string) => voertuigen[vid]?.naam ?? 'Voertuig';
+  const busNaam = (vid: string) => voertuigen[vid]?.naam ?? tx('Voertuig');
   const klantTel = workOrder.customer?.phone?.replace(/\s/g, '') ?? '';
   const internNotes = notes.filter((n) => !n.voor_klant);
   const klantNotes = notes.filter((n) => n.voor_klant);
@@ -882,7 +887,7 @@ export default function WorkOrderDetailScreen() {
           <AppTopBar
             variant="detail"
             onBack={() => terugOfNaar(router, '/work-orders')}
-            title={workOrder.nummer ?? 'Werkbon'}
+            title={workOrder.nummer ?? tx('Werkbon')}
             rightAction={<WerkbonStatusBadge status={workOrder.status} />}
           />
           <AnimatedScreen style={[styles.stack, styles.stackPadding]}>
@@ -896,13 +901,13 @@ export default function WorkOrderDetailScreen() {
                       <Pressable
                         onPress={() => router.push(`/project/${workOrder.project!.id}`)}
                         accessibilityRole="link"
-                        accessibilityLabel={`Project ${workOrder.project.name ?? ''}`}
+                        accessibilityLabel={tx('Project {naam}', { naam: workOrder.project.name ?? '' })}
                         hitSlop={8}
                         style={({ pressed }) => [styles.projectPil, pressed && { opacity: 0.7 }]}
                       >
                         <FolderKanban size={13} color="#0F7A3F" />
                         <Text style={styles.projectPilTekst} numberOfLines={1}>
-                          {workOrder.project.name ?? 'Project'}
+                          {workOrder.project.name ?? tx('Project')}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -910,15 +915,15 @@ export default function WorkOrderDetailScreen() {
                       <Pressable
                         onPress={() =>
                           Dialog.alert(
-                            'Alleen inzage',
-                            'Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.',
+                            tx('Alleen inzage'),
+                            tx('Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.'),
                           )
                         }
                         style={styles.inzagePil}
                         accessibilityRole="button"
                       >
                         <Eye size={13} color={th.muted} />
-                        <Text style={styles.inzageTekst}>Alleen inzage</Text>
+                        <Text style={styles.inzageTekst}>{tx('Alleen inzage')}</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -930,14 +935,14 @@ export default function WorkOrderDetailScreen() {
                       style={({ pressed }) => [styles.bewerkKnop, pressed && { opacity: 0.8 }]}
                     >
                       <Pencil size={14} color={th.ink2} />
-                      <Text style={styles.bewerkTekst}>Bewerken</Text>
+                      <Text style={styles.bewerkTekst}>{tx('Bewerken')}</Text>
                     </Pressable>
                   ) : null}
                 </View>
               ) : null}
 
               <View style={{ gap: 2 }}>
-                <Text style={styles.kopTitel}>{workOrder.titel || 'Werkbon'}</Text>
+                <Text style={styles.kopTitel}>{workOrder.titel || tx('Werkbon')}</Text>
                 {workOrder.customer ? (
                   <Pressable
                     onPress={() => router.push(`/customers/${workOrder.customer!.id}`)}
@@ -962,27 +967,27 @@ export default function WorkOrderDetailScreen() {
                   tekst={
                     pLabel
                       ? `${pLabel}${venster.starttijd ? ` · ${venster.starttijd}${venster.eindtijd ? `–${venster.eindtijd}` : ''}` : ''}`
-                      : 'Nog niet ingepland'
+                        : tx('Nog niet ingepland')
                   }
                   gedempt={!pLabel}
                 />
                 {verantwIds.length ? (
                   <KopFeit
                     icon={<UserCheck size={16} color={th.muted} />}
-                    label="Verantwoordelijk"
+                    label={tx('Verantwoordelijk')}
                     tekst={namesFor(verantwIds)}
                   />
                 ) : null}
                 {uitvoerderIds.length ? (
-                  <KopFeit icon={<Users size={16} color={th.muted} />} label="Medewerkers" tekst={namesFor(uitvoerderIds)} />
+                  <KopFeit icon={<Users size={16} color={th.muted} />} label={tx('Medewerkers')} tekst={namesFor(uitvoerderIds)} />
                 ) : null}
                 {!assignedIds.length ? (
-                  <KopFeit icon={<Users size={16} color={th.muted} />} tekst="Nog niemand gekoppeld" gedempt />
+                  <KopFeit icon={<Users size={16} color={th.muted} />} tekst={tx('Nog niemand gekoppeld')} gedempt />
                 ) : null}
                 {metVoertuigen && (workOrder.voertuig_ids ?? []).length && !mijn ? (
                   <KopFeit
                     icon={<Truck size={16} color={th.muted} />}
-                    label="Voertuigen"
+                    label={tx('Voertuigen')}
                     tekst={(workOrder.voertuig_ids ?? []).map(busNaam).join(', ')}
                   />
                 ) : null}
@@ -994,11 +999,18 @@ export default function WorkOrderDetailScreen() {
               <View style={styles.mijnMelding}>
                 <Text style={styles.mijnTekst}>
                   <Text style={{ fontWeight: '800' }}>
-                    Jij bent {dagWoord(mijn.dag.datum, vandaag())} ingepland
+                    {tx('Jij bent {dag} ingepland', { dag: dagWoord(mijn.dag.datum, vandaag()) })}
                   </Text>
-                  {mijn.tijd.starttijd ? ` van ${mijn.tijd.starttijd}${mijn.tijd.eindtijd ? ` tot ${mijn.tijd.eindtijd}` : ''}` : ''}
+                  {mijn.tijd.starttijd
+                    ? ' ' +
+                      (mijn.tijd.eindtijd
+                        ? tx('van {start} tot {eind}', { start: mijn.tijd.starttijd, eind: mijn.tijd.eindtijd })
+                        : tx('van {start}', { start: mijn.tijd.starttijd }))
+                    : ''}
                   {metVoertuigen && mijnBus ? ` · ${busNaam(mijnBus)}` : ''}
-                  {mijn.collegas ? ` · samen met ${mijn.collegas} ${mijn.collegas === 1 ? 'collega' : "collega's"}` : ''}
+                  {mijn.collegas
+                    ? ` · ${txn('samen met {n} collega', "samen met {n} collega's", mijn.collegas)}`
+                    : ''}
                 </Text>
               </View>
             ) : null}
@@ -1013,14 +1025,14 @@ export default function WorkOrderDetailScreen() {
                 onPress={() =>
                   klantTel
                     ? openUrl(`tel:${klantTel}`)
-                    : Dialog.alert('Geen telefoonnummer bekend voor deze klant')
+                    : Dialog.alert(tx('Geen telefoonnummer bekend voor deze klant'))
                 }
                 disabled={!workOrder.customer}
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.actieTegel, !workOrder.customer && styles.uit, pressed && { opacity: 0.8 }]}
               >
                 <Phone size={18} color={ds.green700} />
-                <Text style={styles.actieTegelTekst}>Bel klant</Text>
+                <Text style={styles.actieTegelTekst}>{tx('Bel klant')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => openMaps(workOrder.locatie)}
@@ -1029,7 +1041,7 @@ export default function WorkOrderDetailScreen() {
                 style={({ pressed }) => [styles.actieTegel, !workOrder.locatie && styles.uit, pressed && { opacity: 0.8 }]}
               >
                 <MapPin size={18} color={ds.green700} />
-                <Text style={styles.actieTegelTekst}>Route</Text>
+                <Text style={styles.actieTegelTekst}>{tx('Route')}</Text>
               </Pressable>
               <Pressable
                 onPress={status === 'gepland' ? startKlus : vraagAfronden}
@@ -1051,12 +1063,12 @@ export default function WorkOrderDetailScreen() {
                 )}
                 <Text style={[styles.actieTegelTekst, { color: ds.greenInk }]}>
                   {status === 'gepland'
-                    ? 'Start klus'
+                    ? tx('Start klus')
                     : status === 'in_uitvoering'
-                      ? 'Afronden'
+                      ? tx('Afronden')
                       : status === 'geannuleerd'
-                        ? 'Geannuleerd'
-                        : 'Afgerond'}
+                        ? tx('Geannuleerd')
+                        : tx('Afgerond')}
                 </Text>
               </Pressable>
             </View>
@@ -1067,11 +1079,14 @@ export default function WorkOrderDetailScreen() {
                 <Lock size={16} color={th.muted} />
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={styles.meldingTitel}>
-                    Ondertekend door {workOrder.ondertekend_door_naam || 'de klant'}
+                    {workOrder.ondertekend_door_naam
+                      ? tx('Ondertekend door {naam}', { naam: workOrder.ondertekend_door_naam })
+                      : tx('Ondertekend door de klant')}
                   </Text>
                   <Text style={styles.meldingTekst}>
                     {workOrder.ondertekend_op ? formatDatumTijd(workOrder.ondertekend_op) : ''}
-                    {' · '}Uren, taken en materiaal staan op slot. Een correctie loopt via een nieuwe werkbon.
+                    {' · '}
+                    {tx('Uren, taken en materiaal staan op slot. Een correctie loopt via een nieuwe werkbon.')}
                   </Text>
                   {workOrder.ondertekende_pdf_url ? (
                     // Korte link (10 minuten) op het moment van openen, via document-url.
@@ -1080,25 +1095,25 @@ export default function WorkOrderDetailScreen() {
                         setPdfDoc({
                           soort: 'werkbon',
                           id: workOrder.id,
-                          titel: `Ondertekende bon ${workOrder.nummer ?? ''}`.trim(),
+                          titel: tx('Ondertekende bon {nummer}', { nummer: workOrder.nummer ?? '' }).trim(),
                           opgeslagenEerst: true,
                         })
                       }
                       accessibilityRole="button"
                       style={styles.linkKnop}
                     >
-                      <Text style={styles.addText}>Ondertekende bon</Text>
+                      <Text style={styles.addText}>{tx('Ondertekende bon')}</Text>
                     </Pressable>
                   ) : (
                     // De server maakt hem alsnog (zie het vangnet hierboven).
                     <Text style={[styles.meldingTekst, { color: '#b45309' }]}>
                       {pdfHerstel === 'bezig'
-                        ? 'Getekende bon wordt alsnog gemaakt…'
+                        ? tx('Getekende bon wordt alsnog gemaakt…')
                         : pdfHerstel === 'klaar'
-                          ? 'Bon alsnog opgeslagen en nagestuurd. Ververs om hem te openen.'
+                          ? tx('Bon alsnog opgeslagen en nagestuurd. Ververs om hem te openen.')
                           : pdfHerstel === 'fout'
-                            ? 'Getekende bon ontbreekt; maken lukte niet. Open de werkbon opnieuw.'
-                            : 'Getekend, PDF ontbreekt'}
+                            ? tx('Getekende bon ontbreekt; maken lukte niet. Open de werkbon opnieuw.')
+                            : tx('Getekend, PDF ontbreekt')}
                     </Text>
                   )}
                 </View>
@@ -1107,9 +1122,13 @@ export default function WorkOrderDetailScreen() {
               <View style={[styles.melding, { borderLeftColor: '#FDBA74' }]}>
                 <Send size={16} color={th.muted} />
                 <Text style={[styles.meldingTekst, { flex: 1 }]}>
-                  Ter ondertekening gestuurd naar{' '}
-                  <Text style={{ fontWeight: '700' }}>{workOrder.verstuurd_naar_email || 'de klant'}</Text> op{' '}
-                  {formatKortMoment(workOrder.verstuurd_op)}. Nog niet getekend.
+                  {metVet(
+                    tx('Ter ondertekening gestuurd naar {email} op {moment}. Nog niet getekend.', {
+                      moment: formatKortMoment(workOrder.verstuurd_op),
+                    }),
+                    'email',
+                    workOrder.verstuurd_naar_email || tx('de klant'),
+                  )}
                 </Text>
               </View>
             ) : null}
@@ -1132,13 +1151,13 @@ export default function WorkOrderDetailScreen() {
 
             {/* 5. Omschrijving */}
             {workOrder.omschrijving || workOrder.notes ? (
-              <Section styles={styles} title="Omschrijving">
+              <Section styles={styles} title={tx('Omschrijving')}>
                 {workOrder.omschrijving ? (
                   <Text style={styles.descriptionText}>{alsTekst(workOrder.omschrijving)}</Text>
                 ) : null}
                 {workOrder.notes?.trim() ? (
                   <View style={styles.interneBalk}>
-                    <Text style={styles.interneLabel}>Interne notitie:</Text>
+                    <Text style={styles.interneLabel}>{tx('Interne notitie:')}</Text>
                     <Text style={styles.descriptionText}>{alsTekst(workOrder.notes)}</Text>
                   </View>
                 ) : null}
@@ -1148,17 +1167,21 @@ export default function WorkOrderDetailScreen() {
             {/* 6. Planning */}
             <Section
               styles={styles}
-              title={`Planning${planRegelsLijst.length ? ` · ${planRegelsLijst.length} ${planRegelsLijst.length === 1 ? 'dag' : 'dagen'}` : ''}`}
+              title={
+                planRegelsLijst.length
+                  ? txn('Planning · {n} dag', 'Planning · {n} dagen', planRegelsLijst.length)
+                  : tx('Planning')
+              }
               icon={<CalendarDays size={16} color={ds.green700} />}
               action={
                 // Zoals het dashboard: het recht planning is genoeg (niet ook werkbonbeheer).
                 can('planning') && !readonly && !opSlot ? (
-                  <KopKnop styles={styles} label="Planning aanpassen" onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)} />
+                  <KopKnop styles={styles} label={tx('Planning aanpassen')} onPress={() => router.push(`/work-orders/bewerk/${workOrder.id}`)} />
                 ) : null
               }
             >
               {planRegelsLijst.length === 0 ? (
-                <Text style={styles.empty}>Deze werkbon staat nog niet ingepland.</Text>
+                <Text style={styles.empty}>{tx('Deze werkbon staat nog niet ingepland.')}</Text>
               ) : (
                 // Zelfde regels als PlanningRegels in het dashboard; geen status
                 // per dag, en dagen die al geweest zijn doffer.
@@ -1168,7 +1191,7 @@ export default function WorkOrderDetailScreen() {
                       <Text style={styles.dagDatum}>
                         {korteDatum(r.datum)} · {planTijd(r)}
                       </Text>
-                      <Text style={styles.dagWie}>{r.wie.length ? r.wie.join(', ') : 'niemand toegewezen'}</Text>
+                      <Text style={styles.dagWie}>{r.wie.length ? r.wie.join(', ') : tx('niemand toegewezen')}</Text>
                       {metVoertuigen
                         ? busRegels(workOrder, r.dag, voertuigen, (pid) => teamNames[pid]).map((b) => (
                             <View key={b.vid} style={styles.busRij}>
@@ -1186,9 +1209,13 @@ export default function WorkOrderDetailScreen() {
             {/* 7. Taken */}
             <Section
               styles={styles}
-              title={`Taken${gewoneTaken.length ? ` · ${takenDone} / ${gewoneTaken.length}` : ''}`}
+              title={
+                gewoneTaken.length
+                  ? tx('Taken · {klaar} / {totaal}', { klaar: takenDone, totaal: gewoneTaken.length })
+                  : tx('Taken')
+              }
               icon={<ListChecks size={16} color={ds.green700} />}
-              action={kanOvernemen ? <KopKnop styles={styles} label="+ Uit offerte" onPress={() => setToonOvernemen(true)} /> : null}
+              action={kanOvernemen ? <KopKnop styles={styles} label={tx('+ Uit offerte')} onPress={() => setToonOvernemen(true)} /> : null}
             >
               {partialErrors.taken ? (
                 <Text style={styles.sectionError}>{partialErrors.taken}</Text>
@@ -1203,7 +1230,7 @@ export default function WorkOrderDetailScreen() {
                       />
                     </View>
                   ) : !canTasks ? (
-                    <Text style={styles.empty}>Nog geen taken.</Text>
+                    <Text style={styles.empty}>{tx('Nog geen taken.')}</Text>
                   ) : null}
                   <View style={{ gap: spacing.sm }}>
                     {gewoneTaken.map((t) => (
@@ -1223,8 +1250,8 @@ export default function WorkOrderDetailScreen() {
                     <TaakInvoer
                       styles={styles}
                       th={th}
-                      plaatshouder="Nieuwe taak…"
-                      knopLabel="Taak"
+                      plaatshouder={tx('Nieuwe taak…')}
+                      knopLabel={tx('Taak')}
                       onAdd={(o) => handleAddTask(o, false)}
                     />
                   ) : null}
@@ -1235,13 +1262,13 @@ export default function WorkOrderDetailScreen() {
             {/* 8. Uren — alleen lezen; boeken via het formulier */}
             <Section
               styles={styles}
-              title={`Uren${totaalUren > 0 ? ` · ${totaalUren.toFixed(1).replace('.', ',')}u` : ''}`}
-              action={canBook ? <KopKnop styles={styles} label="+ Boeken" onPress={() => setTimeModal(true)} /> : null}
+              title={totaalUren > 0 ? tx('Uren · {uren}u', { uren: getal(totaalUren, 1) }) : tx('Uren')}
+              action={canBook ? <KopKnop styles={styles} label={tx('+ Boeken')} onPress={() => setTimeModal(true)} /> : null}
             >
               {partialErrors.uren ? (
                 <Text style={styles.sectionError}>{partialErrors.uren}</Text>
               ) : uren.length === 0 ? (
-                <Text style={styles.empty}>Nog geen uren geboekt.</Text>
+                <Text style={styles.empty}>{tx('Nog geen uren geboekt.')}</Text>
               ) : (
                 <View style={{ gap: spacing.sm }}>
                   {[...uren]
@@ -1250,13 +1277,13 @@ export default function WorkOrderDetailScreen() {
                       <View key={u.id} style={styles.timeEntry}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.timeEntryDate}>
-                            {korteDatum(u.datum)} · {u.medewerker?.full_name ?? 'Onbekend'}
+                            {korteDatum(u.datum)} · {u.medewerker?.full_name ?? tx('Onbekend')}
                           </Text>
                           {u.pauze_minuten || u.reis_km != null || u.notitie ? (
                             <Text style={styles.timeEntryNote} numberOfLines={2}>
                               {[
-                                u.pauze_minuten ? `${u.pauze_minuten} min pauze` : null,
-                                u.reis_km != null ? `${String(u.reis_km).replace('.', ',')} km` : null,
+                                u.pauze_minuten ? tx('{min} min pauze', { min: u.pauze_minuten }) : null,
+                                u.reis_km != null ? tx('{km} km', { km: getal(Number(u.reis_km)) }) : null,
                                 u.notitie,
                               ]
                                 .filter(Boolean)
@@ -1270,14 +1297,14 @@ export default function WorkOrderDetailScreen() {
                               {hhmm(u.start_tijd)}–{hhmm(u.eind_tijd)}
                             </Text>
                           ) : null}
-                          <Text style={styles.timeEntryHours}>{Number(u.uren).toFixed(2).replace('.', ',')}</Text>
+                          <Text style={styles.timeEntryHours}>{getal(Number(u.uren), 2)}</Text>
                           {magUurAanpassen(u) ? (
                             <View style={styles.notitieActies}>
                               <Pressable onPress={() => setBewerkUur(u)} accessibilityRole="button" style={styles.linkKnop}>
-                                <Text style={styles.addText}>Wijzigen</Text>
+                                <Text style={styles.addText}>{tx('Wijzigen')}</Text>
                               </Pressable>
                               <Pressable onPress={() => verwijderUur(u)} accessibilityRole="button" style={styles.linkKnop}>
-                                <Text style={styles.addText}>Verwijderen</Text>
+                                <Text style={styles.addText}>{tx('Verwijderen')}</Text>
                               </Pressable>
                             </View>
                           ) : null}
@@ -1288,17 +1315,17 @@ export default function WorkOrderDetailScreen() {
               )}
               {!canBook && !opSlot ? (
                 <Text style={styles.photoHint}>
-                  Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.
+                  {tx('Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.')}
                 </Text>
               ) : null}
             </Section>
 
             {/* 9. Foto's per fase */}
-            <Section styles={styles} title={`Foto's · ${photos.length}`} icon={<ImageIcon size={16} color={ds.green700} />}>
+            <Section styles={styles} title={tx("Foto's · {n}", { n: photos.length })} icon={<ImageIcon size={16} color={ds.green700} />}>
               {partialErrors.fotos ? (
                 <Text style={styles.sectionError}>{partialErrors.fotos}</Text>
               ) : !canEdit && photos.length === 0 ? (
-                <Text style={styles.empty}>Geen foto&apos;s</Text>
+                <Text style={styles.empty}>{tx("Geen foto's")}</Text>
               ) : (
                 <View style={{ gap: spacing.md }}>
                   {/* Drie knoppen naast elkaar: in één tik een foto bij de juiste soort. */}
@@ -1314,7 +1341,11 @@ export default function WorkOrderDetailScreen() {
                             onPress={() => kiesFoto(cat)}
                             disabled={!!fotoBezig || fotoKiezen}
                             accessibilityRole="button"
-                            accessibilityLabel={`Foto toevoegen bij ${stijl.label}${aantal ? `, ${aantal} foto's` : ''}`}
+                            accessibilityLabel={
+                              aantal
+                                ? txn('Foto toevoegen bij {soort}, {n} foto', "Foto toevoegen bij {soort}, {n} foto's", aantal, { soort: tx(stijl.label) })
+                                : tx('Foto toevoegen bij {soort}', { soort: tx(stijl.label) })
+                            }
                             accessibilityState={{ disabled: !!fotoBezig || fotoKiezen, busy: bezig }}
                             aria-busy={bezig}
                             style={({ pressed }) => [
@@ -1329,7 +1360,7 @@ export default function WorkOrderDetailScreen() {
                               <Camera size={18} color={stijl.kleur} strokeWidth={2.2} />
                             )}
                             <Text style={[styles.fotoKnopTekst, { color: stijl.kleur }]} numberOfLines={1}>
-                              {bezig ? 'Uploaden…' : stijl.label}
+                              {bezig ? tx('Uploaden…') : tx(stijl.label)}
                             </Text>
                             {aantal ? (
                               <View style={[styles.fotoKnopTeller, { backgroundColor: stijl.kleur }]}>
@@ -1350,7 +1381,7 @@ export default function WorkOrderDetailScreen() {
                     return (
                       <View key={cat} style={{ gap: 6 }}>
                         <Text style={[styles.fotoRijLabel, { color: stijl.kleur }]}>
-                          {stijl.label} · {lijst.length}
+                          {tx(stijl.label)} · {lijst.length}
                         </Text>
                         <ScrollView
                           horizontal
@@ -1362,7 +1393,7 @@ export default function WorkOrderDetailScreen() {
                               key={ph.id}
                               accessibilityRole="imagebutton"
                               onPress={() => setFotoInBeeld({ cat, index: i })}
-                              accessibilityLabel={`Foto ${i + 1} van ${lijst.length} bij ${stijl.label} bekijken`}
+                              accessibilityLabel={tx('Foto {nr} van {totaal} bij {soort} bekijken', { nr: i + 1, totaal: lijst.length, soort: tx(stijl.label) })}
                               style={({ pressed }) => [pressed && { opacity: 0.85 }]}
                             >
                               <Image source={{ uri: ph.url }} style={styles.fotoKlein} />
@@ -1372,7 +1403,11 @@ export default function WorkOrderDetailScreen() {
         <FotoViewer
           fotos={fotosInBeeld}
           index={fotoInBeeld?.index ?? null}
-          titel={fotoInBeeld ? FOTO_CATEGORIE_STIJL[fotoInBeeld.cat as keyof typeof FOTO_CATEGORIE_STIJL]?.label : undefined}
+          titel={
+            fotoInBeeld && FOTO_CATEGORIE_STIJL[fotoInBeeld.cat as keyof typeof FOTO_CATEGORIE_STIJL]
+              ? tx(FOTO_CATEGORIE_STIJL[fotoInBeeld.cat as keyof typeof FOTO_CATEGORIE_STIJL].label)
+              : undefined
+          }
           onSluit={sluitFotoViewer}
           onVerwijder={
             canEdit
@@ -1386,7 +1421,7 @@ export default function WorkOrderDetailScreen() {
                       </View>
                     );
                   })}
-                  {!canEdit && photos.length === 0 ? <Text style={styles.empty}>Geen foto&apos;s</Text> : null}
+                  {!canEdit && photos.length === 0 ? <Text style={styles.empty}>{tx("Geen foto's")}</Text> : null}
                 </View>
               )}
             </Section>
@@ -1394,14 +1429,14 @@ export default function WorkOrderDetailScreen() {
             {/* 10. Materialen — elke regel inline te bewerken (MaterialenSection) */}
             <Section
               styles={styles}
-              title="Materialen"
+              title={tx('Materialen')}
               icon={<Package size={16} color={ds.green700} />}
-              action={canEdit ? <KopKnop styles={styles} label="+ Materiaal" onPress={() => setMaterialModal(true)} /> : null}
+              action={canEdit ? <KopKnop styles={styles} label={tx('+ Materiaal')} onPress={() => setMaterialModal(true)} /> : null}
             >
               {partialErrors.materialen ? (
                 <Text style={styles.sectionError}>{partialErrors.materialen}</Text>
               ) : materials.length === 0 ? (
-                <Text style={styles.empty}>Geen materialen op deze werkbon.</Text>
+                <Text style={styles.empty}>{tx('Geen materialen op deze werkbon.')}</Text>
               ) : (
                 <View style={{ gap: spacing.sm }}>
                   {materials.map((m) => (
@@ -1421,10 +1456,10 @@ export default function WorkOrderDetailScreen() {
                   ))}
                   {magBedragen ? (
                     <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Totaal materiaal (excl. BTW)</Text>
+                      <Text style={styles.totalLabel}>{tx('Totaal materiaal (excl. BTW)')}</Text>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.totalValue}>{formatEUR(materiaalTotaal.excl)}</Text>
-                        <Text style={styles.timeEntryNote}>{formatEUR(materiaalTotaal.incl)} incl. BTW</Text>
+                        <Text style={styles.timeEntryNote}>{tx('{bedrag} incl. BTW', { bedrag: formatEUR(materiaalTotaal.incl) })}</Text>
                       </View>
                     </View>
                   ) : null}
@@ -1434,26 +1469,27 @@ export default function WorkOrderDetailScreen() {
                   gebruikt is (telt meteen als kosten, staat op de PDF). */}
               {kanMateriaalUitOfferte && !partialErrors.materialen && materiaalUitOfferteLijst.length > 0 ? (
                 <View style={styles.uitOfferte}>
-                  <Text style={styles.uitOfferteKop}>Uit de offerte</Text>
+                  <Text style={styles.uitOfferteKop}>{tx('Uit de offerte')}</Text>
                   <Text style={styles.photoHint}>
-                    Voeg toe als het gebruikt is: materiaal op de werkbon telt meteen als werkelijke kosten en staat op
-                    de werkbon die de klant tekent. Het aantal pas je daarna aan op de regel.
+                    {tx(
+                      'Voeg toe als het gebruikt is: materiaal op de werkbon telt meteen als werkelijke kosten en staat op de werkbon die de klant tekent. Het aantal pas je daarna aan op de regel.',
+                    )}
                   </Text>
                   {materiaalUitOfferteLijst.map((m) => (
                     <View key={m.id} style={styles.uitOfferteRij}>
                       <Text style={styles.uitOfferteNaam} numberOfLines={2}>
                         {m.omschrijving}
                         <Text style={styles.timeEntryNote}>
-                          {m.aantal != null ? ` · ${String(m.aantal).replace('.', ',')}${m.eenheid ? ` ${m.eenheid}` : ''}` : ''}
+                          {m.aantal != null ? ` · ${getal(Number(m.aantal))}${m.eenheid ? ` ${m.eenheid}` : ''}` : ''}
                           {m.nummer ? ` · ${m.nummer}` : ''}
                         </Text>
                       </Text>
                       {m.alAanwezig ? (
-                        <Text style={styles.timeEntryNote}>staat op de werkbon</Text>
+                        <Text style={styles.timeEntryNote}>{tx('staat op de werkbon')}</Text>
                       ) : materiaalUitOfferteBezig === m.id ? (
                         <ActivityIndicator size="small" color={ds.green700} />
                       ) : (
-                        <KopKnop styles={styles} label="+ Toevoegen" onPress={() => void voegMateriaalUitOfferteToe(m)} />
+                        <KopKnop styles={styles} label={tx('+ Toevoegen')} onPress={() => void voegMateriaalUitOfferteToe(m)} />
                       )}
                     </View>
                   ))}
@@ -1464,7 +1500,7 @@ export default function WorkOrderDetailScreen() {
             {/* Kosten: inkopen op de werkbon (WerkbonKostenSection), met het
                 recht kosten en de module kosten_nacalculatie. */}
             {kosten.zien ? (
-              <Section styles={styles} title="Kosten" icon={<Receipt size={16} color={ds.green700} />}>
+              <Section styles={styles} title={tx('Kosten')} icon={<Receipt size={16} color={ds.green700} />}>
                 <KostenInhoud
                   werkbon={workOrder}
                   uren={uren}
@@ -1481,19 +1517,31 @@ export default function WorkOrderDetailScreen() {
             {/* 11. Meerwerk */}
             <Section
               styles={styles}
-              title={`Meerwerk${meerwerkTaken.length ? ` · ${meerwerkTaken.filter((t) => t.afgerond).length} / ${meerwerkTaken.length}` : ''}${
-                magMeerwerkPrijzen && meerwerkTotaal > 0 ? ` · ${formatEUR(meerwerkTotaal)} excl. btw` : ''
+              title={`${
+                meerwerkTaken.length
+                  ? tx('Meerwerk · {klaar} / {totaal}', {
+                      klaar: meerwerkTaken.filter((t) => t.afgerond).length,
+                      totaal: meerwerkTaken.length,
+                    })
+                  : tx('Meerwerk')
+              }${
+                magMeerwerkPrijzen && meerwerkTotaal > 0
+                  ? ` · ${tx('{bedrag} excl. btw', { bedrag: formatEUR(meerwerkTotaal) })}`
+                  : ''
               }`}
               icon={<PlusCircle size={16} color={ds.green700} />}
             >
               <Text style={styles.meerwerkHint}>
-                Werk dat er tijdens de klus bij kwam en niet in de oorspronkelijke opdracht zat. Staat apart op de werkbon, telt
-                niet mee in de taakvoortgang.
+                {tx(
+                  'Werk dat er tijdens de klus bij kwam en niet in de oorspronkelijke opdracht zat. Staat apart op de werkbon, telt niet mee in de taakvoortgang.',
+                )}{' '}
                 {magMeerwerkPrijzen
-                  ? ' Vul bij elke regel het bedrag voor de klant in (excl. btw) en eventueel de uren: dat komt niet op de werkbon die de klant tekent, wel in de nacalculatie en op de factuur.'
-                  : ' Het bedrag vult kantoor in.'}
+                  ? tx(
+                      'Vul bij elke regel het bedrag voor de klant in (excl. btw) en eventueel de uren: dat komt niet op de werkbon die de klant tekent, wel in de nacalculatie en op de factuur.',
+                    )
+                  : tx('Het bedrag vult kantoor in.')}
               </Text>
-              {meerwerkTaken.length === 0 && !canTasks ? <Text style={styles.empty}>Geen meerwerk op deze klus.</Text> : null}
+              {meerwerkTaken.length === 0 && !canTasks ? <Text style={styles.empty}>{tx('Geen meerwerk op deze klus.')}</Text> : null}
               {meerwerkTaken.map((t) => (
                 <TaskRow
                   key={t.id}
@@ -1520,8 +1568,8 @@ export default function WorkOrderDetailScreen() {
                 <TaakInvoer
                   styles={styles}
                   th={th}
-                  plaatshouder="Wat is er extra gedaan?"
-                  knopLabel="Meerwerk"
+                  plaatshouder={tx('Wat is er extra gedaan?')}
+                  knopLabel={tx('Meerwerk')}
                   onAdd={(o) => handleAddTask(o, true)}
                 />
               ) : null}
@@ -1530,8 +1578,8 @@ export default function WorkOrderDetailScreen() {
             {/* 12. Notities: Intern / Voor de klant */}
             <Section
               styles={styles}
-              title="Notities"
-              action={canNote ? <KopKnop styles={styles} label="+ Notitie" onPress={() => setNoteModal(true)} /> : null}
+              title={tx('Notities')}
+              action={canNote ? <KopKnop styles={styles} label={tx('+ Notitie')} onPress={() => setNoteModal(true)} /> : null}
             >
               <View style={styles.tabRij} accessibilityRole="tablist">
                 {(['intern', 'klant'] as const).map((tab) => {
@@ -1546,7 +1594,9 @@ export default function WorkOrderDetailScreen() {
                       style={[styles.tab, aan && styles.tabAan]}
                     >
                       <Text style={[styles.tabTekst, aan && styles.tabTekstAan]}>
-                        {tab === 'intern' ? `Intern · ${internNotes.length}` : `Voor de klant · ${klantNotes.length}`}
+                        {tab === 'intern'
+                          ? tx('Intern · {n}', { n: internNotes.length })
+                          : tx('Voor de klant · {n}', { n: klantNotes.length })}
                       </Text>
                     </Pressable>
                   );
@@ -1555,7 +1605,7 @@ export default function WorkOrderDetailScreen() {
               {notitieTab === 'klant' ? (
                 <View style={styles.klantInfo}>
                   <Text style={styles.klantInfoTekst}>
-                    Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.
+                    {tx('Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.')}
                   </Text>
                 </View>
               ) : null}
@@ -1563,7 +1613,7 @@ export default function WorkOrderDetailScreen() {
                 <Text style={styles.sectionError}>{partialErrors.notities}</Text>
               ) : (notitieTab === 'intern' ? internNotes : klantNotes).length === 0 ? (
                 <Text style={styles.empty}>
-                  {notitieTab === 'intern' ? 'Nog geen interne notities.' : 'Nog geen notities voor de klant.'}
+                  {notitieTab === 'intern' ? tx('Nog geen interne notities.') : tx('Nog geen notities voor de klant.')}
                 </Text>
               ) : (
                 <View style={{ gap: spacing.md }}>
@@ -1574,11 +1624,11 @@ export default function WorkOrderDetailScreen() {
                       <View key={n.id} style={styles.noteCard}>
                         <View style={styles.noteMetaRow}>
                           <Text style={styles.noteMeta}>
-                            {[n.auteur?.full_name ?? 'Onbekend', formatDateNL(n.created_at)].join(' · ')}
+                            {[n.auteur?.full_name ?? tx('Onbekend'), formatDateNL(n.created_at)].join(' · ')}
                           </Text>
                           {n.waarschuwing_verzonden_op ? (
                             <View style={styles.notePill}>
-                              <Text style={styles.notePillText}>Gewaarschuwd</Text>
+                              <Text style={styles.notePillText}>{tx('Gewaarschuwd')}</Text>
                             </View>
                           ) : null}
                         </View>
@@ -1588,7 +1638,7 @@ export default function WorkOrderDetailScreen() {
                               nog niets de deur uit (dashboard NotitiesSection). */}
                           {canNote && n.voor_klant && !n.waarschuwing_verzonden_op ? (
                             <Pressable onPress={() => setWaarschuwing(n)} accessibilityRole="button" style={styles.linkKnop}>
-                              <Text style={styles.addText}>Waarschuwing voor klant</Text>
+                              <Text style={styles.addText}>{tx('Waarschuwing voor klant')}</Text>
                             </Pressable>
                           ) : null}
                           {magWisselen ? (
@@ -1597,16 +1647,16 @@ export default function WorkOrderDetailScreen() {
                               accessibilityRole="button"
                               style={styles.linkKnop}
                             >
-                              <Text style={styles.addText}>{n.voor_klant ? 'Naar intern' : 'Naar de klant'}</Text>
+                              <Text style={styles.addText}>{n.voor_klant ? tx('Naar intern') : tx('Naar de klant')}</Text>
                             </Pressable>
                           ) : null}
                           {magNotitieAanpassen(n) ? (
                             <>
                               <Pressable onPress={() => setBewerkNotitie(n)} accessibilityRole="button" style={styles.linkKnop}>
-                                <Text style={styles.addText}>Wijzigen</Text>
+                                <Text style={styles.addText}>{tx('Wijzigen')}</Text>
                               </Pressable>
                               <Pressable onPress={() => verwijderNotitie(n)} accessibilityRole="button" style={styles.linkKnop}>
-                                <Text style={styles.addText}>Verwijderen</Text>
+                                <Text style={styles.addText}>{tx('Verwijderen')}</Text>
                               </Pressable>
                             </>
                           ) : null}
@@ -1621,22 +1671,26 @@ export default function WorkOrderDetailScreen() {
             {waarschuwingen.length ? (
               <Section
                 styles={styles}
-                title="Waarschuwingen aan de klant"
+                title={tx('Waarschuwingen aan de klant')}
                 icon={<AlertTriangle size={16} color="#F59E0B" />}
               >
                 {waarschuwingen.map((n) => (
                   <View key={n.id} style={styles.waarschuwing}>
-                    <Text style={styles.waarschuwingKop}>GECONSTATEERD</Text>
+                    <Text style={styles.waarschuwingKop}>{tx('GECONSTATEERD')}</Text>
                     <Text style={styles.waarschuwingTekst}>{alsTekst(n.note)}</Text>
                     {n.gevolg ? (
                       <>
-                        <Text style={styles.waarschuwingKop}>MOGELIJK GEVOLG</Text>
+                        <Text style={styles.waarschuwingKop}>{tx('MOGELIJK GEVOLG')}</Text>
                         <Text style={styles.waarschuwingTekst}>{alsTekst(n.gevolg)}</Text>
                       </>
                     ) : null}
                     <Text style={styles.waarschuwingVoet}>
-                      Schriftelijk gemeld op {formatDateNL(n.waarschuwing_verzonden_op)}
-                      {n.waarschuwing_verzonden_naar ? ` aan ${n.waarschuwing_verzonden_naar}` : ''}
+                      {n.waarschuwing_verzonden_naar
+                        ? tx('Schriftelijk gemeld op {datum} aan {naar}', {
+                            datum: formatDateNL(n.waarschuwing_verzonden_op),
+                            naar: n.waarschuwing_verzonden_naar,
+                          })
+                        : tx('Schriftelijk gemeld op {datum}', { datum: formatDateNL(n.waarschuwing_verzonden_op) })}
                     </Text>
                   </View>
                 ))}
@@ -1648,13 +1702,13 @@ export default function WorkOrderDetailScreen() {
               {/* Zonder handtekening met een leeg tekenvak, zodat een uitgeprinte
                   bon ook met pen kan worden afgetekend. */}
               <Button
-                label="Werkbon als PDF"
+                label={tx('Werkbon als PDF')}
                 variant="secondary"
                 onPress={() =>
                   setPdfDoc({
                     soort: 'werkbon',
                     id: workOrder.id,
-                    titel: `Werkbon ${workOrder.nummer ?? ''}`.trim(),
+                    titel: tx('Werkbon {nummer}', { nummer: workOrder.nummer ?? '' }).trim(),
                     opgeslagenEerst: false,
                   })
                 }
@@ -1662,18 +1716,19 @@ export default function WorkOrderDetailScreen() {
               {opSlot ? (
                 <View style={[styles.eindKnop, styles.eindKnopKlaar]}>
                   <Text style={styles.eindKnopTekst}>
-                    Ondertekend en afgerond{workOrder.ondertekend_op ? ` · ${formatKortMoment(workOrder.ondertekend_op)}` : ''}
+                    {tx('Ondertekend en afgerond')}
+                    {workOrder.ondertekend_op ? ` · ${formatKortMoment(workOrder.ondertekend_op)}` : ''}
                   </Text>
                 </View>
               ) : status !== 'afgerond' && status !== 'geannuleerd' && editDetail && !readonly ? (
-                <Button label="Klus afronden" onPress={vraagAfronden} loading={statusUpdating} />
+                <Button label={tx('Klus afronden')} onPress={vraagAfronden} loading={statusUpdating} />
               ) : status === 'afgerond' && editDetail && !readonly ? (
                 // Afgerond maar nog niet getekend: alsnog laten ondertekenen.
-                <Button label="Laten ondertekenen" onPress={() => setAfrondModal(true)} />
+                <Button label={tx('Laten ondertekenen')} onPress={() => setAfrondModal(true)} />
               ) : null}
               {magAnnuleren && (status === 'geannuleerd' || status !== 'afgerond') ? (
                 <Button
-                  label={status === 'geannuleerd' ? 'Terugzetten' : 'Werkbon annuleren'}
+                  label={status === 'geannuleerd' ? tx('Terugzetten') : tx('Werkbon annuleren')}
                   variant="ghost"
                   onPress={vraagAnnuleren}
                   disabled={statusUpdating}
@@ -1683,8 +1738,8 @@ export default function WorkOrderDetailScreen() {
 
             <View style={styles.metaBlock}>
               <Text style={styles.metaText}>
-                Aangemaakt {formatDateNL(workOrder.created_at)}
-                {workOrder.updated_at ? ` · bijgewerkt ${formatDateNL(workOrder.updated_at)}` : ''}
+                {tx('Aangemaakt {datum}', { datum: formatDateNL(workOrder.created_at) })}
+                {workOrder.updated_at ? ` · ${tx('bijgewerkt {datum}', { datum: formatDateNL(workOrder.updated_at) })}` : ''}
               </Text>
             </View>
           </AnimatedScreen>
@@ -1699,7 +1754,7 @@ export default function WorkOrderDetailScreen() {
         voorKlant={notitieTab === 'klant'}
         onClose={() => setNoteModal(false)}
         onSubmit={async (body, gekozen) => {
-          if (!user?.id) return { error: 'Sessie niet geladen.' };
+          if (!user?.id) return { error: tx('Sessie niet geladen.') };
           // Getagde collega's als mention-span, zoals NoteEditor in het dashboard.
           const html = gekozen.length ? tekstMetVermeldingen(body, gekozen) : alsHtml(body);
           const { data, error: noteError } = await addWorkOrderNote({
@@ -1709,7 +1764,7 @@ export default function WorkOrderDetailScreen() {
             note: html,
             voor_klant: notitieTab === 'klant',
           });
-          if (noteError || !data) return { error: noteError ?? 'Notitie kon niet worden toegevoegd.' };
+          if (noteError || !data) return { error: noteError ?? tx('Notitie kon niet worden toegevoegd.') };
           setNotes((prev) => [data, ...prev]);
           // De getagde collega hoort het ook (createMentionNotifications).
           void meldVermeldingen({
@@ -1734,7 +1789,7 @@ export default function WorkOrderDetailScreen() {
           onSubmit={async (body, gekozen) => {
             const html = gekozen.length ? tekstMetVermeldingen(body, gekozen) : alsHtml(body);
             const { data, error: e } = await updateWorkOrderNote(bewerkNotitie.id, html);
-            if (e || !data) return { error: e ?? 'Notitie kon niet worden gewijzigd.' };
+            if (e || !data) return { error: e ?? tx('Notitie kon niet worden gewijzigd.') };
             setNotes((prev) => prev.map((x) => (x.id === data.id ? data : x)));
             return { error: null };
           }}
@@ -1754,7 +1809,7 @@ export default function WorkOrderDetailScreen() {
               company_id: workOrder.company_id,
               ...regel,
             });
-            if (matError || !data) return { error: matError ?? 'Opslaan mislukt.' };
+            if (matError || !data) return { error: matError ?? tx('Opslaan mislukt.') };
             setMaterials((prev) => [...prev, data]);
             if (data.leverancier_id && !leveranciers[data.leverancier_id]) herlaad();
             return { error: null };
@@ -1798,7 +1853,7 @@ export default function WorkOrderDetailScreen() {
           kiesMedewerker={magUrenVoorAnder}
           onClose={() => setTimeModal(false)}
           onSubmit={async (input) => {
-            if (!user?.id) return { error: 'Sessie niet geladen.' };
+            if (!user?.id) return { error: tx('Sessie niet geladen.') };
             const res = await createWerkbonUur({
               company_id: workOrder.company_id,
               werkbon_id: workOrder.id,
@@ -1875,13 +1930,34 @@ export default function WorkOrderDetailScreen() {
 function formatKortMoment(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Getal met komma of punt volgens de taal (alleen weergave). */
+function getal(n: number, decimalen?: number): string {
+  return n.toLocaleString(
+    locale(),
+    decimalen == null ? { maximumFractionDigits: 2 } : { minimumFractionDigits: decimalen, maximumFractionDigits: decimalen },
+  );
+}
+
+/** Vertaalde zin met één {plaatshouder} vetgedrukt. */
+function metVet(zin: string, naam: string, waarde: string) {
+  const [voor, ...na] = zin.split(`{${naam}}`);
+  if (!na.length) return zin;
+  return (
+    <>
+      {voor}
+      <Text style={{ fontWeight: '700' }}>{waarde}</Text>
+      {na.join(waarde)}
+    </>
+  );
 }
 
 function formatDatumTijd(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(locale(), { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // ---------------------------------------------------------------------------
@@ -1970,7 +2046,7 @@ function TaskRow({
         <Pressable
           accessibilityRole="button"
           onPress={onDelete}
-          accessibilityLabel={`${task.omschrijving} verwijderen`}
+          accessibilityLabel={tx('{naam} verwijderen', { naam: task.omschrijving })}
           style={({ pressed }) => [styles.iconKnop, pressed && { opacity: 0.6 }]}
         >
           <Trash2 size={16} color={th.muted} strokeWidth={2} />
@@ -2042,12 +2118,12 @@ function MeerwerkPrijsInvoer({
         onChangeText={setUren}
         onBlur={opslaan}
         onSubmitEditing={opslaan}
-        placeholder="uren"
+        placeholder={tx('uren')}
         placeholderTextColor={th.muted2}
         keyboardType="decimal-pad"
         returnKeyType="done"
         aria-busy={bezig}
-        accessibilityLabel="Uren meerwerk"
+        accessibilityLabel={tx('Uren meerwerk')}
         style={[styles.taakInvoerVeld, styles.meerwerkPrijsUren]}
       />
       <TextInput
@@ -2055,12 +2131,12 @@ function MeerwerkPrijsInvoer({
         onChangeText={setBedrag}
         onBlur={opslaan}
         onSubmitEditing={opslaan}
-        placeholder="€ excl. btw"
+        placeholder={tx('€ excl. btw')}
         placeholderTextColor={th.muted2}
         keyboardType="decimal-pad"
         returnKeyType="done"
         aria-busy={bezig}
-        accessibilityLabel="Bedrag meerwerk excl. btw"
+        accessibilityLabel={tx('Bedrag meerwerk excl. btw')}
         style={[styles.taakInvoerVeld, styles.meerwerkPrijsBedrag]}
       />
       {bezig ? <ActivityIndicator size="small" color={ds.green700} /> : null}
@@ -2076,7 +2152,7 @@ function ModalKop({ styles, titel, onClose }: { styles: Styles; titel: string; o
   return (
     <View style={styles.modalHeader}>
       <Pressable onPress={onClose} hitSlop={8} style={styles.minTouch} accessibilityRole="button">
-        <Text style={styles.modalCancel}>Annuleren</Text>
+        <Text style={styles.modalCancel}>{tx('Annuleren')}</Text>
       </Pressable>
       <Text style={styles.modalTitle}>{titel}</Text>
       <View style={{ width: 64 }} />
@@ -2152,7 +2228,7 @@ function AddNoteModal({
   };
   const submit = async () => {
     if (!body.trim()) {
-      setErrorMsg('Voer een notitie in.');
+      setErrorMsg(tx('Voer een notitie in.'));
       return;
     }
     setSubmitting(true);
@@ -2174,27 +2250,27 @@ function AddNoteModal({
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ModalKop
             styles={styles}
-            titel={begin ? 'Notitie wijzigen' : voorKlant ? 'Notitie voor de klant' : 'Interne notitie'}
+            titel={begin ? tx('Notitie wijzigen') : voorKlant ? tx('Notitie voor de klant') : tx('Interne notitie')}
             onClose={close}
           />
           <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             {voorKlant ? (
               <View style={styles.klantInfo}>
                 <Text style={styles.klantInfoTekst}>
-                  Deze regel komt op de werkbon-PDF en op de pagina waar de klant tekent.
+                  {tx('Deze regel komt op de werkbon-PDF en op de pagina waar de klant tekent.')}
                 </Text>
               </View>
             ) : null}
             <FormField
-              label="Notitie"
+              label={tx('Notitie')}
               value={body}
               onChangeText={setBody}
               onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
               multiline
               placeholder={
                 voorKlant
-                  ? 'Wat moet de klant weten? Bijvoorbeeld: kraan vervangen, oude meegenomen…'
-                  : 'Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen'
+                  ? tx('Wat moet de klant weten? Bijvoorbeeld: kraan vervangen, oude meegenomen…')
+                  : tx('Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen')
               }
               autoFocus
               editable={!submitting}
@@ -2217,7 +2293,7 @@ function AddNoteModal({
               </View>
             ) : null}
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-            <Button label="Opslaan" onPress={submit} loading={submitting} />
+            <Button label={tx('Opslaan')} onPress={submit} loading={submitting} />
           </ScrollView>
         </KeyboardAvoidingView>
       </MobielKader>
@@ -2252,7 +2328,7 @@ function TaakInvoer({
     const { error: e } = await onAdd(v);
     setBezig(false);
     if (e) {
-      Dialog.alert('Toevoegen mislukt', e);
+      Dialog.alert(tx('Toevoegen mislukt'), e);
       return;
     }
     setTekst('');
@@ -2275,7 +2351,7 @@ function TaakInvoer({
         onPress={voegToe}
         disabled={!tekst.trim() || bezig}
         accessibilityRole="button"
-        accessibilityLabel={`${knopLabel} toevoegen`}
+        accessibilityLabel={tx('{naam} toevoegen', { naam: knopLabel })}
         style={({ pressed }) => [styles.taakInvoerKnop, (!tekst.trim() || bezig) && styles.uit, pressed && { opacity: 0.8 }]}
       >
         {bezig ? <ActivityIndicator size="small" color={ds.green700} /> : <Text style={styles.addText}>+ {knopLabel}</Text>}
@@ -2343,10 +2419,10 @@ function AddMaterialModal({
 
   const submit = async () => {
     const aantal = Number(aantalStr.replace(',', '.'));
-    if (!keuze) return setErrorMsg('Kies een materiaal of vrij materiaal.');
+    if (!keuze) return setErrorMsg(tx('Kies een materiaal of vrij materiaal.'));
     const regelNaam = gekozen ? gekozen.naam : naam;
-    if (!regelNaam.trim()) return setErrorMsg('Vul een naam in.');
-    if (!Number.isFinite(aantal) || aantal <= 0) return setErrorMsg('Vul een geldig aantal in.');
+    if (!regelNaam.trim()) return setErrorMsg(tx('Vul een naam in.'));
+    if (!Number.isFinite(aantal) || aantal <= 0) return setErrorMsg(tx('Vul een geldig aantal in.'));
     const regel: NieuweRegel = gekozen
       ? {
           naam: gekozen.naam,
@@ -2383,16 +2459,16 @@ function AddMaterialModal({
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ModalKop styles={styles} titel="Materiaal" onClose={onClose} />
+          <ModalKop styles={styles} titel={tx('Materiaal')} onClose={onClose} />
           <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             <SelectField
-              label="Kies materiaal"
+              label={tx('Kies materiaal')}
               value={keuze}
               onChange={setKeuze}
-              placeholder="Kies materiaal"
+              placeholder={tx('Kies materiaal')}
               searchable
               options={[
-                { id: VRIJ, label: 'Vrij materiaal (zelf invullen)…' },
+                { id: VRIJ, label: tx('Vrij materiaal (zelf invullen)…') },
                 ...bibliotheek.map((m) => ({
                   id: m.id,
                   label: m.naam,
@@ -2404,9 +2480,9 @@ function AddMaterialModal({
             />
             {vrij ? (
               <>
-                <FormField label="Naam" value={naam} onChangeText={setNaam} placeholder="Bijv. Installatiedraad 2,5mm²" editable={!submitting} />
+                <FormField label={tx('Naam')} value={naam} onChangeText={setNaam} placeholder={tx('Bijv. Installatiedraad 2,5mm²')} editable={!submitting} />
                 <View>
-                  <Text style={styles.veldLabel}>Eenheid</Text>
+                  <Text style={styles.veldLabel}>{tx('Eenheid')}</Text>
                   <View style={styles.chipRij}>
                     {EENHEDEN.map((e) => (
                       <Pressable
@@ -2426,34 +2502,41 @@ function AddMaterialModal({
             ) : gekozen ? (
               <Text style={styles.meerwerkHint}>
                 {gekozen.eenheid}
-                {magBedragen && gekozen.verkoopprijs != null ? ` · verkoop ${formatEUR(gekozen.verkoopprijs)}` : ''}
-                {magInkoop && gekozen.inkoopprijs != null ? ` · inkoop ${formatEUR(gekozen.inkoopprijs)}` : ''}
-                {'\n'}Prijs en leverancier liggen vast op het materiaal in de bibliotheek.
+                {magBedragen && gekozen.verkoopprijs != null
+                  ? ` · ${tx('verkoop {bedrag}', { bedrag: formatEUR(gekozen.verkoopprijs) })}`
+                  : ''}
+                {magInkoop && gekozen.inkoopprijs != null
+                  ? ` · ${tx('inkoop {bedrag}', { bedrag: formatEUR(gekozen.inkoopprijs) })}`
+                  : ''}
+                {'\n'}
+                {tx('Prijs en leverancier liggen vast op het materiaal in de bibliotheek.')}
               </Text>
             ) : null}
-            <FormField label="Aantal" value={aantalStr} onChangeText={setAantalStr} keyboardType="decimal-pad" editable={!submitting} />
+            <FormField label={tx('Aantal')} value={aantalStr} onChangeText={setAantalStr} keyboardType="decimal-pad" editable={!submitting} />
             {vrij && magBedragen ? (
-              <FormField label="Verkoopprijs per eenheid (excl. btw)" value={prijsStr} onChangeText={setPrijsStr} keyboardType="decimal-pad" placeholder="0,00" />
+              <FormField label={tx('Verkoopprijs per eenheid (excl. btw)')} value={prijsStr} onChangeText={setPrijsStr} keyboardType="decimal-pad" placeholder="0,00" />
             ) : null}
             {vrij && magInkoop ? (
-              <FormField label="Inkoop per eenheid (excl. btw · intern)" value={inkoopStr} onChangeText={setInkoopStr} keyboardType="decimal-pad" placeholder="0,00" />
+              <FormField label={tx('Inkoop per eenheid (excl. btw · intern)')} value={inkoopStr} onChangeText={setInkoopStr} keyboardType="decimal-pad" placeholder="0,00" />
             ) : null}
             {vrij ? (
               <SelectField
-                label="Leverancier"
+                label={tx('Leverancier')}
                 value={leverancierId}
                 onChange={setLeverancierId}
                 allowEmpty
-                emptyLabel="— Geen leverancier —"
-                placeholder="— Geen leverancier —"
+                emptyLabel={tx('— Geen leverancier —')}
+                placeholder={tx('— Geen leverancier —')}
                 options={leveranciers.map((l) => ({ id: l.id, label: l.naam }))}
               />
             ) : null}
             {magBedragen && keuze ? (
-              <Text style={styles.meerwerkHint}>Subtotaal {formatEUR(materiaalSubtotaal(aantalNum, prijs))} (excl. btw)</Text>
+              <Text style={styles.meerwerkHint}>
+                {tx('Subtotaal {bedrag} (excl. btw)', { bedrag: formatEUR(materiaalSubtotaal(aantalNum, prijs)) })}
+              </Text>
             ) : null}
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-            <Button label="Toevoegen" onPress={submit} loading={submitting} disabled={!keuze || (vrij && !naam.trim())} />
+            <Button label={tx('Toevoegen')} onPress={submit} loading={submitting} disabled={!keuze || (vrij && !naam.trim())} />
           </ScrollView>
         </KeyboardAvoidingView>
       </MobielKader>
@@ -2517,18 +2600,18 @@ function AddTimeEntryModal({
   const tijdFout =
     start && eind
       ? eind <= start
-        ? 'Eindtijd moet later zijn dan starttijd'
+        ? tx('Eindtijd moet later zijn dan starttijd')
         : uren === null || uren <= 0
-          ? 'Er blijft geen tijd over na aftrek van de pauze'
+          ? tx('Er blijft geen tijd over na aftrek van de pauze')
           : null
       : null;
 
   const submit = async () => {
-    if (!isGeldigeISODatum(datum)) return setErrorMsg('Kies een geldige datum.');
-    if (!start || !eind) return setErrorMsg('Vul een begin- en eindtijd in.');
-    if (tijdFout || uren === null) return setErrorMsg(tijdFout ?? 'Controleer de tijden.');
+    if (!isGeldigeISODatum(datum)) return setErrorMsg(tx('Kies een geldige datum.'));
+    if (!start || !eind) return setErrorMsg(tx('Vul een begin- en eindtijd in.'));
+    if (tijdFout || uren === null) return setErrorMsg(tijdFout ?? tx('Controleer de tijden.'));
     const km = kmStr.trim() ? Math.round(Number(kmStr.replace(',', '.'))) : null;
-    if (km !== null && (!Number.isFinite(km) || km < 0)) return setErrorMsg('Vul een geldig aantal kilometers in.');
+    if (km !== null && (!Number.isFinite(km) || km < 0)) return setErrorMsg(tx('Vul een geldig aantal kilometers in.'));
     setSubmitting(true);
     setErrorMsg(null);
     const { error: e } = await onSubmit({
@@ -2550,30 +2633,32 @@ function AddTimeEntryModal({
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: th.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ModalKop styles={styles} titel={uur ? 'Uren wijzigen' : 'Uren boeken'} onClose={onClose} />
+          <ModalKop styles={styles} titel={uur ? tx('Uren wijzigen') : tx('Uren boeken')} onClose={onClose} />
           <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-            <DateField label="Datum *" value={datum} onChange={setDatum} disabled={submitting} />
+            <DateField label={tx('Datum *')} value={datum} onChange={setDatum} disabled={submitting} />
             {kiesMedewerker ? (
               <SelectField
-                label="Medewerker"
+                label={tx('Medewerker')}
                 value={profileId}
                 onChange={setProfileId}
                 options={team.map((c) => ({
                   id: c.id,
-                  label: `${c.full_name ?? 'Naamloos'}${c.id === ikzelf ? ' (ikzelf)' : ''}`,
+                  label: c.id === ikzelf
+                    ? tx('{naam} (ikzelf)', { naam: c.full_name ?? tx('Naamloos') })
+                    : (c.full_name ?? tx('Naamloos')),
                 }))}
               />
             ) : null}
             <View style={styles.tijdRij}>
               <View style={{ flex: 1 }}>
-                <TimeField label="Starttijd *" value={start || null} onChange={(v) => setStart(rondAfOpVijf(v))} />
+                <TimeField label={tx('Starttijd *')} value={start || null} onChange={(v) => setStart(rondAfOpVijf(v))} />
               </View>
               <View style={{ flex: 1 }}>
-                <TimeField label="Eindtijd *" value={eind || null} onChange={(v) => setEind(rondAfOpVijf(v))} />
+                <TimeField label={tx('Eindtijd *')} value={eind || null} onChange={(v) => setEind(rondAfOpVijf(v))} />
               </View>
             </View>
             <View>
-              <Text style={styles.veldLabel}>Pauze (minuten)</Text>
+              <Text style={styles.veldLabel}>{tx('Pauze (minuten)')}</Text>
               <View style={styles.chipRij}>
                 {[0, 15, 30, 45, 60].map((m) => (
                   <Pressable
@@ -2589,17 +2674,19 @@ function AddTimeEntryModal({
                 ))}
               </View>
             </View>
-            <FormField label="Of zelf (minuten)" value={pauzeStr} onChangeText={setPauzeStr} keyboardType="number-pad" />
+            <FormField label={tx('Of zelf (minuten)')} value={pauzeStr} onChangeText={setPauzeStr} keyboardType="number-pad" />
             {uren !== null && !tijdFout ? (
               <Text style={styles.meerwerkHint}>
-                ≈ {uren.toFixed(2).replace('.', ',')} uur{pauze ? ` (${pauze} min pauze eraf)` : ''}
+                {pauze
+                  ? tx('≈ {uren} uur ({min} min pauze eraf)', { uren: getal(uren, 2), min: pauze })
+                  : tx('≈ {uren} uur', { uren: getal(uren, 2) })}
               </Text>
             ) : null}
             {tijdFout ? <Text style={styles.modalError}>{tijdFout}</Text> : null}
-            <FormField label="Gereden kilometers (optioneel)" value={kmStr} onChangeText={setKmStr} keyboardType="number-pad" />
-            <FormField label="Notitie" value={notitie} onChangeText={setNotitie} multiline placeholder="Wat is er gedaan?" />
+            <FormField label={tx('Gereden kilometers (optioneel)')} value={kmStr} onChangeText={setKmStr} keyboardType="number-pad" />
+            <FormField label={tx('Notitie')} value={notitie} onChangeText={setNotitie} multiline placeholder={tx('Wat is er gedaan?')} />
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
-            <Button label="Opslaan" onPress={submit} loading={submitting} disabled={!start || !eind || !!tijdFout} />
+            <Button label={tx('Opslaan')} onPress={submit} loading={submitting} disabled={!start || !eind || !!tijdFout} />
           </ScrollView>
         </KeyboardAvoidingView>
       </MobielKader>
@@ -2631,10 +2718,10 @@ function StartMomentModal({
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   const opslaan = async () => {
-    if (!isGeldigeISODatum(datum) || datum > vandaagISO()) return setFout('Kies een startdatum van vandaag of eerder.');
-    if (!tijd) return setFout('Vul de starttijd in.');
+    if (!isGeldigeISODatum(datum) || datum > vandaagISO()) return setFout(tx('Kies een startdatum van vandaag of eerder.'));
+    if (!tijd) return setFout(tx('Vul de starttijd in.'));
     const d = lokaalNaarUtc(datum, tijd);
-    if (!d) return setFout('Vul een geldige startdatum en -tijd in');
+    if (!d) return setFout(tx('Vul een geldige startdatum en -tijd in'));
     setBezig(true);
     const e = await onSubmit(d.toISOString());
     setBezig(false);
@@ -2644,12 +2731,12 @@ function StartMomentModal({
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
       <MobielKader soort="formulier">
         <View style={{ flex: 1, backgroundColor: th.bg }}>
-          <ModalKop styles={styles} titel="Wanneer is de klus gestart?" onClose={onClose} />
+          <ModalKop styles={styles} titel={tx('Wanneer is de klus gestart?')} onClose={onClose} />
           <ScrollView contentContainerStyle={styles.modalBody}>
-            <DateField label="Startdatum" value={datum} onChange={setDatum} maximum={vandaagISO()} />
-            <TimeField label="Starttijd" value={tijd || null} onChange={setTijd} />
+            <DateField label={tx('Startdatum')} value={datum} onChange={setDatum} maximum={vandaagISO()} />
+            <TimeField label={tx('Starttijd')} value={tijd || null} onChange={setTijd} />
             {fout ? <Text style={styles.modalError}>{fout}</Text> : null}
-            <Button label="Opslaan & verder" onPress={opslaan} loading={bezig} disabled={!datum || !tijd} />
+            <Button label={tx('Opslaan & verder')} onPress={opslaan} loading={bezig} disabled={!datum || !tijd} />
           </ScrollView>
         </View>
       </MobielKader>

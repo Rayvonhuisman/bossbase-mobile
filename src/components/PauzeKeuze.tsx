@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import { PAUZE_KEUZES } from '@/lib/urenRegels';
+import { tx } from '@/i18n';
 
 /**
  * Pauze kiezen zoals in het dashboard (`UrenVelden.jsx`): vaste knoppen
@@ -10,7 +11,7 @@ import { PAUZE_KEUZES } from '@/lib/urenRegels';
  * De waarde is altijd een geheel aantal minuten ≥ 0.
  */
 export function PauzeKeuze({
-  label = 'Pauze',
+  label,
   waarde,
   onChange,
 }: {
@@ -39,24 +40,24 @@ export function PauzeKeuze({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label ?? tx('Pauze')}</Text>
       <View style={styles.rij}>
         {PAUZE_KEUZES.map((m) =>
-          knop(String(m), m === 0 ? 'geen' : `${m} min`, !toonAnders && waarde === m, () => {
+          knop(String(m), m === 0 ? tx('geen', undefined, 'pauze') : tx('{m} min', { m }), !toonAnders && waarde === m, () => {
             setAnders(false);
             onChange(m);
           }),
         )}
-        {knop('anders', 'anders', toonAnders, () => setAnders(true))}
+        {knop('anders', tx('anders', undefined, 'pauze'), toonAnders, () => setAnders(true))}
       </View>
       {toonAnders ? (
         <TextInput
           value={String(waarde)}
           onChangeText={(v) => onChange(Math.max(0, Math.round(Number(v.replace(',', '.')) || 0)))}
           keyboardType="number-pad"
-          placeholder="minuten"
+          placeholder={tx('minuten')}
           placeholderTextColor={t.muted2}
-          accessibilityLabel="Pauze in minuten"
+          accessibilityLabel={tx('Pauze in minuten')}
           style={styles.invoer}
         />
       ) : null}

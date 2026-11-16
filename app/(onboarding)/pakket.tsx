@@ -8,6 +8,7 @@ import { useOnboarding } from '@/providers';
 import { PAKKETTEN, PROEF_DAGEN, type Pakket } from '@/lib/registratie';
 import { PrimaryButton, TopBar } from './_components';
 import { onb } from './_tokens';
+import { tx } from '@/i18n';
 
 const ICONEN: Record<Pakket, typeof User> = { groei: User, team: Users };
 
@@ -38,8 +39,8 @@ export default function PakketScreen() {
       <TopBar step={0} />
 
       <View style={styles.headerBlock}>
-        <Text style={styles.title}>Welk pakket past{'\n'}bij je?</Text>
-        <Text style={styles.sub}>Kies waar je nu staat. {PROEF_DAGEN} dagen gratis proberen, zonder creditcard.</Text>
+        <Text style={styles.title}>{tx('Welk pakket past\nbij je?')}</Text>
+        <Text style={styles.sub}>{tx('Kies waar je nu staat. {dagen} dagen gratis proberen, zonder creditcard.', { dagen: PROEF_DAGEN })}</Text>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -59,8 +60,8 @@ export default function PakketScreen() {
                 <Icon size={26} color={onb.ink} strokeWidth={2} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.cardTitle}>{p.titel}</Text>
-                <Text style={styles.cardDesc}>{p.omschrijving}</Text>
+                <Text style={styles.cardTitle}>{tx(p.titel)}</Text>
+                <Text style={styles.cardDesc}>{tx(p.omschrijving)}</Text>
               </View>
               <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
             </Pressable>
@@ -70,22 +71,21 @@ export default function PakketScreen() {
         <View style={styles.trialNote}>
           <View style={styles.trialTitleRow}>
             <Sparkles size={15} color={onb.greenDk} strokeWidth={2} />
-            <Text style={styles.trialTitle}>{PROEF_DAGEN} dagen gratis proberen</Text>
+            <Text style={styles.trialTitle}>{tx('{dagen} dagen gratis proberen', { dagen: PROEF_DAGEN })}</Text>
           </View>
           <Text style={styles.trialText}>
-            Je probeert je keuze {PROEF_DAGEN} dagen gratis, zonder creditcard. Daarna stopt het vanzelf, tenzij je een
-            abonnement afsluit.
+            {tx('Je probeert je keuze {dagen} dagen gratis, zonder creditcard. Daarna stopt het vanzelf, tenzij je een abonnement afsluit.', { dagen: PROEF_DAGEN })}
           </Text>
         </View>
 
         <Text style={styles.inviteHint}>
-          Uitgenodigd door je werkgever? Dan maak je hier geen account aan, maar volg je de link in de uitnodigingsmail.
+          {tx('Uitgenodigd door je werkgever? Dan maak je hier geen account aan, maar volg je de link in de uitnodigingsmail.')}
         </Text>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <PrimaryButton
-          label="Doorgaan"
+          label={tx('Doorgaan')}
           onPress={onContinue}
           trailing={<ArrowRight size={16} color="#fff" strokeWidth={2} />}
         />

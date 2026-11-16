@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getCompanyId, isReadonly } from '@/lib/sessionContext';
 import { classificeerFout, writeFout, type WriteResult } from '@/lib/writeResult';
 import { naarRij, type Eenheid, type Meting, type MetingForm, type Soort, type VoorstelMeting } from '@/lib/metingen';
+import { tx } from '@/i18n';
 
 /**
  * Metingen bij een project — tabel `metingen`, zoals `services/metingService.js`
@@ -100,9 +101,9 @@ export async function createMeting(
   { volgorde = 0 }: { volgorde?: number } = {},
 ): Promise<WriteResult<Meting>> {
   const rij = naarRij(m);
-  if (!rij.naam) return writeFout('validatie', 'Geef de meting een naam, bijvoorbeeld "Raam woonkamer links".');
+  if (!rij.naam) return writeFout('validatie', tx('Geef de meting een naam, bijvoorbeeld "Raam woonkamer links".'));
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   if (isReadonly()) return writeFout('readonly');
   const { data, error } = await supabase
     .from('metingen')
@@ -110,18 +111,18 @@ export async function createMeting(
     .select(SELECT);
   if (error) return classificeerFout(error, 'metingService.createMeting', isReadonly());
   const eerste = (data as Rij[] | null)?.[0];
-  if (!eerste) return writeFout('geen-rechten', 'Je mag bij dit project geen metingen toevoegen.');
+  if (!eerste) return writeFout('geen-rechten', tx('Je mag bij dit project geen metingen toevoegen.'));
   return { ok: true, data: toMeting(eerste) };
 }
 
 export async function updateMeting(id: string, m: MetingForm): Promise<WriteResult<Meting>> {
   const rij = naarRij(m);
-  if (!rij.naam) return writeFout('validatie', 'Een meting moet een naam houden.');
+  if (!rij.naam) return writeFout('validatie', tx('Een meting moet een naam houden.'));
   if (isReadonly()) return writeFout('readonly');
   const { data, error } = await supabase.from('metingen').update(rij).eq('id', id).select(SELECT);
   if (error) return classificeerFout(error, 'metingService.updateMeting', isReadonly());
   const eerste = (data as Rij[] | null)?.[0];
-  if (!eerste) return writeFout('geen-rechten', 'Je mag deze meting niet wijzigen.');
+  if (!eerste) return writeFout('geen-rechten', tx('Je mag deze meting niet wijzigen.'));
   return { ok: true, data: toMeting(eerste) };
 }
 
@@ -129,7 +130,7 @@ export async function deleteMeting(meting: Meting): Promise<WriteResult<null>> {
   if (isReadonly()) return writeFout('readonly');
   const { data, error } = await supabase.from('metingen').delete().eq('id', meting.id).select('id');
   if (error) return classificeerFout(error, 'metingService.deleteMeting', isReadonly());
-  if (!(data as unknown[] | null)?.length) return writeFout('geen-rechten', 'Je mag deze meting niet verwijderen.');
+  if (!(data as unknown[] | null)?.length) return writeFout('geen-rechten', tx('Je mag deze meting niet verwijderen.'));
   // Foto's van de meting horen er niet meer bij; mislukt dat, dan blijft de meting toch weg.
   if (meting.fotos.length) await supabase.storage.from(BUCKET).remove(meting.fotos).then(undefined, () => {});
   return { ok: true, data: null };
@@ -149,11 +150,11 @@ export async function vertelMetingen(
   try {
     res = await supabase.functions.invoke('metingen-uitlezen', { body: { project_id: projectId, tekst, bestaande } });
   } catch {
-    return { ok: false, melding: 'Boss is niet bereikbaar. Controleer je internet en probeer het opnieuw.' };
+    return { ok: false, melding: tx('Boss is niet bereikbaar. Controleer je internet en probeer het opnieuw.') };
   }
   const { data, error } = res;
   if (error) {
-    let melding = 'Boss kon dit niet verwerken. Probeer het zo nog eens.';
+    let melding = tx('Boss kon dit niet verwerken. Probeer het zo nog eens.');
     try {
       const j = await (error as { context?: { json?: () => Promise<{ error?: string }> } })?.context?.json?.();
       if (j?.error) melding = j.error;
@@ -163,6 +164,6 @@ export async function vertelMetingen(
     return { ok: false, melding };
   }
   const d = data as { success?: boolean; error?: string; metingen?: VoorstelMeting[]; melding?: string } | null;
-  if (!d?.success) return { ok: false, melding: d?.error || 'Boss kon dit niet verwerken.' };
+  if (!d?.success) return { ok: false, melding: d?.error || tx('Boss kon dit niet verwerken.') };
   return { ok: true, metingen: d.metingen || [], melding: d.melding || '' };
 }

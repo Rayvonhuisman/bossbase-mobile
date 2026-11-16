@@ -10,6 +10,7 @@
  *  - "Overschrijding uren" vergelijkt met de echte werkbonuren per project
  *    (het dashboard las `usedHours`, dat niet meer op een project staat).
  */
+import { tx, txn } from '@/i18n';
 
 export type DbKlant = {
   id: string;
@@ -511,37 +512,37 @@ export function segmentSleutel(profielId: string | null | undefined): string {
 // ── Keuzelijsten ───────────────────────────────────────────────────────────
 
 export const PROJECT_STATUS_OPTIES = [
-  { id: 'gepland', label: 'Gepland' },
-  { id: 'in_uitvoering', label: 'In uitvoering' },
-  { id: 'afgerond', label: 'Afgerond' },
+  { id: 'gepland', get label() { return tx('Gepland'); } },
+  { id: 'in_uitvoering', get label() { return tx('In uitvoering'); } },
+  { id: 'afgerond', get label() { return tx('Afgerond'); } },
 ];
 
 export const OFFERTE_STATUS_OPTIES = [
-  { id: 'concept', label: 'Concept' },
-  { id: 'verzonden', label: 'Verzonden' },
-  { id: 'geaccepteerd', label: 'Geaccepteerd' },
-  { id: 'afgewezen', label: 'Afgewezen' },
+  { id: 'concept', get label() { return tx('Concept'); } },
+  { id: 'verzonden', get label() { return tx('Verzonden'); } },
+  { id: 'geaccepteerd', get label() { return tx('Geaccepteerd'); } },
+  { id: 'afgewezen', get label() { return tx('Afgewezen'); } },
 ];
 
 export const FACTUUR_STATUS_OPTIES = [
-  { id: 'concept', label: 'Concept' },
-  { id: 'verzonden', label: 'Verzonden' },
-  { id: 'betaald', label: 'Betaald' },
+  { id: 'concept', get label() { return tx('Concept'); } },
+  { id: 'verzonden', get label() { return tx('Verzonden'); } },
+  { id: 'betaald', get label() { return tx('Betaald'); } },
 ];
 
 export const ACTIVITEIT_TYPE_OPTIES = [
-  { id: 'call', label: 'Bellen' },
-  { id: 'email', label: 'E-mail' },
-  { id: 'visit', label: 'Bezoek' },
-  { id: 'task', label: 'Taak' },
-  { id: 'follow', label: 'Opvolgen' },
+  { id: 'call', get label() { return tx('Bellen'); } },
+  { id: 'email', get label() { return tx('E-mail'); } },
+  { id: 'visit', get label() { return tx('Bezoek'); } },
+  { id: 'task', get label() { return tx('Taak'); } },
+  { id: 'follow', get label() { return tx('Opvolgen'); } },
 ];
 
 export const CONTACT_DAGEN_OPTIES = [
-  { id: '7', label: '7 dagen' },
-  { id: '30', label: '30 dagen' },
-  { id: '90', label: '90 dagen' },
-  { id: '180', label: '180 dagen' },
+  { id: '7', get label() { return txn('{n} dag', '{n} dagen', 7); } },
+  { id: '30', get label() { return txn('{n} dag', '{n} dagen', 30); } },
+  { id: '90', get label() { return txn('{n} dag', '{n} dagen', 90); } },
+  { id: '180', get label() { return txn('{n} dag', '{n} dagen', 180); } },
 ];
 
 export const projectStatusLabel = (s: string) =>

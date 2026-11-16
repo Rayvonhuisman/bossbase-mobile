@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { tx } from '@/i18n';
 import { useTheme } from '@/providers';
 import { maakStijl, type HandtekeningProps } from './handtekeningStijl';
 
@@ -12,8 +13,8 @@ export function HandtekeningVak({
   onChange,
   disabled,
   onTekenen,
-  titel = 'Handtekening klant',
-  plaatshouder = 'Laat de klant hier tekenen',
+  titel = tx('Handtekening klant'),
+  plaatshouder = tx('Laat de klant hier tekenen'),
 }: HandtekeningProps) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => maakStijl(t), [t]);
@@ -95,7 +96,7 @@ export function HandtekeningVak({
         <Text style={styles.titel}>{titel}</Text>
         {heeft && !disabled ? (
           <Pressable onPress={wis} accessibilityRole="button" hitSlop={8}>
-            <Text style={styles.wis}>Wissen</Text>
+            <Text style={styles.wis}>{tx('Wissen')}</Text>
           </Pressable>
         ) : null}
       </View>

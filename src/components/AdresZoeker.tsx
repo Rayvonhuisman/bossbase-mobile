@@ -24,6 +24,7 @@ import {
   type AdresSuggestie,
   type AdresVelden,
 } from '@/lib/adresZoeken';
+import { tx, txm } from '@/i18n';
 
 type Props = {
   /** Krijgt de losse velden na een keuze; het formulier eromheen blijft de baas. */
@@ -43,8 +44,8 @@ type Props = {
   onChangeText?: (tekst: string) => void;
 };
 
-const FOUT_ZOEKEN = 'Adres zoeken lukt even niet — je kunt het zelf typen';
-const FOUT_DETAILS = 'Adresdetails ophalen mislukt — je kunt het zelf typen';
+const FOUT_ZOEKEN = txm('Adres zoeken lukt even niet — je kunt het zelf typen');
+const FOUT_DETAILS = txm('Adresdetails ophalen mislukt — je kunt het zelf typen');
 
 /**
  * Adres zoeken via PDOK, zoals `AdresZoeker.jsx` in het dashboard. Slaat zelf
@@ -56,9 +57,9 @@ const FOUT_DETAILS = 'Adresdetails ophalen mislukt — je kunt het zelf typen';
  */
 export function AdresZoeker({
   onSelect,
-  label = 'Zoek adres',
-  placeholder = 'Bijv. Dam 1 Amsterdam of 1012 JS 1',
-  hint = 'Optioneel — je kunt de velden hieronder ook zelf invullen.',
+  label: labelProp,
+  placeholder: placeholderProp,
+  hint: hintProp,
   disabled = false,
   volledigAdres = false,
   value,
@@ -66,6 +67,9 @@ export function AdresZoeker({
 }: Props) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const label = labelProp === undefined ? tx('Zoek adres') : labelProp;
+  const placeholder = placeholderProp === undefined ? tx('Bijv. Dam 1 Amsterdam of 1012 JS 1') : placeholderProp;
+  const hint = hintProp === undefined ? tx('Optioneel — je kunt de velden hieronder ook zelf invullen.') : hintProp;
 
   const gecontroleerd = value !== undefined;
   const [eigen, setEigen] = useState('');
@@ -128,13 +132,13 @@ export function AdresZoeker({
       setItems(lijst);
       setActief(-1);
       setOpen(true);
-      setFout(lijst.length ? '' : 'Geen adres gevonden');
+      setFout(lijst.length ? '' : tx('Geen adres gevonden'));
     } catch (e) {
       // Opgevolgd door een nieuwere zoekopdracht: niets melden.
       if (ctrl.signal.aborted || (e as Error)?.name === 'AbortError' || !levend.current) return;
       setItems([]);
       setOpen(true);
-      setFout(FOUT_ZOEKEN);
+      setFout(tx(FOUT_ZOEKEN));
     } finally {
       if (levend.current && !ctrl.signal.aborted) setLaden(false);
     }
@@ -160,7 +164,7 @@ export function AdresZoeker({
       if (volledigAdres) zetTekst(adresRegel(velden));
       terug.current.onSelect?.(velden);
     } catch {
-      if (levend.current) setFout(FOUT_DETAILS);
+      if (levend.current) setFout(tx(FOUT_DETAILS));
     } finally {
       if (levend.current) setLaden(false);
     }
@@ -212,7 +216,7 @@ export function AdresZoeker({
           autoComplete="off"
           spellCheck={false}
           returnKeyType="search"
-          accessibilityLabel={label || 'Zoek adres'}
+          accessibilityLabel={label || tx('Zoek adres')}
           aria-expanded={open}
           style={styles.input}
         />

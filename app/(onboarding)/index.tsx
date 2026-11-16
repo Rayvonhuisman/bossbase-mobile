@@ -7,6 +7,7 @@ import { BBMark } from '@/components';
 import { useOnboarding } from '@/providers';
 import { GhostLink, GreenButton } from './_components';
 import { onb } from './_tokens';
+import { tx } from '@/i18n';
 
 /**
  * Screen 1/6 — Welcome.
@@ -49,9 +50,9 @@ export default function WelcomeScreen() {
               <CalendarIcon size={22} color={onb.greenDk} strokeWidth={2} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.cardPlanningMeta}>Morgen · 09:00</Text>
+              <Text style={styles.cardPlanningMeta}>{tx('Morgen · {tijd}', { tijd: '09:00' })}</Text>
               <Text style={styles.cardPlanningTitle} numberOfLines={1}>
-                CV-ketel plaatsen · Jansen
+                {tx('CV-ketel plaatsen · {naam}', { naam: 'Jansen' })}
               </Text>
             </View>
           </View>
@@ -59,12 +60,12 @@ export default function WelcomeScreen() {
           {/* Middle card — Work order */}
           <View style={styles.cardWO}>
             <View style={styles.cardWOTopRow}>
-              <Text style={styles.cardWOMeta}>WERKBON · #4821</Text>
+              <Text style={styles.cardWOMeta}>{tx('WERKBON · #{nummer}', { nummer: 4821 })}</Text>
               <View style={styles.cardWOStatus}>
-                <Text style={styles.cardWOStatusText}>BEZIG</Text>
+                <Text style={styles.cardWOStatusText}>{tx('BEZIG')}</Text>
               </View>
             </View>
-            <Text style={styles.cardWOTitle}>Badkamer renovatie</Text>
+            <Text style={styles.cardWOTitle}>{tx('Badkamer renovatie')}</Text>
             <Text style={styles.cardWOSub}>Hoofdstraat 24 · Utrecht</Text>
           </View>
 
@@ -74,7 +75,7 @@ export default function WelcomeScreen() {
               <View style={styles.cardTimerDot} />
             </View>
             <View>
-              <Text style={styles.cardTimerKicker}>TIMER LOOPT</Text>
+              <Text style={styles.cardTimerKicker}>{tx('TIMER LOOPT')}</Text>
               <Text style={styles.cardTimerValue}>02:14:38</Text>
             </View>
           </View>
@@ -82,17 +83,17 @@ export default function WelcomeScreen() {
 
         {/* Hero title */}
         <View style={styles.titleBlock}>
-          <Text style={styles.title}>Run je bedrijf{'\n'}vanuit het veld</Text>
+          <Text style={styles.title}>{tx('Run je bedrijf\nvanuit het veld')}</Text>
           <Text style={styles.subtitle}>
-            Beheer klanten, planning, werkbonnen en uren in één mobiel CRM.
+            {tx('Beheer klanten, planning, werkbonnen en uren in één mobiel CRM.')}
           </Text>
         </View>
       </View>
 
       {/* Footer CTAs */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-        <GreenButton label="Aan de slag" onPress={onStart} />
-        <GhostLink label="Ik heb al een account" onPress={onAlreadyHaveAccount} />
+        <GreenButton label={tx('Aan de slag')} onPress={onStart} />
+        <GhostLink label={tx('Ik heb al een account')} onPress={onAlreadyHaveAccount} />
       </View>
     </View>
   );

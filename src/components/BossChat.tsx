@@ -9,12 +9,13 @@ import { zetBossMeting, type BossKaart } from '@/lib/boss/vastleggen';
 import { BossKaartje } from './boss/BossKaart';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { Paneel } from './Paneel';
+import { tx, txm } from '@/i18n';
 
 const BOSS_HOOFD = require('../../assets/boss-hoofd.png');
 
 // Boss zegt meteen dat hij een AI-assistent is: in de begroeting en in de kop
 // (AI-verordening art. 50, audit 2026-10-25, J-14). Gelijk aan het dashboard.
-const BEGROETING = 'Hoi! Ik ben Boss, de AI-assistent van BossBase. Waar kan ik je mee helpen?';
+const BEGROETING = txm('Hoi! Ik ben Boss, de AI-assistent van BossBase. Waar kan ik je mee helpen?');
 
 /**
  * Boss-avatar: zijn hoofd, net als de gids in de rondleiding van het dashboard
@@ -173,7 +174,7 @@ export function BossChat({
     <Paneel
       open={open}
       titel="Boss"
-      subtitel="AI-assistent · beta · helpt je met BossBase"
+      subtitel={tx('AI-assistent · beta · helpt je met BossBase')}
       kop={<BossAvatar />}
       onSluit={sluit}
       voet={
@@ -182,12 +183,12 @@ export function BossChat({
             <TextInput
               value={invoer}
               onChangeText={setInvoer}
-              placeholder={luistert ? 'Boss luistert…' : 'Vraag iets, of zeg wat Boss moet noteren…'}
+              placeholder={luistert ? tx('Boss luistert…') : tx('Vraag iets, of zeg wat Boss moet noteren…')}
               placeholderTextColor={t.muted2}
               multiline
               editable={!bezig}
               style={styles.invoer}
-              accessibilityLabel="Bericht aan Boss"
+              accessibilityLabel={tx('Bericht aan Boss')}
               // Web en extern toetsenbord: Enter verstuurt, Shift+Enter is een
               // nieuwe regel — zoals in het dashboard.
               onKeyPress={(e) => {
@@ -203,7 +204,7 @@ export function BossChat({
                 onPress={() => (luistert ? spraak.stop() : spraak.start())}
                 disabled={bezig}
                 accessibilityRole="button"
-                accessibilityLabel={luistert ? 'Stoppen met inspreken' : 'Inspreken'}
+                accessibilityLabel={luistert ? tx('Stoppen met inspreken') : tx('Inspreken')}
                 accessibilityState={{ selected: luistert }}
                 testID="boss-chat-mic"
                 style={({ pressed }) => [styles.mic, luistert && styles.micAan, pressed && { opacity: 0.8 }]}
@@ -215,7 +216,7 @@ export function BossChat({
               onPress={() => void stuur()}
               disabled={bezig || !invoer.trim()}
               accessibilityRole="button"
-              accessibilityLabel="Stuur"
+              accessibilityLabel={tx('Stuur')}
               style={({ pressed }) => [
                 styles.stuur,
                 (bezig || !invoer.trim()) && { opacity: 0.45 },
@@ -233,7 +234,7 @@ export function BossChat({
           ) : null}
           {onMelden ? (
             <Pressable onPress={onMelden} accessibilityRole="link" hitSlop={8}>
-              <Text style={styles.melden}>Bug gevonden of een idee? Meld het hier</Text>
+              <Text style={styles.melden}>{tx('Bug gevonden of een idee? Meld het hier')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -241,7 +242,7 @@ export function BossChat({
     >
       <ScrollView ref={lijst} contentContainerStyle={styles.lijst} keyboardShouldPersistTaps="handled">
         <View style={[styles.bubbel, styles.boss]}>
-          <Text style={styles.bossTekst}>{BEGROETING}</Text>
+          <Text style={styles.bossTekst}>{tx(BEGROETING)}</Text>
         </View>
         {berichten.map((b, i) =>
           b.rol === 'gebruiker' ? (
@@ -262,7 +263,7 @@ export function BossChat({
           ) : null,
         )}
         {bezig ? (
-          <Text style={styles.status}>{doorzetten ? 'Boss zet je vraag door…' : 'Boss denkt na…'}</Text>
+          <Text style={styles.status}>{doorzetten ? tx('Boss zet je vraag door…') : tx('Boss denkt na…')}</Text>
         ) : null}
         {fout ? (
           <View style={styles.fout} accessibilityRole="alert">

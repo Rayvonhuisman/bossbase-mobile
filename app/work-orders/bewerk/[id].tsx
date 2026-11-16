@@ -7,6 +7,7 @@ import { useAuth, usePermissions, useTheme } from '@/providers';
 import { canManageWerkbonnen, getWorkOrder, type Werkbon } from '@/services/workOrderService';
 import { terugOfNaar } from '@/lib/navigatie';
 import { useLaden } from '@/lib/useLaden';
+import { tx } from '@/i18n';
 
 /**
  * Werkbon bewerken — `WerkbonModal` (modus bewerken) van het dashboard. Alleen
@@ -25,7 +26,7 @@ export default function BewerkWerkbonScreen() {
   const laad = useCallback(async () => {
     if (!id) return;
     const res = await getWorkOrder(id);
-    if (res.error || !res.data) setFout(res.error ?? 'Deze werkbon bestaat niet of je hebt er geen toegang toe.');
+    if (res.error || !res.data) setFout(res.error ?? tx('Deze werkbon bestaat niet of je hebt er geen toegang toe.'));
     else {
       setFout(null);
       setWerkbon((huidig) => huidig ?? res.data);
@@ -51,16 +52,16 @@ export default function BewerkWerkbonScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
-        <AppTopBar variant="detail" title="Werkbon bewerken" onBack={terug} />
+        <AppTopBar variant="detail" title={tx('Werkbon bewerken')} onBack={terug} />
         {!loaded || (loading && !werkbon) ? (
-          <LoadingScreen label="Werkbon laden..." />
+          <LoadingScreen label={tx('Werkbon laden...')} />
         ) : !mag ? (
           <ErrorState
-            title="Geen rechten"
-            message="Bewerken kan een beheerder of iemand met het recht werkbonnen bewerken."
+            title={tx('Geen rechten')}
+            message={tx('Bewerken kan een beheerder of iemand met het recht werkbonnen bewerken.')}
           />
         ) : fout || !werkbon ? (
-          <ErrorState title="Werkbon niet gevonden" message={fout ?? 'Probeer het opnieuw.'} onRetry={opnieuw} />
+          <ErrorState title={tx('Werkbon niet gevonden')} message={fout ?? tx('Probeer het opnieuw.')} onRetry={opnieuw} />
         ) : (
           <WerkbonFormulier werkbon={werkbon} onKlaar={() => terug()} />
         )}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Dialog } from '@/lib/dialog';
+import { tx, txn, locale } from '@/i18n';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Lock, Plus, Receipt, Trash2 } from 'lucide-react-native';
 import {
@@ -162,7 +163,7 @@ import { getalOfNul } from '@/lib/getalNl';
 
 export default function InvoicesScreen() {
   return (
-    <PermissionGate permission="facturen" label="Facturen">
+    <PermissionGate permission="facturen" label={tx('Facturen')}>
       <InvoicesScreenInhoud />
     </PermissionGate>
   );
@@ -221,32 +222,34 @@ type CreditStand = {
 
 function subtitleFor(f: FactuurRow, vandaag: string): string {
   const delen: string[] = [];
-  if (f.is_credit) delen.push('Creditfactuur');
+  if (f.is_credit) delen.push(tx('Creditfactuur'));
   if (f.customer?.name) delen.push(f.customer.name);
-  if (f.betaald_op) delen.push(`Betaald ${formatDateNL(f.betaald_op)}`);
+  if (f.betaald_op) delen.push(tx('Betaald {datum}', { datum: formatDateNL(f.betaald_op) }));
   else if (f.vervaldatum) {
     delen.push(
-      `${isFactuurVerlopen(f, vandaag) ? 'Verviel' : 'Vervalt'} ${formatDateNL(f.vervaldatum)}`,
+      isFactuurVerlopen(f, vandaag)
+        ? tx('Verviel {datum}', { datum: formatDateNL(f.vervaldatum) })
+        : tx('Vervalt {datum}', { datum: formatDateNL(f.vervaldatum) }),
     );
   }
-  if (f.gecrediteerd) delen.push('Gecrediteerd');
-  return delen.join(' · ') || 'Factuur';
+  if (f.gecrediteerd) delen.push(tx('Gecrediteerd'));
+  return delen.join(' · ') || tx('Factuur');
 }
 
 function regelMeta(r: FactuurRegel): string {
   const btw =
     r.btw_regime === 'verlegd'
-      ? 'btw verlegd'
+      ? tx('btw verlegd')
       : r.btw_regime === 'vrijgesteld'
-        ? 'geen btw'
-        : `${Number(r.btw_pct ?? 21)}% btw`;
+        ? tx('geen btw')
+        : tx('{pct}% btw', { pct: Number(r.btw_pct ?? 21) });
   return `${String(r.aantal).replace('.', ',')} × ${formatEURCent(r.eenheidsprijs)} · ${btw}`;
 }
 
 /** Ontbrekende klantgegevens voor een factuur (`missingFields` in NewFactuurModal). */
 function ontbrekendeKlantgegevens(k: Customer | undefined): string[] {
   if (!k) return [];
-  return [!k.address && 'adres', !k.city && 'plaats', !k.email && 'e-mailadres'].filter(
+  return [!k.address && tx('adres'), !k.city && tx('plaats'), !k.email && tx('e-mailadres')].filter(
     (x): x is string => Boolean(x),
   );
 }
@@ -398,8 +401,8 @@ function InvoicesScreenInhoud() {
   const klanten: SelectOption[] = useMemo(
     () =>
       klantenLijst
-        .map((k) => ({ id: k.id, label: k.name ?? 'Klant' }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'nl')),
+        .map((k) => ({ id: k.id, label: k.name ?? tx('Klant') }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale())),
     [klantenLijst],
   );
 
@@ -436,7 +439,7 @@ function InvoicesScreenInhoud() {
    */
   const [pdfDoc, setPdfDoc] = useState<PdfDocument | null>(null);
   const bekijkPdf = (f: FactuurRow) =>
-    setPdfDoc({ soort: 'factuur', id: f.id, titel: `Factuur ${f.nummer ?? ''}`.trim(), opgeslagenEerst: true });
+    setPdfDoc({ soort: 'factuur', id: f.id, titel: tx('Factuur {nummer}', { nummer: f.nummer ?? '' }).trim(), opgeslagenEerst: true });
 
   // ── Nieuw / bewerken ──────────────────────────────────────────────────────
 
@@ -444,8 +447,8 @@ function InvoicesScreenInhoud() {
   const limietBereikt = () => {
     if (binnenLimiet(planStatus?.limits, 'facturen')) return false;
     Dialog.alert(
-      'Factuurlimiet bereikt',
-      'Je factuurlimiet voor deze periode is bereikt. Je abonnement bekijk je bij Instellingen → Abonnement.',
+      tx('Factuurlimiet bereikt'),
+      tx('Je factuurlimiet voor deze periode is bereikt. Je abonnement bekijk je bij Instellingen → Abonnement.'),
     );
     return true;
   };
@@ -513,7 +516,7 @@ function InvoicesScreenInhoud() {
     void (async () => {
       const [o, r, g] = await Promise.all([getOfferteDetail(vanOfferte), getOfferteItems(vanOfferte), getOfferteGroepen(vanOfferte)]);
       if (!o.data) {
-        Dialog.alert('Offerte niet gevonden', o.error ?? 'De offerte kon niet worden geladen.');
+        Dialog.alert(tx('Offerte niet gevonden'), o.error ?? tx('De offerte kon niet worden geladen.'));
         return;
       }
       openNieuw({
@@ -592,17 +595,17 @@ function InvoicesScreenInhoud() {
     save(
       async (): Promise<WriteResult<FactuurRow>> => {
         if (c.id && c.regelsStand === 'laden') {
-          return writeFout('validatie', 'De regels zijn nog niet geladen. Wacht even en probeer het opnieuw.');
+          return writeFout('validatie', tx('De regels zijn nog niet geladen. Wacht even en probeer het opnieuw.'));
         }
         if (c.id && c.regelsStand === 'fout') {
-          return writeFout('validatie', 'De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast.');
+          return writeFout('validatie', tx('De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast.'));
         }
         if (c.id && c.regelsStand === 'klaar') {
           // Concept: regels (alleen als ze veranderd zijn) en kop in één
           // transactie (bb_factuur_regels_vervangen), daarna de rest van de kop.
           const zonderPrijs = aantalZonderPrijs(c.regels);
           if (zonderPrijs) {
-            return writeFout('validatie', `Vul eerst de prijs in bij ${zonderPrijs} ${zonderPrijs === 1 ? 'regel' : 'regels'}.`);
+            return writeFout('validatie', txn('Vul eerst de prijs in bij {n} regel.', 'Vul eerst de prijs in bij {n} regels.', zonderPrijs));
           }
           const nieuw = c.regels.filter((r) => !isLegeFactuurRegel(r)).map((r) => factuurRegelVoorOpslag(r, eenheden));
           const gewijzigd = JSON.stringify(nieuw) !== c.regelsOrigineel;
@@ -636,7 +639,7 @@ function InvoicesScreenInhoud() {
         // Onvolledige klant: het dashboard maakt de factuur dan niet aan.
         const ontbreekt = ontbrekendeKlantgegevens(klantenLijst.find((k) => k.id === c.customerId));
         if (ontbreekt.length > 0) {
-          return writeFout('validatie', 'Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.');
+          return writeFout('validatie', tx('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.'));
         }
         const invoer: FactuurInput = {
           customer_id: c.customerId,
@@ -649,7 +652,7 @@ function InvoicesScreenInhoud() {
         // Een regel die Boss zonder prijs neerzette, mag niet stil als € 0 de factuur op.
         const zonderPrijs = aantalZonderPrijs(c.regels);
         if (zonderPrijs) {
-          return writeFout('validatie', `Vul eerst de prijs in bij ${zonderPrijs} ${zonderPrijs === 1 ? 'regel' : 'regels'}.`);
+          return writeFout('validatie', txn('Vul eerst de prijs in bij {n} regel.', 'Vul eerst de prijs in bij {n} regels.', zonderPrijs));
         }
         // Nieuwe factuur: kop én regels in één transactie, zoals het dashboard.
         if (!magRegels) return createFactuur(invoer);
@@ -677,7 +680,7 @@ function InvoicesScreenInhoud() {
           await herlaad();
           if (enVersturen) void openMail(f, 'factuur');
         },
-        succesMelding: c.id ? 'Factuur opgeslagen' : 'Factuur aangemaakt',
+        succesMelding: c.id ? tx('Factuur opgeslagen') : tx('Factuur aangemaakt'),
       },
     );
   };
@@ -692,16 +695,16 @@ function InvoicesScreenInhoud() {
     const { data: r } = await getFactuurRegels(f.id);
     const weigering = factuurStatusWeigering(f, 'betaald', r.length);
     if (weigering) {
-      Dialog.alert('Niet op betaald gezet', weigering);
+      Dialog.alert(tx('Niet op betaald gezet'), weigering);
       return;
     }
     Dialog.alert(
-      'Factuur op betaald zetten?',
+      tx('Factuur op betaald zetten?'),
       `${f.nummer} · ${formatEURCent(Number(f.totaal_incl ?? 0))}`,
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Betaald',
+          text: tx('Betaald'),
           onPress: () => {
             save(
               async () => {
@@ -715,11 +718,11 @@ function InvoicesScreenInhoud() {
                 onSuccess: async (res) => {
                   const uitkomst = res as { gewijzigd: boolean };
                   if (!uitkomst.gewijzigd) {
-                    Dialog.alert('Geen wijziging', 'Deze factuur stond al op betaald.');
+                    Dialog.alert(tx('Geen wijziging'), tx('Deze factuur stond al op betaald.'));
                   }
                   await herlaad();
                 },
-                succesMelding: 'Factuur op betaald gezet',
+                succesMelding: tx('Factuur op betaald gezet'),
               },
             );
           },
@@ -733,7 +736,7 @@ function InvoicesScreenInhoud() {
     const id = concept.id;
     const uitBoekhouding = concept.geimporteerd;
     bevestigVerwijderen(
-      'Factuur',
+      tx('Factuur'),
       () => {
         save(async () => {
           const r = await deleteFactuur(id);
@@ -744,27 +747,27 @@ function InvoicesScreenInhoud() {
             setConcept(null);
             // De factuur is weg; lukte de prullenbak niet, dan komt hij bij de
             // volgende synchronisatie terug en moet de gebruiker dat weten.
-            if (typeof extra?.waarschuwing === 'string') Dialog.alert('Let op', extra.waarschuwing);
+            if (typeof extra?.waarschuwing === 'string') Dialog.alert(tx('Let op'), extra.waarschuwing);
             await herlaad();
           },
-          succesMelding: 'Factuur verwijderd',
+          succesMelding: tx('Factuur verwijderd'),
         });
       },
       uitBoekhouding
-        ? 'Deze factuur komt uit je boekhouding. Hij wordt ook op de negeerlijst gezet, zodat de volgende synchronisatie hem niet terughaalt.'
-        : 'Dit kan niet ongedaan worden gemaakt.',
+        ? tx('Deze factuur komt uit je boekhouding. Hij wordt ook op de negeerlijst gezet, zodat de volgende synchronisatie hem niet terughaalt.')
+        : tx('Dit kan niet ongedaan worden gemaakt.'),
     );
   };
 
   // Een ouder concept kan niet weg (gat in de nummering): op Vervallen zetten.
   const vraagVervallen = (id: string) =>
     Dialog.alert(
-      'Op Vervallen zetten?',
-      'Deze factuur heeft al een nummer in de reeks. Op Vervallen blijft hij in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.',
+      tx('Op Vervallen zetten?'),
+      tx('Deze factuur heeft al een nummer in de reeks. Op Vervallen blijft hij in de lijst staan, telt nergens meer mee en kan niet meer worden verstuurd.'),
       [
-        { text: 'Annuleren', style: 'cancel' },
+        { text: tx('Annuleren'), style: 'cancel' },
         {
-          text: 'Op Vervallen zetten',
+          text: tx('Op Vervallen zetten'),
           style: 'destructive',
           onPress: () =>
             save(() => zetFactuurVervallen(id), {
@@ -772,7 +775,7 @@ function InvoicesScreenInhoud() {
                 setConcept(null);
                 await herlaad();
               },
-              succesMelding: 'Factuur op Vervallen gezet',
+              succesMelding: tx('Factuur op Vervallen gezet'),
             }),
         },
       ],
@@ -818,7 +821,7 @@ function InvoicesScreenInhoud() {
   };
 
   const regelVerwijderen = (r: FactuurRegel) => {
-    bevestigVerwijderen('Regel', () => {
+    bevestigVerwijderen(tx('Regel'), () => {
       saveRegel(() => deleteFactuurRegel(r.id), {
         onSuccess: async () => herlaadRegels(r.factuur_id),
       });
@@ -851,17 +854,16 @@ function InvoicesScreenInhoud() {
       setMail(null);
       const magInstellingen = can('instellingen');
       Dialog.alert(
-        'IBAN ontbreekt',
-        'Deze factuur kan nog niet weg: het IBAN van je bedrijf ontbreekt. Zonder rekeningnummer weet je klant niet waar hij moet betalen. '
-          + (magInstellingen
-            ? 'Vul het IBAN in bij Instellingen › Bedrijfsprofiel en verstuur de factuur daarna opnieuw.'
-            : 'Vraag een beheerder om het IBAN in te vullen bij Instellingen › Bedrijfsprofiel.'),
+        tx('IBAN ontbreekt'),
+        magInstellingen
+          ? tx('Deze factuur kan nog niet weg: het IBAN van je bedrijf ontbreekt. Zonder rekeningnummer weet je klant niet waar hij moet betalen. Vul het IBAN in bij Instellingen › Bedrijfsprofiel en verstuur de factuur daarna opnieuw.')
+          : tx('Deze factuur kan nog niet weg: het IBAN van je bedrijf ontbreekt. Zonder rekeningnummer weet je klant niet waar hij moet betalen. Vraag een beheerder om het IBAN in te vullen bij Instellingen › Bedrijfsprofiel.'),
         magInstellingen
           ? [
-              { text: 'Annuleren', style: 'cancel' },
-              { text: 'Naar Bedrijfsprofiel', onPress: () => router.push('/settings?tab=bedrijf') },
+              { text: tx('Annuleren'), style: 'cancel' },
+              { text: tx('Naar Bedrijfsprofiel'), onPress: () => router.push('/settings?tab=bedrijf') },
             ]
-          : [{ text: 'OK' }],
+          : [{ text: tx('OK') }],
       );
       return;
     }
@@ -901,8 +903,8 @@ function InvoicesScreenInhoud() {
   const openHerinnering = (f: FactuurRow, nr: 1 | 2) => {
     if (!kanHerinneren) {
       Dialog.alert(
-        'Betaalherinneringen',
-        'Betaalherinneringen versturen zit niet in je huidige abonnement. Je abonnement wijzig je op het dashboard.',
+        tx('Betaalherinneringen'),
+        tx('Betaalherinneringen versturen zit niet in je huidige abonnement. Je abonnement wijzig je op het dashboard.'),
       );
       return;
     }
@@ -916,7 +918,7 @@ function InvoicesScreenInhoud() {
     const aan = m.concept.aan.trim();
     saveMail(
       async (): Promise<WriteResult<null>> => {
-        if (!aan) return writeFout('validatie', 'E-mailadres is verplicht.');
+        if (!aan) return writeFout('validatie', tx('E-mailadres is verplicht.'));
         // De PDF als bijlage, en dezelfde PDF bewaren vóór het op verzonden
         // zetten: de boekhoudsync die daarop volgt moet hem kunnen vinden.
         let bijlagen: { filename: string; content: string }[] = [];
@@ -963,7 +965,7 @@ function InvoicesScreenInhoud() {
           });
         }
         if (bijwerken && !bijwerken.ok) {
-          return writeFout('onbekend', `De e-mail is verstuurd, maar de factuur is niet bijgewerkt: ${bijwerken.melding}`);
+          return writeFout('onbekend', tx('De e-mail is verstuurd, maar de factuur is niet bijgewerkt: {melding}', { melding: bijwerken.melding }));
         }
         return { ok: true, data: null };
       },
@@ -972,7 +974,7 @@ function InvoicesScreenInhoud() {
           setMail(null);
           await herlaad();
         },
-        succesMelding: 'E-mail verstuurd',
+        succesMelding: tx('E-mail verstuurd'),
       },
     );
   };
@@ -985,7 +987,7 @@ function InvoicesScreenInhoud() {
       onSuccess: async (data) => {
         const nieuw = data as FactuurRow;
         setDetail(null);
-        toonResultaat({ ok: true, data: null }, `Factuur ${nieuw.nummer} aangemaakt als concept`);
+        toonResultaat({ ok: true, data: null }, tx('Factuur {nummer} aangemaakt als concept', { nummer: nieuw.nummer }));
         await herlaad();
         openBewerk(nieuw);
       },
@@ -998,7 +1000,7 @@ function InvoicesScreenInhoud() {
     setCreditFout(null);
     const { data, error: fout } = await getFactuurRegels(f.id);
     if (fout) {
-      Dialog.alert('Regelitems laden mislukt', fout);
+      Dialog.alert(tx('Regelitems laden mislukt'), fout);
       return;
     }
     setCredit({
@@ -1028,23 +1030,23 @@ function InvoicesScreenInhoud() {
         onSuccess: async (res) => {
           const cf = res as FactuurRow;
           setCredit(null);
-          toonResultaat({ ok: true, data: null }, `Creditfactuur ${cf.nummer} aangemaakt`);
+          toonResultaat({ ok: true, data: null }, tx('Creditfactuur {nummer} aangemaakt', { nummer: cf.nummer }));
           await herlaad();
         },
       },
     );
   };
 
-  if (loading || !rechtenGeladen) return <LoadingScreen label="Facturen laden..." />;
+  if (loading || !rechtenGeladen) return <LoadingScreen label={tx('Facturen laden...')} />;
 
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <AppScreen
           scroll={false}
-          header={<AppTopBar variant="detail" title="Facturen" onBack={() => terugOfNaar(router, '/menu')} />}
+          header={<AppTopBar variant="detail" title={tx('Facturen')} onBack={() => terugOfNaar(router, '/menu')} />}
         >
-          <ErrorState title="Niet geladen" message={error} onRetry={opnieuw} />
+          <ErrorState title={tx('Niet geladen')} message={error} onRetry={opnieuw} />
         </AppScreen>
       </View>
     );
@@ -1095,10 +1097,10 @@ function InvoicesScreenInhoud() {
       kanHerinneren,
     );
     const isConcept = ['concept', 'aangemaakt'].includes(f.status);
-    const mailActie: Actie = { id: 'mail', label: 'Verstuur per mail', onPress: sluitEn(() => void openMail(f, 'factuur')) };
-    const h1: Actie = { id: 'h1', label: 'Herinnering sturen', onPress: sluitEn(() => openHerinnering(f, 1)) };
-    const h2: Actie = { id: 'h2', label: 'Tweede herinnering', onPress: sluitEn(() => openHerinnering(f, 2)) };
-    const betaald: Actie = { id: 'betaald', label: 'Markeer als betaald', onPress: sluitEn(() => void betaaldZetten(f)) };
+    const mailActie: Actie = { id: 'mail', label: tx('Verstuur per mail'), onPress: sluitEn(() => void openMail(f, 'factuur')) };
+    const h1: Actie = { id: 'h1', label: tx('Herinnering sturen'), onPress: sluitEn(() => openHerinnering(f, 1)) };
+    const h2: Actie = { id: 'h2', label: tx('Tweede herinnering'), onPress: sluitEn(() => openHerinnering(f, 2)) };
+    const betaald: Actie = { id: 'betaald', label: tx('Markeer als betaald'), onPress: sluitEn(() => void betaaldZetten(f)) };
     const magBetaaldHier = magBetaald && !detailGeimporteerd && f.status !== 'betaald';
 
     let primair: Actie | null = null;
@@ -1113,19 +1115,19 @@ function InvoicesScreenInhoud() {
     if (metDocument.has(f.id) || !detailGeimporteerd) {
       acties.push({
         id: 'pdf',
-        label: detailGeimporteerd ? 'Origineel document' : 'Bekijken',
+        label: detailGeimporteerd ? tx('Origineel document') : tx('Bekijken'),
         onPress: () => bekijkPdf(f),
         variant: detailGeimporteerd ? 'primary' : 'secondary',
       });
     }
     if (magMailen && primair?.id !== 'mail') acties.push({ ...mailActie, variant: 'secondary' });
-    if (magMailen && herinnering.eerste && primair?.id !== 'h1') acties.push({ ...h1, label: 'Herinnering 1 sturen', variant: 'secondary' });
-    if (magMailen && herinnering.tweede && primair?.id !== 'h2') acties.push({ ...h2, label: 'Herinnering 2 sturen', variant: 'secondary' });
+    if (magMailen && herinnering.eerste && primair?.id !== 'h1') acties.push({ ...h1, label: tx('Herinnering 1 sturen'), variant: 'secondary' });
+    if (magMailen && herinnering.tweede && primair?.id !== 'h2') acties.push({ ...h2, label: tx('Herinnering 2 sturen'), variant: 'secondary' });
     if (magBetaaldHier && primair?.id !== 'betaald') acties.push({ ...betaald, variant: 'secondary' });
     if (magWijzigen) {
       acties.push({
         id: 'bewerk',
-        label: inhoudLigtVast(f) || detailGeimporteerd ? 'Status wijzigen' : 'Bewerken',
+        label: inhoudLigtVast(f) || detailGeimporteerd ? tx('Status wijzigen') : tx('Bewerken'),
         onPress: sluitEn(() => openBewerk(f)),
         variant: 'secondary',
       });
@@ -1133,13 +1135,13 @@ function InvoicesScreenInhoud() {
     // Bij een concept staan de regels in Bewerken (met Boss), zoals het
     // dashboard; het losse regelblad blijft voor de status Aangemaakt.
     if (!detailGeimporteerd && !inhoudLigtVast(f) && !(f.status === 'concept' && magRegels && magWijzigen)) {
-      acties.push({ id: 'regels', label: 'Regels', onPress: sluitEn(() => void openRegels(f)), variant: 'ghost' });
+      acties.push({ id: 'regels', label: tx('Regels'), onPress: sluitEn(() => void openRegels(f)), variant: 'ghost' });
     }
     if (magMaken && !detailGeimporteerd) {
-      acties.push({ id: 'kopie', label: 'Kopiëren naar nieuwe factuur', onPress: () => kopieren(f), variant: 'ghost' });
+      acties.push({ id: 'kopie', label: tx('Kopiëren naar nieuwe factuur'), onPress: () => kopieren(f), variant: 'ghost' });
     }
     if (magCreditMaken && magCrediteren(f)) {
-      acties.push({ id: 'credit', label: 'Crediteer factuur', onPress: sluitEn(() => void openCredit(f)), variant: 'ghost' });
+      acties.push({ id: 'credit', label: tx('Crediteer factuur'), onPress: sluitEn(() => void openCredit(f)), variant: 'ghost' });
     }
   }
 
@@ -1148,7 +1150,7 @@ function InvoicesScreenInhoud() {
   const ontbreekt = concept && !concept.id ? ontbrekendeKlantgegevens(conceptKlant) : [];
   const projectOpties: SelectOption[] = projectenLijst
     .filter((p) => !concept?.customerId || p.customer_id === concept.customerId)
-    .map((p) => ({ id: p.id, label: p.name ?? 'Project' }));
+    .map((p) => ({ id: p.id, label: p.name ?? tx('Project') }));
   const conceptBron = concept?.id ? items.find((x) => x.id === concept.id) : undefined;
   const conceptMagWeg = Boolean(concept?.id) && magVerwijderen && (conceptBron ? magFactuurVerwijderen(conceptBron) : false);
   const nieuwOngeldig =
@@ -1177,13 +1179,13 @@ function InvoicesScreenInhoud() {
   const conceptTotalen = berekenTotalen(concept?.regels ?? []);
   const aandachtspunten: Aandachtspunt[] = concept
     ? ([
-        !concept.customerId ? { tekst: 'een klant', veld: 'klant' } : null,
-        ontbreekt.length ? { tekst: `${ontbreekt.join(', ')} van de klant` } : null,
-        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: 'factuurregels', veld: 'regels' } : null,
+        !concept.customerId ? { tekst: tx('een klant'), veld: 'klant' } : null,
+        ontbreekt.length ? { tekst: tx('{velden} van de klant', { velden: ontbreekt.join(', ') }) } : null,
+        !concept.regels.some((r) => r.omschrijving.trim()) ? { tekst: tx('factuurregels'), veld: 'regels' } : null,
         (() => {
           const n = aantalZonderPrijs(concept.regels);
           const eerste = concept.regels.find((r) => prijsOntbreekt(r));
-          return n ? { tekst: `een prijs bij ${n} ${n === 1 ? 'regel' : 'regels'}`, veld: eerste ? `regel:${eerste.sleutel}` : 'regels' } : null;
+          return n ? { tekst: txn('een prijs bij {n} regel', 'een prijs bij {n} regels', n), veld: eerste ? `regel:${eerste.sleutel}` : 'regels' } : null;
         })(),
       ] as (Aandachtspunt | null)[]).filter((x): x is Aandachtspunt => x !== null)
     : [];
@@ -1191,7 +1193,7 @@ function InvoicesScreenInhoud() {
     <>
           <WerkruimteVeld naam="klant">
           <SelectField
-            label="Klant"
+            label={tx('Klant')}
             value={concept?.customerId ?? null}
             options={klanten}
             onChange={(id) => {
@@ -1199,34 +1201,34 @@ function InvoicesScreenInhoud() {
               if (concept && !concept.id) void zetTermijn(id);
             }}
             allowEmpty
-            emptyLabel="Geen klant"
-            placeholder="Selecteer klant"
+            emptyLabel={tx('Geen klant')}
+            placeholder={tx('Selecteer klant')}
             disabled={concept?.opSlot || concept?.geimporteerd}
           />
           </WerkruimteVeld>
           {ontbreekt.length > 0 ? (
             <NoticeBanner
               toon="waarschuwing"
-              title="Klantgegevens onvolledig"
-              message={`Ontbrekend: ${ontbreekt.join(', ')}. Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.`}
+              title={tx('Klantgegevens onvolledig')}
+              message={tx('Ontbrekend: {velden}. Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.', { velden: ontbreekt.join(', ') })}
             />
           ) : null}
           {projectOpties.length > 0 || concept?.projectId ? (
             <SelectField
-              label="Project (optioneel)"
+              label={tx('Project (optioneel)')}
               value={concept?.projectId ?? null}
               options={projectOpties}
               onChange={(id) => setConcept((c) => (c ? { ...c, projectId: id } : c))}
               allowEmpty
-              emptyLabel="Geen project"
-              placeholder="Geen project"
+              emptyLabel={tx('Geen project')}
+              placeholder={tx('Geen project')}
               disabled={concept?.opSlot || concept?.geimporteerd}
             />
           ) : null}
           <View style={styles.rij}>
             <View style={{ flex: 1.4 }}>
               <DateField
-                label="Factuurdatum"
+                label={tx('Factuurdatum')}
                 value={concept?.factuurdatum || null}
                 onChange={(v) =>
                   setConcept((c) =>
@@ -1241,13 +1243,13 @@ function InvoicesScreenInhoud() {
                       : c,
                   )
                 }
-                placeholder="Kies"
+                placeholder={tx('Kies')}
                 disabled={concept?.opSlot || concept?.geimporteerd}
               />
             </View>
             <View style={{ flex: 1 }}>
               <FormField
-                label="Termijn"
+                label={tx('Termijn')}
                 value={concept?.betaaltermijn ?? ''}
                 onChangeText={(v) =>
                   setConcept((c) =>
@@ -1265,21 +1267,21 @@ function InvoicesScreenInhoud() {
                 }
                 placeholder="14"
                 keyboardType="number-pad"
-                hint="dagen"
+                hint={tx('dagen')}
                 editable={!concept?.opSlot && !concept?.geimporteerd}
               />
             </View>
           </View>
           <DateField
-            label="Vervaldatum"
+            label={tx('Vervaldatum')}
             value={concept?.vervaldatum || null}
             onChange={(v) => setConcept((c) => (c ? { ...c, vervaldatum: v, vervalHandmatig: true } : c))}
-            placeholder="Kies"
+            placeholder={tx('Kies')}
             disabled={concept?.opSlot || concept?.geimporteerd}
           />
           {concept?.id ? (
             <FormField
-              label="Betalingskenmerk"
+              label={tx('Betalingskenmerk')}
               value={concept.betalingskenmerk}
               onChangeText={(v) => setConcept((c) => (c ? { ...c, betalingskenmerk: v } : c))}
               placeholder={conceptBron?.nummer ?? ''}
@@ -1294,16 +1296,16 @@ function InvoicesScreenInhoud() {
               toon="waarschuwing"
               message={
                 waaromNiet('factuurRegels', 'maken') ??
-                'Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder om het recht Facturen.'
+                tx('Je mag wel een factuur aanmaken, maar geen regels toevoegen. Vraag een beheerder om het recht Facturen.')
               }
             />
           ) : null}
 
-          {concept?.regelsStand === 'laden' ? <Text style={styles.hint}>Regels laden…</Text> : null}
+          {concept?.regelsStand === 'laden' ? <Text style={styles.hint}>{tx('Regels laden…')}</Text> : null}
           {concept?.regelsStand === 'fout' ? (
             <NoticeBanner
               toon="waarschuwing"
-              message="De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast."
+              message={tx('De regels konden niet worden geladen. Sluit het venster en probeer het opnieuw; er is niets aangepast.')}
             />
           ) : null}
           {concept && ((!concept.id && magRegels) || concept.regelsStand === 'klaar') ? (
@@ -1324,10 +1326,10 @@ function InvoicesScreenInhoud() {
           ) : null}
 
           <FormField
-            label="Interne notitie"
+            label={tx('Interne notitie')}
             value={concept?.notities ?? ''}
             onChangeText={(v) => setConcept((c) => (c ? { ...c, notities: v } : c))}
-            placeholder="Alleen voor jou en je collega's — niet op de factuur of in de mail"
+            placeholder={tx("Alleen voor jou en je collega's — niet op de factuur of in de mail")}
             multiline
             editable={!concept?.opSlot && !concept?.geimporteerd}
           />
@@ -1352,13 +1354,13 @@ function InvoicesScreenInhoud() {
         header={
           <AppTopBar
             variant="detail"
-            title="Facturen"
-            subtitle={`${items.length} ${items.length === 1 ? 'factuur' : 'facturen'}`}
-            meta={kpis.openstaand !== 0 ? `${formatEUR(kpis.openstaand)} open` : undefined}
+            title={tx('Facturen')}
+            subtitle={txn('{n} factuur', '{n} facturen', items.length)}
+            meta={kpis.openstaand !== 0 ? tx('{bedrag} open', { bedrag: formatEUR(kpis.openstaand) }) : undefined}
             onBack={() => terugOfNaar(router, '/menu')}
             rightAction={
               magMaken ? (
-                <HeaderIconButton icon={Plus} label="Nieuwe factuur" onPress={() => openNieuw()} />
+                <HeaderIconButton icon={Plus} label={tx('Nieuwe factuur')} onPress={() => openNieuw()} />
               ) : undefined
             }
           />
@@ -1375,19 +1377,19 @@ function InvoicesScreenInhoud() {
         <TegelRaster
           breed={breed}
           tegels={[
-            { id: 'totaal', label: 'Totaal facturen', waarde: String(kpis.totaal) },
-            { id: 'open', label: 'Openstaand', waarde: formatEUR(kpis.openstaand) },
-            { id: 'betaald', label: 'Betaald deze maand', waarde: formatEUR(kpis.betaaldDezeMaand), toon: 'goed' },
-            { id: 'verlopen', label: 'Verlopen', waarde: String(kpis.verlopen) },
+            { id: 'totaal', label: tx('Totaal facturen'), waarde: String(kpis.totaal) },
+            { id: 'open', label: tx('Openstaand'), waarde: formatEUR(kpis.openstaand) },
+            { id: 'betaald', label: tx('Betaald deze maand'), waarde: formatEUR(kpis.betaaldDezeMaand), toon: 'goed' },
+            { id: 'verlopen', label: tx('Verlopen'), waarde: String(kpis.verlopen) },
           ]}
         />
 
         <View style={styles.zoekRij}>
-          <AppSearchBar value={zoek} onChange={setZoek} placeholder="Zoek factuur..." />
+          <AppSearchBar value={zoek} onChange={setZoek} placeholder={tx('Zoek factuur...')} />
         </View>
         <View style={{ paddingTop: 12 }}>
           <AppFilterChips
-            chips={FACTUUR_FILTERS.map((f) => ({ id: f.id, label: f.label, count: tellingen[f.id] }))}
+            chips={FACTUUR_FILTERS.map((f) => ({ id: f.id, label: tx(f.label), count: tellingen[f.id] }))}
             active={filter}
             onChange={setFilter}
           />
@@ -1396,23 +1398,23 @@ function InvoicesScreenInhoud() {
         {items.length === 0 ? (
           <EmptyState
             icon={<Receipt size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen facturen"
+            title={tx('Geen facturen')}
             message={
               magMaken
-                ? 'Maak met de plusknop je eerste factuur.'
-                : (waaromNiet('facturen', 'maken') ?? 'Er zijn nog geen facturen.')
+                ? tx('Maak met de plusknop je eerste factuur.')
+                : (waaromNiet('facturen', 'maken') ?? tx('Er zijn nog geen facturen.'))
             }
           />
         ) : zichtbaar.length === 0 ? (
           <EmptyState
             icon={<Receipt size={40} color={ds.green} strokeWidth={1.6} />}
-            title="Geen facturen gevonden"
-            message="Geen facturen die passen bij je zoekopdracht of filter."
+            title={tx('Geen facturen gevonden')}
+            message={tx('Geen facturen die passen bij je zoekopdracht of filter.')}
           />
         ) : (
           <>
             <AppSection
-              title={filter === 'alle' ? 'Alle facturen' : (FACTUUR_FILTERS.find((f) => f.id === filter)?.label ?? '')}
+              title={filter === 'alle' ? tx('Alle facturen') : tx(FACTUUR_FILTERS.find((f) => f.id === filter)?.label ?? '')}
               count={zichtbaar.length}
               variant="eyebrow"
             />
@@ -1430,7 +1432,7 @@ function InvoicesScreenInhoud() {
                     trailing={
                       <View style={styles.trailing}>
                         <Text style={styles.bedrag}>{formatEURCent(Number(f.totaal_incl ?? 0))}</Text>
-                        <DocumentStatusBadge toon={st.toon} label={st.label} />
+                        <DocumentStatusBadge toon={st.toon} label={tx(st.label)} />
                       </View>
                     }
                   />
@@ -1444,7 +1446,7 @@ function InvoicesScreenInhoud() {
       {/* Factuur bekijken */}
       <Paneel
         open={detail !== null}
-        titel={detail?.nummer ?? 'Factuur'}
+        titel={detail?.nummer ?? tx('Factuur')}
         subtitel={detail?.customer?.name ?? undefined}
         onSluit={() => setDetail(null)}
         voet={
@@ -1469,44 +1471,46 @@ function InvoicesScreenInhoud() {
             {detailFout ? <NoticeBanner toon="fout" message={detailFout} /> : null}
             {saveError ? <NoticeBanner toon="fout" message={saveError} /> : null}
             <View>
-              <DetailRij label="Klant" waarde={detail.customer?.name ?? 'Geen klant'} />
+              <DetailRij label={tx('Klant')} waarde={detail.customer?.name ?? tx('Geen klant')} />
               <DetailRij
-                label="Status"
+                label={tx('Status')}
                 waarde={
                   <View style={styles.badgeRij}>
                     {detail.is_credit ? <DocumentStatusBadge toon="red" label="CF" /> : null}
                     {detail.gecrediteerd ? (
-                      <DocumentStatusBadge toon="gray" label="Gecrediteerd" />
+                      <DocumentStatusBadge toon="gray" label={tx('Gecrediteerd')} />
                     ) : null}
-                    <DocumentStatusBadge toon={detailStatus.toon} label={detailStatus.label} />
+                    <DocumentStatusBadge toon={detailStatus.toon} label={tx(detailStatus.label)} />
                   </View>
                 }
               />
-              <DetailRij label="Factuurdatum" waarde={formatDateNL(detail.factuurdatum)} />
+              <DetailRij label={tx('Factuurdatum')} waarde={formatDateNL(detail.factuurdatum)} />
               <DetailRij
-                label="Vervaldatum"
+                label={tx('Vervaldatum')}
                 waarde={
                   detail.vervaldatum
-                    ? `${formatDateNL(detail.vervaldatum)}${detailVerlopen ? ' · Te laat' : ''}`
+                    ? detailVerlopen
+                      ? tx('{datum} · Te laat', { datum: formatDateNL(detail.vervaldatum) })
+                      : formatDateNL(detail.vervaldatum)
                     : '—'
                 }
                 toon={detailVerlopen ? 'rood' : undefined}
               />
               {detail.betalingskenmerk ? (
-                <DetailRij label="Betalingskenmerk" waarde={detail.betalingskenmerk} />
+                <DetailRij label={tx('Betalingskenmerk')} waarde={detail.betalingskenmerk} />
               ) : null}
               {detail.betaald_op ? (
-                <DetailRij label="Betaald op" waarde={formatDateNL(detail.betaald_op)} />
+                <DetailRij label={tx('Betaald op')} waarde={formatDateNL(detail.betaald_op)} />
               ) : null}
               {detailData?.herinnering_1_verstuurd_at ? (
                 <DetailRij
-                  label="Herinnering 1 verstuurd"
+                  label={tx('Herinnering 1 verstuurd')}
                   waarde={formatDateNL(detailData.herinnering_1_verstuurd_at)}
                 />
               ) : null}
               {detailData?.herinnering_2_verstuurd_at ? (
                 <DetailRij
-                  label="Herinnering 2 verstuurd"
+                  label={tx('Herinnering 2 verstuurd')}
                   waarde={formatDateNL(detailData.herinnering_2_verstuurd_at)}
                 />
               ) : null}
@@ -1517,15 +1521,15 @@ function InvoicesScreenInhoud() {
                 toon="info"
                 message={
                   metDocument.has(detail.id)
-                    ? 'Deze factuur komt uit je boekhouding; het originele document staat hieronder.'
-                    : 'Deze factuur komt uit je boekhouding. Er is geen document meegekomen.'
+                    ? tx('Deze factuur komt uit je boekhouding; het originele document staat hieronder.')
+                    : tx('Deze factuur komt uit je boekhouding. Er is geen document meegekomen.')
                 }
               />
             ) : null}
 
             <RegelLijst
               laden={detailLaden}
-              leegTekst="Deze factuur heeft geen regels."
+              leegTekst={tx('Deze factuur heeft geen regels.')}
               regels={detailRegels.map((r) => ({
                 id: r.id,
                 omschrijving: r.omschrijving,
@@ -1537,7 +1541,7 @@ function InvoicesScreenInhoud() {
 
             {detail.notities ? (
               <View style={{ gap: spacing.xs }}>
-                <Text style={styles.label}>{detail.is_credit ? 'Toelichting' : 'Interne notitie'}</Text>
+                <Text style={styles.label}>{detail.is_credit ? tx('Toelichting') : tx('Interne notitie')}</Text>
                 <Text style={styles.uitleg}>{alsTekst(detail.notities)}</Text>
               </View>
             ) : null}
@@ -1550,8 +1554,8 @@ function InvoicesScreenInhoud() {
       {/* Factuur aanmaken / bewerken */}
       <FormSheet
         visible={concept !== null && !wrOpen}
-        title={concept?.id ? 'Factuur bewerken' : 'Nieuwe factuur'}
-        subtitle={concept?.id ? (conceptBron?.nummer ?? undefined) : 'Het nummer wordt automatisch toegekend'}
+        title={concept?.id ? tx('Factuur bewerken') : tx('Nieuwe factuur')}
+        subtitle={concept?.id ? (conceptBron?.nummer ?? undefined) : tx('Het nummer wordt automatisch toegekend')}
         error={saveError}
         saving={saving}
         submitDisabled={nieuwOngeldig}
@@ -1565,27 +1569,25 @@ function InvoicesScreenInhoud() {
             terugOfNaar(router, `/project/${naar}`);
           }
         }}
-        destructive={conceptMagWeg ? { label: 'Factuur verwijderen', onPress: verwijderen } : undefined}
+        destructive={conceptMagWeg ? { label: tx('Factuur verwijderen'), onPress: verwijderen } : undefined}
       >
         {concept?.geimporteerd ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              Deze factuur komt uit je boekhouding. Wijzigen doe je daar; verwijderen kan hier wel
-              — hij gaat dan meteen op de negeerlijst zodat de synchronisatie hem niet terughaalt.
+              {tx('Deze factuur komt uit je boekhouding. Wijzigen doe je daar; verwijderen kan hier wel — hij gaat dan meteen op de negeerlijst zodat de synchronisatie hem niet terughaalt.')}
             </Text>
           </View>
         ) : concept?.opSlot ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              Deze factuur is verstuurd. De inhoud ligt vast; de betaalstand bijwerken kan wel.
-              Klopt er iets niet, crediteer hem dan en maak een nieuwe.
+              {tx('Deze factuur is verstuurd. De inhoud ligt vast; de betaalstand bijwerken kan wel. Klopt er iets niet, crediteer hem dan en maak een nieuwe.')}
             </Text>
           </View>
         ) : null}
 
         {concept?.id && concept.status !== 'betaald' && magBetaald && !concept.geimporteerd ? (
           <Button
-            label="Op betaald zetten"
+            label={tx('Op betaald zetten')}
             variant="secondary"
             disabled={saving}
             onPress={() => {
@@ -1600,7 +1602,7 @@ function InvoicesScreenInhoud() {
 
         {concept?.id && concept.status !== 'betaald' && !concept.geimporteerd ? (
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>Status</Text>
+            <Text style={styles.label}>{tx('Status')}</Text>
             <View style={styles.chipRij}>
               {FACTUUR_STATUS_OPTIES.filter((s) => s.id !== 'betaald').map((s) => {
                 const actief = concept.status === s.id;
@@ -1614,15 +1616,14 @@ function InvoicesScreenInhoud() {
                     style={[styles.chip, actief && styles.chipActief]}
                   >
                     <Text style={[styles.chipTekst, actief && styles.chipTekstActief]}>
-                      {s.label}
+                      {s.label ? tx(s.label) : s.label}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
             <Text style={styles.hint}>
-              Betaald zetten gaat via de knop hierboven: die boekt één keer door naar je
-              boekhouding, ook als je twee keer tikt.
+              {tx('Betaald zetten gaat via de knop hierboven: die boekt één keer door naar je boekhouding, ook als je twee keer tikt.')}
             </Text>
           </View>
         ) : null}
@@ -1632,7 +1633,7 @@ function InvoicesScreenInhoud() {
             soort="factuur"
             vorig={vorigConcept}
             gebruikt={bossGebruikt}
-            sub="Uit een werkbon, offerte of in je eigen woorden"
+            sub={tx('Uit een werkbon, offerte of in je eigen woorden')}
             onOpen={bossOpenen}
             onVerder={bossVerder}
             onOpnieuw={() => { wisConcept(concept!.bossSleutel); setVorigConcept(null); }}
@@ -1644,7 +1645,7 @@ function InvoicesScreenInhoud() {
             verstuurde of geïmporteerde factuur. */}
         {concept && !concept.opSlot && !concept.geimporteerd && magWijzigen ? (
           <Button
-            label="Opslaan en versturen"
+            label={tx('Opslaan en versturen')}
             variant="secondary"
             disabled={saving || nieuwOngeldig}
             onPress={() => opslaan(true)}
@@ -1656,9 +1657,9 @@ function InvoicesScreenInhoud() {
       {concept && bossGebruikt && wrOpen ? (
         <Werkruimte
           open={wrOpen}
-          titel={concept.id ? 'Factuur aanpassen' : 'Factuur opstellen'}
+          titel={concept.id ? tx('Factuur aanpassen') : tx('Factuur opstellen')}
           nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
-          status={concept.id ? { label: 'Concept', toon: 'concept' } : { label: 'Nieuw · nog niet opgeslagen', toon: 'concept' }}
+          status={concept.id ? { label: tx('Concept'), toon: 'concept' } : { label: tx('Nieuw · nog niet opgeslagen'), toon: 'concept' }}
           bossBezig={bossStand.bezig}
           bossWacht={bossStand.wacht}
           onTerug={() => { if (!bossStand.bezig) setWrOpen(false); }}
@@ -1689,8 +1690,8 @@ function InvoicesScreenInhoud() {
               nummer={concept.id ? (conceptBron?.nummer ?? null) : null}
               klant={conceptKlant ?? null}
               datums={[
-                { label: 'Factuurdatum', waarde: concept.factuurdatum ? formatDateNL(concept.factuurdatum) : '' },
-                { label: 'Vervaldatum', waarde: concept.vervaldatum ? formatDateNL(concept.vervaldatum) : '' },
+                { label: tx('Factuurdatum'), waarde: concept.factuurdatum ? formatDateNL(concept.factuurdatum) : '' },
+                { label: tx('Vervaldatum'), waarde: concept.vervaldatum ? formatDateNL(concept.vervaldatum) : '' },
               ]}
               regels={concept.regels}
               eenheden={eenheden}
@@ -1702,9 +1703,9 @@ function InvoicesScreenInhoud() {
           acties={
             <>
               {magWijzigen ? (
-                <Button label="Opslaan en versturen" variant="secondary" disabled={saving || nieuwOngeldig} onPress={() => opslaan(true)} style={{ flex: 1 }} />
+                <Button label={tx('Opslaan en versturen')} variant="secondary" disabled={saving || nieuwOngeldig} onPress={() => opslaan(true)} style={{ flex: 1 }} />
               ) : null}
-              <Button label="Opslaan als concept" loading={saving} disabled={saving || nieuwOngeldig} onPress={() => opslaan(false)} style={{ flex: 1 }} />
+              <Button label={tx('Opslaan als concept')} loading={saving} disabled={saving || nieuwOngeldig} onPress={() => opslaan(false)} style={{ flex: 1 }} />
             </>
           }
         />
@@ -1713,11 +1714,11 @@ function InvoicesScreenInhoud() {
       {/* Factuurregels */}
       <FormSheet
         visible={regelsVoor !== null}
-        title="Factuurregels"
+        title={tx('Factuurregels')}
         subtitle={regelsVoor?.nummer}
         error={regelFout}
         saving={regelBezig}
-        submitLabel="Regel toevoegen"
+        submitLabel={tx('Regel toevoegen')}
         submitDisabled={
           !magRegels ||
           regelsOpSlot ||
@@ -1730,28 +1731,28 @@ function InvoicesScreenInhoud() {
         {regelsOpSlot ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
-              Deze factuur is verstuurd of betaald; de regels liggen vast.
+              {tx('Deze factuur is verstuurd of betaald; de regels liggen vast.')}
             </Text>
           </View>
         ) : !magRegels ? (
           <View style={styles.slotBanner}>
             <Text style={styles.slotTekst}>
               {waaromNiet('factuurRegels', 'maken') ??
-                'Factuurregels wijzigen vraagt het recht Facturen.'}
+                tx('Factuurregels wijzigen vraagt het recht Facturen.')}
             </Text>
           </View>
         ) : (
           <>
             <FormField
-              label="Omschrijving"
+              label={tx('Omschrijving')}
               value={nieuweRegel.omschrijving}
               onChangeText={(v) => setNieuweRegel((r) => ({ ...r, omschrijving: v }))}
-              placeholder="Bijv. Arbeidsuren week 37"
+              placeholder={tx('Bijv. Arbeidsuren week 37')}
             />
             <View style={styles.rij}>
               <View style={{ flex: 1 }}>
                 <FormField
-                  label="Aantal"
+                  label={tx('Aantal')}
                   value={nieuweRegel.aantal}
                   onChangeText={(v) => setNieuweRegel((r) => ({ ...r, aantal: v }))}
                   placeholder="1"
@@ -1760,7 +1761,7 @@ function InvoicesScreenInhoud() {
               </View>
               <View style={{ flex: 1.2 }}>
                 <FormField
-                  label="Prijs"
+                  label={tx('Prijs')}
                   value={nieuweRegel.prijs}
                   onChangeText={(v) => setNieuweRegel((r) => ({ ...r, prijs: v }))}
                   placeholder="0,00"
@@ -1769,7 +1770,7 @@ function InvoicesScreenInhoud() {
               </View>
               <View style={{ flex: 0.9 }}>
                 <FormField
-                  label="Btw %"
+                  label={tx('Btw %')}
                   value={nieuweRegel.btw}
                   onChangeText={(v) => setNieuweRegel((r) => ({ ...r, btw: v }))}
                   placeholder="21"
@@ -1781,7 +1782,7 @@ function InvoicesScreenInhoud() {
         )}
 
         {regels.length === 0 ? (
-          <Text style={styles.uitleg}>Deze factuur heeft nog geen regels.</Text>
+          <Text style={styles.uitleg}>{tx('Deze factuur heeft nog geen regels.')}</Text>
         ) : (
           <View style={{ gap: spacing.sm }}>
             {regels.map((r) => (
@@ -1789,7 +1790,7 @@ function InvoicesScreenInhoud() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.regelTitel}>{r.omschrijving}</Text>
                   <Text style={styles.regelMeta}>
-                    {r.aantal} × {formatEURCent(r.eenheidsprijs)} · {r.btw_pct}% btw
+                    {tx('{aantal} × {prijs} · {pct}% btw', { aantal: r.aantal, prijs: formatEURCent(r.eenheidsprijs), pct: r.btw_pct })}
                   </Text>
                 </View>
                 <Text style={styles.bedrag}>{formatEURCent(r.regelprijs)}</Text>
@@ -1798,7 +1799,7 @@ function InvoicesScreenInhoud() {
                     onPress={() => regelVerwijderen(r)}
                     hitSlop={10}
                     accessibilityRole="button"
-                    accessibilityLabel="Regel verwijderen"
+                    accessibilityLabel={tx('Regel verwijderen')}
                   >
                     <Trash2 size={16} color={t.statusRejectFg} />
                   </Pressable>
@@ -1812,7 +1813,7 @@ function InvoicesScreenInhoud() {
       {/* Versturen per mail / herinnering */}
       <DocumentMailSheet
         visible={mail !== null}
-        titel={mail ? FACTUUR_MAIL_TITEL[mail.soort] : 'E-mail versturen'}
+        titel={mail ? tx(FACTUUR_MAIL_TITEL[mail.soort]) : tx('E-mail versturen')}
         nummer={mail?.factuur.nummer}
         laden={mail?.laden ?? false}
         concept={mail?.concept ?? { aan: '', onderwerp: '', tekst: '' }}
@@ -1827,43 +1828,44 @@ function InvoicesScreenInhoud() {
       {/* Crediteren */}
       <FormSheet
         visible={credit !== null}
-        title="Crediteer factuur"
+        title={tx('Crediteer factuur')}
         subtitle={credit?.factuur.nummer}
         error={creditFout}
         saving={creditBezig}
         submitLabel={
           creditBezig
-            ? 'Aanmaken...'
+            ? tx('Aanmaken...')
             : credit?.modus === 'volledig'
-              ? 'Volledig crediteren'
-              : 'Creditfactuur aanmaken'
+              ? tx('Volledig crediteren')
+              : tx('Creditfactuur aanmaken')
         }
         submitDisabled={!credit || credit.modus === 'kies'}
         onSubmit={crediteren}
         onClose={() => setCredit(null)}
       >
         <Keuze
-          label="Kies hoe je deze factuur wilt crediteren"
+          label={tx('Kies hoe je deze factuur wilt crediteren')}
           opties={[
-            { id: 'volledig', label: 'Volledig crediteren' },
-            { id: 'gedeeltelijk', label: 'Gedeeltelijk crediteren' },
+            { id: 'volledig', label: tx('Volledig crediteren') },
+            { id: 'gedeeltelijk', label: tx('Gedeeltelijk crediteren') },
           ]}
           waarde={credit && credit.modus !== 'kies' ? credit.modus : null}
           onKies={(id) => setCredit((c) => (c ? { ...c, modus: id as CreditStand['modus'] } : c))}
           hint={
             credit?.modus === 'gedeeltelijk'
-              ? 'Kies welke regelitems en voor welk bedrag je wilt crediteren.'
-              : 'Crediteer alle regelitems voor het volledige bedrag.'
+              ? tx('Kies welke regelitems en voor welk bedrag je wilt crediteren.')
+              : tx('Crediteer alle regelitems voor het volledige bedrag.')
           }
         />
         {credit?.modus === 'volledig' ? (
           <NoticeBanner
             toon="fout"
-            message={`Een creditfactuur wordt aangemaakt voor alle ${credit.regels.length} regelitem${
-              credit.regels.length !== 1 ? 's' : ''
-            } van factuur ${credit.factuur.nummer}. Totaal te crediteren: ${formatEURCent(
-              Number(credit.factuur.totaal_incl ?? 0),
-            )}.`}
+            message={txn(
+              'Een creditfactuur wordt aangemaakt voor {n} regelitem van factuur {nummer}. Totaal te crediteren: {bedrag}.',
+              'Een creditfactuur wordt aangemaakt voor alle {n} regelitems van factuur {nummer}. Totaal te crediteren: {bedrag}.',
+              credit.regels.length,
+              { nummer: credit.factuur.nummer, bedrag: formatEURCent(Number(credit.factuur.totaal_incl ?? 0)) },
+            )}
           />
         ) : null}
         {credit?.modus === 'gedeeltelijk'
@@ -1883,7 +1885,7 @@ function InvoicesScreenInhoud() {
                   <View style={styles.rij}>
                     <View style={{ flex: 1 }}>
                       <FormField
-                        label="Aantal"
+                        label={tx('Aantal')}
                         value={k.aantal}
                         onChangeText={(v) =>
                           setCredit((c) =>
@@ -1895,7 +1897,7 @@ function InvoicesScreenInhoud() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <FormField
-                        label="Prijs"
+                        label={tx('Prijs')}
                         value={k.prijs}
                         onChangeText={(v) =>
                           setCredit((c) =>
@@ -1911,7 +1913,7 @@ function InvoicesScreenInhoud() {
             ))
           : null}
         {creditTotaal !== null ? (
-          <Text style={styles.uitleg}>{`Te crediteren excl. btw: ${formatEURCent(creditTotaal)}`}</Text>
+          <Text style={styles.uitleg}>{tx('Te crediteren excl. btw: {bedrag}', { bedrag: formatEURCent(creditTotaal) })}</Text>
         ) : null}
       </FormSheet>
     </View>

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getUserId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
 import { alsHtml, alsTekst } from '@/lib/notitieTekst';
+import { tx } from '@/i18n';
 
 /**
  * Klantnotities — rijen in `klant_tijdlijn` met `type = 'notitie_toegevoegd'`.
@@ -94,7 +95,7 @@ export async function listNotes(options?: {
   const { data, error } = await query;
   if (error) {
     console.warn('[noteService.listNotes]', error.message);
-    return { data: [], error: 'Notities konden niet worden geladen.' };
+    return { data: [], error: tx('Notities konden niet worden geladen.') };
   }
   return { data: ((data as unknown as NoteDbRow[]) ?? []).map(toNote), error: null };
 }
@@ -107,7 +108,7 @@ export async function getNote(id: string): Promise<{ data: NoteRow | null; error
     .maybeSingle();
   if (error) {
     console.warn('[noteService.getNote]', error.message);
-    return { data: null, error: 'Notitie kon niet worden geladen.' };
+    return { data: null, error: tx('Notitie kon niet worden geladen.') };
   }
   return { data: data ? toNote(data as unknown as NoteDbRow) : null, error: null };
 }
@@ -124,8 +125,8 @@ export type NoteInput = {
 };
 
 function valideer(input: NoteInput): string | null {
-  if (!input.customer_id) return 'Kies een klant; een notitie hangt altijd aan een klant.';
-  if (!input.body.trim()) return 'Een notitie mag niet leeg zijn.';
+  if (!input.customer_id) return tx('Kies een klant; een notitie hangt altijd aan een klant.');
+  if (!input.body.trim()) return tx('Een notitie mag niet leeg zijn.');
   return null;
 }
 
@@ -144,7 +145,7 @@ export async function createNote(input: NoteInput): Promise<WriteResult<NoteRow>
     ...(userId ? { created_by: userId } : {}),
   });
   if (!payload) {
-    return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.');
+    return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen. Probeer het zo opnieuw.'));
   }
 
   const res = await schrijf<NoteDbRow>(

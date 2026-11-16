@@ -4,6 +4,7 @@ import { useTheme } from '@/providers';
 import { formatEURCent } from '@/lib/format';
 import { radius, spacing, type ThemeColors } from '@/theme';
 import type { StatusToon } from '@/lib/documentLogica';
+import { tx } from '@/i18n';
 
 /**
  * Bouwstenen voor de detailweergave van offertes en facturen (en de tegels
@@ -100,7 +101,7 @@ export function RegelLijst({
 }) {
   const { colors: t } = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  if (laden) return <Text style={styles.zacht}>Regels laden…</Text>;
+  if (laden) return <Text style={styles.zacht}>{tx('Regels laden…')}</Text>;
   if (regels.length === 0) return <Text style={styles.zacht}>{leegTekst}</Text>;
   return (
     <View style={styles.regels}>
@@ -131,17 +132,17 @@ export function TotalenBlok({
   return (
     <View style={styles.totalen}>
       <View style={styles.totaalRij}>
-        <Text style={styles.zacht}>Subtotaal excl. BTW</Text>
+        <Text style={styles.zacht}>{tx('Subtotaal excl. BTW')}</Text>
         <Text style={styles.totaalBedrag}>{formatEURCent(excl)}</Text>
       </View>
       {btwPerTarief.map((b) => (
         <View key={b.pct} style={styles.totaalRij}>
-          <Text style={styles.zacht}>BTW {b.pct}%</Text>
+          <Text style={styles.zacht}>{tx('BTW {pct}%', { pct: b.pct })}</Text>
           <Text style={styles.totaalBedrag}>{formatEURCent(b.bedrag)}</Text>
         </View>
       ))}
       <View style={[styles.totaalRij, styles.totaalEind]}>
-        <Text style={styles.eindLabel}>Totaal incl. BTW</Text>
+        <Text style={styles.eindLabel}>{tx('Totaal incl. BTW')}</Text>
         <Text style={styles.eindBedrag}>{formatEURCent(incl)}</Text>
       </View>
     </View>

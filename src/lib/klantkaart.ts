@@ -6,8 +6,11 @@
  * (`handleTemplateSelect`, `handleSendEmail`) en de regel onder een
  * verstuurde mail.
  *
- * Bewust zonder imports: de tests draaien dit bestand rechtstreeks in Node.
+ * Bewust zonder zware imports (alleen vertaling en kalendernamen): de tests
+ * draaien dit bestand in Node.
  */
+import { tx } from '@/i18n';
+import { dagNaam, maandNaam } from './kalenderNamen';
 
 /** De iconen van `TIJDLIJN_ICON`, als sleutel; het scherm kiest het lucide-icoon. */
 export type TijdlijnIcoon =
@@ -63,8 +66,6 @@ export function tijdlijnKleur(type: string | null | undefined): string | null {
   return KLEUR.find(([voor]) => t.startsWith(voor))?.[1] ?? null;
 }
 
-const DAG = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAAND = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const twee = (n: number) => String(n).padStart(2, '0');
 
 /** `fmtTijdlijnDate`: "wo 15 okt · 14:03" (lokale tijd, zonder jaar). */
@@ -72,7 +73,12 @@ export function tijdlijnDatum(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return `${DAG[d.getDay()]} ${d.getDate()} ${MAAND[d.getMonth()]} · ${twee(d.getHours())}:${twee(d.getMinutes())}`;
+  return tx('{weekdag} {dag} {maand} · {tijd}', {
+    weekdag: dagNaam(d.getDay(), 'kort'),
+    dag: d.getDate(),
+    maand: maandNaam(d.getMonth(), 'kort'),
+    tijd: `${twee(d.getHours())}:${twee(d.getMinutes())}`,
+  });
 }
 
 /**
@@ -86,7 +92,12 @@ export function verstuurdeMailSub(m: { sent_at?: string | null; related_type?: s
     const d = new Date(m.sent_at);
     if (!Number.isNaN(d.getTime())) {
       delen.push(
-        `${d.getDate()} ${MAAND[d.getMonth()]} ${d.getFullYear()} ${twee(d.getHours())}:${twee(d.getMinutes())}`,
+        tx('{dag} {maand} {jaar} {tijd}', {
+          dag: d.getDate(),
+          maand: maandNaam(d.getMonth(), 'kort'),
+          jaar: d.getFullYear(),
+          tijd: `${twee(d.getHours())}:${twee(d.getMinutes())}`,
+        }),
       );
     }
   }
@@ -96,8 +107,8 @@ export function verstuurdeMailSub(m: { sent_at?: string | null; related_type?: s
 
 /** De controles van `handleSendEmail`, in dezelfde volgorde en met dezelfde tekst. */
 export function klantMailFout(c: { aan: string; onderwerp: string }): string | null {
-  if (!c.aan.trim()) return 'E-mailadres is verplicht';
-  if (!c.onderwerp.trim()) return 'Onderwerp is verplicht';
+  if (!c.aan.trim()) return tx('E-mailadres is verplicht');
+  if (!c.onderwerp.trim()) return tx('Onderwerp is verplicht');
   return null;
 }
 

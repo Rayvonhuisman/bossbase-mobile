@@ -15,10 +15,11 @@ import {
   type VerwijderStatus,
 } from '@/services/accountVerwijderenService';
 import { Kaart, Keuze, Uitleg, stijlVoorInstellingen } from './Bouwstenen';
+import { tx, txn, locale } from '@/i18n';
 
 const datum = (iso: string | null | undefined) =>
   iso
-    ? new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' })
+    ? new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' })
     : '';
 
 type Venster = 'lid' | 'overdracht' | 'bedrijf' | null;
@@ -76,7 +77,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
   // Na een definitieve verwijdering bestaat de login niet meer.
   const naarBuiten = async (bericht: string) => {
     setVenster(null);
-    Dialog.alert('Verwijderd', bericht);
+    Dialog.alert(tx('Verwijderd'), bericht);
     await lokaalUitloggen();
     onUitgelogd();
   };
@@ -92,7 +93,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
       metWachtwoord(async () => {
         const r = await verwijderActie<{ status: string }>('lid_verwijderen', { sleutel: nieuweSleutel() });
         if (!r.ok) return r;
-        await naarBuiten(r.data.status === 'voltooid' ? 'Je account is verwijderd.' : 'Je account wordt verwijderd. Je bent uitgelogd.');
+        await naarBuiten(r.data.status === 'voltooid' ? tx('Je account is verwijderd.') : tx('Je account wordt verwijderd. Je bent uitgelogd.'));
         return writeOk(null);
       }),
     );
@@ -103,7 +104,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         const r = await verwijderActie<{ verlooptOp: string }>('overdracht_starten', { naar: ontvanger });
         if (!r.ok) return r;
         setVenster(null);
-        toonResultaat(writeOk(null), `Verzoek verstuurd. Het verloopt op ${datum(r.data.verlooptOp)}.`);
+        toonResultaat(writeOk(null), tx('Verzoek verstuurd. Het verloopt op {datum}.', { datum: datum(r.data.verlooptOp) }));
         await laad();
         return writeOk(null);
       }),
@@ -117,8 +118,8 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
           if (!r.ok) return r;
           await naarBuiten(
             r.data.status === 'voltooid'
-              ? 'Het bedrijf en alle accounts zijn verwijderd.'
-              : 'Het bedrijf wordt verwijderd. Je bent uitgelogd.',
+              ? tx('Het bedrijf en alle accounts zijn verwijderd.')
+              : tx('Het bedrijf wordt verwijderd. Je bent uitgelogd.'),
           );
           return writeOk(null);
         }
@@ -128,7 +129,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
         });
         if (!r.ok) return r;
         setVenster(null);
-        toonResultaat(writeOk(null), `Het bedrijf wordt verwijderd op ${datum(r.data.geplandOp)}. Tot die tijd kun je annuleren.`);
+        toonResultaat(writeOk(null), tx('Het bedrijf wordt verwijderd op {datum}. Tot die tijd kun je annuleren.', { datum: datum(r.data.geplandOp) }));
         await laad();
         return writeOk(null);
       }),
@@ -145,18 +146,18 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
 
   if (laadFout) {
     return (
-      <Kaart titel="Account verwijderen">
-        <Text style={s.hint}>De gegevens over verwijderen konden niet worden geladen. {laadFout}</Text>
+      <Kaart titel={tx('Account verwijderen')}>
+        <Text style={s.hint}>{tx('De gegevens over verwijderen konden niet worden geladen. {fout}', { fout: laadFout })}</Text>
         <View style={s.knoppen}>
-          <Button label="Opnieuw proberen" variant="ghost" onPress={() => void laad()} />
+          <Button label={tx('Opnieuw proberen')} variant="ghost" onPress={() => void laad()} />
         </View>
       </Kaart>
     );
   }
   if (!status) {
     return (
-      <Kaart titel="Account verwijderen">
-        <Text style={s.hint}>Laden…</Text>
+      <Kaart titel={tx('Account verwijderen')}>
+        <Text style={s.hint}>{tx('Laden…')}</Text>
       </Kaart>
     );
   }
@@ -166,19 +167,21 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
   const kandidaten = status.kandidaten ?? [];
 
   return (
-    <Kaart titel="Account verwijderen">
+    <Kaart titel={tx('Account verwijderen')}>
       {v ? (
         <Uitleg toon="waarschuwing">
-          {`Dit bedrijf wordt ${v.modus === 'direct' || v.status === 'bezig' ? 'nu verwijderd' : `verwijderd op ${datum(v.geplandOp)}`}. Tot die tijd kun je alles bekijken en exporteren, maar niets meer wijzigen.`}
+          {v.modus === 'direct' || v.status === 'bezig'
+            ? tx('Dit bedrijf wordt nu verwijderd. Tot die tijd kun je alles bekijken en exporteren, maar niets meer wijzigen.')
+            : tx('Dit bedrijf wordt verwijderd op {datum}. Tot die tijd kun je alles bekijken en exporteren, maar niets meer wijzigen.', { datum: datum(v.geplandOp) })}
         </Uitleg>
       ) : null}
       {v && eigenaar && v.status === 'gepland' ? (
         <View style={s.knoppen}>
           <Button
-            label="Verwijdering annuleren"
+            label={tx('Verwijdering annuleren')}
             variant="secondary"
             disabled={saving}
-            onPress={() => kort('bedrijf_annuleren', {}, 'De verwijdering is geannuleerd. Je kunt weer gewoon werken.')}
+            onPress={() => kort('bedrijf_annuleren', {}, tx('De verwijdering is geannuleerd. Je kunt weer gewoon werken.'))}
           />
         </View>
       ) : null}
@@ -186,19 +189,22 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
       {status.overdrachtIn ? (
         <>
           <Uitleg>
-            {`${status.overdrachtIn.vanNaam || 'De eigenaar'} wil het eigendom van het bedrijf aan jou overdragen. Als eigenaar beheer je het abonnement en kun je het bedrijf verwijderen. Geldig tot ${datum(status.overdrachtIn.verlooptOp)}.`}
+            {tx('{naam} wil het eigendom van het bedrijf aan jou overdragen. Als eigenaar beheer je het abonnement en kun je het bedrijf verwijderen. Geldig tot {datum}.', {
+              naam: status.overdrachtIn.vanNaam || tx('De eigenaar'),
+              datum: datum(status.overdrachtIn.verlooptOp),
+            })}
           </Uitleg>
           <View style={s.knoppen}>
             <Button
-              label="Accepteren"
+              label={tx('Accepteren')}
               disabled={saving}
-              onPress={() => kort('overdracht_accepteren', { id: status.overdrachtIn!.id }, 'Je bent nu de eigenaar van het bedrijf.')}
+              onPress={() => kort('overdracht_accepteren', { id: status.overdrachtIn!.id }, tx('Je bent nu de eigenaar van het bedrijf.'))}
             />
             <Button
-              label="Weigeren"
+              label={tx('Weigeren')}
               variant="ghost"
               disabled={saving}
-              onPress={() => kort('overdracht_weigeren', { id: status.overdrachtIn!.id }, 'Je hebt de overdracht geweigerd.')}
+              onPress={() => kort('overdracht_weigeren', { id: status.overdrachtIn!.id }, tx('Je hebt de overdracht geweigerd.'))}
             />
           </View>
         </>
@@ -207,36 +213,37 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
       {!v && eigenaar ? (
         <>
           <Text style={s.hint}>
-            Je bent de eigenaar. Wil je alleen je eigen account verwijderen, draag dan eerst het eigendom over aan een
-            andere beheerder. Of verwijder het hele bedrijf, met alle teamleden en gegevens. Wil je alleen stoppen met
-            betalen, zeg dan je abonnement op (dashboard › Instellingen › Abonnement).
+            {tx('Je bent de eigenaar. Wil je alleen je eigen account verwijderen, draag dan eerst het eigendom over aan een andere beheerder. Of verwijder het hele bedrijf, met alle teamleden en gegevens. Wil je alleen stoppen met betalen, zeg dan je abonnement op (dashboard › Instellingen › Abonnement).')}
           </Text>
           {status.overdrachtUit ? (
             <>
               <Uitleg>
-                {`Overdracht aan ${status.overdrachtUit.naarNaam || 'een beheerder'} wacht op acceptatie (tot ${datum(status.overdrachtUit.verlooptOp)}). Tot die tijd blijf jij eigenaar.`}
+                {tx('Overdracht aan {naam} wacht op acceptatie (tot {datum}). Tot die tijd blijf jij eigenaar.', {
+                  naam: status.overdrachtUit.naarNaam || tx('een beheerder'),
+                  datum: datum(status.overdrachtUit.verlooptOp),
+                })}
               </Uitleg>
               <View style={s.knoppen}>
                 <Button
-                  label="Overdracht intrekken"
+                  label={tx('Overdracht intrekken')}
                   variant="ghost"
                   disabled={saving}
-                  onPress={() => kort('overdracht_intrekken', { id: status.overdrachtUit!.id }, 'De overdracht is ingetrokken.')}
+                  onPress={() => kort('overdracht_intrekken', { id: status.overdrachtUit!.id }, tx('De overdracht is ingetrokken.'))}
                 />
               </View>
             </>
           ) : null}
           <View style={s.knoppen}>
             <Button
-              label="Eigendom overdragen"
+              label={tx('Eigendom overdragen')}
               variant="secondary"
               disabled={kandidaten.length === 0 || !!status.overdrachtUit}
               onPress={() => open('overdracht')}
             />
-            <Button label="Bedrijf verwijderen" variant="secondary" onPress={() => open('bedrijf')} />
+            <Button label={tx('Bedrijf verwijderen')} variant="secondary" onPress={() => open('bedrijf')} />
           </View>
           {kandidaten.length === 0 ? (
-            <Text style={s.hint}>Overdragen kan aan een actieve beheerder. Maak eerst iemand beheerder bij Team.</Text>
+            <Text style={s.hint}>{tx('Overdragen kan aan een actieve beheerder. Maak eerst iemand beheerder bij Team.')}</Text>
           ) : null}
         </>
       ) : null}
@@ -244,32 +251,32 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
       {!eigenaar ? (
         <>
           <Text style={s.hint}>
-            Verwijder je eigen account definitief. Het bedrijf en het werk van je collega’s blijven bestaan.
+            {tx('Verwijder je eigen account definitief. Het bedrijf en het werk van je collega’s blijven bestaan.')}
           </Text>
           <View style={s.knoppen}>
-            <Button label="Account verwijderen" variant="secondary" onPress={() => open('lid')} />
+            <Button label={tx('Account verwijderen')} variant="secondary" onPress={() => open('lid')} />
           </View>
         </>
       ) : null}
 
       <FormSheet
         visible={venster === 'lid'}
-        title="Account verwijderen"
-        subtitle="Dit is definitief en kan niet ongedaan worden gemaakt."
+        title={tx('Account verwijderen')}
+        subtitle={tx('Dit is definitief en kan niet ongedaan worden gemaakt.')}
         error={error}
         saving={saving}
-        submitLabel="Definitief verwijderen"
+        submitLabel={tx('Definitief verwijderen')}
         submitDisabled={!wachtwoord || bevestiging.trim().toUpperCase() !== 'VERWIJDEREN'}
         onSubmit={lidVerwijderen}
         onClose={() => setVenster(null)}
       >
         <Uitleg toon="waarschuwing">
-          {'• Weg: je login, naam, e-mailadres, telefoonnummer, profielfoto, meldingen en koppelingen. Je wordt overal uitgelogd.\n' +
-            '• Blijft bij het bedrijf: wat je voor het bedrijf hebt vastgelegd (uren, werkbonnen, notities). Daar staat voortaan „Verwijderde gebruiker”.\n' +
-            '• Het bedrijf en de accounts van je collega’s blijven bestaan.'}
+          {tx('• Weg: je login, naam, e-mailadres, telefoonnummer, profielfoto, meldingen en koppelingen. Je wordt overal uitgelogd.') + '\n' +
+            tx('• Blijft bij het bedrijf: wat je voor het bedrijf hebt vastgelegd (uren, werkbonnen, notities). Daar staat voortaan „Verwijderde gebruiker”.') + '\n' +
+            tx('• Het bedrijf en de accounts van je collega’s blijven bestaan.')}
         </Uitleg>
         <FormField
-          label="Bevestig met je wachtwoord"
+          label={tx('Bevestig met je wachtwoord')}
           value={wachtwoord}
           onChangeText={setWachtwoord}
           secureTextEntry
@@ -277,7 +284,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
           autoComplete="current-password"
         />
         <FormField
-          label="Typ VERWIJDEREN om te bevestigen"
+          label={tx('Typ VERWIJDEREN om te bevestigen')}
           value={bevestiging}
           onChangeText={setBevestiging}
           placeholder="VERWIJDEREN"
@@ -288,28 +295,28 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
 
       <FormSheet
         visible={venster === 'overdracht'}
-        title="Eigendom overdragen"
-        subtitle="De nieuwe eigenaar moet het verzoek accepteren."
+        title={tx('Eigendom overdragen')}
+        subtitle={tx('De nieuwe eigenaar moet het verzoek accepteren.')}
         error={error}
         saving={saving}
-        submitLabel="Verzoek versturen"
+        submitLabel={tx('Verzoek versturen')}
         submitDisabled={!ontvanger || !wachtwoord}
         onSubmit={overdragen}
         onClose={() => setVenster(null)}
       >
         <Uitleg>
-          {'• De nieuwe eigenaar beheert het abonnement en kan het bedrijf verwijderen.\n' +
-            '• Tot de acceptatie blijf jij eigenaar. Het verzoek verloopt na 7 dagen; je kunt het eerder intrekken.\n' +
-            '• Daarna kun je je eigen account verwijderen.'}
+          {tx('• De nieuwe eigenaar beheert het abonnement en kan het bedrijf verwijderen.') + '\n' +
+            tx('• Tot de acceptatie blijf jij eigenaar. Het verzoek verloopt na 7 dagen; je kunt het eerder intrekken.') + '\n' +
+            tx('• Daarna kun je je eigen account verwijderen.')}
         </Uitleg>
         <Keuze
-          label="Nieuwe eigenaar"
-          opties={kandidaten.map((k) => ({ id: k.id, label: k.naam || 'Beheerder' }))}
+          label={tx('Nieuwe eigenaar')}
+          opties={kandidaten.map((k) => ({ id: k.id, label: k.naam || tx('Beheerder') }))}
           waarde={ontvanger}
           onKies={setOntvanger}
         />
         <FormField
-          label="Bevestig met je wachtwoord"
+          label={tx('Bevestig met je wachtwoord')}
           value={wachtwoord}
           onChangeText={setWachtwoord}
           secureTextEntry
@@ -320,33 +327,39 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
 
       <FormSheet
         visible={venster === 'bedrijf'}
-        title="Bedrijf verwijderen"
+        title={tx('Bedrijf verwijderen')}
         subtitle={status.bedrijfsnaam ?? undefined}
         error={error}
         saving={saving}
-        submitLabel={modus === 'direct' ? 'Nu definitief verwijderen' : 'Verwijderen over 30 dagen'}
+        submitLabel={modus === 'direct' ? tx('Nu definitief verwijderen') : tx('Verwijderen over 30 dagen')}
         submitDisabled={!wachtwoord || (modus === 'direct' && bevestiging !== status.bedrijfsnaam)}
         onSubmit={bedrijfVerwijderen}
         onClose={() => setVenster(null)}
       >
         <Uitleg toon="waarschuwing">
-          {`• Weg: alle klanten, projecten, werkbonnen, uren, planning, offertes, facturen, kosten, bestanden en foto’s, en de accounts van jou en ${status.teamleden ? `${status.teamleden} teamleden` : 'je team'}.\n` +
-            '• Abonnement: stopt op de verwijderdatum; daarna wordt er niets meer afgeschreven.\n' +
-            '• Wat BossBase bewaart: alleen de facturen die BossBase jou stuurde en de betaalgegevens daarvan, 7 jaar (wettelijke bewaarplicht), plus een kort technisch bewijs van dit verzoek.\n' +
-            '• Exporteer eerst wat je zelf moet bewaren, zoals je facturen en btw-gegevens (op het dashboard). Jouw eigen administratieplicht blijft gelden.'}
+          {(status.teamleden
+            ? txn(
+                '• Weg: alle klanten, projecten, werkbonnen, uren, planning, offertes, facturen, kosten, bestanden en foto’s, en de accounts van jou en {n} teamlid.',
+                '• Weg: alle klanten, projecten, werkbonnen, uren, planning, offertes, facturen, kosten, bestanden en foto’s, en de accounts van jou en {n} teamleden.',
+                status.teamleden,
+              )
+            : tx('• Weg: alle klanten, projecten, werkbonnen, uren, planning, offertes, facturen, kosten, bestanden en foto’s, en de accounts van jou en je team.')) + '\n' +
+            tx('• Abonnement: stopt op de verwijderdatum; daarna wordt er niets meer afgeschreven.') + '\n' +
+            tx('• Wat BossBase bewaart: alleen de facturen die BossBase jou stuurde en de betaalgegevens daarvan, 7 jaar (wettelijke bewaarplicht), plus een kort technisch bewijs van dit verzoek.') + '\n' +
+            tx('• Exporteer eerst wat je zelf moet bewaren, zoals je facturen en btw-gegevens (op het dashboard). Jouw eigen administratieplicht blijft gelden.')}
         </Uitleg>
         <Keuze
-          label="Wanneer?"
+          label={tx('Wanneer?')}
           opties={[
-            { id: 'gepland', label: 'Over 30 dagen (aanbevolen): eerst alleen-lezen, annuleren kan nog' },
-            { id: 'direct', label: 'Nu definitief: alles is direct weg' },
+            { id: 'gepland', label: tx('Over 30 dagen (aanbevolen): eerst alleen-lezen, annuleren kan nog') },
+            { id: 'direct', label: tx('Nu definitief: alles is direct weg') },
           ]}
           waarde={modus}
           onKies={(id) => setModus(id as 'gepland' | 'direct')}
         />
         {modus === 'direct' ? (
           <FormField
-            label={`Typ de bedrijfsnaam “${status.bedrijfsnaam ?? ''}” om te bevestigen`}
+            label={tx('Typ de bedrijfsnaam “{naam}” om te bevestigen', { naam: status.bedrijfsnaam ?? '' })}
             value={bevestiging}
             onChangeText={setBevestiging}
             autoCapitalize="none"
@@ -354,7 +367,7 @@ export function AccountVerwijderen({ onUitgelogd }: { onUitgelogd: () => void })
           />
         ) : null}
         <FormField
-          label="Bevestig met je wachtwoord"
+          label={tx('Bevestig met je wachtwoord')}
           value={wachtwoord}
           onChangeText={setWachtwoord}
           secureTextEntry

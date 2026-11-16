@@ -18,7 +18,7 @@ function bestanden(dir) {
   const uit = [];
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== 'i18n') uit.push(...bestanden(p)); }
+    if (e.isDirectory()) { if (e.name !== 'node_modules') uit.push(...bestanden(p)); }
     else if (/\.(tsx?|jsx?)$/.test(e.name) && !e.name.endsWith('.d.ts')) uit.push(p);
   }
   return uit;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronRight, FileSignature } from 'lucide-react-native';
+import { tx } from '@/i18n';
 import { usePermissions, useTheme } from '@/providers';
 import { ds, dsShadow, spacing, type ThemeColors } from '@/theme';
 import { formatDateNL } from '@/lib/format';
@@ -71,7 +72,7 @@ export function ContractBlok({
   if (fout && !info) {
     return (
       <View style={styles.kaart}>
-        <Text style={styles.gedempt}>Contractgegevens konden niet worden geladen.</Text>
+        <Text style={styles.gedempt}>{tx('Contractgegevens konden niet worden geladen.')}</Text>
       </View>
     );
   }
@@ -98,7 +99,7 @@ export function ContractBlok({
     <View style={styles.sectie}>
       <View style={styles.kop}>
         <FileSignature size={16} color={ds.green700} />
-        <Text style={styles.kopTitel}>{c ? 'Contract' : 'Installatie'}</Text>
+        <Text style={styles.kopTitel}>{c ? tx('Contract') : tx('Installatie')}</Text>
       </View>
       <View style={styles.kaart}>
         {c ? (
@@ -109,7 +110,7 @@ export function ContractBlok({
             style={({ pressed }) => [styles.contractRij, pressed && { opacity: 0.7 }]}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.contractNummer}>{c.nummer ?? 'Contract'}</Text>
+              <Text style={styles.contractNummer}>{c.nummer ?? tx('Contract')}</Text>
               <Text style={styles.contractTitel} numberOfLines={2}>
                 {c.titel ?? ''}
               </Text>
@@ -123,14 +124,14 @@ export function ContractBlok({
             {prioriteit ? (
               <View style={[styles.pil, prioriteit === 'spoed' && { backgroundColor: t.statusRejectBg }]}>
                 <Text style={[styles.pilTekst, prioriteit === 'spoed' && { color: t.statusRejectFg }]}>
-                  {PRIORITEIT_LABEL[prioriteit]}
+                  {tx(PRIORITEIT_LABEL[prioriteit])}
                 </Text>
               </View>
             ) : null}
             {info.sla?.niveau ? (
               <Text style={styles.gedempt}>
                 SLA {info.sla.niveau}
-                {info.sla.klok === 'werkuren' ? ' · werkuren (ma–vr 8–17)' : info.sla.klok === 'altijd' ? ' · 24/7' : ''}
+                {info.sla.klok === 'werkuren' ? ` · ${tx('werkuren (ma–vr 8–17)')}` : info.sla.klok === 'altijd' ? ' · 24/7' : ''}
               </Text>
             ) : null}
           </View>
@@ -144,7 +145,8 @@ export function ContractBlok({
                 {deadlineTekst(r.deadline)}
                 {(() => {
                   const klaar = r.soort === 'reactie' ? (info.gestart_op ?? info.afgerond_op) : info.afgerond_op;
-                  if (klaar) return ` · ${r.soort === 'reactie' ? 'gestart' : 'afgerond'} ${deadlineTekst(klaar)}`;
+                  if (klaar)
+                    return ` · ${r.soort === 'reactie' ? tx('gestart {wanneer}', { wanneer: deadlineTekst(klaar) }) : tx('afgerond {wanneer}', { wanneer: deadlineTekst(klaar) })}`;
                   return ` · ${resterendTekst(r.deadline, nu)}`;
                 })()}
               </Text>
@@ -155,27 +157,27 @@ export function ContractBlok({
 
         {info.uiterlijk_op ? (
           <View style={styles.regel}>
-            <Text style={styles.label}>Uiterlijk uitvoeren op</Text>
+            <Text style={styles.label}>{tx('Uiterlijk uitvoeren op')}</Text>
             <Text style={styles.waarde}>{formatDateNL(info.uiterlijk_op)}</Text>
           </View>
         ) : null}
 
         {info.sla_toelichting ? (
           <View style={styles.regel}>
-            <Text style={styles.label}>Toelichting</Text>
+            <Text style={styles.label}>{tx('Toelichting')}</Text>
             <Text style={styles.waarde}>{info.sla_toelichting}</Text>
           </View>
         ) : null}
 
         {ins ? (
           <View style={styles.regel}>
-            <Text style={styles.label}>Installatie</Text>
+            <Text style={styles.label}>{tx('Installatie')}</Text>
             <Text style={styles.waarde}>{installatieNaam(ins)}</Text>
             {ins.serienummer || ins.plaatsingsdatum ? (
               <Text style={styles.gedempt}>
                 {[
-                  ins.serienummer ? `Serienummer ${ins.serienummer}` : null,
-                  ins.plaatsingsdatum ? `geplaatst ${formatDateNL(ins.plaatsingsdatum)}` : null,
+                  ins.serienummer ? tx('Serienummer {nummer}', { nummer: ins.serienummer }) : null,
+                  ins.plaatsingsdatum ? tx('geplaatst {datum}', { datum: formatDateNL(ins.plaatsingsdatum) }) : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -190,14 +192,14 @@ export function ContractBlok({
 
         {info.beurt?.omschrijving ? (
           <View style={styles.regel}>
-            <Text style={styles.label}>Onderhoudsbeurt</Text>
+            <Text style={styles.label}>{tx('Onderhoudsbeurt')}</Text>
             <Text style={styles.waarde}>{info.beurt.omschrijving}</Text>
           </View>
         ) : null}
 
         {binnen ? (
           <View style={styles.regel}>
-            <Text style={styles.label}>Binnen het contract</Text>
+            <Text style={styles.label}>{tx('Binnen het contract')}</Text>
             <Text style={styles.waarde}>{binnen}</Text>
           </View>
         ) : null}

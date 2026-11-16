@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '@/providers';
 import type { ThemeColors } from '@/theme';
 import { HeaderActions } from './HeaderActions';
+import { tx } from '@/i18n';
 
 export type AppTopBarVariant = 'default' | 'detail' | 'compact';
 
@@ -67,7 +68,7 @@ export function AppTopBar({
       <Pressable
         onPress={onBack}
         accessibilityRole="button"
-        accessibilityLabel="Terug"
+        accessibilityLabel={tx('Terug')}
         hitSlop={8}
         style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
       >

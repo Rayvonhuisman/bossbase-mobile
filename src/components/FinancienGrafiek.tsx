@@ -4,6 +4,7 @@ import { useTheme } from '@/providers';
 import { formatDateNL, formatEURCent } from '@/lib/format';
 import { asLabel, grafiekSchaal, type GrafiekModus, type GrafiekPeriode, type Staaf } from '@/lib/financienLogica';
 import type { ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 const HOOGTE = 180;
 const AS_BREEDTE = 44;
@@ -52,7 +53,7 @@ export function FinancienGrafiek({
     <View>
       <View style={styles.uitleesRij} accessibilityLiveRegion="polite">
         <Text style={styles.uitleesLabel} numberOfLines={1}>
-          {sel ? selLabel : `Totaal · ${modusLabel}`}
+          {sel ? selLabel : tx('Totaal · {modus}', { modus: modusLabel })}
         </Text>
         <Text style={[styles.uitleesWaarde, { color: modus === 'kosten' ? t.statusRejectFg : t.ink }]}>
           {formatEURCent(sel ? sel[modus] : totaal)}

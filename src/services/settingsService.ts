@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { normaliseerIban, valideerIban } from '@/lib/relatieValidatie';
 import { getCompanyId, getSessionStand, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { classificeerFout, schrijf, writeFout, type WriteResult } from '@/lib/writeResult';
+import { tx, txm } from '@/i18n';
 
 /**
  * Bedrijfsinstellingen (`bedrijfsinstellingen`) en bedrijfsgegevens
@@ -125,7 +126,7 @@ export async function getCompanySettings(): Promise<{
 
   if (error) {
     console.warn('[settingsService.getCompanySettings]', error.message);
-    return { data: { ...STANDAARD }, bestaat: false, error: 'Bedrijfsinstellingen konden niet worden geladen.' };
+    return { data: { ...STANDAARD }, bestaat: false, error: tx('Bedrijfsinstellingen konden niet worden geladen.') };
   }
   return { data: toSettings(data as SettingsDb | null), bestaat: Boolean(data), error: null };
 }
@@ -152,31 +153,31 @@ export type SettingsInput = Partial<
 >;
 
 function valideerSettings(input: SettingsInput): string | null {
-  const bereik = (v: number | undefined, min: number, max: number, label: string) => {
+  const bereik = (v: number | undefined, min: number, max: number, tekst: string) => {
     if (v === undefined) return null;
-    if (!Number.isFinite(v) || v < min || v > max) return `Vul een ${label} tussen ${min} en ${max} in.`;
+    if (!Number.isFinite(v) || v < min || v > max) return tx(tekst, { min, max });
     return null;
   };
   return (
-    bereik(input.uurtarief, 0, 10000, 'uurtarief') ??
-    bereik(input.reiskosten_per_km, 0, 100, 'kilometervergoeding') ??
-    bereik(input.standaard_marge, 0, 100, 'marge') ??
-    bereik(input.btw_pct, 0, 100, 'btw-percentage') ??
-    bereik(input.offerte_geldig_dagen, 1, 365, 'geldigheidsduur in dagen') ??
-    bereik(input.betaaltermijn_dagen, 0, 365, 'betaaltermijn in dagen') ??
-    bereik(input.agenda_start_uur, 0, 23, 'startuur') ??
-    bereik(input.agenda_eind_uur, 1, 24, 'einduur') ??
-    bereik(input.uren_herinnering_interval_min, 0, 1440, 'herhaalinterval') ??
+    bereik(input.uurtarief, 0, 10000, txm('Vul een uurtarief tussen {min} en {max} in.')) ??
+    bereik(input.reiskosten_per_km, 0, 100, txm('Vul een kilometervergoeding tussen {min} en {max} in.')) ??
+    bereik(input.standaard_marge, 0, 100, txm('Vul een marge tussen {min} en {max} in.')) ??
+    bereik(input.btw_pct, 0, 100, txm('Vul een btw-percentage tussen {min} en {max} in.')) ??
+    bereik(input.offerte_geldig_dagen, 1, 365, txm('Vul een geldigheidsduur in dagen tussen {min} en {max} in.')) ??
+    bereik(input.betaaltermijn_dagen, 0, 365, txm('Vul een betaaltermijn in dagen tussen {min} en {max} in.')) ??
+    bereik(input.agenda_start_uur, 0, 23, txm('Vul een startuur tussen {min} en {max} in.')) ??
+    bereik(input.agenda_eind_uur, 1, 24, txm('Vul een einduur tussen {min} en {max} in.')) ??
+    bereik(input.uren_herinnering_interval_min, 0, 1440, txm('Vul een herhaalinterval tussen {min} en {max} in.')) ??
     (input.uren_herinnering_moment && !MOMENTEN.includes(input.uren_herinnering_moment)
-      ? 'Kies wanneer de herinnering komt.'
+      ? tx('Kies wanneer de herinnering komt.')
       : null) ??
     (input.btw_stelsel && !['kas', 'factuur'].includes(input.btw_stelsel)
-      ? 'Kies kas- of factuurstelsel.'
+      ? tx('Kies kas- of factuurstelsel.')
       : null) ??
     (input.agenda_start_uur !== undefined &&
     input.agenda_eind_uur !== undefined &&
     input.agenda_eind_uur <= input.agenda_start_uur
-      ? 'Het einduur van de agenda moet ná het startuur liggen.'
+      ? tx('Het einduur van de agenda moet ná het startuur liggen.')
       : null)
   );
 }
@@ -227,7 +228,7 @@ export async function upsertCompanySettings(
     updates.auto_sync_google_calendar = input.auto_sync_google_calendar;
   }
 
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
   updates.updated_at = new Date().toISOString();
 
   const { data: bestaand } = await supabase
@@ -238,8 +239,7 @@ export async function upsertCompanySettings(
   const rij = bestaand as { id: string } | null;
 
   const geenRechten =
-    'De instellingen zijn niet opgeslagen. Alleen een beheerder kan de bedrijfsinstellingen ' +
-    'wijzigen.';
+    tx('De instellingen zijn niet opgeslagen. Alleen een beheerder kan de bedrijfsinstellingen wijzigen.');
 
   if (rij?.id) {
     const res = await schrijf<SettingsDb>(
@@ -260,7 +260,7 @@ export async function upsertCompanySettings(
   }
 
   const payload = withCompanyId(updates);
-  if (!payload) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!payload) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   const res = await schrijf<SettingsDb>(
     () => supabase.from('bedrijfsinstellingen').insert(payload).select(SETTINGS_COLUMNS),
@@ -312,7 +312,7 @@ export async function getCompany(): Promise<{ data: CompanyRow | null; error: st
     .maybeSingle();
   if (error) {
     console.warn('[settingsService.getCompany]', error.message);
-    return { data: null, error: 'Bedrijfsgegevens konden niet worden geladen.' };
+    return { data: null, error: tx('Bedrijfsgegevens konden niet worden geladen.') };
   }
   return { data: (data as unknown as CompanyRow | null) ?? null, error: null };
 }
@@ -341,22 +341,22 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function updateCompany(input: CompanyInput): Promise<WriteResult<CompanyRow>> {
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
 
   if (input.name !== undefined && !input.name.trim()) {
-    return writeFout('validatie', 'De bedrijfsnaam mag niet leeg zijn.');
+    return writeFout('validatie', tx('De bedrijfsnaam mag niet leeg zijn.'));
   }
   if (input.email && !EMAIL_RE.test(input.email.trim())) {
-    return writeFout('validatie', 'E-mailadres heeft geen geldig formaat');
+    return writeFout('validatie', tx('E-mailadres heeft geen geldig formaat'));
   }
   if (input.reply_to_email && !EMAIL_RE.test(input.reply_to_email.trim())) {
-    return writeFout('validatie', 'Antwoord e-mailadres heeft geen geldig formaat');
+    return writeFout('validatie', tx('Antwoord e-mailadres heeft geen geldig formaat'));
   }
   if (input.kvk && !/^\d{8}$/.test(input.kvk.trim())) {
-    return writeFout('validatie', 'KvK-nummer moet 8 cijfers bevatten');
+    return writeFout('validatie', tx('KvK-nummer moet 8 cijfers bevatten'));
   }
   if (input.branding_color && !/^#[0-9a-fA-F]{6}$/.test(input.branding_color.trim())) {
-    return writeFout('validatie', 'Kies een merkkleur als hexcode, bijvoorbeeld #1DDB62.');
+    return writeFout('validatie', tx('Kies een merkkleur als hexcode, bijvoorbeeld #1DDB62.'));
   }
 
   // IBAN: dezelfde mod-97-controle als de database (bb_iban_geldig); opslaan
@@ -386,7 +386,7 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
     const v = input[veld];
     if (v !== undefined) updates[veld] = v?.trim() || null;
   }
-  if (Object.keys(updates).length === 0) return writeFout('validatie', 'Er is niets gewijzigd.');
+  if (Object.keys(updates).length === 0) return writeFout('validatie', tx('Er is niets gewijzigd.'));
 
   return schrijf<CompanyRow>(
     () => supabase.from('companies').update(updates).eq('id', companyId).select(COMPANY_COLUMNS),
@@ -395,7 +395,7 @@ export async function updateCompany(input: CompanyInput): Promise<WriteResult<Co
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
       leegMelding:
-        'De bedrijfsgegevens zijn niet opgeslagen. Alleen een beheerder kan ze wijzigen.',
+        tx('De bedrijfsgegevens zijn niet opgeslagen. Alleen een beheerder kan ze wijzigen.'),
     },
   );
 }
@@ -414,23 +414,23 @@ export async function uploadBedrijfslogo(input: {
   extensie: string;
 }): Promise<WriteResult<CompanyRow>> {
   const companyId = getCompanyId();
-  if (!companyId) return writeFout('onbekend', 'Je bedrijfsgegevens zijn nog niet geladen.');
+  if (!companyId) return writeFout('onbekend', tx('Je bedrijfsgegevens zijn nog niet geladen.'));
   if (input.contentType !== 'image/jpeg' && input.contentType !== 'image/png') {
     return writeFout(
       'validatie',
-      "Dit bestandstype wordt niet ondersteund. Het logo komt ook in e-mails en PDF's terecht — gebruik JPG of PNG.",
+      tx("Dit bestandstype wordt niet ondersteund. Het logo komt ook in e-mails en PDF's terecht — gebruik JPG of PNG."),
     );
   }
   // Bucket `bedrijf-logos` heeft file_size_limit 5 MB; groter weigert de server.
   if (input.bytes.byteLength > 5 * 1024 * 1024) {
-    return writeFout('validatie', 'Het logo is groter dan 5 MB.');
+    return writeFout('validatie', tx('Het logo is groter dan 5 MB.'));
   }
   // De storage-policy op `bedrijf-logos` toetst alleen de bedrijfsmap, niet de
   // rol. Zonder deze check zou een niet-beheerder `logo.*` kunnen overschrijven
   // (zelfde URL, dus direct zichtbaar in mails/PDF's) terwijl de update van
   // `companies.logo_url` daarna door RLS wordt geweigerd.
   if (getSessionStand().role !== 'admin') {
-    return writeFout('geen-rechten', 'Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.');
+    return writeFout('geen-rechten', tx('Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.'));
   }
   const ext = input.extensie === 'png' ? 'png' : 'jpg';
   const pad = `${companyId}/logo.${ext}`;
@@ -461,7 +461,7 @@ export async function uploadBedrijfslogo(input: {
       context: 'settingsService.uploadBedrijfslogo',
       bedrijfReadonly: isReadonly(),
       leegSoort: 'geen-rechten',
-      leegMelding: 'Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.',
+      leegMelding: tx('Het logo is niet opgeslagen. Alleen een beheerder kan het wijzigen.'),
     },
   );
 }

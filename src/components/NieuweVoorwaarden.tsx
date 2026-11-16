@@ -6,6 +6,7 @@ import { vandaagISO } from '@/lib/datum';
 import { supabase } from '@/lib/supabase';
 import { useAuth, useTheme } from '@/providers';
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
+import { tx } from '@/i18n';
 
 /**
  * Nieuwe versie van de voorwaarden: dezelfde kleine melding als
@@ -67,20 +68,22 @@ export function NieuweVoorwaarden() {
     const { data, error } = await supabase.functions.invoke('akkoord-vastleggen');
     setBezig(false);
     if (error || data?.success === false) {
-      setFout('Vastleggen lukte niet. Probeer het zo nog eens.');
+      setFout(tx('Vastleggen lukte niet. Probeer het zo nog eens.'));
       return;
     }
     setGevonden(null);
   };
 
   const namen = ontbreekt.map((d) => AKKOORD_NIEUW[d].naam.toLowerCase());
-  const wat = namen.length > 1 ? `${namen.slice(0, -1).join(', ')} en de ${namen[namen.length - 1]}` : namen[0];
+  const wat = namen.length > 1
+    ? tx('{lijst} en de {laatste}', { lijst: namen.slice(0, -1).join(', '), laatste: namen[namen.length - 1] })
+    : namen[0];
 
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + 92 }]} pointerEvents="box-none">
       <View style={styles.kaart} accessibilityRole="alert">
         <View style={styles.tekstvak}>
-          <Text style={styles.tekst}>We hebben de {wat} aangepast.</Text>
+          <Text style={styles.tekst}>{tx('We hebben de {wat} aangepast.', { wat })}</Text>
           <View style={styles.links}>
             {ontbreekt.map((d) => (
               <Text
@@ -89,7 +92,7 @@ export function NieuweVoorwaarden() {
                 style={styles.link}
                 onPress={() => void Linking.openURL(AKKOORD_NIEUW[d].url).catch(() => undefined)}
               >
-                {ontbreekt.length > 1 ? AKKOORD_NIEUW[d].naam : 'Lees ze'}
+                {ontbreekt.length > 1 ? AKKOORD_NIEUW[d].naam : tx('Lees ze')}
               </Text>
             ))}
           </View>
@@ -106,7 +109,7 @@ export function NieuweVoorwaarden() {
           hitSlop={8}
           style={({ pressed }) => [styles.knop, (pressed || bezig) && { opacity: 0.7 }]}
         >
-          <Text style={styles.knopTekst}>{bezig ? 'Bezig…' : 'Akkoord'}</Text>
+          <Text style={styles.knopTekst}>{bezig ? tx('Bezig…') : tx('Akkoord')}</Text>
         </Pressable>
       </View>
     </View>

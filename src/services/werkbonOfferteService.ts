@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { OfferteRegelRij } from '@/lib/werkbonUitOfferte';
+import { tx } from '@/i18n';
 
 /**
  * Werkbon vullen vanuit de offerte — `werkbonOfferteService.js` van het
@@ -30,7 +31,7 @@ export async function getOfferteRegelsVoorWerkbon({
   if (error) {
     if (nogNietUitgerold(error)) return { data: [], error: null };
     if (__DEV__) console.log('[werkbonOfferteService.regels]', error.message);
-    return { data: [], error: melding(error, 'De offerteregels konden niet worden geladen.') };
+    return { data: [], error: melding(error, tx('De offerteregels konden niet worden geladen.')) };
   }
   return { data: (data as OfferteRegelRij[] | null) ?? [], error: null };
 }
@@ -46,7 +47,7 @@ export async function takenUitOfferte(
     p_offerte: offerteId,
     p_regels: regelIds,
   });
-  if (error) return { data: 0, error: melding(error, 'Overnemen mislukt.') };
+  if (error) return { data: 0, error: melding(error, tx('Overnemen mislukt.')) };
   return { data: Number(data) || 0, error: null };
 }
 
@@ -59,6 +60,6 @@ export async function materiaalUitOfferte(
     p_werkbon: werkbonId,
     p_regel: regelId,
   });
-  if (error) return { data: null, error: melding(error, 'Toevoegen mislukt.') };
+  if (error) return { data: null, error: melding(error, tx('Toevoegen mislukt.')) };
   return { data: (data as string | null) ?? null, error: null };
 }

@@ -7,6 +7,7 @@ import { planRegels, takenVoortgang } from '@/lib/projectLogica';
 import { planningLabel, type WerkbonDag } from '@/lib/werkbonLogica';
 import type { ProjectWerkbon } from '@/services/projectService';
 import { Blok, KleineKnop, useStijl } from './bouwstenen';
+import { tx } from '@/i18n';
 
 /**
  * De Werkbonnen-tab (`WerkbonnenTab` in het dashboard): elke werkbon van dit
@@ -32,11 +33,11 @@ export function WerkbonnenTab({
 
   return (
     <Blok
-      titel={`Werkbonnen (${werkbonnen.length})`}
+      titel={tx('Werkbonnen ({n})', { n: werkbonnen.length })}
       actie={
         magMaken ? (
           <KleineKnop
-            label="Nieuwe werkbon"
+            label={tx('Nieuwe werkbon')}
             icon="plus"
             onPress={() =>
               router.push(
@@ -48,7 +49,7 @@ export function WerkbonnenTab({
       }
     >
       {werkbonnen.length === 0 ? (
-        <Text style={styles.leeg}>Nog geen werkbonnen gekoppeld aan dit project.</Text>
+        <Text style={styles.leeg}>{tx('Nog geen werkbonnen gekoppeld aan dit project.')}</Text>
       ) : (
         werkbonnen.map((w) => {
           const taken = takenVoortgang(w.werkbon_taken);
@@ -63,18 +64,19 @@ export function WerkbonnenTab({
               key={w.id}
               onPress={() => router.push(`/work-orders/${w.id}`)}
               accessibilityRole="button"
-              accessibilityLabel={`Werkbon ${w.titel || ''} openen`}
+              accessibilityLabel={tx('Werkbon {titel} openen', { titel: w.titel || '' })}
               style={({ pressed }) => [styles.rij, pressed && { opacity: 0.7 }]}
             >
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text style={styles.rijTitel} numberOfLines={1}>
-                  {w.titel || 'Werkbon'}
+                  {w.titel || tx('Werkbon')}
                 </Text>
                 {periode ? <Text style={styles.rijSub}>{periode}</Text> : null}
                 {taken.totaal ? (
                   <View style={styles.rijMidden}>
                     <Text style={styles.rijSub}>
-                      {taken.klaar}/{taken.totaal} taken
+                      {tx('{klaar}/{totaal} taken', { klaar: taken.klaar, totaal: taken.totaal })}
+
                     </Text>
                     <View style={styles.voortgang}>
                       <View style={[styles.voortgangBalk, { width: `${taken.pct}%` }]} />

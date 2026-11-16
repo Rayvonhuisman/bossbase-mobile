@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { tx, txn } from '@/i18n';
 
 /**
  * De meldingenbel — dezelfde tabel als het dashboard: `notifications`.
@@ -32,7 +33,7 @@ export async function listMeldingen(userId: string): Promise<{ data: Melding[]; 
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);
-  if (error) return { data: [], error: 'Meldingen konden niet worden geladen.' };
+  if (error) return { data: [], error: tx('Meldingen konden niet worden geladen.') };
   return {
     data: ((data ?? []) as unknown as (Omit<Melding, 'maker'> & { creator: { full_name: string | null } | null })[]).map(
       (r) => ({ ...r, maker: r.creator?.full_name ?? null }),
@@ -68,11 +69,11 @@ export { routeVoorLink } from '@/lib/meldingLink';
 /** "zojuist", "5 min geleden", "3 uur geleden", "2 dagen geleden" — als het dashboard. */
 export function relatieveTijd(iso: string, nu = Date.now()): string {
   const sec = Math.max(0, Math.round((nu - new Date(iso).getTime()) / 1000));
-  if (sec < 60) return 'zojuist';
+  if (sec < 60) return tx('zojuist');
   const min = Math.round(sec / 60);
-  if (min < 60) return `${min} min geleden`;
+  if (min < 60) return tx('{n} min geleden', { n: min });
   const uur = Math.round(min / 60);
-  if (uur < 24) return `${uur} uur geleden`;
+  if (uur < 24) return txn('{n} uur geleden', '{n} uur geleden', uur);
   const dagen = Math.round(uur / 24);
-  return `${dagen} ${dagen === 1 ? 'dag' : 'dagen'} geleden`;
+  return txn('{n} dag geleden', '{n} dagen geleden', dagen);
 }

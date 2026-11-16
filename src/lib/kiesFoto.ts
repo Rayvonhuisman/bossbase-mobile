@@ -1,3 +1,4 @@
+import { tx } from '@/i18n';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Dialog } from './dialog';
@@ -14,10 +15,10 @@ export type GekozenFoto = Extract<VoorbereideFoto, { ok: true }> & { uri: string
  */
 export function kiesFotoBron(titel: string): Promise<'camera' | 'bibliotheek' | null> {
   return new Promise((klaar) => {
-    Dialog.alert(titel, 'Waar komt de foto vandaan?', [
-      { text: 'Camera', onPress: () => klaar('camera') },
-      { text: 'Fotobibliotheek', onPress: () => klaar('bibliotheek') },
-      { text: 'Annuleren', style: 'cancel', onPress: () => klaar(null) },
+    Dialog.alert(titel, tx('Waar komt de foto vandaan?'), [
+      { text: tx('Camera'), onPress: () => klaar('camera') },
+      { text: tx('Fotobibliotheek'), onPress: () => klaar('bibliotheek') },
+      { text: tx('Annuleren'), style: 'cancel', onPress: () => klaar(null) },
     ]);
   });
 }
@@ -31,10 +32,10 @@ export async function maakOfKiesFoto(bron: 'camera' | 'bibliotheek'): Promise<Ge
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!toestemming.granted) {
         Dialog.alert(
-          'Geen toestemming',
+          tx('Geen toestemming'),
           bron === 'camera'
-            ? 'Geef BossBase toegang tot de camera om een foto te maken.'
-            : "Geef BossBase toegang tot je foto's om er een te kiezen.",
+            ? tx('Geef BossBase toegang tot de camera om een foto te maken.')
+            : tx("Geef BossBase toegang tot je foto's om er een te kiezen."),
         );
         return null;
       }
@@ -44,7 +45,7 @@ export async function maakOfKiesFoto(bron: 'camera' | 'bibliotheek'): Promise<Ge
     if (r.canceled) return null;
     const asset = r.assets?.[0];
     if (!asset) {
-      Dialog.alert('Foto niet gelezen', 'Probeer het opnieuw of kies een andere foto.');
+      Dialog.alert(tx('Foto niet gelezen'), tx('Probeer het opnieuw of kies een andere foto.'));
       return null;
     }
     const foto = await bereidFotoVoor(asset);
@@ -54,7 +55,7 @@ export async function maakOfKiesFoto(bron: 'camera' | 'bibliotheek'): Promise<Ge
     }
     return { ...foto, uri: asset.uri };
   } catch {
-    Dialog.alert('Foto niet gelezen', 'Er ging iets mis bij het kiezen van de foto.');
+    Dialog.alert(tx('Foto niet gelezen'), tx('Er ging iets mis bij het kiezen van de foto.'));
     return null;
   }
 }

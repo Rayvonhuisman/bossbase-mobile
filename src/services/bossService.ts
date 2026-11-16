@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import type { BossKaart } from '@/lib/boss/vastleggen';
+import { tx } from '@/i18n';
 
 /**
  * Boss — dezelfde helpagent als in het dashboard: Edge Function `boss-chat`.
@@ -82,7 +83,7 @@ export async function vraagBoss({
 }): Promise<BossUitkomst> {
   const { data: sessie } = await supabase.auth.getSession();
   const token = sessie.session?.access_token;
-  if (!token) return { ok: false, melding: 'Je bent niet ingelogd. Log opnieuw in.' };
+  if (!token) return { ok: false, melding: tx('Je bent niet ingelogd. Log opnieuw in.') };
 
   let antwoord: Response;
   try {
@@ -107,7 +108,7 @@ export async function vraagBoss({
       signal,
     });
   } catch {
-    return { ok: false, melding: 'Boss is even niet bereikbaar. Controleer je internet en probeer het opnieuw.' };
+    return { ok: false, melding: tx('Boss is even niet bereikbaar. Controleer je internet en probeer het opnieuw.') };
   }
 
   if (!antwoord.ok) {
@@ -118,7 +119,7 @@ export async function vraagBoss({
     } catch {
       // geen JSON
     }
-    return { ok: false, melding: 'Boss is even niet bereikbaar. Probeer het zo nog eens.' };
+    return { ok: false, melding: tx('Boss is even niet bereikbaar. Probeer het zo nog eens.') };
   }
 
   let nieuwGesprekId: string | null = gesprekId;
@@ -134,7 +135,7 @@ export async function vraagBoss({
       else if (e.soort === 'acties' && Array.isArray(e.data.kaarten)) {
         tekens += 1;
         onActies?.(e.data.kaarten as BossKaart[], typeof e.data.tekst === 'string' ? e.data.tekst : null);
-      } else if (e.soort === 'fout') fout = typeof e.data.bericht === 'string' ? e.data.bericht : 'Er ging iets mis.';
+      } else if (e.soort === 'fout') fout = typeof e.data.bericht === 'string' ? e.data.bericht : tx('Er ging iets mis.');
     }
   };
 
@@ -158,6 +159,6 @@ export async function vraagBoss({
   }
 
   if (fout) return { ok: false, melding: fout };
-  if (!tekens) return { ok: false, melding: 'Boss gaf geen antwoord. Probeer het zo nog eens.' };
+  if (!tekens) return { ok: false, melding: tx('Boss gaf geen antwoord. Probeer het zo nog eens.') };
   return { ok: true, gesprekId: nieuwGesprekId };
 }

@@ -3,6 +3,7 @@ import { haalInStukken } from '@/lib/inStukken';
 import type { PlanActiviteit, WerkbonDag, WerkbonPlanbaar } from '@/lib/planningRegels';
 import { lokaalNaarUtc, splitsLokaal } from '@/lib/nlTijd';
 import { plusDagen } from '@/lib/werkbonLogica';
+import { tx } from '@/i18n';
 
 /**
  * Lezen voor de Agenda (tab `/planning`) en de Planning (`/planningbord`).
@@ -92,10 +93,10 @@ export type Voertuig = {
 function melding(where: string, error: { code?: string; message?: string }): string {
   if (__DEV__) console.log(`[planningService.${where}]`, error.code, error.message);
   if (error.code === '42501' || /row-level security|permission denied/i.test(error.message ?? '')) {
-    return 'Je hebt geen rechten om dit te bekijken.';
+    return tx('Je hebt geen rechten om dit te bekijken.');
   }
-  if (/JWT|token/i.test(error.message ?? '')) return 'Je sessie is verlopen. Log opnieuw in.';
-  return 'De planning kon niet worden geladen. Probeer het opnieuw.';
+  if (/JWT|token/i.test(error.message ?? '')) return tx('Je sessie is verlopen. Log opnieuw in.');
+  return tx('De planning kon niet worden geladen. Probeer het opnieuw.');
 }
 
 function normaliseer(rijen: unknown[]): PlanWerkbon[] {
@@ -270,6 +271,6 @@ export async function koppelWerkbonAanActiviteit(werkbonId: string, activityId: 
     .eq('id', werkbonId)
     .select('id');
   if (error) return { error: melding('koppelWerkbonAanActiviteit', error) };
-  if (!data?.length) return { error: 'De werkbon kon niet worden gekoppeld: je hebt geen rechten op deze werkbon.' };
+  if (!data?.length) return { error: tx('De werkbon kon niet worden gekoppeld: je hebt geen rechten op deze werkbon.') };
   return { error: null };
 }

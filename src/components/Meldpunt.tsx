@@ -15,6 +15,7 @@ import {
 import { fonts, radius, spacing, type ThemeColors } from '@/theme';
 import { Button } from './Button';
 import { Paneel } from './Paneel';
+import { tx } from '@/i18n';
 
 const VOORWAARDEN =
   'Deelname staat open voor gebruikers van BossBase. De prijzen worden verdeeld onder de eerste 1500 klanten die iets doorgeven. Je mag zoveel meldingen doen als je wilt: elke melding geeft extra kans om te winnen. Winnaars worden door ons gekozen uit de ingezonden meldingen en krijgen persoonlijk bericht. Over de uitslag kan niet worden gecorrespondeerd.';
@@ -67,10 +68,10 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, base64: true });
     if (r.canceled) return;
     const a = r.assets?.[0];
-    if (!a?.base64) return setFout('De afbeelding kon niet worden gelezen.');
+    if (!a?.base64) return setFout(tx('De afbeelding kon niet worden gelezen.'));
     const type = a.mimeType ?? 'image/jpeg';
-    if (!TOEGESTAAN.includes(type)) return setFout('Alleen PNG, JPG of WebP.');
-    if (a.base64.length * 0.75 > MAX_SCREENSHOT_BYTES) return setFout('Deze afbeelding is te groot (max. 5 MB).');
+    if (!TOEGESTAAN.includes(type)) return setFout(tx('Alleen PNG, JPG of WebP.'));
+    if (a.base64.length * 0.75 > MAX_SCREENSHOT_BYTES) return setFout(tx('Deze afbeelding is te groot (max. 5 MB).'));
     setFoto({ uri: a.uri, type, data: a.base64 });
   };
 
@@ -94,19 +95,19 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
   return (
     <Paneel
       open={open}
-      titel={klaar ? 'Bedankt!' : 'Bug of idee?'}
-      subtitel={klaar ? undefined : 'Meld het en help BossBase beter maken'}
+      titel={klaar ? tx('Bedankt!') : tx('Bug of idee?')}
+      subtitel={klaar ? undefined : tx('Meld het en help BossBase beter maken')}
       onSluit={sluit}
       voet={
         klaar ? (
           <View style={styles.knoppen}>
-            <Button label="Nog iets melden" variant="secondary" onPress={opnieuw} style={{ flex: 1 }} />
-            <Button label="Sluiten" onPress={sluit} style={{ flex: 1 }} />
+            <Button label={tx('Nog iets melden')} variant="secondary" onPress={opnieuw} style={{ flex: 1 }} />
+            <Button label={tx('Sluiten')} onPress={sluit} style={{ flex: 1 }} />
           </View>
         ) : (
           <View style={styles.knoppen}>
-            <Button label="Annuleren" variant="secondary" onPress={sluit} disabled={bezig} style={{ flex: 1 }} />
-            <Button label="Melding versturen" onPress={() => void verstuur()} loading={bezig} disabled={!kanVersturen} style={{ flex: 1 }} />
+            <Button label={tx('Annuleren')} variant="secondary" onPress={sluit} disabled={bezig} style={{ flex: 1 }} />
+            <Button label={tx('Melding versturen')} onPress={() => void verstuur()} loading={bezig} disabled={!kanVersturen} style={{ flex: 1 }} />
           </View>
         )
       }
@@ -114,22 +115,31 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
       <ScrollView contentContainerStyle={styles.inhoud} keyboardShouldPersistTaps="handled">
         {klaar ? (
           <View style={{ gap: spacing.sm }}>
-            <Text style={styles.tekst}>Je melding is binnen.</Text>
+            <Text style={styles.tekst}>{tx('Je melding is binnen.')}</Text>
             {klaar.nummer != null ? (
               <Text style={styles.tekst}>
-                We hebben hem ontvangen onder nummer <Text style={styles.vet}>{klaar.nummer}</Text>.
+                {(() => {
+                  const [voor, na] = tx('We hebben hem ontvangen onder nummer {nummer}.').split('{nummer}');
+                  return (
+                    <>
+                      {voor}
+                      <Text style={styles.vet}>{klaar.nummer}</Text>
+                      {na}
+                    </>
+                  );
+                })()}
               </Text>
             ) : null}
-            {klaar.bevestigd ? <Text style={styles.tekst}>Je krijgt ook een bevestiging per mail.</Text> : null}
-            {klaar.actie ? <Text style={styles.tekst}>Je doet mee aan de actie. Succes!</Text> : null}
+            {klaar.bevestigd ? <Text style={styles.tekst}>{tx('Je krijgt ook een bevestiging per mail.')}</Text> : null}
+            {klaar.actie ? <Text style={styles.tekst}>{tx('Je doet mee aan de actie. Succes!')}</Text> : null}
           </View>
         ) : (
           <>
             <View style={styles.soorten} accessibilityRole="radiogroup">
               {(
                 [
-                  ['bug', Bug, 'Bug', 'Iets werkt niet zoals het hoort'],
-                  ['idee', Lightbulb, 'Idee', 'Iets wat BossBase beter zou maken'],
+                  ['bug', Bug, tx('Bug'), tx('Iets werkt niet zoals het hoort')],
+                  ['idee', Lightbulb, tx('Idee'), tx('Iets wat BossBase beter zou maken')],
                 ] as const
               ).map(([waarde, Icoon, label, uitleg]) => {
                 const actief = soort === waarde;
@@ -153,32 +163,32 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={styles.label}>Omschrijving</Text>
+              <Text style={styles.label}>{tx('Omschrijving')}</Text>
               <TextInput
                 value={tekst}
                 onChangeText={setTekst}
                 maxLength={MAX_LENGTE}
                 multiline
-                placeholder={soort === 'bug' ? 'Wat ging er mis, en wat deed je op dat moment?' : 'Wat zou je willen, en waarom?'}
+                placeholder={soort === 'bug' ? tx('Wat ging er mis, en wat deed je op dat moment?') : tx('Wat zou je willen, en waarom?')}
                 placeholderTextColor={t.muted2}
                 style={styles.veld}
-                accessibilityLabel="Omschrijving"
+                accessibilityLabel={tx('Omschrijving')}
               />
             </View>
 
             <View style={{ gap: 6 }}>
-              <Text style={styles.label}>Schermafbeelding (optioneel)</Text>
+              <Text style={styles.label}>{tx('Schermafbeelding (optioneel)')}</Text>
               {foto ? (
                 <View style={styles.fotoRij}>
-                  <Image source={{ uri: foto.uri }} style={styles.foto} accessibilityLabel="Gekozen schermafbeelding" />
-                  <Pressable onPress={() => setFoto(null)} accessibilityRole="button" accessibilityLabel="Afbeelding weghalen" style={styles.fotoWeg}>
+                  <Image source={{ uri: foto.uri }} style={styles.foto} accessibilityLabel={tx('Gekozen schermafbeelding')} />
+                  <Pressable onPress={() => setFoto(null)} accessibilityRole="button" accessibilityLabel={tx('Afbeelding weghalen')} style={styles.fotoWeg}>
                     <X size={16} color={t.ink2} />
                   </Pressable>
                 </View>
               ) : (
                 <Pressable onPress={() => void kiesFoto()} accessibilityRole="button" style={styles.fotoKies}>
                   <ImagePlus size={18} color={t.ink2} />
-                  <Text style={styles.fotoKiesTekst}>Afbeelding kiezen</Text>
+                  <Text style={styles.fotoKiesTekst}>{tx('Afbeelding kiezen')}</Text>
                 </Pressable>
               )}
             </View>
@@ -187,7 +197,7 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
               <View style={styles.actie}>
                 <View style={styles.actieKop}>
                   <Gift size={18} color={t.green700} />
-                  <Text style={styles.vet}>Wie een melding doet, maakt kans op:</Text>
+                  <Text style={styles.vet}>{tx('Wie een melding doet, maakt kans op:')}</Text>
                 </View>
                 {actie.prijzen.map((p) => (
                   <Text key={p} style={styles.tekst}>
@@ -195,14 +205,14 @@ export function Meldpunt({ open, pagina, onSluit }: { open: boolean; pagina: str
                   </Text>
                 ))}
                 <Pressable onPress={() => setVoorwaarden((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: voorwaarden }} aria-expanded={voorwaarden}>
-                  <Text style={styles.link}>{voorwaarden ? 'Voorwaarden verbergen' : 'Voorwaarden'}</Text>
+                  <Text style={styles.link}>{voorwaarden ? tx('Voorwaarden verbergen') : tx('Voorwaarden')}</Text>
                 </Pressable>
                 {voorwaarden ? <Text style={styles.klein}>{VOORWAARDEN}</Text> : null}
               </View>
             ) : null}
 
             <Text style={styles.klein}>
-              We sturen automatisch mee: je bedrijf, je naam, deze pagina, je abonnement en je apparaat.
+              {tx('We sturen automatisch mee: je bedrijf, je naam, deze pagina, je abonnement en je apparaat.')}
             </Text>
             {fout ? (
               <View style={styles.fout} accessibilityRole="alert">
