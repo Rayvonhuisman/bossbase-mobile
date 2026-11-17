@@ -1,0 +1,82 @@
+# Vertalingen automatisch bijwerken na elke wijziging op main.
+#
+# Draait scripts/vertalingen-bijwerken.mjs: nieuwe of gewijzigde Nederlandse
+# tekst in de app wordt in alle tien talen
+# vertaald (met Claude), gecontroleerd en als aparte commit op main gezet.
+# Vercel bouwt daarna vanzelf opnieuw (app.bossbase.nl).
+#
+# Nodig: repository-secret ANTHROPIC_API_KEY (Settings → Secrets and variables
+# → Actions). Zonder die sleutel slaat de job over en meldt dat.
+name: Vertalingen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - '!src/i18n/talen/**'
+      - '!src/i18n/bron.json'
+  workflow_dispatch:
+
+concurrency:
+  group: vertalingen
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  vertalen:
+    # Niet op de eigen commit van deze job reageren.
+    if: ${{ !startsWith(github.event.head_commit.message, 'Vertalingen bijgewerkt') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Sleutel aanwezig?
+        id: sleutel
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::warning::ANTHROPIC_API_KEY ontbreekt als repository-secret; vertalingen niet bijgewerkt."
+            echo "aanwezig=nee" >> "$GITHUB_OUTPUT"
+          else
+            echo "aanwezig=ja" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Afhankelijkheden
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        run: npm ci --no-audit --no-fund
+      - name: Vertalen
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/vertalingen-bijwerken.mjs
+      - name: Vastleggen
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        run: |
+          git add src/i18n
+          if git diff --cached --quiet; then echo "Niets te vertalen."; exit 0; fi
+          git config user.name "BossBase vertalingen"
+          git config user.email "vertalingen@users.noreply.github.com"
+          git commit -m "Vertalingen bijgewerkt"
+          for poging in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1
+      # Na het vastleggen: wat wel vertaald is, staat er al. Faalt dit, dan
+      # bleef er iets onvertaald (zie de uitvoer van Vertalen).
+      - name: Controle
+        if: steps.sleutel.outputs.aanwezig == 'ja'
+        run: |
+          node scripts/talen-check.mjs --streng
