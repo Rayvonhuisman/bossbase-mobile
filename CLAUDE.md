@@ -42,3 +42,21 @@ Beide delen dezelfde productiedatabase.
 - Opnieuw opbouwen kan met `scripts/seed-test-account-claude.sql` (zie de kop
   daarvan). De ondertekende offerte maakt `scripts/onderteken-test-offerte.ts`
   (zelfde code als sign-offerte, zonder mail). Beide staan in ~/BossBase.
+
+## Talen: Nederlands schrijven, de rest gaat vanzelf
+
+De app is er in elf talen (src/i18n, zie src/i18n/LEESMIJ.md). Nederlands is de
+bron: zet elke nieuwe of gewijzigde schermtekst in `tx()` / `txn()` / `txm()`
+en schrijf hem gewoon in het Nederlands.
+
+**Vertalen gebeurt automatisch.** Na elke push naar main vertaalt de GitHub
+Action `Vertalingen` (.github/workflows/vertalingen.yml) de nieuwe en
+gewijzigde teksten met Claude, controleert ze en zet ze als commit
+"Vertalingen bijgewerkt" op main. Een gewijzigde Nederlandse zin is een nieuwe
+sleutel, dus die wordt vanzelf opnieuw vertaald; vertalingen van verdwenen
+teksten worden opgeruimd. Tot de Action klaar is, toont de app Nederlands.
+
+Wil je het meteen (bijvoorbeeld om te testen): `npm run talen:bijwerken`. Dat
+draait hetzelfde script lokaal; zonder ANTHROPIC_API_KEY gebruikt het de
+`claude`-opdrachtregel. De Action heeft de repository-secret
+`ANTHROPIC_API_KEY` nodig.

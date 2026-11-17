@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/metingVelden.js
-// Dashboardcommit: cd8c8f4
+// Dashboardcommit: cd8c8f45
 // Bijwerken: node scripts/meting-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie (zie scripts/meting-bron.mjs);
 // tests/metingen.test.mjs vergelijkt het met het dashboard.

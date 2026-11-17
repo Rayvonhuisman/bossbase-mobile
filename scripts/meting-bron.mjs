@@ -25,7 +25,11 @@ export const METING_BESTANDEN = [
   {
     bron: 'src/lib/metingVelden.js',
     doel: 'metingWeergave.js',
-    vervang: [["from '../../supabase/functions/_shared/metingVelden.js'", "from './metingVelden.js'"]],
+    vervang: [
+      ["from '../../supabase/functions/_shared/metingVelden.js'", "from './metingVelden.js'"],
+      // Het dashboard vertaalt de labels met zijn eigen src/i18n; in de app is dat @/i18n.
+      ["from '../i18n/index.js'", "from '@/i18n'"],
+    ],
   },
 ];
 

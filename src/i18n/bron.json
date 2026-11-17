@@ -8268,7 +8268,8 @@
  "Inhoud": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/project/MetingVelden.tsx"
+   "src/components/project/MetingVelden.tsx",
+   "src/lib/metingen/vendored/metingWeergave.js"
   ]
  },
  "Inhoud niet beschikbaar voor oudere e-mails": {
@@ -10416,7 +10417,8 @@
  "Lengte": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/project/MetingVelden.tsx"
+   "src/components/project/MetingVelden.tsx",
+   "src/lib/metingen/vendored/metingWeergave.js"
   ]
  },
  "Let op": {
@@ -13731,7 +13733,8 @@
  "Oppervlak": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/project/MetingVelden.tsx"
+   "src/components/project/MetingVelden.tsx",
+   "src/lib/metingen/vendored/metingWeergave.js"
   ]
  },
  "Opslaan": {
@@ -15711,6 +15714,7 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/project/MetingVelden.tsx",
+   "src/lib/metingen/vendored/metingWeergave.js",
    "src/lib/regels.ts"
   ]
  },
@@ -20022,6 +20026,12 @@
    "src/components/planning/VoertuigenPerDag.tsx"
   ]
  },
+ "alleen het aantal": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/metingen/vendored/metingWeergave.js"
+  ]
+ },
  "arbeid": {
   "soort": "tekst",
   "bestanden": [
@@ -20092,6 +20102,18 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/project/ProjectDetailScherm.tsx"
+  ]
+ },
+ "breedte × hoogte": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/metingen/vendored/metingWeergave.js"
+  ]
+ },
+ "breedte × hoogte × diepte": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/metingen/vendored/metingWeergave.js"
   ]
  },
  "btw verlegd": {
@@ -20787,6 +20809,12 @@
   "bestanden": [
    "src/components/RegelEditor.tsx",
    "src/components/boss/OfferteGesprek.tsx"
+  ]
+ },
+ "strekkende meter": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/metingen/vendored/metingWeergave.js"
   ]
  },
  "stuk": {

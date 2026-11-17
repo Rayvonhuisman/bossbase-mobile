@@ -60,6 +60,8 @@ test('overgenomen bestanden importeren alleen elkaar', () => {
   for (const naam of namen) {
     const tekst = lees(`${METING_MAP_APP}/${naam}`);
     for (const [, spec] of tekst.matchAll(/^import .* from ['"]([^'"]+)['"]/gm)) {
+      // @/i18n is de vertaalmodule van de app zelf (tx), geen dashboardbestand.
+      if (spec === '@/i18n') continue;
       assert.ok(namen.includes(spec.replace(/^\.\//, '')), `${naam} importeert ${spec}; neem dat ook over`);
     }
   }

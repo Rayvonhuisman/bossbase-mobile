@@ -17,7 +17,8 @@
     "pdf:overnemen": "node scripts/pdf-opbouw-overnemen.mjs",
     "mail:overnemen": "node scripts/mail-overnemen.mjs",
     "pdf:vergelijk": "node scripts/vergelijk-pdf.mjs",
-    "pdf:vergelijk-werkbon": "node scripts/vergelijk-werkbon-pdf.mjs"
+    "pdf:vergelijk-werkbon": "node scripts/vergelijk-werkbon-pdf.mjs",
+    "talen:bijwerken": "node scripts/vertalingen-bijwerken.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/sora": "^0.4.2",
@@ -58,6 +59,7 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
     "@types/react": "~19.2.4",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "~57.0.0",

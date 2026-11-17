@@ -1,11 +1,12 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase src/lib/metingVelden.js
-// Dashboardcommit: 07b8184
+// Dashboardcommit: 933ed252
 // Bijwerken: node scripts/meting-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie (zie scripts/meting-bron.mjs);
 // tests/metingen.test.mjs vergelijkt het met het dashboard.
 // ── einde overgenomen kop ──
 import { brancheVelden, PER_BRANCHE, ALGEMEEN } from './metingVelden.js';
+import { tx } from '@/i18n';
 
 // Metingen: soorten, de berekening voor het scherm, en de velden per branche.
 //
@@ -15,10 +16,12 @@ import { brancheVelden, PER_BRANCHE, ALGEMEEN } from './metingVelden.js';
 // je de formule, wijzig dan beide.
 
 export const SOORTEN = [
-  { value: 'oppervlak', label: 'Oppervlak', eenheid: 'm²', uitleg: 'breedte × hoogte' },
-  { value: 'lengte',    label: 'Lengte',    eenheid: 'm',  uitleg: 'strekkende meter' },
-  { value: 'stuks',     label: 'Stuks',     eenheid: 'stuk', uitleg: 'alleen het aantal' },
-  { value: 'inhoud',    label: 'Inhoud',    eenheid: 'm³', uitleg: 'breedte × hoogte × diepte' },
+  // label en uitleg zijn getters: ze volgen de gekozen taal. eenheid blijft
+  // zoals hij is (gaat mee in de omschrijving van een offerteregel).
+  { value: 'oppervlak', get label() { return tx('Oppervlak'); }, eenheid: 'm²', get uitleg() { return tx('breedte × hoogte'); } },
+  { value: 'lengte',    get label() { return tx('Lengte'); },    eenheid: 'm',  get uitleg() { return tx('strekkende meter'); } },
+  { value: 'stuks',     get label() { return tx('Stuks'); },     eenheid: 'stuk', get uitleg() { return tx('alleen het aantal'); } },
+  { value: 'inhoud',    get label() { return tx('Inhoud'); },    eenheid: 'm³', get uitleg() { return tx('breedte × hoogte × diepte'); } },
 ];
 
 export const MAAT_EENHEDEN = ['mm', 'cm', 'm'];
@@ -52,6 +55,8 @@ export function berekenMeting(m) {
   return w == null ? null : Math.round(w * 1000) / 1000;
 }
 
+// toonWaarde, toonSom en toonMaat blijven Nederlands ('nl-NL', "stuks"): ze
+// komen ook in de omschrijving van een offerteregel (MetingenNaarRegels).
 const nl = (n, max = 3) => Number(n).toLocaleString('nl-NL', { maximumFractionDigits: max });
 // Maten zonder duizendtalpunt: "1250 × 1480 mm", zoals een vakman ze schrijft.
 const maat = n => Number(n).toLocaleString('nl-NL', { maximumFractionDigits: 3, useGrouping: false });
