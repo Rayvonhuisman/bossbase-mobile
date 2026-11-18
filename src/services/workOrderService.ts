@@ -910,10 +910,12 @@ export type WerkbonMateriaalRegel = WorkOrderMaterial & {
   btw_percentage: number;
   /** null = niet ingevuld óf geen recht om te zien. */
   inkoopprijs_per: number | null;
+  /** Hoort bij deze meerwerkregel van dezelfde werkbon (of null). */
+  meerwerk_taak_id: string | null;
 };
 
 const MATERIAAL_KOLOMMEN = `
-  id, naam, eenheid, aantal, materiaal_id, leverancier_id,
+  id, naam, eenheid, aantal, materiaal_id, leverancier_id, meerwerk_taak_id,
   btw_percentage, created_at, werkbon_materiaal_inkoop ( inkoopprijs_per )
 `;
 
@@ -950,6 +952,7 @@ function naarRegel(r: MateriaalRij): WerkbonMateriaalRegel {
     leverancier_id: r.leverancier_id ?? null,
     btw_percentage: r.btw_percentage != null ? Number(r.btw_percentage) : 21,
     inkoopprijs_per: k?.inkoopprijs_per != null ? Number(k.inkoopprijs_per) : null,
+    meerwerk_taak_id: r.meerwerk_taak_id ?? null,
   };
 }
 
@@ -1008,6 +1011,8 @@ export async function addWorkOrderMaterial(input: {
   leverancier_id?: string | null;
   /** Alleen meesturen met het recht `inkoopprijzen`. */
   inkoopprijs_per?: number | null;
+  /** Hoort bij deze meerwerkregel van dezelfde werkbon (trigger controleert dat). */
+  meerwerk_taak_id?: string | null;
 }): Promise<{ data: WerkbonMateriaalRegel | null; error: string | null }> {
   const naam = input.naam.trim();
   if (!naam) return { data: null, error: tx('Vul een naam in.') };
@@ -1028,6 +1033,7 @@ export async function addWorkOrderMaterial(input: {
       materiaal_id: input.materiaal_id ?? null,
       leverancier_id: input.leverancier_id ?? null,
       btw_percentage: input.btw_percentage ?? 21,
+      ...(input.meerwerk_taak_id ? { meerwerk_taak_id: input.meerwerk_taak_id } : {}),
     })
     .select(MATERIAAL_KOLOMMEN);
 

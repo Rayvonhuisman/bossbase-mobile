@@ -238,6 +238,8 @@ export type WerkbonUur = {
   uren: number;
   reis_km: number | null;
   notitie: string | null;
+  /** Hoort bij deze meerwerkregel (werkbon_taken.is_meerwerk) van dezelfde werkbon. */
+  meerwerk_taak_id?: string | null;
   created_at: string;
   updated_at: string;
   medewerker?: ProfileSummary | null;

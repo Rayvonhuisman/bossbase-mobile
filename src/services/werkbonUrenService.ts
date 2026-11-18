@@ -33,7 +33,7 @@ import { tx } from '@/i18n';
 
 const UREN_COLUMNS = `
   id, company_id, werkbon_id, profile_id, datum, start_tijd, eind_tijd,
-  pauze_minuten, uren, reis_km, notitie, created_at, updated_at,
+  pauze_minuten, uren, reis_km, notitie, meerwerk_taak_id, created_at, updated_at,
   medewerker:profiles!werkbon_uren_profile_id_fkey ( id, full_name )
 `;
 
@@ -155,6 +155,11 @@ export type CreateWerkbonUurInput = {
   /** Gereden kilometers; leeg = null (niet 0), zoals het dashboard. */
   reis_km?: number | null;
   notitie?: string | null;
+  /**
+   * Optioneel: deze uren horen bij een meerwerkregel van deze werkbon
+   * (werkbon_taken met is_meerwerk). Een trigger controleert dat.
+   */
+  meerwerk_taak_id?: string | null;
 };
 
 /**
@@ -201,6 +206,7 @@ export async function createWerkbonUur(
           pauze_minuten: input.pauze_minuten ?? 0,
           reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
+          ...(input.meerwerk_taak_id ? { meerwerk_taak_id: input.meerwerk_taak_id } : {}),
         })
         .select(UREN_COLUMNS),
     {
@@ -265,6 +271,8 @@ export async function updateWerkbonUur(
           reis_km: input.reis_km ?? null,
           notitie: input.notitie?.trim() ? input.notitie.trim() : null,
           ...(input.profile_id ? { profile_id: input.profile_id } : {}),
+          // Alleen meesturen als het veranderd is (undefined = laten staan).
+          ...(input.meerwerk_taak_id !== undefined ? { meerwerk_taak_id: input.meerwerk_taak_id } : {}),
         })
         .eq('id', id)
         .select(UREN_COLUMNS),

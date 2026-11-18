@@ -90,7 +90,7 @@ export async function listMaterialen(
   return { data: ((data as unknown as Rij[]) ?? []).map(naarMateriaal), error: null };
 }
 
-async function getMateriaal(id: string): Promise<Materiaal | null> {
+export async function getMateriaal(id: string): Promise<Materiaal | null> {
   const { data } = await supabase.from('materialen').select(SELECT).eq('id', id).maybeSingle();
   return data ? naarMateriaal(data as unknown as Rij) : null;
 }

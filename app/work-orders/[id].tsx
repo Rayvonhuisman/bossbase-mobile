@@ -66,6 +66,10 @@ import { ContractBlok } from '@/components/werkbon/ContractBlok';
 import { KostenInhoud } from '@/components/werkbon/KostenInhoud';
 import { getMeerwerkPrijzen, zetMeerwerkPrijs } from '@/services/meerwerkPrijsService';
 import { meerwerkTotaal as somMeerwerk, naarInvoer, type MeerwerkPrijs } from '@/lib/meerwerkPrijs';
+import { gekoppeldAanMeerwerk } from '@/lib/boss/meerwerkRegels';
+import { bossMeerwerkStatus, type BossMeerwerkStatus } from '@/services/bossMeerwerkService';
+import { BossMeerwerk, type BossMeerwerkInvoer } from '@/components/boss/BossMeerwerk';
+import { BossAvatar } from '@/components/BossChat';
 import { MateriaalRegel } from '@/components/werkbon/Regels';
 import { OfferteOvernemen } from '@/components/werkbon/OfferteOvernemen';
 import { getOfferteRegelsVoorWerkbon, materiaalUitOfferte, takenUitOfferte } from '@/services/werkbonOfferteService';
@@ -115,7 +119,7 @@ import {
   type WerkbonNotitie,
   FOTO_CATEGORIEEN,
 } from '@/services/workOrderService';
-import { listMaterialen, listLeveranciers, type Materiaal } from '@/services/materiaalService';
+import { getMateriaal, listMaterialen, listLeveranciers, type Materiaal } from '@/services/materiaalService';
 import { bereidFotoVoor, FOTO_ALS_BASE64 } from '@/lib/fotoVoorbereiden';
 import { useFocusTerug } from '@/lib/focusTerug';
 import { createWerkbonUur, deleteWerkbonUur, listWerkbonUren, updateWerkbonUur } from '@/services/werkbonUrenService';
@@ -515,6 +519,84 @@ export default function WorkOrderDetailScreen() {
   };
   const totaalUren = useMemo(() => uren.reduce((sum, u) => sum + Number(u.uren || 0), 0), [uren]);
 
+  // ── Meerwerk met Boss (edge function boss-meerwerk) ──────────────────────
+  // De knop staat er alleen als de functie er is en de server zegt dat je
+  // meerwerk op deze werkbon mag zetten (niet getekend, niet geannuleerd,
+  // bewerkrecht). Zonder internet geen knop en geen wachtrij.
+  // De status hoort bij één werkbon; die van een vorige werkbon telt niet.
+  const [bossMwVoor, setBossMwVoor] = useState<{ id: string; status: BossMeerwerkStatus } | null>(null);
+  const [toonBossMw, setToonBossMw] = useState(false);
+  const bossWerkbonId = workOrder?.id ?? null;
+  const bossMw: BossMeerwerkStatus =
+    bossMwVoor && bossMwVoor.id === bossWerkbonId
+      ? bossMwVoor.status
+      : { beschikbaar: false, mag: false, magBedragen: false };
+  useEffect(() => {
+    if (!bossWerkbonId) return undefined;
+    let actief = true;
+    void bossMeerwerkStatus(bossWerkbonId).then((status) => {
+      if (actief) setBossMwVoor({ id: bossWerkbonId, status });
+    });
+    return () => {
+      actief = false;
+    };
+  }, [bossWerkbonId]);
+  const kanBossMeerwerk = canEdit && canTasks && bossMw.beschikbaar && bossMw.mag;
+
+  /**
+   * Het voorstel van Boss op de werkbon zetten (handleBossMeerwerk van het
+   * dashboard): de meerwerkregel, het bedrag en de uren (alleen met
+   * projectbedragen) en het materiaal, gekoppeld aan dit meerwerk. Gaat er
+   * halverwege iets mis, dan blijft staan wat er al is en zegt de melding wat
+   * ontbreekt.
+   */
+  const handleBossMeerwerk = async (inv: BossMeerwerkInvoer): Promise<string | null> => {
+    if (!workOrder) return tx('Werkbon niet geladen.');
+    const volgende = tasks.reduce((max, t) => Math.max(max, t.volgorde), -1) + 1;
+    const { data: taak, error: taakFout } = await addWorkOrderTask({
+      werkbon_id: workOrder.id,
+      company_id: workOrder.company_id,
+      omschrijving: inv.omschrijving,
+      is_meerwerk: true,
+      volgorde: volgende,
+    });
+    if (taakFout || !taak) return taakFout ?? tx('Meerwerk toevoegen mislukt');
+    setTasks((prev) => [...prev, taak]);
+    const mislukt: string[] = [];
+    if (magMeerwerkPrijzen && bossMw.magBedragen && (inv.bedrag != null || inv.uren != null)) {
+      const { data, error: e } = await zetMeerwerkPrijs(taak.id, workOrder.company_id, {
+        bedragExcl: naarInvoer(inv.bedrag),
+        uren: naarInvoer(inv.uren),
+      });
+      if (e) mislukt.push(tx('het bedrag'));
+      else if (data) setMeerwerkPrijzen((prev) => new Map(prev).set(taak.id, data));
+    }
+    for (const m of inv.materialen) {
+      const bib = m.materiaalId ? await getMateriaal(m.materiaalId).catch(() => null) : null;
+      const { data, error: e } = await addWorkOrderMaterial({
+        werkbon_id: workOrder.id,
+        company_id: workOrder.company_id,
+        naam: m.naam,
+        eenheid: m.eenheid || bib?.eenheid || null,
+        aantal: m.aantal,
+        prijs_per: m.prijs ?? bib?.verkoopprijs ?? 0,
+        btw_percentage: bib?.btwPct ?? 21,
+        materiaal_id: bib?.id ?? null,
+        leverancier_id: bib?.leverancierId ?? null,
+        meerwerk_taak_id: taak.id,
+      });
+      if (e || !data) mislukt.push(m.naam);
+      else setMaterials((prev) => [...prev, data]);
+    }
+    setToonBossMw(false);
+    Dialog.alert(
+      mislukt.length
+        ? tx('Meerwerk toegevoegd, maar dit lukte niet: {wat}. Vul het zelf aan.', { wat: mislukt.join(', ') })
+        : tx('Meerwerk toegevoegd'),
+    );
+    return null;
+  };
+
   // ── Afronden (WerkbonAfrondenModal) ──────────────────────────────────────
   // Startpunt van het afronden (requestComplete). Zonder enig startmoment
   // (geen werkelijke start én geen geplande start) eerst het startmoment
@@ -624,7 +706,14 @@ export default function WorkOrderDetailScreen() {
       tx('Taak "{omschrijving}" verwijderen?', { omschrijving: task.omschrijving }),
       async () => {
         const { error: e } = await deleteWorkOrderTask(task.id);
-        if (!e) setTasks((prev) => prev.filter((t) => t.id !== task.id));
+        if (!e) {
+          setTasks((prev) => prev.filter((t) => t.id !== task.id));
+          // De database maakt de koppeling leeg; hier ook.
+          if (task.is_meerwerk) {
+            setUren((prev) => prev.map((u) => (u.meerwerk_taak_id === task.id ? { ...u, meerwerk_taak_id: null } : u)));
+            setMaterials((prev) => prev.map((m) => (m.meerwerk_taak_id === task.id ? { ...m, meerwerk_taak_id: null } : m)));
+          }
+        }
         return e;
       },
     );
@@ -1279,9 +1368,14 @@ export default function WorkOrderDetailScreen() {
                           <Text style={styles.timeEntryDate}>
                             {korteDatum(u.datum)} · {u.medewerker?.full_name ?? tx('Onbekend')}
                           </Text>
-                          {u.pauze_minuten || u.reis_km != null || u.notitie ? (
+                          {u.pauze_minuten || u.reis_km != null || u.notitie || u.meerwerk_taak_id ? (
                             <Text style={styles.timeEntryNote} numberOfLines={2}>
                               {[
+                                u.meerwerk_taak_id
+                                  ? tx('Meerwerk: {omschrijving}', {
+                                      omschrijving: meerwerkTaken.find((t) => t.id === u.meerwerk_taak_id)?.omschrijving ?? '…',
+                                    })
+                                  : null,
                                 u.pauze_minuten ? tx('{min} min pauze', { min: u.pauze_minuten }) : null,
                                 u.reis_km != null ? tx('{km} km', { km: getal(Number(u.reis_km)) }) : null,
                                 u.notitie,
@@ -1541,29 +1635,67 @@ export default function WorkOrderDetailScreen() {
                     )
                   : tx('Het bedrag vult kantoor in.')}
               </Text>
+              {kanBossMeerwerk ? (
+                <Pressable
+                  onPress={() => setToonBossMw(true)}
+                  accessibilityRole="button"
+                  accessibilityHint={tx('Vertel wat er extra gedaan is; Boss maakt er een meerwerkregel van')}
+                  testID="boss-meerwerk"
+                  style={({ pressed }) => [styles.bossMeerwerkKnop, pressed && { opacity: 0.85 }]}
+                >
+                  <BossAvatar size={30} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.bossMeerwerkTitel}>{tx('Meerwerk met Boss')}</Text>
+                    <Text style={styles.bossMeerwerkSub}>{tx('Vertel wat er extra gedaan is; Boss maakt er een meerwerkregel van')}</Text>
+                  </View>
+                </Pressable>
+              ) : null}
               {meerwerkTaken.length === 0 && !canTasks ? <Text style={styles.empty}>{tx('Geen meerwerk op deze klus.')}</Text> : null}
-              {meerwerkTaken.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  styles={styles}
-                  th={th}
-                  task={t}
-                  busy={busyTaskId === t.id}
-                  disabled={!canEdit}
-                  onToggle={() => handleToggleTask(t)}
-                  onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
-                  extra={
-                    magMeerwerkPrijzen && !geannuleerd && !readonly ? (
-                      <MeerwerkPrijsInvoer
-                        styles={styles}
-                        th={th}
-                        prijs={meerwerkPrijzen.get(t.id)}
-                        onOpslaan={(invoer) => handleMeerwerkPrijs(t.id, invoer)}
-                      />
-                    ) : null
-                  }
-                />
-              ))}
+              {meerwerkTaken.map((t) => {
+                const k = gekoppeldAanMeerwerk(t.id, { uren, materialen: materials });
+                const info = [
+                  k.uren > 0 ? tx('{n} u geboekt', { n: getal(k.uren) }) : null,
+                  k.materialen.length ? k.materialen.map((m) => `${getal(Number(m.aantal))}× ${m.naam}`).join(', ') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                const prijsInvoer =
+                  magMeerwerkPrijzen && !geannuleerd && !readonly ? (
+                    <MeerwerkPrijsInvoer
+                      styles={styles}
+                      th={th}
+                      prijs={meerwerkPrijzen.get(t.id)}
+                      onOpslaan={(invoer) => handleMeerwerkPrijs(t.id, invoer)}
+                    />
+                  ) : null;
+                return (
+                  <TaskRow
+                    key={t.id}
+                    styles={styles}
+                    th={th}
+                    task={t}
+                    busy={busyTaskId === t.id}
+                    disabled={!canEdit}
+                    onToggle={() => handleToggleTask(t)}
+                    onDelete={canTasks ? () => handleDeleteTask(t) : undefined}
+                    extra={
+                      info || prijsInvoer ? (
+                        <>
+                          {info ? (
+                            <Text
+                              style={styles.meerwerkGekoppeld}
+                              accessibilityLabel={tx('Uren en materiaal die bij dit meerwerk horen: {info}', { info })}
+                            >
+                              {info}
+                            </Text>
+                          ) : null}
+                          {prijsInvoer}
+                        </>
+                      ) : null
+                    }
+                  />
+                );
+              })}
               {canTasks ? (
                 <TaakInvoer
                   styles={styles}
@@ -1823,6 +1955,7 @@ export default function WorkOrderDetailScreen() {
           th={th}
           ikzelf={user?.id ?? null}
           kiesMedewerker={magUrenVoorAnder}
+          meerwerk={meerwerkTaken}
           uur={bewerkUur}
           onClose={() => setBewerkUur(null)}
           onSubmit={async (input) => {
@@ -1836,6 +1969,10 @@ export default function WorkOrderDetailScreen() {
               uren: input.uren,
               reis_km: input.km,
               notitie: input.notitie,
+              // Alleen meesturen als het veranderd is.
+              ...((bewerkUur.meerwerk_taak_id ?? null) !== input.meerwerkTaakId
+                ? { meerwerk_taak_id: input.meerwerkTaakId }
+                : {}),
             });
             if (!res.ok) return { error: res.melding };
             setUren((prev) => prev.map((x) => (x.id === res.data.id ? res.data : x)));
@@ -1845,12 +1982,22 @@ export default function WorkOrderDetailScreen() {
         />
       ) : null}
 
+      {toonBossMw ? (
+        <BossMeerwerk
+          werkbon={workOrder}
+          magBedragen={magMeerwerkPrijzen && bossMw.magBedragen}
+          onSluit={() => setToonBossMw(false)}
+          onToevoegen={handleBossMeerwerk}
+        />
+      ) : null}
+
       {timeModal ? (
         <AddTimeEntryModal
           styles={styles}
           th={th}
           ikzelf={user?.id ?? null}
           kiesMedewerker={magUrenVoorAnder}
+          meerwerk={meerwerkTaken}
           onClose={() => setTimeModal(false)}
           onSubmit={async (input) => {
             if (!user?.id) return { error: tx('Sessie niet geladen.') };
@@ -1865,6 +2012,7 @@ export default function WorkOrderDetailScreen() {
               uren: input.uren,
               reis_km: input.km,
               notitie: input.notitie,
+              meerwerk_taak_id: input.meerwerkTaakId,
             });
             if (!res.ok) return { error: res.melding };
             setUren((prev) => [res.data, ...prev]);
@@ -2554,6 +2702,7 @@ function AddTimeEntryModal({
   th,
   ikzelf,
   kiesMedewerker,
+  meerwerk = [],
   uur,
   onClose,
   onSubmit,
@@ -2562,6 +2711,8 @@ function AddTimeEntryModal({
   th: ThemeColors;
   ikzelf: string | null;
   kiesMedewerker: boolean;
+  /** Meerwerkregels van deze werkbon: "Hoort bij meerwerk" (optioneel). */
+  meerwerk?: WorkOrderTask[];
   /** Een geboekt uur wijzigen: het formulier begint met zijn waarden. */
   uur?: WerkbonUur | null;
   onClose: () => void;
@@ -2574,6 +2725,7 @@ function AddTimeEntryModal({
     uren: number;
     km: number | null;
     notitie: string | null;
+    meerwerkTaakId: string | null;
   }) => Promise<{ error: string | null }>;
 }) {
   useFocusTerug(true);
@@ -2585,6 +2737,9 @@ function AddTimeEntryModal({
   const [pauzeStr, setPauzeStr] = useState(String(uur?.pauze_minuten ?? 0));
   const [kmStr, setKmStr] = useState(uur?.reis_km != null ? String(uur.reis_km) : '');
   const [notitie, setNotitie] = useState(uur?.notitie ?? '');
+  // Optioneel: deze uren horen bij een meerwerkregel. Heeft dat meerwerk een
+  // bedrag, dan staan ze niet nog eens apart op de factuur (dashboard).
+  const [meerwerkId, setMeerwerkId] = useState<string | null>(uur?.meerwerk_taak_id ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -2623,6 +2778,7 @@ function AddTimeEntryModal({
       uren,
       km,
       notitie: notitie.trim() || null,
+      meerwerkTaakId: meerwerkId,
     });
     setSubmitting(false);
     if (e) return setErrorMsg(e);
@@ -2685,6 +2841,17 @@ function AddTimeEntryModal({
             {tijdFout ? <Text style={styles.modalError}>{tijdFout}</Text> : null}
             <FormField label={tx('Gereden kilometers (optioneel)')} value={kmStr} onChangeText={setKmStr} keyboardType="number-pad" />
             <FormField label={tx('Notitie')} value={notitie} onChangeText={setNotitie} multiline placeholder={tx('Wat is er gedaan?')} />
+            {meerwerk.length > 0 || meerwerkId ? (
+              <SelectField
+                label={tx('Hoort bij meerwerk (optioneel)')}
+                value={meerwerkId}
+                onChange={setMeerwerkId}
+                allowEmpty
+                emptyLabel={tx('Geen meerwerk')}
+                placeholder={tx('Geen meerwerk')}
+                options={meerwerk.map((t) => ({ id: t.id, label: t.omschrijving }))}
+              />
+            ) : null}
             {errorMsg ? <Text style={styles.modalError}>{errorMsg}</Text> : null}
             <Button label={tx('Opslaan')} onPress={submit} loading={submitting} disabled={!start || !eind || !!tijdFout} />
           </ScrollView>
@@ -2899,6 +3066,19 @@ const makeStyles = (t: ThemeColors) =>
       paddingBottom: 6,
     },
     meerwerkPrijsUren: { flex: 0, width: 80, minHeight: 40 },
+    // Uren en materiaal die bij een meerwerkregel horen, onder de regel.
+    meerwerkGekoppeld: { fontSize: 12, lineHeight: 17, color: t.muted, paddingLeft: 30, paddingBottom: 6 },
+    // "Meerwerk met Boss": zelfde groene vlak als "Maak met Boss" (BossIngang).
+    bossMeerwerkKnop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: t.green50,
+      borderRadius: t.rMd,
+      padding: 10,
+    },
+    bossMeerwerkTitel: { fontSize: 14.5, fontWeight: '600', color: t.ink },
+    bossMeerwerkSub: { fontSize: 12, lineHeight: 16, color: t.green700, marginTop: 1 },
     meerwerkPrijsBedrag: { flex: 0, width: 120, minHeight: 40 },
     noteMetaRow: {
       flexDirection: 'row',

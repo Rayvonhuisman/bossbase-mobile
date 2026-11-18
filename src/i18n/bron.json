@@ -246,6 +246,7 @@
    "app/(more)/invoices.tsx",
    "app/work-orders/[id].tsx",
    "src/components/RegelEditor.tsx",
+   "src/components/boss/BossMeerwerk.tsx",
    "src/components/boss/OfferteGesprek.tsx",
    "src/components/project/KostenTab.tsx",
    "src/components/project/MetingVelden.tsx",
@@ -1434,7 +1435,8 @@
  "Bedrag excl. btw": {
   "soort": "tekst",
   "bestanden": [
-   "app/(more)/expenses.tsx"
+   "app/(more)/expenses.tsx",
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Bedrag incl. btw": {
@@ -2143,6 +2145,7 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/NieuweVoorwaarden.tsx",
+   "src/components/boss/BossMeerwerk.tsx",
    "src/components/project/ProjectDetailScherm.tsx"
   ]
  },
@@ -2354,6 +2357,12 @@
    "src/components/werkbon/WaarschuwingModal.tsx"
   ]
  },
+ "Bijvoorbeeld: kozijn achterdeur was rot, uitgefreesd en opgevuld met houtrot-vuller, 2 uur werk, 1 koker vuller gebruikt": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Bijvoorbeeld: lekkage op termijn, of het dak kan hier niet op worden gelegd": {
   "soort": "tekst",
   "bestanden": [
@@ -2416,6 +2425,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/planningbord.tsx"
+  ]
+ },
+ "Boek de echte uren daarna bij Uren, met \"Hoort bij meerwerk\".": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.": {
@@ -2494,7 +2509,9 @@
  "Boss is even niet bereikbaar. Probeer het zo nog eens.": {
   "soort": "tekst",
   "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx",
    "src/services/bossDocumentService.ts",
+   "src/services/bossMeerwerkService.ts",
    "src/services/bossService.ts"
   ]
  },
@@ -2516,10 +2533,23 @@
    "src/services/metingService.ts"
   ]
  },
+ "Boss kon er nog geen meerwerk van maken.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "Boss kon hier geen meerwerk van maken.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Boss luistert…": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/BossChat.tsx"
+   "src/components/BossChat.tsx",
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Boss luistert… tik op stop als je klaar bent": {
@@ -2547,6 +2577,12 @@
    "src/components/boss/Werkruimte.tsx"
   ]
  },
+ "Boss weet nog niet (vul het aan als je het weet):": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Boss werkt": {
   "soort": "tekst",
   "bestanden": [
@@ -2558,6 +2594,12 @@
   "bestanden": [
    "src/components/boss/BossGesprek.tsx",
    "src/components/boss/Werkruimte.tsx"
+  ]
+ },
+ "Boss werkt eraan…": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Boss zet het in een lijst. Je kijkt alles na, en pas als je op opslaan tikt komen de metingen bij het project.": {
@@ -5324,6 +5366,12 @@
    "src/i18n/databaseWaarden.ts"
   ]
  },
+ "Elk materiaal heeft een naam nodig.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
+  ]
+ },
  "Elk uur": {
   "soort": "tekst",
   "bestanden": [
@@ -6585,6 +6633,12 @@
    "src/services/materiaalService.ts"
   ]
  },
+ "Geen bedrag: niet alles heeft een prijs of uurtarief. Vul het zelf in, of later bij het meerwerk.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Geen bestanden gevonden.": {
   "soort": "tekst",
   "bestanden": [
@@ -6832,6 +6886,12 @@
    "app/work-orders/[id].tsx"
   ]
  },
+ "Geen meerwerk": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
  "Geen meerwerk op deze klus.": {
   "soort": "tekst",
   "bestanden": [
@@ -7050,6 +7110,12 @@
   "bestanden": [
    "src/lib/errors.ts",
    "src/lib/writeResult.ts"
+  ]
+ },
+ "Geen verbinding. Boss werkt alleen met internet; je notitie blijft staan, probeer het zo nog eens.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/bossMeerwerkService.ts"
   ]
  },
  "Geen verbinding. Er is niets opgeslagen; probeer het opnieuw zodra je weer bereik hebt.": {
@@ -8045,6 +8111,12 @@
    "src/components/BestandenBlok.tsx"
   ]
  },
+ "Hoort bij meerwerk (optioneel)": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
  "Hovenier": {
   "soort": "tekst",
   "bestanden": [
@@ -8439,12 +8511,14 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/BossChat.tsx",
+   "src/components/boss/BossMeerwerk.tsx",
    "src/components/project/VertelHetBoss.tsx"
   ]
  },
  "Inspreken in de app zelf werkt in Chrome en Safari.": {
   "soort": "tekst",
   "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx",
    "src/components/project/VertelHetBoss.tsx"
   ]
  },
@@ -9011,6 +9085,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/instellingen/BedrijfTab.tsx"
+  ]
+ },
+ "Je kunt het meerwerk gewoon op de werkbon zetten; dit houdt je niet tegen.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Je kunt je eigen account niet verwijderen.": {
@@ -9954,6 +10034,12 @@
    "app/(more)/expenses.tsx"
   ]
  },
+ "Komt op de werkbon, gekoppeld aan dit meerwerk.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Komt uit de geaccepteerde offerte": {
   "soort": "tekst",
   "bestanden": [
@@ -10280,6 +10366,12 @@
    "src/services/dealService.ts"
   ]
  },
+ "Laat Boss het uitwerken": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Laat de agenda-afspraken van collega’s zien (alleen inzien, niet bewerken). Normaal ziet een medewerker alleen zijn eigen agenda.": {
   "soort": "tekst",
   "bestanden": [
@@ -10427,7 +10519,8 @@
    "app/(more)/expenses.tsx",
    "app/(more)/invoices.tsx",
    "app/customers/[id].tsx",
-   "app/customers/leverancier/[id].tsx"
+   "app/customers/leverancier/[id].tsx",
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Let op: deze fase is gekoppeld aan {momenten}. Die koppeling vervalt.": {
@@ -10956,6 +11049,7 @@
    "app/(more)/financien.tsx",
    "app/customers/leverancier/[id].tsx",
    "app/work-orders/[id].tsx",
+   "src/components/boss/BossMeerwerk.tsx",
    "src/components/werkbon/AfrondenModal.tsx",
    "src/components/werkbon/Regels.tsx",
    "src/i18n/databaseWaarden.ts",
@@ -11171,10 +11265,35 @@
    "app/work-orders/[id].tsx"
   ]
  },
+ "Meerwerk met Boss": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx",
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Meerwerk te factureren: {bedrag} excl. btw": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/KostenInhoud.tsx"
+  ]
+ },
+ "Meerwerk toegevoegd": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
+ "Meerwerk toegevoegd, maar dit lukte niet: {wat}. Vul het zelf aan.": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
+ "Meerwerk toevoegen mislukt": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
   ]
  },
  "Meerwerk verwijderen": {
@@ -11184,6 +11303,12 @@
   ]
  },
  "Meerwerk · {klaar} / {totaal}": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
+ "Meerwerk: {omschrijving}": {
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
@@ -12235,6 +12360,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/team.tsx"
+  ]
+ },
+ "Noem wat je deed, waarom, hoe lang het duurde en welk materiaal je gebruikte. Boss verzint niets: wat je niet noemt, blijft leeg.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Nog een bon toevoegen": {
@@ -13465,6 +13596,12 @@
    "src/components/werkbon/AfrondenModal.tsx"
   ]
  },
+ "Op de werkbon zetten": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Op schema": {
   "soort": "tekst",
   "bestanden": [
@@ -14384,6 +14521,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/RegelEditor.tsx"
+  ]
+ },
+ "Prijs per stuk excl. btw": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Prijs {bedrag} overnemen voor {omschrijving}": {
@@ -15499,6 +15642,18 @@
    "src/components/instellingen/StandaardTab.tsx"
   ]
  },
+ "Stap 1 van 2: vertel wat je extra deed": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "Stap 2 van 2: controleer en zet het op de werkbon": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Stap {stap} van 6 · {naam}": {
   "soort": "tekst",
   "bestanden": [
@@ -15651,7 +15806,8 @@
  "Stoppen met inspreken": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/BossChat.tsx"
+   "src/components/BossChat.tsx",
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "Stopt op": {
@@ -16670,6 +16826,12 @@
    "app/(more)/offers.tsx"
   ]
  },
+ "Totaal {bedrag} excl. btw": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
+  ]
+ },
  "Totaal {bedrag} incl. btw.": {
   "soort": "tekst",
   "bestanden": [
@@ -16889,6 +17051,12 @@
    "src/lib/regels.ts"
   ]
  },
+ "Uren (optioneel)": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Uren *": {
   "soort": "tekst",
   "bestanden": [
@@ -16902,6 +17070,12 @@
   ]
  },
  "Uren boeken": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
+ "Uren en materiaal die bij dit meerwerk horen: {info}": {
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
@@ -17485,6 +17659,18 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/project/MetingenBlok.tsx"
+  ]
+ },
+ "Vertel wat er extra gedaan is": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "Vertel wat er extra gedaan is; Boss maakt er een meerwerkregel van": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
   ]
  },
  "Vertel wat je meet, bijvoorbeeld: “woonkamer 5 meter 20 bij 4 meter 10, plafond 2,60 hoog, twee ramen van 1,20 bij 1,40”. Dat mag in één verhaal of per ruimte: elk stuk komt erbij.": {
@@ -18154,6 +18340,18 @@
    "app/work-orders/[id].tsx"
   ]
  },
+ "Vul bij {naam} een aantal in.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
+  ]
+ },
+ "Vul bij {naam} een geldige prijs in.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
+  ]
+ },
  "Vul de 6-cijferige code in.": {
   "soort": "tekst",
   "bestanden": [
@@ -18293,6 +18491,7 @@
   "soort": "tekst",
   "bestanden": [
    "app/hours/new.tsx",
+   "src/lib/boss/meerwerkRegels.ts",
    "src/lib/meerwerkPrijs.ts",
    "src/services/timeEntryService.ts",
    "src/services/werkbonUrenService.ts"
@@ -18301,6 +18500,7 @@
  "Vul een geldig bedrag in.": {
   "soort": "tekst",
   "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts",
    "src/lib/meerwerkPrijs.ts",
    "src/services/dealService.ts"
   ]
@@ -18525,6 +18725,7 @@
  "Vul een omschrijving in.": {
   "soort": "tekst",
   "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts",
    "src/services/factuurService.ts",
    "src/services/jobCostService.ts",
    "src/services/offerteService.ts",
@@ -19764,6 +19965,18 @@
    "app/(tabs)/today.tsx"
   ]
  },
+ "Zo is het bedrag opgebouwd": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "Zo komt het op de werkbon (de klant ziet deze tekst)": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "Zo krijgt de klant hem": {
   "soort": "tekst",
   "bestanden": [
@@ -19965,6 +20178,12 @@
    "src/lib/instellingenRegels.ts"
   ]
  },
+ "aantal": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "actie::Open": {
   "soort": "tekst",
   "bestanden": [
@@ -20084,6 +20303,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
+  ]
+ },
+ "bijv. 2,5": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "bijv. garantie tot 2031, getekend contract": {
@@ -20427,6 +20652,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/planningbord.tsx"
+  ]
+ },
+ "het bedrag": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
   ]
  },
  "hoeveelheid of prijs bij {n} regel|hoeveelheid of prijs bij {n} regels": {
@@ -21044,6 +21275,12 @@
    "src/lib/metingen/index.ts"
   ]
  },
+ "{aantal} × {naam} à {prijs} (Materialen) = {bedrag}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
+  ]
+ },
  "{aantal} × {prijs} · {pct}% btw": {
   "soort": "tekst",
   "bestanden": [
@@ -21103,6 +21340,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/expenses.tsx"
+  ]
+ },
+ "{bedrag} komt bij het meerwerk; niet op de werkbon die de klant tekent, wel op de factuur.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "{bedrag} open": {
@@ -21549,6 +21792,12 @@
    "src/components/instellingen/VoertuigenTab.tsx"
   ]
  },
+ "{naam} weghalen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
  "{naam} weglaten": {
   "soort": "tekst",
   "bestanden": [
@@ -21950,6 +22199,12 @@
    "src/services/verhuisService.ts"
   ]
  },
+ "{n} u geboekt": {
+  "soort": "tekst",
+  "bestanden": [
+   "app/work-orders/[id].tsx"
+  ]
+ },
  "{n} uur geleden|{n} uur geleden": {
   "soort": "meervoud",
   "bestanden": [
@@ -22175,6 +22430,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/OfferteCalculatie.tsx"
+  ]
+ },
+ "{uren} uur × {tarief} (uurtarief uit Instellingen) = {bedrag}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/boss/meerwerkRegels.ts"
   ]
  },
  "{uren} uur × {tarief} = {bedrag}": {
@@ -22434,13 +22695,26 @@
  "€ excl. btw": {
   "soort": "tekst",
   "bestanden": [
-   "app/work-orders/[id].tsx"
+   "app/work-orders/[id].tsx",
+   "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "€ per stuk": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "€ {bedrag} p/mnd": {
   "soort": "tekst",
   "bestanden": [
    "src/components/instellingen/AbonnementTab.tsx"
+  ]
+ },
+ "← Notitie aanpassen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "≈ {uren} uur": {
