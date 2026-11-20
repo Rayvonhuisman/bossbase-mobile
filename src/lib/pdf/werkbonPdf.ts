@@ -12,7 +12,8 @@ export type WerkbonPdfData = {
   taken: { omschrijving: string; afgerond: true }[];
   uren: { datum: string; startTijd: string | null; eindTijd: string | null; pauzeMinuten: number; uren: number; notitie: string }[];
   materialen: { naam: string; eenheid: string; aantal: number }[];
-  meerwerk: { omschrijving: string }[];
+  /** bedragExcl: verkoopbedrag excl. btw als er een is gerekend, anders null. */
+  meerwerk: { omschrijving: string; bedragExcl: number | null }[];
   notities: { note: string }[];
   waarschuwingen: { note: string; gevolg: string; verzondenOp: string }[];
   fotos: { url: string; categorie: string }[];
@@ -33,7 +34,8 @@ const buildWerkbonPdf = buildWerkbonPdfJs as unknown as (...args: unknown[]) => 
  *   klant    → toCustomer uit de klantenlijst, anders { name: customerName }
  *   bedrijf  → getCurrentCompany() (toCompany, géén snapshot: een werkbon heeft er geen)
  *
- * `bouwPdfData` is de zeef: geen bedragen, geen interne notities, geen open
+ * `bouwPdfData` is de zeef: geen bedragen (alleen het verkoopbedrag bij
+ * meerwerk, als dat er is), geen interne notities, geen open
  * taken. Die zeef is letterlijk overgenomen; deze module levert hem dezelfde
  * invoer als het dashboard, in dezelfde volgorde (de database-sortering van
  * werkbonService/werkbonUrenService).
@@ -147,7 +149,7 @@ export async function laadWerkbonInvoer(
   if (!row) throw new PdfFout('Deze werkbon bestaat niet of je hebt er geen toegang toe.');
   const w = row as Rij;
 
-  const [taken, uren, materialen, fotos, notities, team, klant, bedrijf] = await Promise.all([
+  const [taken, uren, materialen, fotos, notities, team, klant, bedrijf, klantTaken] = await Promise.all([
     client.from('werkbon_taken').select('*').eq('werkbon_id', werkbonId).order('volgorde', { ascending: true }),
     client
       .from('werkbon_uren')
@@ -167,7 +169,18 @@ export async function laadWerkbonInvoer(
       ? client.from('customers').select('*').eq('id', w.customer_id as string).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     client.from('companies').select('*').eq('id', w.company_id as string).maybeSingle(),
+    // Het meerwerkbedrag zoals de klant het ziet: via de klantlink, zodat de PDF
+    // voor iedereen gelijk is, ook zonder het recht projectbedragen (dashboard:
+    // getMeerwerkBedragenVoorKlant). Alleen het bedrag, nooit de uren.
+    w.sign_token
+      ? client.rpc('get_werkbon_taken_by_sign_token', { p_token: w.sign_token as string })
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  const meerwerkBedragen = new Map<string, number>(
+    ((klantTaken.error ? [] : (klantTaken.data as Rij[]) ?? []) as Rij[])
+      .filter((r) => r.is_meerwerk === true && r.id && r.bedrag_excl != null)
+      .map((r) => [r.id as string, Number(r.bedrag_excl)]),
+  );
   // Een onderdeel dat niet laadt geeft een bon met een gat; dan liever niets.
   for (const r of [taken, materialen, fotos, notities]) {
     if (r.error) throw new PdfFout('Niet alles van deze werkbon kon worden geladen. Probeer het opnieuw.');
@@ -178,6 +191,7 @@ export async function laadWerkbonInvoer(
     omschrijving: t.omschrijving,
     afgerond: Boolean(t.afgerond),
     isMeerwerk: t.is_meerwerk === true,
+    bedragExcl: t.is_meerwerk === true ? (meerwerkBedragen.get(t.id as string) ?? null) : null,
   }));
   const data = bouwPdfData({
     taken: takenRijen.filter((t) => !t.isMeerwerk),

@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/pdfOpbouw.js
-// Dashboardcommit: 30af578
+// Dashboardcommit: dfd24b17
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -1059,9 +1059,11 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
   }
 
   // ── EXTRA UITGEVOERD WERK ───────────────────────────────────────────────
-  // Meerwerk staat hier als omschrijving, zonder bedrag. De klant tekent dat het
-  // werk is uitgevoerd; wat het kost bepaalt het bedrijf bij het factureren. De
-  // interne inschatting van de monteur komt hier dus niet — die is geen prijs.
+  // Meerwerk staat hier als omschrijving. Is er al een verkoopbedrag gerekend
+  // (werkbon_meerwerk_prijs), dan staat dat bedrag excl. btw rechts ernaast:
+  // de klant mag zien wat het extra werk kost (Niels, 20-11-2026). Zonder bedrag
+  // alleen de omschrijving; wat het kost bepaalt het bedrijf dan bij het
+  // factureren. Uren of andere interne getallen komen hier nooit.
   if (meerwerk.length) {
     sectieKop('Extra uitgevoerd werk');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(C.muted);
@@ -1076,9 +1078,14 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
       dc(C.paper); doc.setLineWidth(0.45);
       doc.line(M + 1.1, y - 1.2, M + 1.8, y - 0.4);
       doc.line(M + 1.8, y - 0.4, M + 3.1, y - 2.2);
+      const heeftBedrag = mw.bedragExcl !== null && mw.bedragExcl !== undefined && Number.isFinite(Number(mw.bedragExcl));
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); tc(C.dark);
-      const regels = doc.splitTextToSize(mw.omschrijving || '', CW - 12);
+      const regels = doc.splitTextToSize(mw.omschrijving || '', CW - (heeftBedrag ? 52 : 12));
       doc.text(regels[0] || '', M + 7, y);
+      if (heeftBedrag) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(C.dark);
+        doc.text(`${euro(mw.bedragExcl)} excl. btw`, W - M, y, { align: 'right' });
+      }
       y += 7.5;
     });
     dc(C.line); doc.setLineWidth(0.3); doc.line(M, y - 2.5, W - M, y - 2.5);

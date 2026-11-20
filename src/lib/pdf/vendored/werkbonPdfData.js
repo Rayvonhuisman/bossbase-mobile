@@ -1,6 +1,6 @@
 // ── OVERGENOMEN UIT HET DASHBOARD — niet met de hand bewerken ──
 // Bron: BossBase supabase/functions/_shared/werkbonPdfData.js
-// Dashboardcommit: 4f36bec
+// Dashboardcommit: dfd24b17
 // Bijwerken: node scripts/pdf-opbouw-overnemen.mjs (daarna npm test).
 // Alles onder deze kop is een letterlijke kopie; tests/pdfOpbouw.test.mjs
 // vergelijkt het met het dashboard.
@@ -39,6 +39,14 @@ export function splitsKlantnotities(klantnotities = []) {
   };
 }
 
+/** Het meerwerkbedrag excl. btw, of null. Leest camelCase (app/dashboard) en snake_case (RPC). */
+export function meerwerkBedrag(m) {
+  const v = m?.bedragExcl ?? m?.bedrag_excl
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null
+}
+
 export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] }) {
   return {
     // Alleen afgevinkte regels: de klant tekent voor het uitgevoerde werk. Wat
@@ -69,9 +77,14 @@ export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk =
     // Meerwerk: dezelfde regel als bij taken — alleen afgevinkt. Uit `meerwerk`
     // als de aanroeper een aparte lijst meegeeft (de app), anders uit de
     // takenlijst zelf (de ondertekenpagina krijgt één lijst uit de RPC).
+    //
+    // Het bedrag (verkoopprijs excl. btw, werkbon_meerwerk_prijs) gaat mee als
+    // het er is: de klant mag zien wat het meerwerk kost als er een bedrag is
+    // gerekend (Niels, 20-11-2026). Alleen dat bedrag, nooit de uren of iets
+    // anders uit die tabel.
     meerwerk: (meerwerk.length ? meerwerk : taken.filter(t => t.isMeerwerk))
       .filter(m => m.afgerond)
-      .map(m => ({ omschrijving: m.omschrijving })),
+      .map(m => ({ omschrijving: m.omschrijving, bedragExcl: meerwerkBedrag(m) })),
     // Alleen wat expliciet als klantnotitie is gemarkeerd, en daarbinnen
     // gesplitst in gewone toelichting en verstuurde waarschuwingen.
     ...splitsKlantnotities(

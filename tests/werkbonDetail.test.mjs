@@ -66,7 +66,7 @@ test('PDF-werkbon: zelfde velden en terugvallen als toWerkbon + bouwPdfWerkbon',
   assert.deepEqual(Object.keys(app).sort(), Object.keys(S.bouwPdfWerkbon(detail, { uitvoerders: namen })).sort());
 });
 
-test('PDF-zeef: geen bedragen, geen interne notities, geen open taken', () => {
+test('PDF-zeef: geen bedragen (behalve bij meerwerk), geen interne notities, geen open taken', () => {
   const d = W.bouwPdfData({
     taken: [
       { omschrijving: 'klaar', afgerond: true, isMeerwerk: false },
@@ -74,7 +74,8 @@ test('PDF-zeef: geen bedragen, geen interne notities, geen open taken', () => {
     ],
     meerwerk: [
       { omschrijving: 'extra', afgerond: true, isMeerwerk: true },
-      { omschrijving: 'extra open', afgerond: false, isMeerwerk: true },
+      { omschrijving: 'extra met bedrag', afgerond: true, isMeerwerk: true, bedragExcl: 559.2, uren: 3 },
+      { omschrijving: 'extra open', afgerond: false, isMeerwerk: true, bedragExcl: 10 },
     ],
     materialen: [{ naam: 'Lood', eenheid: 'kg', aantal: 2, prijs_per: 10, subtotaal: 20, inkoopprijs_per: 5 }],
     notities: [
@@ -86,7 +87,11 @@ test('PDF-zeef: geen bedragen, geen interne notities, geen open taken', () => {
     fotos: [],
   });
   assert.deepEqual(d.taken, [{ omschrijving: 'klaar', afgerond: true }]);
-  assert.deepEqual(d.meerwerk, [{ omschrijving: 'extra' }]);
+  // Alleen het verkoopbedrag van meerwerk mag mee (Niels, 20-11-2026), nooit de uren.
+  assert.deepEqual(d.meerwerk, [
+    { omschrijving: 'extra', bedragExcl: null },
+    { omschrijving: 'extra met bedrag', bedragExcl: 559.2 },
+  ]);
   assert.deepEqual(d.materialen, [{ naam: 'Lood', eenheid: 'kg', aantal: 2 }]);
   assert.deepEqual(d.notities, [{ note: 'klant' }]);
   assert.equal(d.waarschuwingen.length, 1);
