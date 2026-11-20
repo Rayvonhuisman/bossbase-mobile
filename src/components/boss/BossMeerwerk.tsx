@@ -396,15 +396,12 @@ export function BossMeerwerk({
                   ))}
                 </>
               ) : null}
-              <Text style={[s.vragenTekst, { marginTop: 4 }]}>
-                {tx('Je kunt het meerwerk gewoon op de werkbon zetten; dit houdt je niet tegen.')}
-              </Text>
             </View>
           ) : null}
 
           {magBedragen && bedragGetal !== null && bedragGetal > 0 ? (
             <Text style={s.hint}>
-              {tx('{bedrag} komt bij het meerwerk; niet op de werkbon die de klant tekent, wel op de factuur.', {
+              {tx('De klant tekent het meerwerk af op de werkbon. Het bedrag van {bedrag} komt op de factuur.', {
                 bedrag: formatEUR(bedragGetal),
               })}
             </Text>
