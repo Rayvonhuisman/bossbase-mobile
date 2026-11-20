@@ -21,7 +21,6 @@ import { AlertTriangle, Mic, Square, X } from 'lucide-react-native';
 import { FormSheet } from '@/components/FormSheet';
 import { FormField } from '@/components/FormField';
 import { DICTEER_HINT, useSpraak } from '@/lib/spraak';
-import { formatEUR } from '@/lib/format';
 import {
   berekenBedrag,
   leesVeld,
@@ -399,13 +398,6 @@ export function BossMeerwerk({
             </View>
           ) : null}
 
-          {magBedragen && bedragGetal !== null && bedragGetal > 0 ? (
-            <Text style={s.hint}>
-              {tx('De klant tekent het meerwerk af op de werkbon. Het bedrag van {bedrag} komt op de factuur.', {
-                bedrag: formatEUR(bedragGetal),
-              })}
-            </Text>
-          ) : null}
           {ongeldig ? <Text style={[s.hint, { color: t.statusRejectFg }]}>{ongeldig}</Text> : null}
         </>
       )}
