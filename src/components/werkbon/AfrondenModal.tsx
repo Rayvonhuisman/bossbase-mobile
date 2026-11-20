@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,6 +20,7 @@ import { formatHours } from '@/lib/format';
 import { rond2 } from '@/lib/werkbonLogica';
 import { EMAIL_RE, type SignResultaat } from '@/lib/werkbonVersturen';
 import { mailTerOndertekening, tekenOpToestel } from '@/services/werkbonOndertekenenService';
+import { heeftMeerwerkBedragVoorKlant } from '@/services/meerwerkPrijsService';
 import type { Werkbon } from '@/services/workOrderService';
 import type { WorkOrderTask } from '@/types/domain';
 import { tx, txn } from '@/i18n';
@@ -41,7 +42,8 @@ type Stap = 'overzicht' | 'tekenen' | 'mailen';
  *      sign-werkbon), de bon gaat op slot;
  *   2. de klant is weg → link per mail, de bon blijft open tot hij tekent;
  *   3. geen handtekening nodig → gewoon afronden.
- * Geen bedragen in beeld: de klant kijkt mee.
+ * Geen bedragen in beeld: de klant kijkt mee. (Alleen het meerwerkbedrag staat
+ * op de bon zelf, als er een is gerekend.)
  */
 export function AfrondenModal({
   werkbon,
@@ -92,6 +94,14 @@ export function AfrondenModal({
   const open = taken.filter((t) => !t.afgerond);
   // Hele zin vertalen; {vet} wordt het vetgedrukte stuk.
   const geenBedragen = tx('Op de werkbon staan {vet}: geen prijzen, geen tarieven, geen inkoop.').split('{vet}');
+  // Heeft meerwerk een bedrag, dan staat dat wél op de bon (Niels, 20-11-2026).
+  const [meerwerkBedrag, setMeerwerkBedrag] = useState(false);
+  const signToken = werkbon.sign_token;
+  useEffect(() => {
+    let alive = true;
+    void heeftMeerwerkBedragVoorKlant(signToken).then((ja) => { if (alive) setMeerwerkBedrag(ja); });
+    return () => { alive = false; };
+  }, [signToken]);
   const sluit = () => !bezig && onClose();
 
   const onderteken = async () => {
@@ -197,9 +207,15 @@ export function AfrondenModal({
 
             <View style={styles.info}>
               <Text style={styles.infoTekst}>
-                {geenBedragen[0]}
-                <Text style={{ fontWeight: '800' }}>{tx('geen bedragen')}</Text>
-                {geenBedragen[1]}{' '}
+                {meerwerkBedrag ? (
+                  tx('Op de werkbon staat alleen het bedrag bij het meerwerk: geen andere prijzen, geen tarieven, geen inkoop.')
+                ) : (
+                  <>
+                    {geenBedragen[0]}
+                    <Text style={{ fontWeight: '800' }}>{tx('geen bedragen')}</Text>
+                    {geenBedragen[1]}
+                  </>
+                )}{' '}
                 {aantalKlantNotities > 0
                   ? txn('Wel één notitie die je als "voor de klant" hebt gemarkeerd.', 'Wel {n} notities die je als "voor de klant" hebt gemarkeerd.', aantalKlantNotities)
                   : tx('Interne notities blijven intern.')}

@@ -54,3 +54,15 @@ export async function zetMeerwerkPrijs(
   if (error || !data) return { data: null, error: error?.message ?? tx('Opslaan mislukt.') };
   return { data: naarMeerwerkPrijs(data as Record<string, unknown>), error: null };
 }
+
+/**
+ * Staat er meerwerk mét bedrag op de bon zoals de klant hem ziet? Via de
+ * klantlink (get_werkbon_taken_by_sign_token), dus ook zonder projectbedragen.
+ * Alleen afgevinkt meerwerk; het bedrag zelf gebruikt de PDF.
+ */
+export async function heeftMeerwerkBedragVoorKlant(signToken: string | null | undefined): Promise<boolean> {
+  if (!signToken) return false;
+  const { data, error } = await supabase.rpc('get_werkbon_taken_by_sign_token', { p_token: signToken });
+  if (error) return false;
+  return ((data as Record<string, unknown>[]) ?? []).some((r) => r.is_meerwerk === true && r.bedrag_excl != null);
+}
