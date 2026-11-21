@@ -8,6 +8,7 @@ import { CalendarDays, ClipboardList, Clock, Home, Menu, Users } from 'lucide-re
 import { Button, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
 import { TABBALK_MAX } from '@/lib/schermklasseRegels';
+import { herstelPush } from '@/lib/push';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
 import { tx, txm } from '@/i18n';
@@ -123,6 +124,19 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 export default function TabsLayout() {
   const { status, session, profileError, refreshProfile, signOut } = useAuth();
   const { colors: t } = useTheme();
+
+  // Pushmeldingen: een toestel dat ze aan had, meldt zich bij elk openen
+  // opnieuw aan (zelfherstel, src/lib/push.web.ts). Op iOS/Android-native niets.
+  const userId = session?.user?.id;
+  useEffect(() => {
+    if (!userId) return undefined;
+    const herstel = () => void herstelPush(userId).catch(() => {});
+    herstel();
+    if (typeof document === 'undefined') return undefined;
+    const zichtbaar = () => { if (document.visibilityState === 'visible') herstel(); };
+    document.addEventListener('visibilitychange', zichtbaar);
+    return () => document.removeEventListener('visibilitychange', zichtbaar);
+  }, [userId]);
 
   // Dev-only diagnostic dump so a developer sees the full picture in the
   // Metro logs while the user sees only a friendly Dutch message.

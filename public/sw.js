@@ -1,8 +1,9 @@
 /*
  * BossBase — service worker.
  *
- * Bewust minimaal. Deze service worker maakt de app installeerbaar en laat het
- * app-omhulsel (HTML, JavaScript, lettertypes, iconen) snel laden. Meer niet.
+ * Bewust minimaal. Deze service worker maakt de app installeerbaar, laat het
+ * app-omhulsel (HTML, JavaScript, lettertypes, iconen) snel laden en toont
+ * pushmeldingen (sinds 21-11-2026, zie `src/lib/push.web.ts`). Meer niet.
  *
  * Wat hij NOOIT doet:
  * - Iets van Supabase aanraken. Database, login, opslag en edge functions
@@ -12,7 +13,8 @@
  * - Verzoeken met een Authorization-header, of iets anders dan GET, afhandelen.
  * - Een paginabezoek bewaren. Pagina's komen altijd eerst van het netwerk; pas
  *   als er geen netwerk is, valt hij terug op het lege app-omhulsel.
- * - Achtergrond-synchronisatie, pushberichten of offline gegevens.
+ * - Achtergrond-synchronisatie of offline gegevens. Een pushbericht bevat
+ *   alleen titel, tekst en een link; het wordt getoond en nergens bewaard.
  *
  * Updates: de build-ID hieronder wordt na `expo export` ingevuld door
  * `scripts/pwa-na-export.mjs` (een hash over de app-bestanden). Elke nieuwe
@@ -139,3 +141,55 @@ function magBewaren(antwoord) {
     !/text\/html/i.test(antwoord.headers.get('content-type') || '')
   );
 }
+
+// ---------------------------------------------------------------------------
+// Pushmeldingen (edge function app-push): tonen, en bij tikken de app openen op
+// /melding, dat de melding als gelezen markeert en de juiste pagina opent.
+// ---------------------------------------------------------------------------
+
+self.addEventListener('push', (event) => {
+  let d = {};
+  try {
+    d = event.data ? event.data.json() : {};
+  } catch {
+    d = { tekst: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(d.titel || 'BossBase', {
+      body: d.tekst || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: d.tag || undefined,
+      data: { url: d.url || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const doel = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin);
+  // Alleen naar de eigen app; een vreemde link opent gewoon de app.
+  const url = doel.origin === self.location.origin ? doel.href : new URL('/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((vensters) => {
+      for (const v of vensters) {
+        if (new URL(v.url).origin === self.location.origin) {
+          return v.focus().then(() => (v.navigate ? v.navigate(url) : undefined));
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});
+
+// De pushdienst vernieuwt het abonnement (o.a. Chrome): meteen een nieuw nemen
+// met dezelfde sleutel; de app meldt het bij het volgende openen aan.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const opties = event.oldSubscription && event.oldSubscription.options;
+  if (!opties || !opties.applicationServerKey) return;
+  event.waitUntil(
+    self.registration.pushManager
+      .subscribe({ userVisibleOnly: true, applicationServerKey: opties.applicationServerKey })
+      .catch(() => {}),
+  );
+});
