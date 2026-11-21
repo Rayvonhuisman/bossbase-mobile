@@ -1,0 +1,12 @@
+#!/bin/sh
+# Geen directe push naar main (afspraak sinds 20-11-2026: er draaien echte klanten).
+# Werk op een eigen tak, test los, en zet het in één keer live via een pull request
+# die na akkoord van Niels wordt gemerged (gh pr merge of de knop op GitHub).
+# Alleen voor een noodherstel na akkoord: BB_RELEASE=1 git push ...
+while read -r lokaal_ref lokaal_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ] && [ "${BB_RELEASE:-}" != "1" ]; then
+    echo "Push naar main geweigerd: werk op een eigen tak en rol uit via een pull request (zie CLAUDE.md, 'Uitrollen: alleen via een release')." >&2
+    exit 1
+  fi
+done
+exit 0

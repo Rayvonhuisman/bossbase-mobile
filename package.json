@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "uitrol": "node ../dashboard/scripts/uitrol.mjs",
     "start": "expo start",
     "ios": "expo start --ios",

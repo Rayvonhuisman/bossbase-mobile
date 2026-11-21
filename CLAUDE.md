@@ -18,6 +18,38 @@ zeven beheerders, onder wie die van Glasmeesters. Aankondigingen van juridische
 documenten gaan daarom standaard alleen als melding in het dashboard (edge
 function `juridisch-aankondigen`); een mail kan pas na akkoord per keer.
 
+## Uitrollen: alleen via een release, nooit direct (sinds 20-11-2026)
+
+**Er draaien echte klanten.** De app (app.bossbase.nl: een push naar `main` is meteen live), het dashboard en de website die nu live staan
+moeten blijven werken. Daarom gaat er **niets meer direct naar `main`** en wordt
+er niets meer los uitgerold. Dit geldt voor elke sessie, elke agent en voor
+Niels en Rayvon zelf. Het gaat voor elke eerdere afspraak om "meteen uit te rollen".
+
+1. **Werk op een eigen tak** (`feature/<onderwerp>`), het liefst in een eigen
+   worktree. Eén tak per wijziging; alles wat bij elkaar hoort (frontend, app,
+   migratie, edge function, Boss-kennis) op dezelfde tak.
+2. **Test los, niet op productie**: lokaal (devserver) en op de preview van de tak,
+   altijd met Test Account Claude. Een push van een tak (niet `main`) maakt alleen
+   een preview.
+   - **Edge functions** niet deployen onder hun echte naam. Testen kan met een
+     tijdelijke kopie onder een andere naam (`<naam>-test`), die je na het testen
+     weer verwijdert (`supabase functions delete <naam>-test`).
+   - **Migraties** alleen als droogloop in een teruggedraaide transactie (zie
+     hieronder). Schrijf ze zo dat de huidige frontend en app ermee blijven werken
+     (alleen toevoegen; niets hernoemen of weghalen wat live nog gebruikt wordt).
+3. **Eén pull request naar `main`** met een beschrijving voor de briefing
+   (`Onderwerp:`, `## Wat`, `## Wat merk je ervan`) en wat er getest is.
+4. **Uitrollen pas na uitdrukkelijk akkoord van Niels op die release**, en dan in
+   één keer, in de volgorde van "Uitrolvolgorde" in ~/BossBase/CLAUDE.md: edge functions,
+   migraties, `migratie:check`, en dan de pull request mergen (`gh pr merge`).
+   Een opdracht om iets te bouwen is géén akkoord om het uit te rollen.
+5. Noodherstel (iets live is kapot) mag sneller, maar ook dan eerst Niels vragen.
+
+Een push naar `main` wordt lokaal tegengehouden door `.githooks/pre-push`
+(`npm install` zet `core.hooksPath` via het `prepare`-script). Alleen voor een
+uitrol na akkoord: `BB_RELEASE=1 git push ...`. Mergen van een pull request op
+GitHub of met `gh pr merge` is de gewone weg.
+
 ## Testen: altijd met Test Account Claude
 
 **Vaste regel: test alleen met het bedrijf "Test Account Claude", nooit met echte
