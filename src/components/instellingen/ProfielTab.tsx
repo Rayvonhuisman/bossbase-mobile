@@ -18,6 +18,7 @@ import {
 } from '@/services/profileService';
 import { spacing } from '@/theme';
 import { AccountVerwijderen } from './AccountVerwijderen';
+import { PushMeldingen } from './PushMeldingen';
 import { Gegeven, Kaart, Keuze, stijlVoorInstellingen } from './Bouwstenen';
 import { kiesAfbeelding } from './kiesAfbeelding';
 import { tx, txm } from '@/i18n';
@@ -160,6 +161,8 @@ export function ProfielTab() {
           onKies={(id) => setVoorkeur(id as ThemaVoorkeur)}
         />
       </Kaart>
+
+      <PushMeldingen />
 
       <Kaart titel={tx('Wachtwoord')}>
         <Button
