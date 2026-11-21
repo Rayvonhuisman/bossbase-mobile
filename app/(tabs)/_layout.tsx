@@ -9,6 +9,7 @@ import { Button, LoadingScreen } from '@/components';
 import { useAuth, useTheme } from '@/providers';
 import { TABBALK_MAX } from '@/lib/schermklasseRegels';
 import { herstelPush } from '@/lib/push';
+import { MeldingenVraag } from '@/components/MeldingenVraag';
 import { useToetsenbordOpen } from '@/lib/zichtbareViewport';
 import { colors, ds, spacing, typography } from '@/theme';
 import { tx, txm } from '@/i18n';
@@ -191,6 +192,8 @@ export default function TabsLayout() {
   }
 
   return (
+    <>
+    <MeldingenVraag />
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
       // Instant tab swap for reliability — the per-screen AnimatedScreen entrance
@@ -242,6 +245,7 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }
 

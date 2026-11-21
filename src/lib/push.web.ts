@@ -147,3 +147,23 @@ export async function herstelPush(userId: string): Promise<void> {
   }
   schrijfOpslag({ aan: true, endpoint: sub.endpoint });
 }
+
+// Net als een app uit de App Store: wie BossBase op het beginscherm zet (of als
+// app installeert), krijgt bij het eerste openen de vraag of meldingen mogen.
+// Eén keer per toestel; daarna kan het via Instellingen → Profiel.
+const GEVRAAGD = 'bb_app_push_gevraagd';
+export function moetMeldingenVragen(): boolean {
+  if (!ondersteund() || !losseApp() || Notification.permission !== 'default') return false;
+  try {
+    return localStorage.getItem(GEVRAAGD) !== '1';
+  } catch {
+    return false;
+  }
+}
+export function markeerMeldingenGevraagd(): void {
+  try {
+    localStorage.setItem(GEVRAAGD, '1');
+  } catch {
+    /* geen opslag */
+  }
+}

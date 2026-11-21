@@ -11,3 +11,7 @@ export async function pushStand(_userId: string): Promise<PushStand> {
 export async function zetPushAan(_userId: string): Promise<void> {}
 export async function zetPushUit(): Promise<void> {}
 export async function herstelPush(_userId: string): Promise<void> {}
+export function moetMeldingenVragen(): boolean {
+  return false;
+}
+export function markeerMeldingenGevraagd(): void {}
