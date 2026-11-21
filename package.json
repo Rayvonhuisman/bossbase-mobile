@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "uitrol": "node ../dashboard/scripts/uitrol.mjs",
     "start": "expo start",
     "ios": "expo start --ios",
     "android": "expo start --android",
