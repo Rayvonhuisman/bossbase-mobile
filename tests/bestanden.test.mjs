@@ -39,7 +39,7 @@ test('in de app te bekijken: PDF en gewone foto’s', () => {
 });
 
 test('zelfde lijst als het dashboard en de database', () => {
-  const dashboard = '/Users/nielsgrevink/BossBase/src/services/bestandenService.js';
+  const dashboard = `${process.env.HOME}/BossBase/dashboard/src/services/bestandenService.js`;
   let bron;
   try {
     bron = readFileSync(dashboard, 'utf8');

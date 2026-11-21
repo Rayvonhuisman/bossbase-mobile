@@ -39,12 +39,14 @@ export function commitUitKop(tekst) {
   return tekst.match(/^\/\/ Dashboardcommit: (\S+)$/m)?.[1] ?? null;
 }
 
-/** Pad naar de dashboardrepo: argument, $BOSSBASE_DASHBOARD of ../BossBase. */
+/** Pad naar de dashboardrepo: argument, $BOSSBASE_DASHBOARD, ../dashboard (sinds 21-11: ~/BossBase/dashboard) of ../BossBase. */
 export function dashboardRepo(arg) {
   const hier = dirname(fileURLToPath(import.meta.url));
   const kandidaten = [
     arg,
     process.env.BOSSBASE_DASHBOARD,
+    resolve(hier, '../../dashboard'),
+    join(process.env.HOME || '', 'BossBase', 'dashboard'),
     resolve(hier, '../../BossBase'),
     join(process.env.HOME || '', 'BossBase'),
   ].filter(Boolean);

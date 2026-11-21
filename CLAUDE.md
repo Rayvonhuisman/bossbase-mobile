@@ -1,7 +1,7 @@
 # BossBase-app — werkafspraken
 
 Dit bestand wordt bij elke sessie ingelezen. De app deelt database, edge functions,
-rechten en pakketten met het dashboard (~/BossBase); zie ook ~/BossBase/CLAUDE.md.
+rechten en pakketten met het dashboard (~/BossBase/dashboard); zie ook ~/BossBase/dashboard/CLAUDE.md.
 
 ## Nooit iets versturen naar echte gebruikers of klanten zonder akkoord
 
@@ -54,12 +54,12 @@ GitHub of met `gh pr merge` is de gewone weg.
 
 **Vaste regel: test alleen met het bedrijf "Test Account Claude", nooit met echte
 klanten** (zoals Glasmeesters) en nooit met de eigen beheeraccounts. Dat geldt voor
-elke sessie en elke agent, in het dashboard (~/BossBase) en in de app (~/bossbase-mobile).
+elke sessie en elke agent, in het dashboard (~/BossBase/dashboard) en in de app (~/BossBase/app).
 Beide delen dezelfde productiedatabase.
 
 - Bedrijf-id `c1a0de00-0000-4000-a000-000000000000`: Team (met planning en voertuigen),
   `is_testbedrijf = true`, geen proefmails.
-- Vier logins, wachtwoorden in `~/test-account-claude-wachtwoorden.txt` (staan
+- Vier logins, wachtwoorden in `~/BossBase/geheim/test-account-claude-wachtwoorden.txt` (staan
   nergens anders, ook niet in git):
   - `nielsgrevink+claude-eigenaar@gmail.com` is admin en eigenaar.
   - `nielsgrevink+claude-planner@gmail.com` heeft de rechten planning, werkbonnen en alles inzien.
@@ -73,7 +73,7 @@ Beide delen dezelfde productiedatabase.
   openstaande facturen en geen klantbezoeken in de toekomst zonder reden.
 - Opnieuw opbouwen kan met `scripts/seed-test-account-claude.sql` (zie de kop
   daarvan). De ondertekende offerte maakt `scripts/onderteken-test-offerte.ts`
-  (zelfde code als sign-offerte, zonder mail). Beide staan in ~/BossBase.
+  (zelfde code als sign-offerte, zonder mail). Beide staan in ~/BossBase/dashboard.
 
 ## Talen: Nederlands schrijven, de rest gaat vanzelf
 
