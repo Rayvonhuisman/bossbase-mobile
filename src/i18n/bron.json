@@ -661,17 +661,10 @@
  "Afrekening controleren": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx",
    "src/services/verhuisService.ts"
   ]
  },
  "Afrekening laten tekenen": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
- "Afrekening opslaan": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -687,6 +680,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
+  ]
+ },
+ "Afronding btw": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Afspraak": {
@@ -2950,6 +2949,12 @@
    "src/components/werkbon/ContractBlok.tsx"
   ]
  },
+ "Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van \"Werkzaamheden starten\" tot \"beëindigen\" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Controleer de tijden.": {
   "soort": "tekst",
   "bestanden": [
@@ -2973,6 +2978,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/boss/OfferteGesprek.tsx"
+  ]
+ },
+ "Controleer vóór de factuur": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Credit": {
@@ -3084,6 +3095,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/lib/werkbonVersturen.ts"
+  ]
+ },
+ "Dat is niet gelukt.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
   ]
  },
  "Database": {
@@ -3433,6 +3450,12 @@
    "src/services/factuurService.ts"
   ]
  },
+ "De factuur is niet verstuurd.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "De factuur is niet verwijderd. Je hebt het recht Facturen nodig.": {
   "soort": "tekst",
   "bestanden": [
@@ -3449,6 +3472,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/services/factuurService.ts"
+  ]
+ },
+ "De factuur wordt op dit moment al verstuurd. Even geduld.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/verhuisService.ts"
   ]
  },
  "De foto is niet opgeslagen — je hebt hier geen rechten voor.": {
@@ -4232,6 +4261,18 @@
    "src/lib/documentLogica.ts"
   ]
  },
+ "Deze factuur is al betaald.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/verhuisService.ts"
+  ]
+ },
+ "Deze factuur is al naar de klant gemaild.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/verhuisService.ts"
+  ]
+ },
  "Deze factuur is betaald.": {
   "soort": "tekst",
   "bestanden": [
@@ -4263,6 +4304,12 @@
   ]
  },
  "Deze factuur kan niet (meer) online worden betaald.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/verhuisService.ts"
+  ]
+ },
+ "Deze factuur kan niet (meer) worden verstuurd.": {
   "soort": "tekst",
   "bestanden": [
    "src/services/verhuisService.ts"
@@ -5095,6 +5142,12 @@
    "app/customers/leverancier/[id].tsx"
   ]
  },
+ "Een melding op je telefoon bij alles wat ook in de bel komt": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
  "Een meting moet een naam houden.": {
   "soort": "tekst",
   "bestanden": [
@@ -5316,7 +5369,13 @@
    "src/components/planning/VoertuigenPerDag.tsx"
   ]
  },
- "Eindafrekening factureren": {
+ "Eindcontrole": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Eindcontrole opslaan": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -5538,6 +5597,12 @@
    "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
+ "Er is geen e-mailadres van de klant bekend. Vul het in bij de klant en probeer het opnieuw.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/services/verhuisService.ts"
+  ]
+ },
  "Er is geen factuur gekozen.": {
   "soort": "tekst",
   "bestanden": [
@@ -5650,6 +5715,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
+  ]
+ },
+ "Er staan {n} extra kostenregel(s) op de afrekening.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Er staat geen werkbon open waarop jij uren mag boeken. Vraag de planner om je op de klus te zetten, of kies \"Werkdag\".": {
@@ -5838,6 +5909,12 @@
    "app/(more)/invoices.tsx"
   ]
  },
+ "Factuur aanmaken": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Factuur aanpassen": {
   "soort": "tekst",
   "bestanden": [
@@ -5904,10 +5981,22 @@
    "app/(more)/invoices.tsx"
   ]
  },
+ "Factuur opnieuw versturen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Factuur opstellen": {
   "soort": "tekst",
   "bestanden": [
    "app/(more)/invoices.tsx"
+  ]
+ },
+ "Factuur versturen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Factuur verstuurd": {
@@ -5934,10 +6023,22 @@
    "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
+ "Factuur wordt verstuurd naar {naar}…": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Factuur {nummer}": {
   "soort": "tekst",
   "bestanden": [
    "app/(more)/invoices.tsx"
+  ]
+ },
+ "Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en een betaallink voor iDEAL. Klopt het e-mailadres?": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Factuur {nummer} aangemaakt als concept": {
@@ -6319,6 +6420,18 @@
    "src/lib/databaseFilters.ts",
    "src/lib/documentLogica.ts",
    "src/services/offerteService.ts"
+  ]
+ },
+ "Geaccepteerde offerte {nummer}: {offerte} incl. btw, gelijk aan de nacalculatie.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Geaccepteerde offerte {nummer}: {offerte} incl. btw. De nacalculatie komt op {totaal}, een verschil van {verschil}. Gefactureerd wordt de nacalculatie; is de offerteprijs afgesproken, pas dan de afrekening aan vóór de handtekening.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Geaccepteerde offertes": {
@@ -6706,6 +6819,12 @@
    "app/customers/leverancier/[id].tsx"
   ]
  },
+ "Geen e-mailadres bekend": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Geen e-mailadres bekend.": {
   "soort": "tekst",
   "bestanden": [
@@ -7068,6 +7187,12 @@
    "src/lib/kiesFoto.ts"
   ]
  },
+ "Geen toestemming gegeven.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/push.web.ts"
+  ]
+ },
  "Geen type": {
   "soort": "tekst",
   "bestanden": [
@@ -7207,6 +7332,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/lib/financienLogica.ts"
+  ]
+ },
+ "Gefactureerd: {uren}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Gegevens": {
@@ -8043,7 +8174,7 @@
    "app/(onboarding)/account.tsx"
   ]
  },
- "Hierna volgt de factuur. Betalen kan met iDEAL via de QR-code; tekenen is nog geen betaling.": {
+ "Hierna volgt de factuur per e-mail, met een betaallink en een QR-code voor iDEAL. Tekenen is nog geen betaling.": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -9087,12 +9218,6 @@
    "src/components/instellingen/BedrijfTab.tsx"
   ]
  },
- "Je kunt het meerwerk gewoon op de werkbon zetten; dit houdt je niet tegen.": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/boss/BossMeerwerk.tsx"
-  ]
- },
  "Je kunt je eigen account niet verwijderen.": {
   "soort": "tekst",
   "bestanden": [
@@ -9998,6 +10123,12 @@
    "app/(tabs)/menu.tsx"
   ]
  },
+ "Klusuren (2 verhuizers incl. bus)": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Km": {
   "soort": "tekst",
   "bestanden": [
@@ -10309,6 +10440,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/i18n/databaseWaarden.ts"
+  ]
+ },
+ "Krijg een melding als er een werkbon voor je klaarstaat, je wordt getagd of een klant een offerte tekent. Ook als de app dicht is.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/MeldingenVraag.tsx"
   ]
  },
  "Krijgt een nieuw offertenummer en telt mee voor je offertelimiet.": {
@@ -11340,10 +11477,59 @@
    "src/components/Meldpunt.tsx"
   ]
  },
+ "Meldingen aanzetten": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
+ "Meldingen aanzetten is niet gelukt.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/push.web.ts"
+  ]
+ },
  "Meldingen konden niet worden geladen.": {
   "soort": "tekst",
   "bestanden": [
    "src/services/meldingService.ts"
+  ]
+ },
+ "Meldingen op dit toestel": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
+ "Meldingen toestaan?": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/MeldingenVraag.tsx"
+  ]
+ },
+ "Meldingen uitzetten": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
+ "Meldingen werken alleen in de geïnstalleerde app.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/push.web.ts"
+  ]
+ },
+ "Meldingen zijn geblokkeerd. Zet ze aan in de instellingen van je telefoon of browser.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx",
+   "src/lib/push.web.ts"
+  ]
+ },
+ "Meldingen zijn nu niet beschikbaar. Probeer het later opnieuw.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/lib/push.web.ts"
   ]
  },
  "Menu": {
@@ -11539,6 +11725,12 @@
    "src/lib/registratie.ts"
   ]
  },
+ "Minimum {uren}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Minstens 8 tekens": {
   "soort": "tekst",
   "bestanden": [
@@ -11589,7 +11781,7 @@
    "src/components/instellingen/StandaardTab.tsx"
   ]
  },
- "Na de betaling krijgt de klant de factuur automatisch per e-mail.": {
+ "Na de betaling krijgt de klant automatisch een bevestiging met de betaalde factuur.": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -11785,6 +11977,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/WaarschuwingModal.tsx"
+  ]
+ },
+ "Naar {naar}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Nacalculatie": {
@@ -11992,7 +12190,8 @@
  "Niet nu": {
   "soort": "tekst",
   "bestanden": [
-   "app/work-orders/[id].tsx"
+   "app/work-orders/[id].tsx",
+   "src/components/MeldingenVraag.tsx"
   ]
  },
  "Niet op betaald gezet": {
@@ -13133,6 +13332,12 @@
    "app/(more)/offers.tsx"
   ]
  },
+ "Offerte {nummer} bij deze klus is nog niet geaccepteerd ({status}).": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Offerte {nummer} en klantgegevens lezen": {
   "soort": "tekst",
   "bestanden": [
@@ -13596,10 +13801,22 @@
    "src/components/werkbon/AfrondenModal.tsx"
   ]
  },
+ "Op de werkbon staat alleen het bedrag bij het meerwerk: geen andere prijzen, geen tarieven, geen inkoop.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/AfrondenModal.tsx"
+  ]
+ },
  "Op de werkbon zetten": {
   "soort": "tekst",
   "bestanden": [
    "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "Op iPhone en iPad werken meldingen alleen in de app op je beginscherm. Tik in Safari op Delen → Zet op beginscherm, open BossBase daar en zet ze aan.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
   ]
  },
  "Op schema": {
@@ -14506,6 +14723,12 @@
   ]
  },
  "Prijs excl. btw": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Prijs incl. btw": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -15575,6 +15798,18 @@
    "src/components/project/MetingenBlok.tsx"
   ]
  },
+ "Staan aan op dit toestel.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
+ "Staan uit op dit toestel.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/instellingen/PushMeldingen.tsx"
+  ]
+ },
  "Staat dit uit, dan is het ingevulde bedrag exclusief btw.": {
   "soort": "tekst",
   "bestanden": [
@@ -15896,7 +16131,8 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/RegelEditor.tsx",
-   "src/components/boss/BossGesprek.tsx"
+   "src/components/boss/BossGesprek.tsx",
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Subtotaal groep excl. btw": {
@@ -16671,6 +16907,12 @@
    "src/components/boss/OfferteGesprek.tsx"
   ]
  },
+ "Toestaan": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/MeldingenVraag.tsx"
+  ]
+ },
  "Toevoegen": {
   "soort": "tekst",
   "bestanden": [
@@ -16762,12 +17004,6 @@
    "app/(more)/team.tsx"
   ]
  },
- "Totaal excl. btw": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
  "Totaal facturen": {
   "soort": "tekst",
   "bestanden": [
@@ -16785,14 +17021,7 @@
   "bestanden": [
    "src/components/RegelEditor.tsx",
    "src/components/boss/BossGesprek.tsx",
-   "src/components/boss/Werkruimte.tsx",
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
- "Totaal incl. btw: {bedrag}": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
+   "src/components/boss/Werkruimte.tsx"
   ]
  },
  "Totaal inkopen (excl. BTW)": {
@@ -16824,6 +17053,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/offers.tsx"
+  ]
+ },
+ "Totaal te betalen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Totaal {bedrag} excl. btw": {
@@ -17555,6 +17790,12 @@
    "app/(more)/pipeline.tsx"
   ]
  },
+ "Verplicht. Vul 0 in als er niet is gereden.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Verplicht: zonder leverancier weigert de administratie de kostenpost.": {
   "soort": "tekst",
   "bestanden": [
@@ -17577,7 +17818,20 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/DocumentMailSheet.tsx",
-   "src/components/werkbon/AfrondenModal.tsx"
+   "src/components/werkbon/AfrondenModal.tsx",
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Versturen is mislukt ({fout}). Je kunt dezelfde factuur opnieuw versturen.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Versturen is mislukt. Je kunt dezelfde factuur opnieuw versturen.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Versturen lukte niet. Probeer het zo nog eens, of mail je melding naar info@bossbase.nl.": {
@@ -17601,6 +17855,18 @@
   "soort": "tekst",
   "bestanden": [
    "src/services/wachtwoordService.ts"
+  ]
+ },
+ "Versturen naar {naar} is mislukt ({fout}).": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "Versturen naar {naar} is mislukt.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Versturen...": {
@@ -17634,6 +17900,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/offers.tsx"
+  ]
+ },
+ "Verstuurd naar {naar} op {wanneer}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Verstuurd · opslaan maakt een nieuwe versie": {
@@ -18380,6 +18652,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/work-orders/[id].tsx"
+  ]
+ },
+ "Vul de werkelijk gereden kilometers in en sla op. 0 km mag ook.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Vul een aantal dagen tussen 0 en 365 in.": {
@@ -19713,6 +19991,12 @@
    "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
+ "Werkelijk gereden kilometers": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Werkelijke uren": {
   "soort": "tekst",
   "bestanden": [
@@ -20309,6 +20593,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/boss/BossMeerwerk.tsx"
+  ]
+ },
+ "bijv. 60": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "bijv. garantie tot 2031, getekend contract": {
@@ -21245,6 +21535,12 @@
    "src/services/meldingService.ts"
   ]
  },
+ "zonder betaallink": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "{aantal} materiaal bijgewerkt|{aantal} materialen bijgewerkt": {
   "soort": "meervoud",
   "bestanden": [
@@ -21340,12 +21636,6 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/expenses.tsx"
-  ]
- },
- "{bedrag} komt bij het meerwerk; niet op de werkbon die de klant tekent, wel op de factuur.": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/boss/BossMeerwerk.tsx"
   ]
  },
  "{bedrag} open": {
@@ -22310,12 +22600,6 @@
    "src/components/MaterialenImporteren.tsx"
   ]
  },
- "{prijs} {per} excl. btw · {pct}% btw · {aantal}": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
  "{regel}: deze regel is intussen verwijderd.": {
   "soort": "tekst",
   "bestanden": [
@@ -22534,6 +22818,18 @@
   "soort": "tekst",
   "bestanden": [
    "src/lib/useSave.ts"
+  ]
+ },
+ "{wat}: afgesproken bedrag {afgesproken} (geen standaardtarief).": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "{wat}: afgesproken {afgesproken}, standaard {standaard}.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "{weekdag} {dag} {maand}": {

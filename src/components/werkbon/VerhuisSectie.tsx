@@ -22,9 +22,9 @@ import { locale, tx, txm } from '@/i18n';
 import { useTheme } from '@/providers';
 import { spacing, type ThemeColors } from '@/theme';
 import {
-  BETAALLINK_REDEN, FASE_LABEL, SOORT_LABEL, beeindig, euro, getBetaallink, getFactuurPdf, getVerhuis, getal,
-  maakFactuur, nl, slaAfrekeningOp, start, teken, uren, verstuurFactuurmailOpnieuw,
-  type Inhoud, type Verhuis, type VerhuisFase,
+  BETAALLINK_REDEN, FASE_LABEL, SOORT_LABEL, VERZEND_REDEN, beeindig, berekenAfrekening, euro, getBetaallink, getFactuurPdf,
+  getVerhuis, getal, maakFactuur, nl, slaAfrekeningOp, start, teken, uren, verstuurFactuur, verstuurFactuurmailOpnieuw,
+  type Controle, type Inhoud, type Verhuis, type VerhuisFase,
 } from '@/services/verhuisService';
 import { HandtekeningVak } from './HandtekeningVak';
 
@@ -179,9 +179,11 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
             </View>
           ) : null}
 
+          {v.fase === 'akkoord_eind' ? <ControleMelding controle={v.controle} totaal={htEind?.inhoud?.totaal_incl} s={s} /> : null}
+
           {v.fase === 'akkoord_eind' ? (
             mag.factureren ? (
-              <Button label={tx('Eindafrekening factureren')} loading={bezig === 'factuur'}
+              <Button label={tx('Factuur aanmaken')} loading={bezig === 'factuur'}
                 onPress={() => doe('factuur', async () => { await maakFactuur(werkbonId); return null; })} />
             ) : (
               <Text style={s.hint}>{tx('De klant heeft de afrekening getekend. Iemand met het recht Facturen maakt nu de factuur.')}</Text>
@@ -286,33 +288,71 @@ function Gegevens({ v, s }: { v: Verhuis; s: S }) {
 }
 
 function RegelsLijst({ inhoud, werkelijk, s }: { inhoud: Inhoud; werkelijk: boolean; s: S }) {
+  // Bij prijzen incl. btw zijn de regelbedragen incl.; subtotaal en btw zijn wat de factuur ervan maakt.
+  const incl = inhoud.prijzen === 'incl_btw';
+  const afronding = Number(inhoud.afronding || 0);
   return (
     <View style={s.regels}>
       {inhoud.regels.map((r, i) => (
         <View key={i} style={s.regel}>
           <View style={{ flex: 1 }}>
             <Text style={s.tekst}>{r.omschrijving}{r.extra ? `  · ${tx('extra')}` : ''}</Text>
-            <Text style={s.sub}>{tx('{prijs} {per} excl. btw · {pct}% btw · {aantal}', { prijs: euro(r.eenheidsprijs), per: tx(SOORT_LABEL[r.soort]), pct: r.btw_pct, aantal: r.soort === 'uur' ? uren(r.aantal) : `${nl(r.aantal)}${r.soort === 'km' ? ' km' : '×'}` })}</Text>
+            <Text style={s.sub}>{tx(incl ? '{prijs} {per} incl. btw · {pct}% btw · {aantal}' : '{prijs} {per} excl. btw · {pct}% btw · {aantal}', { prijs: euro(r.eenheidsprijs), per: tx(SOORT_LABEL[r.soort]), pct: r.btw_pct, aantal: r.soort === 'uur' || r.soort === 'reis' ? uren(r.aantal) : `${nl(r.aantal)}${r.soort === 'km' ? ' km' : '×'}` })}</Text>
           </View>
           <Text style={s.bedrag}>{euro(r.bedrag)}</Text>
         </View>
       ))}
-      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Totaal excl. btw')}</Text><Text style={s.sub}>{euro(inhoud.totaal_excl)}</Text></View>
+      <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Subtotaal excl. btw')}</Text><Text style={s.sub}>{euro(inhoud.totaal_excl)}</Text></View>
       <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Btw')}</Text><Text style={s.sub}>{euro(inhoud.btw)}</Text></View>
+      {incl && afronding !== 0 ? (
+        <View style={s.regel}><Text style={[s.sub, { flex: 1 }]}>{tx('Afronding btw')}</Text><Text style={s.sub}>{euro(afronding)}</Text></View>
+      ) : null}
       <View style={[s.regel, s.totaal]}>
-        <Text style={[s.waarde, { flex: 1 }]}>{werkelijk ? tx('Totaal incl. btw') : tx('Geschat totaal incl. btw')}</Text>
+        <Text style={[s.waarde, { flex: 1 }]}>{werkelijk ? tx('Totaal te betalen') : tx('Geschat totaal incl. btw')}</Text>
         <Text style={s.waarde}>{euro(inhoud.totaal_incl)}</Text>
       </View>
     </View>
   );
 }
 
+// Afwijkingen die vóór de factuur zichtbaar moeten zijn (zelfde als het dashboard).
+function ControleMelding({ controle, totaal, s }: { controle?: Controle | null; totaal?: number | null; s: S }) {
+  if (!controle) return null;
+  const afw = controle.afwijkende_tarieven ?? [];
+  const o = controle.offerte;
+  const geaccepteerd = o?.status === 'geaccepteerd';
+  const anders = geaccepteerd && totaal != null && Math.abs(Number(o!.totaal_incl || 0) - Number(totaal)) >= 0.005;
+  const open = o && !geaccepteerd && o.status !== 'afgewezen';
+  if (!afw.length && !controle.extra_regels && !geaccepteerd && !open) return null;
+  return (
+    <View style={[s.melding, { gap: 4 }]}>
+      <Text style={[s.tekst, { fontWeight: '700', color: '#78350f' }]}>{tx('Controleer vóór de factuur')}</Text>
+      {afw.map((a, i) => (
+        <Text key={i} style={{ color: '#78350f', fontSize: 13 }}>• {a.standaard != null
+          ? tx('{wat}: afgesproken {afgesproken}, standaard {standaard}.', { wat: a.omschrijving, afgesproken: euro(a.afgesproken), standaard: euro(a.standaard) })
+          : tx('{wat}: afgesproken bedrag {afgesproken} (geen standaardtarief).', { wat: a.omschrijving, afgesproken: euro(a.afgesproken) })}</Text>
+      ))}
+      {controle.extra_regels > 0 ? <Text style={{ color: '#78350f', fontSize: 13 }}>• {tx('Er staan {n} extra kostenregel(s) op de afrekening.', { n: controle.extra_regels })}</Text> : null}
+      {geaccepteerd ? (
+        <Text style={{ color: '#78350f', fontSize: 13 }}>• {anders
+          ? tx('Geaccepteerde offerte {nummer}: {offerte} incl. btw. De nacalculatie komt op {totaal}, een verschil van {verschil}. Gefactureerd wordt de nacalculatie; is de offerteprijs afgesproken, pas dan de afrekening aan vóór de handtekening.', { nummer: o!.nummer ?? '', offerte: euro(o!.totaal_incl), totaal: euro(totaal), verschil: euro(Number(totaal) - Number(o!.totaal_incl || 0)) })
+          : tx('Geaccepteerde offerte {nummer}: {offerte} incl. btw, gelijk aan de nacalculatie.', { nummer: o!.nummer ?? '', offerte: euro(o!.totaal_incl) })}</Text>
+      ) : null}
+      {open ? <Text style={{ color: '#78350f', fontSize: 13 }}>• {tx('Offerte {nummer} bij deze klus is nog niet geaccepteerd ({status}).', { nummer: o!.nummer ?? '', status: o!.status })}</Text> : null}
+    </View>
+  );
+}
+
 type RegelInvoer = { id?: string; soort: string; omschrijving: string; eenheidsprijs: string; btw_pct: string; werkelijk_aantal: string; extra: boolean };
 
+// Eindcontrole: klusuren en (bij vaste tarieven) de werkelijk gereden
+// kilometers. Het bedrag rekent direct mee; wat de klant tekent rekent de server.
 function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
   v: Verhuis; s: S; bezig: string | null; kan: boolean;
   onOpslaan: (uren: number, regels: Record<string, unknown>[]) => void; onTekenen: () => void;
 }) {
+  const tarieven = v.tarieven ?? null;
+  const incl = !!v.gegevens?.prijzen_incl_btw;
   const begin = useMemo<RegelInvoer[]>(() => (v.regels ?? []).map((r) => ({
     id: r.id, soort: r.soort, omschrijving: r.omschrijving, eenheidsprijs: nl(r.eenheidsprijs),
     btw_pct: String(r.btw_pct), werkelijk_aantal: nl(r.werkelijk_aantal), extra: r.extra,
@@ -329,23 +369,52 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
     if (!Number.isFinite(u)) return;
     setRegels((rs) => rs.map((r) => (r.soort === 'uur' && !r.extra ? { ...r, werkelijk_aantal: nl(Math.max(u, minimum)) } : r)));
   };
-  const ongeldig = !Number.isFinite(getal(urenTxt)) || regels.some((r) => !Number.isFinite(getal(r.werkelijk_aantal))
+  // Lege kilometers = nog niet bevestigd (alleen bij vaste tarieven).
+  const kmLeeg = (r: RegelInvoer) => !!tarieven && r.soort === 'km' && !r.extra && r.werkelijk_aantal.trim() === '';
+  const kmOnbevestigd = regels.some(kmLeeg);
+  const ongeldig = !Number.isFinite(getal(urenTxt)) || regels.some((r) => (!kmLeeg(r) && !Number.isFinite(getal(r.werkelijk_aantal)))
+    || getal(r.werkelijk_aantal) < 0
     || (r.extra && (!r.omschrijving.trim() || !Number.isFinite(getal(r.eenheidsprijs)))));
-  const inhoud = v.te_tekenen?.inhoud;
+  const kmIdx = tarieven ? regels.findIndex((r) => r.soort === 'km' && !r.extra) : -1;
+  const kmRegel = kmIdx >= 0 ? regels[kmIdx] : undefined;
+  const live = useMemo(() => berekenAfrekening(regels.map((r) => ({
+    ...r, soort: r.soort as Inhoud['regels'][number]['soort'], aantal: Number.isFinite(getal(r.werkelijk_aantal)) ? getal(r.werkelijk_aantal) : 0,
+    eenheidsprijs: getal(r.eenheidsprijs), btw_pct: Number(r.btw_pct),
+  })), incl), [regels, incl]);
 
   return (
     <View style={s.afrekening}>
-      <Text style={s.lbl}>{tx('Afrekening controleren')}</Text>
-      <Text style={s.hint}>{tx('De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.')}</Text>
-      <FormField label={tx('Werkelijke uren')} value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
-      {regels.map((r, i) => (
+      <Text style={s.lbl}>{tx('Eindcontrole')}</Text>
+      <Text style={s.hint}>{tarieven
+        ? tx('Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van "Werkzaamheden starten" tot "beëindigen" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.')
+        : tx('De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.')}</Text>
+      <FormField label={tarieven ? tx('Klusuren (2 verhuizers incl. bus)') : tx('Werkelijke uren')} value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
+      {(() => {
+        const uurRegel = regels.find((r) => r.soort === 'uur' && !r.extra);
+        return uurRegel && minimum > 0 && getal(uurRegel.werkelijk_aantal) !== getal(urenTxt)
+          ? <Text style={s.sub}>{tx('Minimum {uren}', { uren: uren(minimum) })} · {tx('Gefactureerd: {uren}', { uren: uren(getal(uurRegel.werkelijk_aantal)) })}</Text>
+          : null;
+      })()}
+      {kmRegel ? (
+        <View style={{ gap: 4 }}>
+          <FormField label={`${tx('Werkelijk gereden kilometers')} *`} value={kmRegel.werkelijk_aantal} placeholder={tx('bijv. 60')}
+            onChangeText={(w) => zet(kmIdx, 'werkelijk_aantal', w)} keyboardType="number-pad" editable={kan} />
+          <Text style={kmLeeg(kmRegel) ? s.fout : s.sub}>{kmLeeg(kmRegel)
+            ? tx('Verplicht. Vul 0 in als er niet is gereden.')
+            : tx(incl ? '{prijs} per km incl. btw' : '{prijs} per km excl. btw', { prijs: euro(getal(kmRegel.eenheidsprijs)) })}</Text>
+        </View>
+      ) : null}
+
+      <RegelsLijst inhoud={{ ...(v.te_tekenen?.inhoud ?? { soort: 'eind' }), ...live, regels: live.regels } as Inhoud} werkelijk s={s} />
+
+      {regels.map((r, i) => (r.soort === 'reis' || (kmIdx === i) || (tarieven && r.soort === 'uur' && !r.extra)) ? null : (
         <View key={r.id ?? `n${i}`} style={s.invoerRegel}>
           {r.extra ? (
             <>
               <TextInput style={s.invoer} value={r.omschrijving} placeholder={tx('Omschrijving, bijv. parkeren')} editable={kan}
                 accessibilityLabel={tx('Omschrijving extra kosten')} onChangeText={(w) => zet(i, 'omschrijving', w)} />
-              <TextInput style={s.invoer} value={r.eenheidsprijs} placeholder={tx('Prijs excl. btw')} keyboardType="decimal-pad"
-                editable={kan} accessibilityLabel={tx('Prijs excl. btw')} onChangeText={(w) => zet(i, 'eenheidsprijs', w)} />
+              <TextInput style={s.invoer} value={r.eenheidsprijs} placeholder={incl ? tx('Prijs incl. btw') : tx('Prijs excl. btw')} keyboardType="decimal-pad"
+                editable={kan} accessibilityLabel={incl ? tx('Prijs incl. btw') : tx('Prijs excl. btw')} onChangeText={(w) => zet(i, 'eenheidsprijs', w)} />
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }} accessibilityRole="radiogroup" accessibilityLabel={tx('Btw')}>
                 <Text style={s.sub}>{tx('Btw')}</Text>
                 {(['21', '9', '0'] as const).map((p) => (
@@ -375,15 +444,16 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
         <Button label={tx('+ Extra kosten')} variant="secondary"
           onPress={() => setRegels((rs) => [...rs, { soort: 'vast', omschrijving: '', eenheidsprijs: '', btw_pct: '21', werkelijk_aantal: '1', extra: true }])} />
       ) : null}
-      {inhoud && !gewijzigd ? <Text style={s.waarde}>{tx('Totaal incl. btw: {bedrag}', { bedrag: euro(inhoud.totaal_incl) })}</Text> : null}
+      <ControleMelding controle={v.controle} totaal={live.totaal_incl} s={s} />
       {kan ? (
         <View style={{ gap: spacing.sm }}>
-          <Button label={tx('Afrekening opslaan')} variant="secondary" loading={bezig === 'afrekening'} disabled={!gewijzigd || ongeldig || !!bezig}
+          <Button label={tx('Eindcontrole opslaan')} variant="secondary" loading={bezig === 'afrekening'} disabled={!gewijzigd || ongeldig || !!bezig}
             onPress={() => onOpslaan(getal(urenTxt), regels.map((r) => (r.id && !r.extra
-              ? { id: r.id, werkelijk_aantal: getal(r.werkelijk_aantal) }
+              ? { id: r.id, werkelijk_aantal: kmLeeg(r) ? null : getal(r.werkelijk_aantal) }
               : { ...(r.id ? { id: r.id } : {}), soort: r.soort, omschrijving: r.omschrijving.trim(), eenheidsprijs: getal(r.eenheidsprijs), btw_pct: Number(r.btw_pct), werkelijk_aantal: getal(r.werkelijk_aantal) })))} />
-          <Button label={tx('Afrekening laten tekenen')} disabled={gewijzigd || !!bezig} onPress={onTekenen} />
+          <Button label={tx('Afrekening laten tekenen')} disabled={gewijzigd || kmOnbevestigd || !!bezig} onPress={onTekenen} />
           {gewijzigd ? <Text style={s.hint}>{tx('Sla eerst op; de klant tekent voor wat is opgeslagen.')}</Text> : null}
+          {!gewijzigd && kmOnbevestigd ? <Text style={s.fout}>{tx('Vul de werkelijk gereden kilometers in en sla op. 0 km mag ook.')}</Text> : null}
         </View>
       ) : null}
     </View>
@@ -415,14 +485,14 @@ function TekenModal({ tekenen, standaardNaam, bezig, onClose, onTeken }: {
           <ScrollView contentContainerStyle={s.modalBody} keyboardShouldPersistTaps="handled" scrollEnabled={!tekent}>
             <Text style={s.tekst}>
               {isStart
-                ? `Ik ga akkoord met de verhuizing${inh.vertrek_adres ? ` van ${inh.vertrek_adres}` : ''}${inh.bestemming_adres ? ` naar ${inh.bestemming_adres}` : ''}, met de afspraken en tarieven hieronder. De uren en kilometers zijn een schatting; afgerekend wordt op wat werkelijk is gewerkt${inh.minimum_uren != null ? `, met een minimum van ${uren(inh.minimum_uren)}` : ''}.`
-                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}.`}
+                ? `Ik ga akkoord met de verhuizing${inh.vertrek_adres ? ` van ${inh.vertrek_adres}` : ''}${inh.bestemming_adres ? ` naar ${inh.bestemming_adres}` : ''}, met de afspraken en tarieven hieronder. De uren en kilometers zijn een schatting; afgerekend wordt op wat werkelijk is gewerkt en gereden${inh.minimum_uren != null ? `, met een minimum van ${uren(inh.minimum_uren)}` : ''}${inh.prijzen === 'incl_btw' ? '. Alle bedragen zijn inclusief btw' : ''}.`
+                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}${inh.minimum_uren != null && Number(inh.werkelijke_uren) < Number(inh.minimum_uren) ? ` (gefactureerd: het minimum van ${uren(inh.minimum_uren)})` : ''}${(() => { const km = inh.regels.find((r) => r.soort === 'km' && !r.extra); return km ? `, en ${nl(km.aantal)} km gereden` : ''; })()}.`}
             </Text>
             {inh.afspraken ? (
               <View style={s.afspraken}><Text style={s.lbl}>{tx('Afspraken')}</Text><Text style={s.tekst}>{inh.afspraken}</Text></View>
             ) : null}
             <RegelsLijst inhoud={inh} werkelijk={!isStart} s={s} />
-            {!isStart ? <Text style={s.hint}>{tx('Hierna volgt de factuur. Betalen kan met iDEAL via de QR-code; tekenen is nog geen betaling.')}</Text> : null}
+            {!isStart ? <Text style={s.hint}>{tx('Hierna volgt de factuur per e-mail, met een betaallink en een QR-code voor iDEAL. Tekenen is nog geen betaling.')}</Text> : null}
             <FormField label={tx('Naam ondertekenaar')} value={naam} onChangeText={setNaam} editable={!bezig} autoComplete="name" />
             {/* Niet `disabled` doorgeven: de webversie wist het canvas als die wisselt,
                 en na een mislukte poging moet de handtekening blijven staan. */}
@@ -444,7 +514,36 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
   const [link, setLink] = useState<{ url: string | null; reden?: string; fout?: string } | null>(null);
   const [pdfBezig, setPdfBezig] = useState(false);
   const [mailBezig, setMailBezig] = useState(false);
+  const [verzendBezig, setVerzendBezig] = useState(false);
   const mailStatus = v.gegevens?.factuurmail_status;
+  const vz = v.gegevens?.verzending_status ?? null;
+  const magVersturen = !!(v.mag?.uitvoeren || v.mag?.factureren) && !betaald;
+  // Eerst het adres laten zien. De server laat één verzending tegelijk door en
+  // weigert een tweede na 'verstuurd': een dubbele tik of een herhaalde poging
+  // na een time-out levert geen tweede mail op.
+  const versturen = () => {
+    const naar = f.email_naar;
+    if (!naar) { Dialog.alert(tx('Niet verstuurd'), VERZEND_REDEN.geen_adres); return; }
+    Dialog.alert(vz === 'mislukt' ? tx('Factuur opnieuw versturen') : tx('Factuur versturen'),
+      tx('Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en een betaallink voor iDEAL. Klopt het e-mailadres?', { nummer: f.nummer, bedrag: euro(f.totaal_incl), naar }), [
+        { text: tx('Annuleren'), style: 'cancel' },
+        { text: tx('Versturen'), onPress: async () => {
+          if (verzendBezig) return;
+          setVerzendBezig(true);
+          try {
+            const r = await verstuurFactuur(werkbonId);
+            if (r.uitkomst === 'mislukt') Dialog.alert(tx('Niet verstuurd'), r.fout ? tx('Versturen is mislukt ({fout}). Je kunt dezelfde factuur opnieuw versturen.', { fout: r.fout }) : tx('Versturen is mislukt. Je kunt dezelfde factuur opnieuw versturen.'));
+            else if (r.uitkomst === 'niet_verstuurd' && r.reden !== 'al_verstuurd') Dialog.alert(tx('Niet verstuurd'), (r.reden && VERZEND_REDEN[r.reden]) || tx('De factuur is niet verstuurd.'));
+          } catch (e) {
+            // Geen antwoord: de server kan het wél hebben verstuurd; de status hieronder komt uit de database.
+            Dialog.alert(tx('Niet verstuurd'), (e as Error).message);
+          } finally {
+            setVerzendBezig(false);
+            await vernieuw.current();
+          }
+        } },
+      ]);
+  };
   // Betaald buiten iDEAL (handmatig op betaald gezet): de webhook stuurt dan niets.
   const buitenStripe = betaald && f.stripe_payment_status !== 'paid';
   const wachtOpWebhook = betaald && !buitenStripe && (mailStatus === 'wacht' || mailStatus === 'bezig');
@@ -460,6 +559,11 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!betaald) haalLink(); }, [betaald, haalLink]);
   // Terwijl de klant betaalt elke 10 s kijken; daarna de mailstatus volgen.
+  useEffect(() => {
+    if (vz !== 'bezig') return undefined;
+    const t = setInterval(() => { vernieuw.current(); }, 4000);
+    return () => clearInterval(t);
+  }, [vz]);
   useEffect(() => {
     const volgen = (!betaald && !!link?.url) || wachtOpWebhook;
     if (!volgen) return undefined;
@@ -478,6 +582,21 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
             : tx('Betaald')
           : tx('Nog niet betaald')}
       </Text>
+      {vz === 'verstuurd' ? (
+        <Text style={[s.status, s.statusOk]}>{tx('Verstuurd naar {naar} op {wanneer}', { naar: v.gegevens?.verzending_naar ?? '', wanneer: tijd(v.gegevens?.verzending_verstuurd_op) })}{v.gegevens?.verzending_met_betaallink === false ? ` · ${tx('zonder betaallink')}` : ''}</Text>
+      ) : null}
+      {vz === 'bezig' ? <Text style={s.hint}>{tx('Factuur wordt verstuurd naar {naar}…', { naar: v.gegevens?.verzending_naar ?? '' })}</Text> : null}
+      {vz === 'mislukt' ? (
+        <Text style={s.fout}>{v.gegevens?.verzending_fout
+          ? tx('Versturen naar {naar} is mislukt ({fout}).', { naar: v.gegevens?.verzending_naar ?? '', fout: v.gegevens.verzending_fout })
+          : tx('Versturen naar {naar} is mislukt.', { naar: v.gegevens?.verzending_naar ?? '' })}</Text>
+      ) : null}
+      {magVersturen && vz !== 'verstuurd' && vz !== 'bezig' ? (
+        <View style={{ gap: 4 }}>
+          <Button label={vz === 'mislukt' ? tx('Opnieuw versturen') : tx('Factuur versturen')} loading={verzendBezig} disabled={verzendBezig} onPress={versturen} />
+          <Text style={s.sub}>{f.email_naar ? tx('Naar {naar}', { naar: f.email_naar }) : tx('Geen e-mailadres bekend')}</Text>
+        </View>
+      ) : null}
       <Button label={tx('Factuur-PDF delen of openen')} variant="secondary" loading={pdfBezig}
         onPress={async () => {
           setPdfBezig(true);
@@ -510,7 +629,7 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
       ) : null}
 
       <Text style={s.sub}>
-        {!betaald ? tx('Na de betaling krijgt de klant de factuur automatisch per e-mail.') : null}
+        {!betaald ? tx('Na de betaling krijgt de klant automatisch een bevestiging met de betaalde factuur.') : null}
         {betaald && mailStatus === 'verstuurd' ? tx('Factuur gemaild naar de klant op {wanneer}.', { wanneer: tijd(v.gegevens?.factuurmail_verstuurd_op) }) : null}
         {wachtOpWebhook ? tx('Factuur wordt naar de klant gemaild…') : null}
         {buitenStripe && mailStatus === 'wacht' ? tx('Betaald buiten iDEAL; de factuur is niet automatisch gemaild.') : null}
