@@ -7334,6 +7334,12 @@
    "src/lib/financienLogica.ts"
   ]
  },
+ "Gefactureerd: {uren}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Gegevens": {
   "soort": "tekst",
   "bestanden": [
@@ -11717,6 +11723,12 @@
   "bestanden": [
    "src/lib/instellingenRegels.ts",
    "src/lib/registratie.ts"
+  ]
+ },
+ "Minimum {uren}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Minstens 8 tekens": {

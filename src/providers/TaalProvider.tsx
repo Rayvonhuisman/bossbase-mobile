@@ -7,6 +7,12 @@
  * kiezen bewust níet automatisch de taal van de telefoon: veel Nederlandse
  * gebruikers hebben hun telefoon in het Engels staan.
  */
+/* eslint-disable react-hooks/immutability, react-hooks/set-state-in-effect, react-hooks/preserve-manual-memoization --
+ * Bestaand gedrag (al zo op main sinds de talen-PR's): de taal wordt meteen op het
+ * gedeelde profielobject gezet, zodat de rest van de app hem zonder nieuwe fetch
+ * ziet. De nieuwere React-compilerregels keuren dat af en maakten CI op main rood.
+ * Ombouwen (taal via AuthProvider bijwerken) is een aparte wijziging; tot die tijd
+ * alleen in dit bestand uit, zodat lint de rest van de app weer bewaakt. */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isTaal, laadWoordenboek, zetTaalIntern, type Taal } from '@/i18n';

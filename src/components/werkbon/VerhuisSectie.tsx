@@ -389,6 +389,12 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
         ? tx('Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van "Werkzaamheden starten" tot "beëindigen" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.')
         : tx('De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.')}</Text>
       <FormField label={tarieven ? tx('Klusuren (2 verhuizers incl. bus)') : tx('Werkelijke uren')} value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
+      {(() => {
+        const uurRegel = regels.find((r) => r.soort === 'uur' && !r.extra);
+        return uurRegel && minimum > 0 && getal(uurRegel.werkelijk_aantal) !== getal(urenTxt)
+          ? <Text style={s.sub}>{tx('Minimum {uren}', { uren: uren(minimum) })} · {tx('Gefactureerd: {uren}', { uren: uren(getal(uurRegel.werkelijk_aantal)) })}</Text>
+          : null;
+      })()}
       {kmRegel ? (
         <View style={{ gap: 4 }}>
           <FormField label={`${tx('Werkelijk gereden kilometers')} *`} value={kmRegel.werkelijk_aantal} placeholder={tx('bijv. 60')}
@@ -480,7 +486,7 @@ function TekenModal({ tekenen, standaardNaam, bezig, onClose, onTeken }: {
             <Text style={s.tekst}>
               {isStart
                 ? `Ik ga akkoord met de verhuizing${inh.vertrek_adres ? ` van ${inh.vertrek_adres}` : ''}${inh.bestemming_adres ? ` naar ${inh.bestemming_adres}` : ''}, met de afspraken en tarieven hieronder. De uren en kilometers zijn een schatting; afgerekend wordt op wat werkelijk is gewerkt en gereden${inh.minimum_uren != null ? `, met een minimum van ${uren(inh.minimum_uren)}` : ''}${inh.prijzen === 'incl_btw' ? '. Alle bedragen zijn inclusief btw' : ''}.`
-                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}${(() => { const km = inh.regels.find((r) => r.soort === 'km' && !r.extra); return km ? `, en ${nl(km.aantal)} km gereden` : ''; })()}.`}
+                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}${inh.minimum_uren != null && Number(inh.werkelijke_uren) < Number(inh.minimum_uren) ? ` (gefactureerd: het minimum van ${uren(inh.minimum_uren)})` : ''}${(() => { const km = inh.regels.find((r) => r.soort === 'km' && !r.extra); return km ? `, en ${nl(km.aantal)} km gereden` : ''; })()}.`}
             </Text>
             {inh.afspraken ? (
               <View style={s.afspraken}><Text style={s.lbl}>{tx('Afspraken')}</Text><Text style={s.tekst}>{inh.afspraken}</Text></View>
