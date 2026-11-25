@@ -2140,6 +2140,12 @@
    "app/(onboarding)/_components.tsx"
   ]
  },
+ "Bezig: {duur}": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Bezig…": {
   "soort": "tekst",
   "bestanden": [
@@ -2949,7 +2955,7 @@
    "src/components/werkbon/ContractBlok.tsx"
   ]
  },
- "Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van \"Werkzaamheden starten\" tot \"beëindigen\" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.": {
+ "Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van \"Klus starten\" tot \"Klus beëindigen\" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -3600,6 +3606,12 @@
    "src/components/instellingen/PipelineTab.tsx"
   ]
  },
+ "De klant betaalt door over te maken; het IBAN en het kenmerk staan op de factuur. Zet de factuur in het dashboard op betaald zodra het geld binnen is.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "De klant heeft de afrekening getekend. Iemand met het recht Facturen maakt nu de factuur.": {
   "soort": "tekst",
   "bestanden": [
@@ -3932,7 +3944,7 @@
    "src/services/integrationService.ts"
   ]
  },
- "De starttijd wordt nu vastgelegd.": {
+ "De starttijd wordt nu vastgelegd en de tijd gaat lopen.": {
   "soort": "tekst",
   "bestanden": [
    "src/components/werkbon/VerhuisSectie.tsx"
@@ -5366,7 +5378,8 @@
   "bestanden": [
    "src/components/WerkbonDagenVelden.tsx",
    "src/components/WerkbonFormulier.tsx",
-   "src/components/planning/VoertuigenPerDag.tsx"
+   "src/components/planning/VoertuigenPerDag.tsx",
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Eindcontrole": {
@@ -6033,6 +6046,12 @@
   "soort": "tekst",
   "bestanden": [
    "app/(more)/invoices.tsx"
+  ]
+ },
+ "Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en de gegevens om over te maken. Klopt het e-mailadres?": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en een betaallink voor iDEAL. Klopt het e-mailadres?": {
@@ -7322,6 +7341,12 @@
    "src/services/verhuisService.ts"
   ]
  },
+ "Gefactureerd minimaal": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Gefactureerd {bedrag}": {
   "soort": "tekst",
   "bestanden": [
@@ -7612,6 +7637,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/components/OfferteCalculatie.tsx"
+  ]
+ },
+ "Gewerkt (zonder reistijd)": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Gewerkte uren": {
@@ -8172,12 +8203,6 @@
   "soort": "tekst",
   "bestanden": [
    "app/(onboarding)/account.tsx"
-  ]
- },
- "Hierna volgt de factuur per e-mail, met een betaallink en een QR-code voor iDEAL. Tekenen is nog geen betaling.": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Hoe": {
@@ -9826,6 +9851,12 @@
    "src/services/verhuisService.ts"
   ]
  },
+ "Klaar om te tekenen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Klaar.": {
   "soort": "tekst",
   "bestanden": [
@@ -10105,6 +10136,12 @@
    "src/components/werkbon/AfrondenModal.tsx"
   ]
  },
+ "Klus beëindigen": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Klus gestart": {
   "soort": "tekst",
   "bestanden": [
@@ -10114,7 +10151,8 @@
  "Klus starten": {
   "soort": "tekst",
   "bestanden": [
-   "app/work-orders/[id].tsx"
+   "app/work-orders/[id].tsx",
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Klussen en uitvoering": {
@@ -11567,6 +11605,12 @@
   "soort": "tekst",
   "bestanden": [
    "src/lib/projectLogica.ts"
+  ]
+ },
+ "Met deze handtekening gaat de klant akkoord met de uitgevoerde werkzaamheden, de geregistreerde tijden en dit kostenoverzicht. Hierna volgt de factuur per e-mail. Tekenen is nog geen betaling.": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "Meting": {
@@ -15901,6 +15945,12 @@
    "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
+ "Start": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "Start klus": {
   "soort": "tekst",
   "bestanden": [
@@ -20015,18 +20065,6 @@
    "app/customers/contract/[id].tsx"
   ]
  },
- "Werkzaamheden beëindigen": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
- "Werkzaamheden starten": {
-  "soort": "tekst",
-  "bestanden": [
-   "src/components/werkbon/VerhuisSectie.tsx"
-  ]
- },
  "Werkzaamheden · komt op de offerte": {
   "soort": "tekst",
   "bestanden": [
@@ -21861,6 +21899,18 @@
    "app/(more)/team.tsx"
   ]
  },
+ "{h} u": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
+ "{h} u {m} min": {
+  "soort": "tekst",
+  "bestanden": [
+   "src/components/werkbon/VerhuisSectie.tsx"
+  ]
+ },
  "{klaar}/{totaal} taken": {
   "soort": "tekst",
   "bestanden": [
@@ -21944,7 +21994,8 @@
  "{m} min": {
   "soort": "tekst",
   "bestanden": [
-   "src/components/PauzeKeuze.tsx"
+   "src/components/PauzeKeuze.tsx",
+   "src/components/werkbon/VerhuisSectie.tsx"
   ]
  },
  "{naam} (ikzelf)": {
