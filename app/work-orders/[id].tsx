@@ -417,6 +417,11 @@ export default function WorkOrderDetailScreen() {
     );
   };
 
+  // Verhuizing met afspraken: starten, beëindigen en aftekenen lopen via de
+  // verhuiskaart (met starttijd, afrekening en factuur). De gewone knoppen
+  // zouden dat overslaan, dus die verdwijnen dan.
+  const [verhuisActief, setVerhuisActief] = useState(false);
+
   const startKlus = () =>
     Dialog.alert(tx('Klus starten'), tx('De werkbon gaat naar "In uitvoering".'), [
       { text: tx('Annuleren'), style: 'cancel' },
@@ -1106,7 +1111,7 @@ export default function WorkOrderDetailScreen() {
 
             {/* 2b. Verhuisflow: alleen als de functie 'verhuisflow' aanstaat voor het
                 bedrijf (de server beslist; anders rendert dit niets). */}
-            <VerhuisSectie werkbonId={workOrder.id} onWerkbonGewijzigd={herlaad} />
+            <VerhuisSectie werkbonId={workOrder.id} onWerkbonGewijzigd={herlaad} onActief={setVerhuisActief} />
 
             {/* 3. Actierij */}
             <View style={styles.actieRij}>
@@ -1132,6 +1137,7 @@ export default function WorkOrderDetailScreen() {
                 <MapPin size={18} color={ds.green700} />
                 <Text style={styles.actieTegelTekst}>{tx('Route')}</Text>
               </Pressable>
+              {verhuisActief ? null : (
               <Pressable
                 onPress={status === 'gepland' ? startKlus : vraagAfronden}
                 disabled={!canEdit || status === 'afgerond' || status === 'geannuleerd' || statusUpdating}
@@ -1160,6 +1166,7 @@ export default function WorkOrderDetailScreen() {
                         : tx('Afgerond')}
                 </Text>
               </Pressable>
+              )}
             </View>
 
             {/* 4. Slot- en verstuurdmelding */}
@@ -1852,7 +1859,7 @@ export default function WorkOrderDetailScreen() {
                     {workOrder.ondertekend_op ? ` · ${formatKortMoment(workOrder.ondertekend_op)}` : ''}
                   </Text>
                 </View>
-              ) : status !== 'afgerond' && status !== 'geannuleerd' && editDetail && !readonly ? (
+              ) : verhuisActief ? null : status !== 'afgerond' && status !== 'geannuleerd' && editDetail && !readonly ? (
                 <Button label={tx('Klus afronden')} onPress={vraagAfronden} loading={statusUpdating} />
               ) : status === 'afgerond' && editDetail && !readonly ? (
                 // Afgerond maar nog niet getekend: alsnog laten ondertekenen.

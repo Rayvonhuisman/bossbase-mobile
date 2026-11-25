@@ -50,10 +50,22 @@ const STAPPEN: { fase: VerhuisFase; label: string }[] = [
   { fase: 'gefactureerd', label: txm('Factuur') },
 ];
 
+/** 1,37 → "1 u 22 min"; 0,02 → "1 min". */
+const duur = (u?: number | null) => {
+  const min = Math.max(0, Math.round(Number(u || 0) * 60));
+  const h = Math.floor(min / 60), m = min % 60;
+  return h && m ? tx('{h} u {m} min', { h, m }) : h ? tx('{h} u', { h }) : tx('{m} min', { m });
+};
+
 const tijd = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
-export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: string; onWerkbonGewijzigd?: () => void }) {
+export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd, onActief }: {
+  werkbonId: string;
+  onWerkbonGewijzigd?: () => void;
+  /** true zodra deze werkbon een verhuizing met afspraken is: de werkbon verbergt dan zijn eigen start/afronden. */
+  onActief?: (actief: boolean) => void;
+}) {
   const { colors: th } = useTheme();
   const s = useMemo(() => maakStijl(th), [th]);
   const [v, setV] = useState<Verhuis | null>(null);
@@ -73,6 +85,15 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
   // Laden bij openen; laad zet de state pas na het antwoord van de server.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { laad(); }, [laad]);
+  const actief = !!(v?.actief && v?.bestaat);
+  useEffect(() => { onActief?.(actief); }, [actief, onActief]);
+  // Lopende klus: elke 30 s de verstreken tijd bijwerken.
+  const [nu, setNu] = useState(() => Date.now());
+  useEffect(() => {
+    if (v?.fase !== 'gestart') return undefined;
+    const t = setInterval(() => setNu(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, [v?.fase]);
 
   const doe = async (naam: string, fn: () => Promise<Verhuis | { verhuis: Verhuis } | null>, opties: { werkbon?: boolean } = {}) => {
     if (bezig) return false;
@@ -114,7 +135,7 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
     <View style={s.kaart}>
       <View style={s.kopRij}>
         <Text style={s.kopTitel}>{tx('Verhuizing')}</Text>
-        <Text style={s.fase}>{tx(FASE_LABEL[v.fase])}</Text>
+        <Text style={s.fase}>{v.fase === 'voorbereiding' && v.bestaat ? tx('Klaar om te tekenen') : tx(FASE_LABEL[v.fase])}</Text>
       </View>
       <Text style={s.stap} accessibilityLabel={tx('Stap {stap} van 6: {naam}', { stap: faseIdx + 1, naam: tx(STAPPEN[faseIdx]?.label ?? '') })}>
         {tx('Stap {stap} van 6 · {naam}', { stap: faseIdx + 1, naam: tx(STAPPEN[faseIdx]?.label ?? '') })}
@@ -150,10 +171,11 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
 
           {!geannuleerd && v.fase === 'akkoord_start' && mag.uitvoeren ? (
             <Button
-              label={tx('Werkzaamheden starten')}
+              label={tx('Klus starten')}
               loading={bezig === 'start'}
+              disabled={!!bezig}
               onPress={() =>
-                Dialog.alert(tx('Werkzaamheden starten'), tx('De starttijd wordt nu vastgelegd.'), [
+                Dialog.alert(tx('Klus starten'), tx('De starttijd wordt nu vastgelegd en de tijd gaat lopen.'), [
                   { text: tx('Annuleren'), style: 'cancel' },
                   { text: tx('Starten'), onPress: () => { doe('start', () => start(werkbonId), { werkbon: true }); } },
                 ])
@@ -164,12 +186,16 @@ export function VerhuisSectie({ werkbonId, onWerkbonGewijzigd }: { werkbonId: st
           {!geannuleerd && v.fase === 'gestart' ? (
             <View style={{ gap: spacing.sm }}>
               <Text style={s.tekst}>{tx('Gestart {wanneer}', { wanneer: tijd(g?.gestart_op) })}</Text>
+              {g?.gestart_op ? (
+                <Text style={s.waarde} accessibilityLiveRegion="polite">{tx('Bezig: {duur}', { duur: duur((nu - new Date(g.gestart_op).getTime()) / 3600000) })}</Text>
+              ) : null}
               {mag.uitvoeren ? (
                 <Button
-                  label={tx('Werkzaamheden beëindigen')}
+                  label={tx('Klus beëindigen')}
                   loading={bezig === 'einde'}
+                  disabled={!!bezig}
                   onPress={() =>
-                    Dialog.alert(tx('Werkzaamheden beëindigen'), tx('De eindtijd wordt nu vastgelegd. Daarna controleer je de uren en kosten.'), [
+                    Dialog.alert(tx('Klus beëindigen'), tx('De eindtijd wordt nu vastgelegd. Daarna controleer je de uren en kosten.'), [
                       { text: tx('Annuleren'), style: 'cancel' },
                       { text: tx('Beëindigen'), onPress: () => { doe('einde', () => beeindig(werkbonId)); } },
                     ])
@@ -272,7 +298,7 @@ function Gegevens({ v, s }: { v: Verhuis; s: S }) {
         {g.werkelijke_uren != null ? (
           <View>
             <Text style={s.lbl}>{tx('Werkelijk')}</Text>
-            <Text style={s.waarde}>{uren(g.werkelijke_uren)}</Text>
+            <Text style={s.waarde}>{duur(g.werkelijke_uren)}</Text>
             <Text style={s.sub}>{tijd(g.gestart_op)} – {tijd(g.beeindigd_op)}</Text>
           </View>
         ) : null}
@@ -385,8 +411,14 @@ function Afrekening({ v, s, bezig, kan, onOpslaan, onTekenen }: {
   return (
     <View style={s.afrekening}>
       <Text style={s.lbl}>{tx('Eindcontrole')}</Text>
+      <View style={s.tijden}>
+        <View style={s.regel}><Text style={[s.tekst, { flex: 1 }]}>{tx('Start')}</Text><Text style={s.tekst}>{tijd(v.gegevens?.gestart_op)}</Text></View>
+        <View style={s.regel}><Text style={[s.tekst, { flex: 1 }]}>{tx('Eind')}</Text><Text style={s.tekst}>{tijd(v.gegevens?.beeindigd_op)}</Text></View>
+        <View style={s.regel}><Text style={[s.tekst, { flex: 1 }]}>{tx('Gewerkt (zonder reistijd)')}</Text><Text style={s.waarde}>{duur(Number.isFinite(getal(urenTxt)) ? getal(urenTxt) : v.gegevens?.werkelijke_uren)}</Text></View>
+        {minimum > 0 ? <View style={[s.regel, { borderBottomWidth: 0 }]}><Text style={[s.sub, { flex: 1 }]}>{tx('Gefactureerd minimaal')}</Text><Text style={s.sub}>{uren(minimum)}</Text></View> : null}
+      </View>
       <Text style={s.hint}>{tarieven
-        ? tx('Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van "Werkzaamheden starten" tot "beëindigen" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.')
+        ? tx('Controleer de klusuren en vul de werkelijk gereden kilometers in. De klusuren lopen van "Klus starten" tot "Klus beëindigen" en bevatten geen reistijd; heen- en terugreis staan apart op de afrekening.')
         : tx('De afgesproken tarieven liggen vast. Pas de aantallen aan en voeg extra kosten toe met hun eigen prijs.')}</Text>
       <FormField label={tarieven ? tx('Klusuren (2 verhuizers incl. bus)') : tx('Werkelijke uren')} value={urenTxt} onChangeText={zetUren} keyboardType="decimal-pad" editable={kan} />
       {(() => {
@@ -486,13 +518,13 @@ function TekenModal({ tekenen, standaardNaam, bezig, onClose, onTeken }: {
             <Text style={s.tekst}>
               {isStart
                 ? `Ik ga akkoord met de verhuizing${inh.vertrek_adres ? ` van ${inh.vertrek_adres}` : ''}${inh.bestemming_adres ? ` naar ${inh.bestemming_adres}` : ''}, met de afspraken en tarieven hieronder. De uren en kilometers zijn een schatting; afgerekend wordt op wat werkelijk is gewerkt en gereden${inh.minimum_uren != null ? `, met een minimum van ${uren(inh.minimum_uren)}` : ''}${inh.prijzen === 'incl_btw' ? '. Alle bedragen zijn inclusief btw' : ''}.`
-                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${uren(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}${inh.minimum_uren != null && Number(inh.werkelijke_uren) < Number(inh.minimum_uren) ? ` (gefactureerd: het minimum van ${uren(inh.minimum_uren)})` : ''}${(() => { const km = inh.regels.find((r) => r.soort === 'km' && !r.extra); return km ? `, en ${nl(km.aantal)} km gereden` : ''; })()}.`}
+                : `Ik ga akkoord met de afronding van de verhuizing en met de afrekening hieronder: ${duur(inh.werkelijke_uren)} gewerkt, van ${tijd(inh.gestart_op)} tot ${tijd(inh.beeindigd_op)}${inh.minimum_uren != null && Number(inh.werkelijke_uren) < Number(inh.minimum_uren) ? ` (gefactureerd: het minimum van ${uren(inh.minimum_uren)})` : ''}${(() => { const km = inh.regels.find((r) => r.soort === 'km' && !r.extra); return km ? `, en ${nl(km.aantal)} km gereden` : ''; })()}.`}
             </Text>
             {inh.afspraken ? (
               <View style={s.afspraken}><Text style={s.lbl}>{tx('Afspraken')}</Text><Text style={s.tekst}>{inh.afspraken}</Text></View>
             ) : null}
             <RegelsLijst inhoud={inh} werkelijk={!isStart} s={s} />
-            {!isStart ? <Text style={s.hint}>{tx('Hierna volgt de factuur per e-mail, met een betaallink en een QR-code voor iDEAL. Tekenen is nog geen betaling.')}</Text> : null}
+            {!isStart ? <Text style={s.hint}>{tx('Met deze handtekening gaat de klant akkoord met de uitgevoerde werkzaamheden, de geregistreerde tijden en dit kostenoverzicht. Hierna volgt de factuur per e-mail. Tekenen is nog geen betaling.')}</Text> : null}
             <FormField label={tx('Naam ondertekenaar')} value={naam} onChangeText={setNaam} editable={!bezig} autoComplete="name" />
             {/* Niet `disabled` doorgeven: de webversie wist het canvas als die wisselt,
                 en na een mislukte poging moet de handtekening blijven staan. */}
@@ -525,7 +557,9 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
     const naar = f.email_naar;
     if (!naar) { Dialog.alert(tx('Niet verstuurd'), VERZEND_REDEN.geen_adres); return; }
     Dialog.alert(vz === 'mislukt' ? tx('Factuur opnieuw versturen') : tx('Factuur versturen'),
-      tx('Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en een betaallink voor iDEAL. Klopt het e-mailadres?', { nummer: f.nummer, bedrag: euro(f.totaal_incl), naar }), [
+      link?.url
+        ? tx('Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en een betaallink voor iDEAL. Klopt het e-mailadres?', { nummer: f.nummer, bedrag: euro(f.totaal_incl), naar })
+        : tx('Factuur {nummer} ({bedrag}) gaat naar {naar}, met de PDF in de bijlage en de gegevens om over te maken. Klopt het e-mailadres?', { nummer: f.nummer, bedrag: euro(f.totaal_incl), naar }), [
         { text: tx('Annuleren'), style: 'cancel' },
         { text: tx('Versturen'), onPress: async () => {
           if (verzendBezig) return;
@@ -629,7 +663,8 @@ function FactuurDeel({ v, werkbonId, s, onVernieuw }: { v: Verhuis; werkbonId: s
       ) : null}
 
       <Text style={s.sub}>
-        {!betaald ? tx('Na de betaling krijgt de klant automatisch een bevestiging met de betaalde factuur.') : null}
+        {!betaald && link?.url ? tx('Na de betaling krijgt de klant automatisch een bevestiging met de betaalde factuur.') : null}
+        {!betaald && link && !link.url && !link.fout ? tx('De klant betaalt door over te maken; het IBAN en het kenmerk staan op de factuur. Zet de factuur in het dashboard op betaald zodra het geld binnen is.') : null}
         {betaald && mailStatus === 'verstuurd' ? tx('Factuur gemaild naar de klant op {wanneer}.', { wanneer: tijd(v.gegevens?.factuurmail_verstuurd_op) }) : null}
         {wachtOpWebhook ? tx('Factuur wordt naar de klant gemaild…') : null}
         {buitenStripe && mailStatus === 'wacht' ? tx('Betaald buiten iDEAL; de factuur is niet automatisch gemaild.') : null}
@@ -720,6 +755,7 @@ const maakStijl = (t: ThemeColors) =>
     regel: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.line },
     bedrag: { fontSize: 14, fontWeight: '600', color: t.ink },
     totaal: { borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: t.lineStrong, paddingTop: 8 },
+    tijden: { backgroundColor: t.card, borderRadius: 8, paddingHorizontal: 10 },
     afrekening: { gap: spacing.sm, backgroundColor: t.bgAlt, borderRadius: 10, padding: 12 },
     invoerRegel: { gap: 6, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.line },
     invoer: { fontSize: 16, color: t.ink, backgroundColor: t.card, borderWidth: 1, borderColor: t.lineStrong, borderRadius: 8, paddingHorizontal: 10, minHeight: 44 },
