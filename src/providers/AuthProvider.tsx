@@ -211,8 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // sessie op het toestel staan: na een herstart was je weer ingelogd
     // (review 26-10, S4-01). Dan in elk geval lokaal afmelden; de sessie op de
     // server verloopt vanzelf of wordt bij een volgende login vervangen.
-    const { error } = await supabase.auth.signOut().catch((e: unknown) => ({ error: e }));
-    if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    //
+    // Alleen dit toestel ('local'). De standaard van supabase-js is 'global':
+    // dat trok ook de sessie in op de andere telefoon van hetzelfde account,
+    // waarna PDF en factuur versturen daar 401 "Ongeldige sessie" gaven terwijl
+    // de rest nog werkte (praktijktest verhuisflow 25-11).
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
     // onAuthStateChange will fire SIGNED_OUT and clear state, but do it
     // eagerly so the UI flips immediately.
     clearAuthState();
