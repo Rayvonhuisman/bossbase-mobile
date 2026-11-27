@@ -248,6 +248,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
                     </View>
                     <Text style={[s.waarde, m.waarde == null && { color: t.statusWarnFg }]}>
                       {m.waarde == null ? tx('maat ontbreekt') : toonWaarde(m.waarde, m.waardeEenheid)}
+                      {m.waarde != null && m.aftrekposten.length > 0 ? ` ${tx('na aftrek')}` : ''}
                     </Text>
                     {kanWijzigen ? <Pencil size={14} color={t.muted2} /> : null}
                   </Pressable>
@@ -285,6 +286,7 @@ export function MetingenBlok({ projectId }: { projectId: string }) {
             set={(k, v) => setForm((f) => (f ? { ...f, [k]: v } : f))}
             velden={velden}
             disabled={formBezig}
+            metAftrek
           />
         ) : null}
       </FormSheet>

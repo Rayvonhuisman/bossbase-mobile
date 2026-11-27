@@ -37,13 +37,17 @@ type Rij = {
   waarde_eenheid: string | null;
   opmerking: string | null;
   extra: Record<string, string> | null;
+  aftrekposten?: AftrekpostRij[] | null;
   fotos: string[] | null;
   volgorde: number | null;
   created_at: string;
 };
 
-const SELECT =
-  'id, project_id, werkbon_id, document_id, materiaal_id, naam, soort, breedte, hoogte, diepte, aantal, eenheid, waarde, waarde_eenheid, opmerking, extra, fotos, volgorde, created_at';
+// Alle kolommen: aftrekposten bestaat pas na dashboardmigratie 20261127160000;
+// met '*' werkt het lezen ervoor en erna.
+const SELECT = '*';
+
+type AftrekpostRij = { naam?: string | null; breedte?: number | null; hoogte?: number | null; diepte?: number | null; aantal?: number | null };
 
 export function toMeting(row: Rij): Meting {
   return {
@@ -63,6 +67,15 @@ export function toMeting(row: Rij): Meting {
     waardeEenheid: row.waarde_eenheid || '',
     opmerking: row.opmerking || '',
     extra: row.extra || {},
+    aftrekposten: Array.isArray(row.aftrekposten)
+      ? row.aftrekposten.map((a) => ({
+          naam: a.naam || '',
+          breedte: a.breedte == null ? '' : Number(a.breedte),
+          hoogte: a.hoogte == null ? '' : Number(a.hoogte),
+          diepte: a.diepte == null ? '' : Number(a.diepte),
+          aantal: a.aantal == null ? 1 : Number(a.aantal),
+        }))
+      : [],
     fotos: row.fotos || [],
     volgorde: row.volgorde ?? 0,
     createdAt: row.created_at,
