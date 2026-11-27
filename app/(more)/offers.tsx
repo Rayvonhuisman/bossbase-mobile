@@ -111,6 +111,7 @@ import { useOnthouden } from '@/lib/useOnthouden';
 import { tx, txn } from '@/i18n';
 import { OfferteCalculatie } from '@/components/OfferteCalculatie';
 import { alsVeld, calculatieVoorOpslag, getalUit } from '@/lib/offerteCalculatie';
+import type { Toeslagen } from '@/lib/offerteCalculatie';
 
 /**
  * Offertes — dezelfde `offertes` + `offerte_items` als het dashboard.
@@ -173,6 +174,8 @@ type Concept = {
   bossSleutel: string;
   /** Interne calculatie: kostprijs per uur van deze offerte (tekstveld). */
   kostprijsPerUur: string;
+  /** Toeslagen van de calculatie (alleen lezen; wijzigen in het dashboard). */
+  toeslagen?: Toeslagen | null;
   /**
    * Alleen opslaan wat ook gelezen is: mislukte het lezen van de calculatie,
    * dan zou opslaan de bestaande wissen (`calcGeladen` in het dashboard).
@@ -563,6 +566,7 @@ function OffersScreenInhoud() {
             groepen,
             regelsLaden: false,
             kostprijsPerUur: alsVeld(calc?.kostprijsPerUur),
+            toeslagen: calc?.toeslagen ?? null,
             calcGeladen: Boolean(calc) && !fout,
           }
         : c,
@@ -1116,6 +1120,7 @@ function OffersScreenInhoud() {
               kostprijsPerUur={concept.kostprijsPerUur}
               onKostprijsPerUur={(v) => setConcept((c) => (c ? { ...c, kostprijsPerUur: v } : c))}
               standaardKostprijs={standaardKostprijs}
+              toeslagen={concept.toeslagen ?? null}
               eenheden={eenheden}
               prijzenVast={!conceptBewerkbaar || !magRegels}
               bedrijfId={companyId}

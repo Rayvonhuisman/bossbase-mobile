@@ -128,3 +128,24 @@ test('werkbon uit offerte: taken, arbeid, materiaal en wat er al staat', () => {
   assert.deepEqual(wb.standaardTaakIds(bron[0]), ['r1']);
   assert.equal(bron[0].materialen[0].alAanwezig, true);
 });
+
+test('toeslagen en opslag: zelfde uitkomst als het dashboard en de database (bb_offerte_toeslag)', () => {
+  const regels = [
+    regel({ prijs: '2000', calc: { urenPer: '40,2', kostprijsPer: '0' } }),
+    regel({ prijs: '737.5', calc: { urenPer: '0', kostprijsPer: '307,52' } }),
+  ];
+  const t = { toezichtUren: 2, aanvoerUren: null, montageUren: null, klimtijdPct: 10, kleinmateriaalPct: 5, overigeKosten: 50, winstMateriaalPct: 15 };
+  const c = calc.berekenCalculatie(regels, '40', t);
+  assert.equal(c.uren, 46.22); // 40,2 + 2 + 4,02 (droogloop database: 46,22)
+  assert.equal(c.materiaal, 372.9); // 307,52 × 1,05 + 50 (database: 372,90)
+  assert.equal(c.arbeid, 1848.8);
+  assert.equal(c.winstMateriaal, 48.43);
+  const zonder = calc.berekenCalculatie(regels, '40');
+  assert.equal(zonder.uren, 40.2);
+  assert.equal(zonder.materiaal, 307.52);
+  assert.equal(calc.adviesPrijs(75, '25', 'opslag'), 93.75);
+  assert.equal(calc.adviesPrijs(75, '120', 'opslag'), 165);
+  assert.equal(calc.adviesPrijs(75, '120'), null);
+  assert.equal(calc.winstPctGeldig('120', 'opslag'), true);
+  assert.equal(calc.heeftToeslagen(t), true);
+});

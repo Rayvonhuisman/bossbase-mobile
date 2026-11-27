@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { Toeslagen } from '@/lib/offerteCalculatie';
 import { getCompanyId, isReadonly, withCompanyId } from '@/lib/sessionContext';
 import { isGeldigeDatum } from '@/lib/nlTijd';
 import { classificeerFout, schrijf, writeFout, type WriteResult, type WriteStatus } from '@/lib/writeResult';
@@ -1079,6 +1080,9 @@ export async function slaOfferteOp(input: {
 }
 
 // ── Interne calculatie (offerte_calculatie, offerte_item_calculatie) ─────────
+// Kolommen van offerte_calculatie, in de volgorde van TOESLAG_VELDEN.
+const TOESLAG_KOLOMMEN = ['toezicht_uren', 'aanvoer_uren', 'montage_uren', 'klimtijd_pct', 'kleinmateriaal_pct', 'overige_kosten', 'winst_materiaal_pct'];
+const TOESLAG_VELDEN: (keyof Toeslagen)[] = ['toezichtUren', 'aanvoerUren', 'montageUren', 'klimtijdPct', 'kleinmateriaalPct', 'overigeKosten', 'winstMateriaalPct'];
 // Migratie 20261107143517. Lezen en schrijven alleen met het recht
 // `inkoopprijzen` en de feature `kosten_nacalculatie`; de klant ziet hier
 // niets van. Zelfde als `getOfferteCalculatie`/`slaOfferteCalculatieOp` in het
@@ -1086,26 +1090,37 @@ export async function slaOfferteOp(input: {
 
 export type OfferteCalculatieOpgeslagen = {
   kostprijsPerUur: number | null;
+  /** Toeslagen (dashboardmigratie 20261127150000); null als de kolommen er nog niet zijn. */
+  toeslagen: Toeslagen | null;
   regels: Map<string, { urenPer: number | null; kostprijsPer: number | null }>;
 };
 
 /** Null als het lezen mislukt: dan mag het formulier de calculatie niet opslaan. */
 export async function getOfferteCalculatie(offerteId: string): Promise<OfferteCalculatieOpgeslagen | null> {
-  const [kop, regels] = await Promise.all([
-    supabase.from('offerte_calculatie').select('kostprijs_per_uur').eq('offerte_id', offerteId).maybeSingle(),
+  const leesKop = (select: string) =>
+    supabase.from('offerte_calculatie').select(select).eq('offerte_id', offerteId).maybeSingle();
+  const [kopMet, regels] = await Promise.all([
+    leesKop(`kostprijs_per_uur, ${TOESLAG_KOLOMMEN.join(', ')}`),
     supabase
       .from('offerte_item_calculatie')
       .select('offerte_item_id, uren_per, kostprijs_per, offerte_items!inner(offerte_id)')
       .eq('offerte_items.offerte_id', offerteId),
   ]);
+  // Toeslagkolommen nog niet in de database: zonder.
+  const metToeslagen = !kopMet.error;
+  const kop = metToeslagen ? kopMet : await leesKop('kostprijs_per_uur');
   if (kop.error || regels.error) {
     if (__DEV__) console.log('[offerteService.getOfferteCalculatie]', (kop.error ?? regels.error)?.message);
     return null;
   }
   const getal = (v: unknown) => (v == null ? null : Number(v));
   const rijen = (regels.data as { offerte_item_id: string; uren_per: unknown; kostprijs_per: unknown }[] | null) ?? [];
+  const kopData = (kop.data ?? null) as Record<string, unknown> | null;
   return {
-    kostprijsPerUur: getal((kop.data as { kostprijs_per_uur?: unknown } | null)?.kostprijs_per_uur),
+    kostprijsPerUur: getal(kopData?.kostprijs_per_uur),
+    toeslagen: metToeslagen
+      ? (Object.fromEntries(TOESLAG_KOLOMMEN.map((k, i) => [TOESLAG_VELDEN[i], getal(kopData?.[k])])) as Toeslagen)
+      : null,
     regels: new Map(rijen.map((r) => [r.offerte_item_id, { urenPer: getal(r.uren_per), kostprijsPer: getal(r.kostprijs_per) }])),
   };
 }

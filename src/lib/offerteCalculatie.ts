@@ -58,8 +58,42 @@ export const mistCalculatie = (r: CalcRegel) =>
   getalUit(r.calc?.urenPer) == null &&
   getalUit(r.calc?.kostprijsPer) == null;
 
+// ── Toeslagen en bijkomende kosten (per offerte) ─────────────────────────────
+// Zoals in het dashboard (src/lib/offerteCalculatie.js) en de database
+// (bb_offerte_toeslag, migratie 20261127150000): toezicht, aan- en afvoer en
+// de- en montage in uren, klimtijd als % op de directe uren, kleinmateriaal als
+// % op het materiaal, overige kosten als bedrag. Winst op materiaal telt alleen
+// in de adviesprijs. In de app worden ze getoond, niet gewijzigd.
+export type Toeslagen = {
+  toezichtUren: number | null;
+  aanvoerUren: number | null;
+  montageUren: number | null;
+  klimtijdPct: number | null;
+  kleinmateriaalPct: number | null;
+  overigeKosten: number | null;
+  winstMateriaalPct: number | null;
+};
+export const heeftToeslagen = (t: Toeslagen | null | undefined) =>
+  Boolean(t) && Object.values(t as Toeslagen).some((v) => (v ?? 0) > 0);
+
+/** Toeslag in uren en in materiaal (kosten) bij deze directe uren en dit materiaal. */
+export function berekenToeslagen(t: Toeslagen | null | undefined, directeUren: number, materiaal: number) {
+  const g = (k: keyof Toeslagen) => t?.[k] ?? 0;
+  return {
+    uren: g('toezichtUren') + g('aanvoerUren') + g('montageUren') + (directeUren || 0) * g('klimtijdPct') / 100,
+    materiaal: (materiaal || 0) * g('kleinmateriaalPct') / 100 + g('overigeKosten'),
+  };
+}
+
 export type Calculatie = {
   uren: number;
+  directeUren: number;
+  toeslagUren: number;
+  toeslagMateriaal: number;
+  /** Kostprijs zonder toeslagen: de basis om de adviesprijs over de regels te verdelen. */
+  kostprijsDirect: number;
+  /** Winst op materiaal (alleen in de adviesprijs). */
+  winstMateriaal: number;
   kostprijsPerUur: number | null;
   arbeid: number;
   materiaal: number;
@@ -76,16 +110,32 @@ export type Calculatie = {
  * Alle regels, ook lege: die worden opgeslagen (met de standaardomschrijving)
  * en tellen dan in de database mee. Zo laat het formulier hetzelfde getal zien.
  */
-export function berekenCalculatie(regels: CalcRegel[], kostprijsPerUur: string | number | null | undefined): Calculatie {
+export function berekenCalculatie(
+  regels: CalcRegel[],
+  kostprijsPerUur: string | number | null | undefined,
+  toeslagen: Toeslagen | null = null,
+): Calculatie {
   const kpu = getalUit(kostprijsPerUur);
-  const uren = regels.reduce((s, r) => s + regelUren(r), 0);
-  const materiaal = rond(regels.reduce((s, r) => s + regelMateriaal(r), 0));
+  const directeUren = regels.reduce((s, r) => s + regelUren(r), 0);
+  const directMateriaal = regels.reduce((s, r) => s + regelMateriaal(r), 0);
+  const t = berekenToeslagen(toeslagen, directeUren, directMateriaal);
+  const uren = directeUren + t.uren;
+  const materiaal = rond(directMateriaal + t.materiaal);
   const arbeid = kpu == null ? 0 : rond(uren * kpu);
+  const kostprijsDirect = rond((kpu == null ? 0 : directeUren * kpu) + directMateriaal);
+  const winstMateriaal = rond(
+    ((directMateriaal + (directMateriaal * (toeslagen?.kleinmateriaalPct ?? 0)) / 100) * (toeslagen?.winstMateriaalPct ?? 0)) / 100,
+  );
   const kostprijs = rond(arbeid + materiaal);
   const verkoop = rond(regels.reduce((s, r) => s + regelprijs(r as Regel), 0));
   const resultaat = rond(verkoop - kostprijs);
   return {
     uren: Math.round(uren * 100) / 100,
+    directeUren: Math.round(directeUren * 100) / 100,
+    toeslagUren: Math.round(t.uren * 100) / 100,
+    toeslagMateriaal: rond(t.materiaal),
+    kostprijsDirect,
+    winstMateriaal,
     kostprijsPerUur: kpu,
     arbeid,
     materiaal,
@@ -120,15 +170,29 @@ export function calculatieVoorOpslag(regels: CalcRegel[], idVan: (id: string) =>
     });
 }
 
+export type WinstMethode = 'marge' | 'opslag';
+
 /**
- * Wat je moet vragen voor een gewenste marge (marge = deel van de
- * verkoopprijs). Null zonder kostprijs of bij een marge buiten 0–95%.
+ * Wat je moet vragen voor een gewenste winst, zoals het dashboard:
+ *   - 'marge' (standaard): deel van de verkoopprijs. 25% op € 75 = € 100.
+ *   - 'opslag': bovenop de kostprijs. 25% op € 75 = € 93,75.
+ * Null zonder kostprijs of buiten het bereik (marge 0–95%, opslag 0–500%).
  */
-export function adviesPrijs(kostprijs: number | null | undefined, margePct: string | number | null | undefined): number | null {
+export function adviesPrijs(
+  kostprijs: number | null | undefined,
+  pct: string | number | null | undefined,
+  methode: WinstMethode = 'marge',
+): number | null {
   const k = Number(kostprijs);
-  const m = getalUit(margePct);
-  if (!(k > 0) || m == null || m < 0 || m > 95) return null;
+  const m = getalUit(pct);
+  if (!(k > 0) || m == null || m < 0) return null;
+  if (methode === 'opslag') return m > 500 ? null : rond(k * (1 + m / 100));
+  if (m > 95) return null;
   return rond(k / (1 - m / 100));
+}
+export function winstPctGeldig(pct: string | number | null | undefined, methode: WinstMethode = 'marge'): boolean {
+  const m = getalUit(pct);
+  return m != null && m >= 0 && m <= (methode === 'opslag' ? 500 : 95);
 }
 
 /** Kostprijs van één eenheid van een regel; null als de regel geen calculatie heeft. */
