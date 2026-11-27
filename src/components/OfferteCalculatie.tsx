@@ -8,6 +8,9 @@ import { typeConfig, nummerNaarVeld, type EigenEenheid, type Regel } from '@/lib
 import { markeerHandmatig } from '@/lib/boss/offerteRegels';
 import {
   adviesPrijs,
+  winstPctGeldig,
+  type Toeslagen,
+  type WinstMethode,
   berekenCalculatie,
   getalUit,
   heeftGeenCalculatie,
@@ -47,6 +50,7 @@ function metOnderdelen(zin: string, onderdelen: Record<string, ReactNode>): Reac
 }
 
 const margeSleutel = (id: string | null | undefined) => `bb-gewenste-marge:${id || 'x'}`;
+const methodeSleutel = (id: string | null | undefined) => `bb-winstmethode:${id || 'x'}`;
 
 export function OfferteCalculatie({
   regels,
@@ -54,6 +58,7 @@ export function OfferteCalculatie({
   kostprijsPerUur,
   onKostprijsPerUur,
   standaardKostprijs,
+  toeslagen = null,
   eenheden = [],
   prijzenVast = false,
   bedrijfId,
@@ -63,6 +68,8 @@ export function OfferteCalculatie({
   kostprijsPerUur: string;
   onKostprijsPerUur: (v: string) => void;
   standaardKostprijs: number | null;
+  /** Toeslagen en bijkomende kosten (dashboard); hier alleen getoond en meegeteld. */
+  toeslagen?: Toeslagen | null;
   eenheden?: EigenEenheid[];
   /** Verstuurd, geaccepteerd of zonder recht op regels: geen Overnemen. */
   prijzenVast?: boolean;
@@ -83,6 +90,23 @@ export function OfferteCalculatie({
       weg = true;
     };
   }, [bedrijfId]);
+  // Marge (deel van de verkoopprijs) of opslag (bovenop de kostprijs), zoals het dashboard.
+  const [methode, setMethodeState] = useState<WinstMethode>('marge');
+  useEffect(() => {
+    let weg = false;
+    AsyncStorage.getItem(methodeSleutel(bedrijfId))
+      .then((v) => {
+        if (!weg && v === 'opslag') setMethodeState('opslag');
+      })
+      .catch(() => {});
+    return () => {
+      weg = true;
+    };
+  }, [bedrijfId]);
+  const setMethode = (v: WinstMethode) => {
+    setMethodeState(v);
+    AsyncStorage.setItem(methodeSleutel(bedrijfId), v).catch(() => {});
+  };
   const setMarge = (v: string) => {
     setMargeState(v);
     (v ? AsyncStorage.setItem(margeSleutel(bedrijfId), v) : AsyncStorage.removeItem(margeSleutel(bedrijfId))).catch(
@@ -90,7 +114,7 @@ export function OfferteCalculatie({
     );
   };
 
-  const c = berekenCalculatie(regels, kostprijsPerUur);
+  const c = berekenCalculatie(regels, kostprijsPerUur, toeslagen);
   const [open, setOpen] = useState(() =>
     regels.some((r) => r.calc && (r.calc.urenPer !== '' || r.calc.kostprijsPer !== '')),
   );
@@ -102,9 +126,16 @@ export function OfferteCalculatie({
     );
   const kpu = getalUit(kostprijsPerUur);
   const margeGetal = getalUit(marge);
-  const margeGeldig = margeGetal != null && margeGetal >= 0 && margeGetal <= 95;
-  const advies = (r: Regel) => (margeGeldig ? adviesPrijs(kostprijsPerEenheid(r, kpu), margeGetal) : null);
-  const adviesTotaal = margeGeldig ? adviesPrijs(c.kostprijs, margeGetal) : null;
+  const margeGeldig = winstPctGeldig(marge, methode);
+  // Toeslagen en winst op materiaal naar verhouding over de regels (zoals het dashboard).
+  const basisTotaal = c.kostprijs + c.winstMateriaal;
+  const factor = c.kostprijsDirect > 0 ? basisTotaal / c.kostprijsDirect : 1;
+  const advies = (r: Regel) => {
+    if (!margeGeldig) return null;
+    const k = kostprijsPerEenheid(r, kpu);
+    return k == null ? null : adviesPrijs(k * factor, margeGetal, methode);
+  };
+  const adviesTotaal = margeGeldig ? adviesPrijs(basisTotaal, margeGetal, methode) : null;
   const neemOver = (sleutels: string[]) =>
     onRegels((rs) =>
       rs.map((r) => {
@@ -265,7 +296,13 @@ export function OfferteCalculatie({
                 ? tx('{uren} uur × {tarief} = {bedrag}', { uren: getalNl(c.uren), tarief: formatEURCent(kpu), bedrag: formatEURCent(c.arbeid) })
                 : tx('{uren} uur = {bedrag}', { uren: getalNl(c.uren), bedrag: formatEURCent(c.arbeid) })
             } />
+            {c.toeslagUren > 0 ? (
+              <Text style={styles.hint}>{tx('Waarvan {n} uur toeslag (toezicht, aan- en afvoer, montage, klimtijd)', { n: getalNl(c.toeslagUren) })}</Text>
+            ) : null}
             <TotaalRij styles={styles} label={tx('Materiaal en inkoop')} waarde={formatEURCent(c.materiaal)} />
+            {c.toeslagMateriaal > 0 ? (
+              <Text style={styles.hint}>{tx('Waarvan {b} toeslag (kleinmateriaal, overige kosten)', { b: formatEURCent(c.toeslagMateriaal) })}</Text>
+            ) : null}
             <TotaalRij styles={styles} label={tx('Kostprijs')} waarde={formatEURCent(c.kostprijs)} som />
             <TotaalRij styles={styles} label={tx('Offerte excl. btw')} waarde={formatEURCent(c.verkoop)} />
             <TotaalRij
@@ -277,8 +314,28 @@ export function OfferteCalculatie({
             />
           </View>
 
+          {c.toeslagUren > 0 || c.toeslagMateriaal > 0 || c.winstMateriaal > 0 ? (
+            <Text style={styles.hint}>{tx('Toeslagen en bijkomende kosten pas je aan in het dashboard, in de calculatie van de offerte.')}</Text>
+          ) : null}
+
           <View style={{ gap: spacing.xs }}>
-            <Text style={styles.label}>{tx('Gewenste marge')}</Text>
+            <View style={styles.methode} accessibilityRole="radiogroup">
+              {(['marge', 'opslag'] as WinstMethode[]).map((m) => (
+                <Pressable
+                  key={m}
+                  onPress={() => setMethode(m)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: methode === m }}
+                  aria-checked={methode === m}
+                  style={[styles.methodeKnop, methode === m && styles.methodeAan]}
+                >
+                  <Text style={[styles.methodeTekst, methode === m && styles.methodeTekstAan]}>
+                    {m === 'marge' ? tx('Marge') : tx('Opslag')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>{methode === 'opslag' ? tx('Winstopslag') : tx('Gewenste marge')}</Text>
             <View style={styles.pctRij}>
               <TextInput
                 value={marge}
@@ -292,13 +349,17 @@ export function OfferteCalculatie({
               <Text style={styles.pct}>%</Text>
             </View>
             <Text style={styles.hint}>
-              {tx('Wat je wilt overhouden, als deel van je verkoopprijs. Bij 25% marge en € 75 kostprijs vraag je € 100.')}
+              {methode === 'opslag'
+                ? tx('Een percentage bovenop je kostprijs. Bij 25% opslag en € 75 kostprijs vraag je € 93,75.')
+                : tx('Wat je wilt overhouden, als deel van je verkoopprijs. Bij 25% marge en € 75 kostprijs vraag je € 100.')}
             </Text>
-            {marge !== '' && !margeGeldig ? <Text style={styles.let}>{tx('Vul een marge in tussen 0 en 95%.')}</Text> : null}
+            {marge !== '' && !margeGeldig ? (
+              <Text style={styles.let}>{methode === 'opslag' ? tx('Vul een opslag in tussen 0 en 500%.') : tx('Vul een marge in tussen 0 en 95%.')}</Text>
+            ) : null}
             {margeGeldig && adviesTotaal != null ? (
               <View style={{ gap: spacing.sm }}>
                 <Text style={styles.tekst}>
-                  {metOnderdelen(tx('Vragen voor {marge}% marge: {bedrag} excl. btw', { marge: getalNl(margeGetal) }), {
+                  {metOnderdelen(methode === 'opslag' ? tx('Vragen voor {marge}% opslag: {bedrag} excl. btw', { marge: getalNl(margeGetal) }) : tx('Vragen voor {marge}% marge: {bedrag} excl. btw', { marge: getalNl(margeGetal) }), {
                     bedrag: <Text style={styles.vet}>{formatEURCent(adviesTotaal)}</Text>,
                   })}
                   {c.verkoop > 0 && Math.abs(adviesTotaal - c.verkoop) >= 0.01 ? (
@@ -452,6 +513,11 @@ const makeStyles = (t: ThemeColors) =>
     },
     neemTekst: { fontSize: 13, fontWeight: '700', color: t.greenInk },
     totaal: { gap: 6, paddingTop: spacing.xs },
+    methode: { flexDirection: 'row', alignSelf: 'flex-start', padding: 2, gap: 2, borderRadius: radius.md, backgroundColor: t.bg },
+    methodeKnop: { minHeight: 36, paddingHorizontal: 14, borderRadius: radius.sm, justifyContent: 'center' },
+    methodeAan: { backgroundColor: t.card },
+    methodeTekst: { ...typography.small, color: t.muted },
+    methodeTekstAan: { color: t.ink, fontWeight: '600' },
     totaalRij: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
     totaalSom: { borderTopWidth: 1, borderTopColor: t.line, paddingTop: 6 },
     totaalLabel: { ...typography.small, color: t.ink2, flexShrink: 0 },
