@@ -3,11 +3,15 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/providers';
 import { radius, spacing, typography, type ThemeColors } from '@/theme';
 import {
+  aftrekVelden,
   alsMaten,
+  berekenAftrek,
   maatVelden,
   MAAT_EENHEDEN,
   SOORTEN,
   toonSom,
+  toonWaarde,
+  type AftrekpostForm,
   type BrancheVeld,
   type Eenheid,
   type MetingForm,
@@ -32,6 +36,7 @@ const MAAT_LABEL: Record<string, string> = { breedte: txm('Breedte'), hoogte: tx
 const SOORT_LABEL: Record<string, string> = {
   oppervlak: txm('Oppervlak'),
   lengte: txm('Lengte'),
+  omtrek: txm('Omtrek'),
   stuks: txm('Stuks'),
   inhoud: txm('Inhoud'),
 };
@@ -44,12 +49,15 @@ export function MetingVelden({
   velden,
   twijfelVelden = [],
   disabled = false,
+  metAftrek = false,
 }: {
   m: MetingForm;
   set: <K extends Sleutel>(k: K, v: MetingForm[K]) => void;
   velden: BrancheVeld[];
   twijfelVelden?: string[];
   disabled?: boolean;
+  /** Aftrekposten tonen (het gewone formulier; niet in de controlelijst van Boss). */
+  metAftrek?: boolean;
 }) {
   const { colors: t } = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
@@ -125,6 +133,8 @@ export function MetingVelden({
         {som || (maten.length ? tx('Vul de maten in') : '')}
       </Text>
 
+      {metAftrek && m.soort !== 'stuks' ? <AftrekPosten m={m} set={set} disabled={disabled} /> : null}
+
       {velden.map((v) => (
         <View key={v.key} style={s.kolomKlein}>
           <Invoer
@@ -156,6 +166,97 @@ export function MetingVelden({
         editable={!disabled}
         maxLength={300}
       />
+    </View>
+  );
+}
+
+const LEGE_POST: AftrekpostForm = { naam: '', breedte: '', hoogte: '', diepte: '', aantal: '1' };
+
+/**
+ * Aftrekposten, zoals in het dashboard (MetingenBlok.jsx): wat van de meting af
+ * gaat, zoals het raam en de deur van een wand. In de eenheid van de meting; de
+ * database trekt het af (bb_meting_waarde).
+ */
+function AftrekPosten({
+  m,
+  set,
+  disabled,
+}: {
+  m: MetingForm;
+  set: <K extends Sleutel>(k: K, v: MetingForm[K]) => void;
+  disabled?: boolean;
+}) {
+  const { colors: t } = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
+  const posten = m.aftrekposten ?? [];
+  const velden = aftrekVelden(m.soort) as ('breedte' | 'hoogte' | 'diepte')[];
+  const zet = (i: number, k: keyof AftrekpostForm, v: string) =>
+    set('aftrekposten', posten.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
+  const totaal = berekenAftrek(alsMaten(m));
+  const eenheid = (SOORTEN as { value: Soort; eenheid: string }[]).find((x) => x.value === m.soort)?.eenheid ?? '';
+  return (
+    <View style={s.aftrek}>
+      {posten.length > 0 ? (
+        <Text style={s.label}>
+          {tx('Aftrekposten (in {eenheid})', { eenheid: m.eenheid })}
+          {totaal > 0 ? ` · ${tx('samen {w}', { w: toonWaarde(Math.round(totaal * 100) / 100, eenheid) })}` : ''}
+        </Text>
+      ) : null}
+      {posten.map((p, i) => (
+        <View key={i} style={s.kolomKlein}>
+          <View style={s.rij}>
+            <View style={s.maat}>
+              <Invoer
+                label={tx('Naam')}
+                value={p.naam}
+                onChangeText={(v) => zet(i, 'naam', v)}
+                placeholder={m.soort === 'oppervlak' ? tx('Bijv. raamkozijn') : tx('Bijv. geen onderdorpel')}
+                editable={!disabled}
+                maxLength={120}
+              />
+            </View>
+            <Pressable
+              onPress={() => set('aftrekposten', posten.filter((_, j) => j !== i))}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityLabel={tx('Aftrekpost verwijderen')}
+              style={({ pressed }) => [s.weg, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={s.wegTekst}>×</Text>
+            </Pressable>
+          </View>
+          <View style={s.rij}>
+            <View style={s.aantal}>
+              <Invoer
+                label={tx('Aantal')}
+                value={p.aantal}
+                onChangeText={(v) => zet(i, 'aantal', v.replace(/[^\d]/g, ''))}
+                keyboardType="number-pad"
+                editable={!disabled}
+              />
+            </View>
+            {velden.map((k) => (
+              <View key={k} style={s.maat}>
+                <Invoer
+                  label={velden.length === 1 ? tx('Lengte') : MAAT_LABEL[k] ? tx(MAAT_LABEL[k]) : k}
+                  value={p[k]}
+                  onChangeText={(v) => zet(i, k, v.replace(/[^\d.,]/g, ''))}
+                  keyboardType="decimal-pad"
+                  editable={!disabled}
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
+      <Pressable
+        onPress={() => set('aftrekposten', [...posten, { ...LEGE_POST }])}
+        disabled={disabled}
+        accessibilityRole="button"
+        style={({ pressed }) => [s.keuze, s.keuzeKlein, { alignSelf: 'flex-start' }, pressed && { opacity: 0.7 }]}
+      >
+        <Text style={[s.keuzeTekst, s.keuzeTekstKlein]}>+ {tx('Aftrekpost')}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -264,4 +365,7 @@ const makeStyles = (t: ThemeColors) =>
     keuzeTekst: { fontSize: 14, fontWeight: '600', color: t.ink2 },
     keuzeTekstKlein: { fontSize: 13 },
     keuzeTekstAan: { color: t.card },
+    aftrek: { gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: t.bg },
+    weg: { width: 40, alignSelf: 'flex-end', minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+    wegTekst: { fontSize: 22, color: t.muted },
   });

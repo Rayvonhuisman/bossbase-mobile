@@ -12,6 +12,8 @@ import {
   SOORTEN,
   MAAT_EENHEDEN,
   maatVelden,
+  aftrekVelden,
+  berekenAftrek,
   toonSom,
   toonMaat,
   toonWaarde,
@@ -20,9 +22,12 @@ import {
   brancheVelden,
 } from './vendored/metingWeergave.js';
 
-export { SOORTEN, MAAT_EENHEDEN, maatVelden, toonSom, toonMaat, toonWaarde, berekenMeting, extraRegels, brancheVelden, voegStukToe };
+export { SOORTEN, MAAT_EENHEDEN, maatVelden, aftrekVelden, berekenAftrek, toonSom, toonMaat, toonWaarde, berekenMeting, extraRegels, brancheVelden, voegStukToe };
 
-export type Soort = 'oppervlak' | 'lengte' | 'stuks' | 'inhoud';
+export type Soort = 'oppervlak' | 'lengte' | 'omtrek' | 'stuks' | 'inhoud';
+/** Wat van een meting af gaat (raam, deur), in de eenheid van de meting. Zie bb_meting_waarde. */
+export type Aftrekpost = { naam: string; breedte: number | ''; hoogte: number | ''; diepte: number | ''; aantal: number };
+export type AftrekpostForm = { naam: string; breedte: string; hoogte: string; diepte: string; aantal: string };
 export type Eenheid = 'mm' | 'cm' | 'm';
 export type BrancheVeld = { key: string; label: string; type: 'keuze' | 'tekst'; opties?: string[]; placeholder?: string };
 
@@ -44,6 +49,7 @@ export type Meting = {
   waardeEenheid: string;
   opmerking: string;
   extra: Record<string, string>;
+  aftrekposten: Aftrekpost[];
   fotos: string[];
   volgorde: number;
   createdAt: string;
@@ -65,6 +71,10 @@ export type MetingForm = {
   opmerking: string;
   extra: Record<string, string>;
   materiaalId: string | null;
+  /** Aftrekposten (optioneel; "Vertel het Boss" maakt ze niet). */
+  aftrekposten?: AftrekpostForm[];
+  /** Had de opgeslagen meting aftrekposten? Dan ook een lege lijst opslaan. */
+  hadAftrek?: boolean;
 };
 
 /** Een regel in de controlelijst van "Vertel het Boss" (nog niet opgeslagen). */
@@ -128,13 +138,14 @@ export function getalTekst(v: unknown): string {
 }
 
 /** Het formulier als meting met getallen, voor de berekening (toonSom) en het opslaan. */
-export function alsMaten(f: Pick<MetingForm, 'soort' | 'breedte' | 'hoogte' | 'diepte' | 'aantal' | 'eenheid'>): {
+export function alsMaten(f: Pick<MetingForm, 'soort' | 'breedte' | 'hoogte' | 'diepte' | 'aantal' | 'eenheid' | 'aftrekposten'>): {
   soort: Soort;
   eenheid: Eenheid;
   breedte: number | '';
   hoogte: number | '';
   diepte: number | '';
   aantal: number;
+  aftrekposten: Aftrekpost[];
 } {
   const aantal = leesGetal(f.aantal);
   return {
@@ -144,6 +155,16 @@ export function alsMaten(f: Pick<MetingForm, 'soort' | 'breedte' | 'hoogte' | 'd
     hoogte: leesGetal(f.hoogte) ?? '',
     diepte: leesGetal(f.diepte) ?? '',
     aantal: aantal && aantal > 0 ? aantal : 1,
+    aftrekposten: (f.aftrekposten ?? []).map((a) => {
+      const n = leesGetal(a.aantal);
+      return {
+        naam: String(a.naam || '').trim().slice(0, 120),
+        breedte: leesGetal(a.breedte) ?? '',
+        hoogte: leesGetal(a.hoogte) ?? '',
+        diepte: leesGetal(a.diepte) ?? '',
+        aantal: n && n > 0 ? n : 1,
+      };
+    }),
   };
 }
 
@@ -160,6 +181,14 @@ export function formUitMeting(m: Meting): MetingForm {
     opmerking: m.opmerking,
     extra: { ...m.extra },
     materiaalId: m.materiaalId,
+    aftrekposten: (m.aftrekposten ?? []).map((a) => ({
+      naam: a.naam,
+      breedte: getalTekst(a.breedte),
+      hoogte: getalTekst(a.hoogte),
+      diepte: getalTekst(a.diepte),
+      aantal: getalTekst(a.aantal) || '1',
+    })),
+    hadAftrek: (m.aftrekposten ?? []).length > 0,
   };
 }
 
@@ -186,6 +215,17 @@ export function totalen(metingen: Pick<Meting, 'waarde' | 'waardeEenheid'>[]): s
  */
 export function naarRij(m: MetingForm) {
   const maten = alsMaten(m);
+  // Posten zonder enige maat tellen niet (bij stuks telt alleen het aantal).
+  const aftrek = maten.aftrekposten
+    .filter((a) => m.soort === 'stuks' || a.breedte !== '' || a.hoogte !== '' || a.diepte !== '')
+    .slice(0, 30)
+    .map((a) => ({
+      naam: a.naam,
+      breedte: a.breedte === '' ? null : a.breedte,
+      hoogte: a.hoogte === '' ? null : a.hoogte,
+      diepte: a.diepte === '' ? null : a.diepte,
+      aantal: a.aantal,
+    }));
   const extra = Object.fromEntries(
     Object.entries(m.extra || {})
       .filter(([, v]) => String(v ?? '').trim())
@@ -202,6 +242,9 @@ export function naarRij(m: MetingForm) {
     opmerking: String(m.opmerking || '').trim() || null,
     extra,
     materiaal_id: m.materiaalId || null,
+    // Alleen meesturen als er iets af gaat (of ging), zoals het dashboard: dan
+    // werkt opslaan ook zolang de kolom er nog niet is.
+    ...(aftrek.length || m.hadAftrek ? { aftrekposten: aftrek } : {}),
   };
 }
 
